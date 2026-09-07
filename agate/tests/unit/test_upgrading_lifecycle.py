@@ -8,7 +8,7 @@
 #           hook 口径统一 / README×2 + SETUP 口径一致）
 #   BDD-4 判据 3（根 ~/.agate/scripts/ 副本维护语义写入生命周期节，与 BDD-11 判据 3 交叉锁）
 # 命名前缀 test_tag0032_bdd_N_。
-# 平台无关：纯文本检索，无 symlink / 无 /tmp 字面量 / 无 python3 硬编码。
+# 平台无关：纯文本检索，无 symlink / 无临时目录字面量 / 无 python3 硬编码。
 # 当前红灯（B 类，断言失败）：UPGRADING.md 无「版本管理生命周期」节。
 #
 # 附加回归项（BDD-12「非主判据」）：check-protocol-consistency.py --strict-errors-only

@@ -11,7 +11,7 @@
 # fixture 形态铁律（I-5，TAG0008 教训）：_tag_meta_upstream 构造「协议在 agate/ 子目录、
 #   根无 scripts/」的元仓库形态，不用「根即协议」模拟 repo 代替。
 # 平台无关（AGENTS.md）：隔离 HOME 用 HOME+USERPROFILE 双 env；install.sh 经 bash fixture 调用；
-#   ~/.agate 为普通目录（非软链，无 os.symlink 依赖）；不用 /tmp 字面量（tmp_path）；
+#   ~/.agate 为普通目录（非软链，无 os.symlink 依赖）；不用临时目录字面量（走 tmp_path fixture）；
 #   python 用 python_exe fixture；git 路径用 shutil.which。
 # CI 无网 fallback（I-6）：本地构造 fixture 即默认路径（不依赖 GitHub）；真实 GitHub clone
 #   属可选增强，无网 → 该增强 pytest.skip + 本地隔离 HOME 记录补证 P6-evidence。
