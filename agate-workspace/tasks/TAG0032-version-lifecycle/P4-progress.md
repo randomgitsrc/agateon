@@ -81,3 +81,20 @@
 5. `ruff check agate-install.py agate_common.py + 2 fixture` → All checks passed
 6. `shellcheck -S warning install.sh` → rc 0
 7. `check-protocol-consistency.py --strict-errors-only` → rc 0，0 ERROR（329 WARNING 均既有叙事引用）
+
+---
+
+## SELF-GATE fix-1（文档传播缺口修复）— 进度
+
+- [x] 读 dispatch-context + alignment-review A2/A3/A5/A7 + 闭环建议 + implementer.md 角色定义
+- [x] 读 5 改动对象 + P4-implementation.md + P2-design §2/§3 + adr.md（现有最大编号 = ADR-011 → 新增 ADR-012）+ test_upgrading_lifecycle.py tag0032 断言（无「叠加/后拷贝者胜」子串匹配，单源口径安全）
+- [x] 修复 1：agate/scripts/README.md L5 机制段（补 latest/--versions/元仓库形态/单源副本 + 指向 UPGRADING 权威）+ agate-install.py 工具行（无参 / `latest` = 装 latest 指针，幂等）
+- [x] 修复 2：agate/AGENTS.md 版本管理形态块（补 install.sh --versions + agate-install.py latest 行 + 元仓库形态/单源副本 blockquote，权威指向 UPGRADING）
+- [x] 修复 3：agate/adr.md 新增 ADR-012（现有最大为 ADR-011，故 +1 = 012；记录版本目录两形态 + _protocol_root 探测序不可颠倒红线 + 决策 B1 单源 copytree 副本；格式对齐 ADR-009；关联扩展 ADR-009）
+- [x] 修复 4：agate/UPGRADING.md L72-73 双 copytree（「运行中安装器 scripts/ 叠加 current 版本协议 scripts/，后拷贝者胜」）→ 单源 copytree 口径；其余 3 子条目未动
+- [x] 修复 5：agate/platform-notes.md 指针形态节补一句（install.sh --versions POSIX shell + 决策 B1 拷贝规避 Windows 符号链接权限，无文本退化形态）
+- [x] 验证：check-protocol-consistency.py --strict-errors-only → EXIT 0 / 0 ERROR / 329 WARNING（既有基线）
+- [x] 验证：pytest test_upgrading_lifecycle.py -k tag0032 → 7 passed（无「叠加/后拷贝者胜」子串断言，无 DESIGN_GAP）
+- [x] 验证：git diff --stat → 5 文档/ADR 文件 + P4-progress.md（分阶段落盘）；无代码/测试
+- [x] 追加 P4-implementation.md `## SELF-GATE fix-1（文档传播）` 节
+- fix-1 完成。

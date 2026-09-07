@@ -231,3 +231,42 @@ M1 守卫 / `_ensure_repo` / `main()` `latest` 别名均未动）+ `test_agate_v
 `test_version_lifecycle_e2e.py`（fixture 只加 `agate-install.py` + 依赖）。
 `agate_common.py` 未改；批 2 文档面（README ×2 / SETUP.md / UPGRADING.md）未改；
 `install-offline.py` / Windows 复制模式 / `.state.yaml` schema 未触碰。
+
+---
+
+## SELF-GATE fix-1（文档传播）
+
+[PROD_NOT_TOUCHED]
+
+协议对齐审查 `docs/reviews/agate-alignment-review-2026-09-07-TAG0032.md`（0 MISALIGNED / 4 NEEDS_HUMAN_REVIEW：A2/A3/A5/A7）指出 TAG0032 改了脚本 + 一线文档面，但**次级参考文档 + ADR 未同步**——无一处被证伪，属「不完整」非「矛盾」。本轮纯文档 + ADR 修复，不碰任何代码/测试。
+
+### 改了什么（5 项）
+
+| # | 文件 | 改动 | 关联审查项 |
+|---|------|------|-----------|
+| 1 | `agate/scripts/README.md` | L5「版本管理机制」blockquote 末尾补一句：`install.sh --versions` 新机入口 + `agate-install.py latest`（`latest` = 无参 install 显式别名，幂等）+ **元仓库整仓形态**版本目录由 `_protocol_root` 两形态探测（`vdir/scripts` 先、`vdir/agate/scripts` 后，顺序不可颠倒）适配 + 根 `~/.agate/scripts/` 是随安装/升级刷新的**单源副本**（非软链）+ 权威口径指向 `agate/UPGRADING.md`「版本管理生命周期」节。`agate-install.py` 工具行「无参 = 装 latest 指针」→「无参 / `latest` = 装 latest 指针（最新发布版，幂等）」 | A2 / A3b |
+| 2 | `agate/AGENTS.md` | 版本管理形态块 `bash` 示例补 `install.sh --versions` 行 + 首行改为 `agate-install.py latest`（幂等；无参等价 latest）；块后加 blockquote：元仓库整仓形态由 `_protocol_root` 两形态探测适配 + 根 `scripts/` 为随安装/升级刷新的单源副本（非软链）+ 完整口径以 `UPGRADING.md`「版本管理生命周期」节为权威（比 `scripts/README.md` 更简） | A2 / A3b |
+| 3 | `agate/adr.md` | 新增 **ADR-012**（现有最大为 ADR-011「引导型 CLI 工具…」，故 +1 = 012——见「编号说明」）：(a) 版本目录两形态「根即协议」/「元仓库整仓」+ `_protocol_root(vdir)` 探测序 `vdir/scripts` 先、`vdir/agate/scripts` 后，**探测序不可颠倒**（既有「根即协议」部署方零回归的纯增量红线）+ 两形态皆无 → 返回 `vdir` 原样、下游 `resolve-entry.py` fail-closed 兜底不变 + current 链分支 version/root 赋值顺序；(b) 决策 B1——根 `~/.agate/scripts/` = 单源 `shutil.copytree` 副本（非软链），随每次 `agate-install.py`（含 `latest`）重建刷新，`repo/`/`vX.Y.Z/` 被删不影响已建副本，副本不参与 hook 版本解析。状态/语境/决策/理由/权衡/后果 六节格式对齐 ADR-009；显式「扩展 ADR-009，不替代」 | A7 |
+| 4 | `agate/UPGRADING.md` | L72-73 「内容 = 运行中安装器自带的 `scripts/`（…）**叠加**当前 `current` 版本的协议 `scripts/`（后者覆盖前者，**后拷贝者胜**）」→ 改写为单源口径：「内容 = 从当前 `current` 版本协议根的 `scripts/` 目录**单源** `copytree` 出的一份副本（该目录恒含 `agate-install.py`/`agate_common.py`/`resolve-entry.py` 等全套入口命令…）」。只改「内部拷贝机制」这一句陈述——其余 3 子条目（随 install 重跑刷新 / `repo/` 被删不影响 / 不参与 hook 解析）对单源仍准确，**未动** | A1 KNOWN_DEVIATION（fix-1 已删 layer-1 双 copytree，此为文档口径追平） |
+| 5 | `agate/platform-notes.md` | 「latest / current 指针在无符号链接权限时的形态」节末尾补一句：`install.sh --versions` 保持 POSIX shell（无 bash 扩展）；决策 B1 下根 `~/.agate/scripts/` 用**拷贝**（`shutil.copytree`，非软链）建立，恰好规避 Windows 符号链接权限问题——比软链更平台无关，也无 `latest`/`current` 指针那样的文本退化形态 | A3b（低 severity，一并做） |
+
+### 编号说明（ADR-012 而非 ADR-011）
+
+dispatch-context 文字写「新增 ADR-011」，但同一处括注要求「编号按 adr.md 现有最大 +1 核实」。核实 `agate/adr.md` 现有最大编号为 **ADR-011**（TAG0024「引导型 CLI 工具的权限是早纠错，不是安全边界」，`adr.md:352`），故本轮新增 ADR 取 **ADR-012**。按括注的「实际最大 +1」规则执行，非偏离 dispatch。
+
+### 不做（按 dispatch 边界）
+
+- 未碰任何代码/测试（`agate/scripts/*.py` / `install.sh` / `agate/tests/*`）。
+- 未写 CHANGELOG（A5 的 6 条语义变更 + UPGRADING §3 版本章节是 P8 步骤）。
+- 未改 `agate/UPGRADING.md`「版本管理生命周期」节的其余内容（对照表 / hook 时机 / 其余维护语义子条目——A1 已 ALIGNED）。
+- `agate/scripts/README.md` / `agate/AGENTS.md` 只做「框架 + 指针」，不复制完整对照表（仓库单一权威哲学）。
+
+### 验证结果
+
+1. `timeout 120 /usr/bin/python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` → **EXIT 0，0 ERROR**（329 WARNING，均既有叙事文件脚本名引用，与 P4 批 2 / fix-1 记录一致，未新增；CHECK 9/10/13 均 PASS 或既有 WARN）。
+2. `timeout 180 /usr/bin/python3 -m pytest agate/tests/unit/test_upgrading_lifecycle.py -k tag0032 -p no:cacheprovider -q` → **7 passed**。`test_tag0032_bdd_4_root_scripts_copy_semantics_documented` 只断言「副本」「重跑 agate-install…刷新」「repo/」三点——UPGRADING L72-73 单源改写后三点仍满足；无断言精确匹配「叠加/后拷贝者胜」子串，无 `[DESIGN_GAP]`。
+3. `git diff --stat` → 仅 `agate/AGENTS.md` / `agate/UPGRADING.md` / `agate/adr.md` / `agate/platform-notes.md` / `agate/scripts/README.md` 五个文档/ADR 文件 + 工作区 `P4-progress.md`（分阶段落盘）。无代码/测试文件。（`gate-events.jsonl` 的 P7 gate 记录为主 Agent 编排活动产物，非本轮改动。）
+
+### 范围锁定核对（fix-1）
+
+只改 5 个文档/ADR 文件的定点段落，未重写章节、未「顺便润色」。ADR-012 记录 `_protocol_root` 两形态探测序（不可颠倒红线）+ 决策 B1 副本机制，格式对齐既有 ADR。未扩范围到 out-of-scope。

@@ -69,8 +69,8 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 ### 根 `~/.agate/scripts/` 维护语义（决策 B1：副本）
 
 版本管理布局下 `~/.agate/scripts/` 是一份**副本**（不是软链），由 `agate-install.py`（含 `latest`）在每次
-安装 / 升级时重建刷新，内容 = 运行中安装器自带的 `scripts/`（保证 `agate-install.py` / `agate_common.py` /
-`resolve-entry.py` 等入口命令在新机可直接调用）叠加当前 `current` 版本的协议 `scripts/`（后者覆盖前者，后拷贝者胜）。
+安装 / 升级时重建刷新，内容 = 从当前 `current` 版本协议根的 `scripts/` 目录**单源** `copytree` 出的一份副本
+（该目录恒含 `agate-install.py` / `agate_common.py` / `resolve-entry.py` 等全套入口命令，保证在新机可直接调用）。
 
 - **随 `agate-install.py` 重跑刷新**：升级期须重跑 `python3 ~/.agate/scripts/agate-install.py latest`，
   根入口副本才刷新到新版本工具；不重跑则根 `scripts/` 停留在上次安装的版本。
