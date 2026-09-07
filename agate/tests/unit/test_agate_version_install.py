@@ -28,11 +28,22 @@ def _run_install(run_cli, python_exe, agate_scripts, home, *args, repo_url=None,
     return run_cli(python_exe, str(agate_scripts / "agate-install.py"), *args, env=env)
 
 
+# 真实 agate/scripts/ 目录（本测试文件位于 <root>/agate/tests/unit/）。
+_REAL_AGATE_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+
+
 def _tag_upstream(git_repo):
-    """建版本源 repo：两次 commit + v0.43.0 / v0.48.0 tag（v0.48.0 最新）。"""
+    """建版本源 repo：两次 commit + v0.43.0 / v0.48.0 tag（v0.48.0 最新）。
+
+    agate/scripts/ 内放真实 agate-install.py + agate_common.py（贴近真实元仓库形态：
+    每个 tag 的 agate/scripts/ 本就含全套版本工具，P1-requirements §3.4）——令
+    _sync_root_scripts 单源 copytree 即覆盖全部根入口命令。
+    """
     scripts = git_repo.path / "agate" / "scripts"
     scripts.mkdir(parents=True)
     (scripts / "README.md").write_text("# agate upstream v0.43.0\n", encoding="utf-8")
+    for name in ("agate-install.py", "agate_common.py"):
+        shutil.copy2(str(_REAL_AGATE_SCRIPTS / name), str(scripts / name))
     git_repo.commit("base v0.43.0")
     git_repo.git("tag", "v0.43.0")
     (scripts / "README.md").write_text("# agate upstream v0.48.0\n", encoding="utf-8")

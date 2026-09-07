@@ -41,7 +41,10 @@ def _tag_meta_upstream(upstream, agate_scripts, marker="E2E-GATE-050"):
     (ag / "scripts").mkdir(parents=True)
     (ag / "rules").mkdir(parents=True)
     (ag / "rules" / ".keep").write_text("", encoding="utf-8")
-    for name in ("agate_common.py", "resolve-entry.py"):
+    # agate/scripts/ 内放真实版本工具（贴近真实元仓库形态：每个 tag 的 agate/scripts/
+    # 本就含全套版本工具，P1-requirements §3.4）——令 install.sh --versions 走
+    # $AGATE_HOME/repo/agate/scripts/agate-install.py 主路径、_sync_root_scripts 单源 copytree。
+    for name in ("agate_common.py", "resolve-entry.py", "agate-install.py"):
         shutil.copy2(str(agate_scripts / name), str(ag / "scripts" / name))
     (ag / "scripts" / "pre-commit-gate.py").write_text(
         _STUB_GATE.format(marker=marker), encoding="utf-8"

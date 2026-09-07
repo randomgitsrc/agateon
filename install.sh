@@ -11,6 +11,41 @@
 
 set -euo pipefail
 
+# --versions：进入「版本管理布局」（TAG0032）。~/.agate 变目录根，含 repo/ 主克隆 +
+# vX.Y.Z/ 版本 worktree + latest/current 指针 + 根 scripts/ 入口副本。原无参「单软链」路径不变。
+if [ "${1:-}" = "--versions" ]; then
+    AGATE_HOME="$HOME/.agate"
+    if [ -L "$AGATE_HOME" ]; then
+        cat >&2 <<'EOF'
+错误: ~/.agate 是 legacy 软链布局，install.sh --versions 会穿透软链把 repo/ 与 vX.Y.Z/ 静默建进源仓库，已拒绝（fail-closed）。
+迁移到版本管理布局（三步）：
+  1. 备份软链:  mv ~/.agate ~/.agate.bak
+  2. 建目录根:  mkdir -p ~/.agate
+  3. 装版本:    install.sh --versions
+               # 迁移完成后亦可: python3 ~/.agate/scripts/agate-install.py latest
+EOF
+        exit 1
+    fi
+    PY=""
+    for c in python3 python; do
+        if command -v "$c" >/dev/null 2>&1; then PY="$c"; break; fi
+    done
+    if [ -z "$PY" ]; then
+        echo "错误: install.sh --versions 需要 python3（未找到 python3/python）" >&2
+        exit 1
+    fi
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    mkdir -p "$AGATE_HOME"
+    if [ ! -d "$AGATE_HOME/repo/.git" ]; then
+        git clone "${AGATE_REPO_URL:-https://github.com/randomgitsrc/agateon}" "$AGATE_HOME/repo"
+    fi
+    # 优先用刚 clone 的 repo 副本内的安装器（curl … | bash -s -- --versions 场景下
+    # $SCRIPT_DIR 是当前工作目录、无 agate/scripts/）；仅 repo 缺失时回退 $SCRIPT_DIR。
+    INSTALLER="$AGATE_HOME/repo/agate/scripts/agate-install.py"
+    [ -f "$INSTALLER" ] || INSTALLER="$SCRIPT_DIR/agate/scripts/agate-install.py"
+    exec "$PY" "$INSTALLER" latest
+fi
+
 INSTALL_DIR="${AGATE_REPO_DIR:-$HOME/oclab/agate}"
 LINK_TARGET="$INSTALL_DIR/agate"
 LINK_NAME="${AGATE_SYMLINK:-$HOME/.agate}"

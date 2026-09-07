@@ -35,10 +35,11 @@ LLM Agent 在长任务上强大但不可靠：上下文被污染、subagent 漂�
    ```bash
    curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh | bash
    ```
-   需要**按项目锁定版本**时，改用版本管理器（在 `~/.agate/vX.Y.Z/` 下安装版本目录，保留 `~/.agate` 软链向后兼容）：
+   需要**按项目锁定版本**时，用官方路径 `install.sh --versions` 进入版本管理布局（在 `~/.agate/vX.Y.Z/` 下安装版本目录，保留 `~/.agate` 软链向后兼容），再用版本管理器更新或钉版。安装 / 迁移 / 更新 / 回退完整口径见 [`agate/UPGRADING.md`](agate/UPGRADING.md) 的「版本管理生命周期」节：
    ```bash
-   python3 ~/.agate/scripts/agate-install.py              # 装最新版
-   python3 ~/.agate/scripts/agate-install.py v0.49.0      # 装指定版本
+   install.sh --versions                                  # 进入版本管理布局（repo/ + vX.Y.Z/ + 指针）
+   python3 ~/.agate/scripts/agate-install.py latest       # 更新到最新版（幂等）
+   python3 ~/.agate/scripts/agate-install.py v0.49.0      # 钉指定版本
    python3 ~/.agate/scripts/agate-install.py --check      # 环境探测
    ```
 2. **注册编排 Agent。** 将 `orchestrator-template.md` 符号链接到你的平台 Agent 目录，并安装 git hooks（`python3 ~/.agate/scripts/install-hook.py`）。平台相关步骤——OpenCode、Claude Code、Windows 降级方案——见 [`agate/SETUP.md`](agate/SETUP.md)。

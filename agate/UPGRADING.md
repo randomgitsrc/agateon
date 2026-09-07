@@ -37,6 +37,50 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 ---
 
+## 版本管理生命周期
+
+> 本节是版本管理布局（`~/.agate/` = 版本管理根目录：`repo/` + `vX.Y.Z/` + `latest`/`current` 指针 + 根 `scripts/`）下
+> **安装 / 迁移 / 更新 / 回退** 四个动作，以及 hook 重装时机、根 `~/.agate/scripts/` 维护语义的**单一权威口径**。
+> UPGRADING 其余版本历史节、`README` 快速上手、`SETUP.md` 升级节遇到分歧一律以本节为准。
+
+### 安装 / 迁移 / 更新 / 回退对照表
+
+| 动作 | legacy 软链布局 | 版本管理布局 |
+|------|-----------------|--------------|
+| 安装（新机）| `curl -sSL .../install.sh \| bash`（`~/.agate` → clone 出来的 `agate/` 子目录）| `install.sh --versions`（一键进入版本管理布局：建 `repo/` + 首个 `vX.Y.Z/` + `latest`/`current` 指针 + 根 `scripts/` 副本；`~/.agate` 已是软链则 fail-closed，提示下方迁移三步）|
+| 迁移（软链 → 版本管理）| — | 三步（与 `agate-install.py` fail-closed 文案同源）：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions` |
+| 更新 | `cd <你克隆 Agateon 的目录> && git pull`（是否需重跑 `install-hook.py` 见下方「hook 重装时机」；`git pull` 无新提交时是 no-op，**幂等**）| `python3 ~/.agate/scripts/agate-install.py latest`（**幂等**：重复执行不报错、不重复建版本目录、`latest`/`current` 指针幂等切换）|
+| 回退 | `git checkout <旧 tag>` | `python3 ~/.agate/scripts/agate-install.py v<旧版本>`，再在项目根 `.agate-version` 钉 `agate: v<旧版本>`（或把 `current` 指针切回旧版本目录）|
+
+两种布局的「更新」指令在文档面对齐、各自**幂等**：legacy 侧 = `git pull`（+ 按需重跑 hook），版本管理侧 = `agate-install.py latest`。
+
+### hook 重装时机（统一口径）
+
+`install-hook.py` 安装的是**固定解析入口** `resolve-entry.py`（一段薄壳 `.sh` + 一个不随版本变的 Python 入口），
+运行时按项目 `.agate-version` 解析版本再 exec 对应版本的 gate。因此：
+
+- **切版本 / 升级通常无需重跑 `install-hook.py`** —— resolve-entry 固定入口机制下，改 `.agate-version`
+  或跑 `agate-install.py latest` 都不改动 `.git/hooks/` 里的入口。
+- **仅两种情况才重跑**：① hook 薄壳（`.sh`）本身有变更；② Windows 复制模式（hook 是复制品、不自动跟随，
+  须重跑 `python3 ~/.agate/scripts/install-hook.py`）。
+
+此口径统一收敛 v0.60-0.62 与 v0.66-0.68 历史节中「升级须重跑 `install-hook.py`」的旧表述——历史节叙事保留，实际以本节为准。
+
+### 根 `~/.agate/scripts/` 维护语义（决策 B1：副本）
+
+版本管理布局下 `~/.agate/scripts/` 是一份**副本**（不是软链），由 `agate-install.py`（含 `latest`）在每次
+安装 / 升级时重建刷新，内容 = 运行中安装器自带的 `scripts/`（保证 `agate-install.py` / `agate_common.py` /
+`resolve-entry.py` 等入口命令在新机可直接调用）叠加当前 `current` 版本的协议 `scripts/`（后者覆盖前者，后拷贝者胜）。
+
+- **随 `agate-install.py` 重跑刷新**：升级期须重跑 `python3 ~/.agate/scripts/agate-install.py latest`，
+  根入口副本才刷新到新版本工具；不重跑则根 `scripts/` 停留在上次安装的版本。
+- **`repo/` 或某个 `vX.Y.Z/` 版本目录被删，不影响**已建立的 `~/.agate/scripts/` 副本可用性——
+  副本是独立拷贝，不回链 `repo/` 或版本目录。
+- **该副本不参与 hook 版本解析**：hook 经 resolve-entry 固定入口按项目 `.agate-version` 解析版本，
+  切版本无需重跑 `agate-install.py`（也无需重跑 `install-hook.py`）。
+
+---
+
 ## 2. 旧数据兼容策略
 
 ### 2.1 active-tasks.md（看板）
@@ -548,9 +592,13 @@ python3 ~/.agate/scripts/install-hook.py
 
 | 迁移前（≤ v0.49.0） | 迁移后（v0.50.0+） |
 |---------------------|---------------------|
-| `~/.agate` = 软链 → 仓库的 `agate/` 子目录 | `~/.agate/` = 版本管理根目录：`repo/`（唯一主仓库）+ `vX.Y.Z/`（worktree 检出 tag）+ `latest`/`current` 纯指针 + `scripts/`（版本管理工具） |
+| `~/.agate` = 软链 → 仓库的 `agate/` 子目录 | `~/.agate/` = 版本管理根目录：`repo/`（唯一主仓库）+ `vX.Y.Z/`（worktree 检出 tag）+ `latest`/`current` 纯指针 + `scripts/（版本管理工具）` |
 | 升级 = `git pull` + hook 自动跟随 | 升级 = `python3 ~/.agate/scripts/agate-install.py`（装最新版，指针切到新版本目录） |
 | 卸载 = `rm ~/.agate` + 删仓库 | 卸载 = `python3 ~/.agate/scripts/agate-install.py --uninstall vX.Y.Z`（含引用保护：仍有项目锁定该版本时拒绝卸载） |
+
+> **本表为版本历史叙事，不再单独维护**：上表「根含 `scripts/`」一行的副本维护语义（决策 B1：随 `agate-install.py latest`
+> 重跑刷新、`repo/` 被删不影响可用性）、「升级 = `agate-install.py`」一行的幂等 `agate-install latest` 更新口径，
+> 均以本文件「版本管理生命周期」节为准。
 
 - **存量单软链用户不跑新工具时行为不变（红线，BDD-30）**：`~/.agate` 仍是软链 → 旧 checkout 的 `agate/` 子目录，无版本目录/无指针时，resolve 直接把软链目标解析为 AGATE_ROOT，hook 照常按既有语义运行——**无迁移动作即可继续用**，gate 不静默禁用。
 - **`install.sh` 兼容保留**：单软链场景仍可用，不破坏存量升级路径。

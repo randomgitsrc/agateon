@@ -163,6 +163,22 @@ def _resolve_pointer_chain(base, name, seen=None):
     return _resolve_pointer_chain(base, content, seen)
 
 
+def _protocol_root(vdir):
+    """版本目录命中后定位协议根：根即协议（探测序 1）→ 元仓库形态（探测序 2）→ 原样。
+
+    探测顺序不可颠倒（纯增量红线，TAG0032 决策 A1）：
+    - `vdir/scripts` 存在 → 返回 `vdir` 本身（「根即协议」部署方零回归，BDD-7）。
+    - 否则 `vdir/agate/scripts` 存在 → 返回 `vdir/agate`（元仓库整仓形态，BDD-6/8）。
+    - 两形态皆无 → 返回 `vdir` 原样，下游维持既有 fail-closed。
+    """
+    if os.path.isdir(os.path.join(vdir, "scripts")):
+        return vdir
+    sub = os.path.join(vdir, "agate")
+    if os.path.isdir(os.path.join(sub, "scripts")):
+        return sub
+    return vdir
+
+
 def _resolve_version_info(start_dir=None, use_legacy=True):
     """版本解析核心：env → 项目声明 → current 链 → legacy 软链兜底。
 
@@ -180,14 +196,17 @@ def _resolve_version_info(start_dir=None, use_legacy=True):
     if status == "ok":
         vdir = os.path.join(base, declared)
         if os.path.isdir(vdir):
-            return {"root": vdir, "version": declared, "reason": "引用 .agate-version", "warnings": warnings}
+            return {"root": _protocol_root(vdir), "version": declared, "reason": "引用 .agate-version", "warnings": warnings}
         warnings.append(f"警告: .agate-version 声明的版本 {declared} 未安装，回退全局 current")
     elif status == "invalid":
         warnings.append("警告: .agate-version 格式非法（应为 agate: vX.Y.Z），回退全局 current")
 
     cur = _resolve_pointer_chain(base, "current")
     if cur:
-        return {"root": cur, "version": os.path.basename(cur), "reason": "全局 current", "warnings": warnings}
+        # 顺序不可倒（I-1 红线）：version 从 cur 取，root 从 _protocol_root(cur) 取——两条独立。
+        version = os.path.basename(cur)
+        root = _protocol_root(cur)
+        return {"root": root, "version": version, "reason": "全局 current", "warnings": warnings}
 
     if use_legacy and os.path.islink(base):
         return {"root": os.path.realpath(base), "version": "", "reason": "legacy 软链布局（无版本指针）", "warnings": warnings}

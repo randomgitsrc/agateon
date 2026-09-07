@@ -1191,3 +1191,26 @@ source: retrospective
 created_at: 2026-09-04
 task_id: TAG0030
 ```
+
+## DEBT0034
+
+```yaml
+id: DEBT0034
+category: technical
+title: "TAG0032 三步 legacy 软链迁移指引文案在 agate-install.py(_LEGACY_SYMLINK_MSG) 与 install.sh(heredoc) 双写"
+status: open
+priority: low
+evidence:
+  - path: agate/scripts/agate-install.py
+    note: "_LEGACY_SYMLINK_MSG 模块常量（Python 侧 fail-closed 拒绝文案）"
+  - path: install.sh
+    note: "--versions 分支的 heredoc（shell 侧同一三步迁移指引），措辞需人工与 Python 侧保持同步"
+impact: "两处文案漂移风险：改一处忘另一处 → 用户在两条入口看到不一致的迁移指引；BDD-2 只 grep Python 侧，install.sh 侧漂移不被测"
+recommendation: "收敛到单一来源：install.sh --versions 的软链拒绝分支改为直接 exec agate-install.py（由其打印统一文案并 exit 1），或抽一份公共文案资源"
+closure_criteria:
+  - 三步迁移文案单一真相源（一处定义，另一处引用或委托）
+  - 全量 pytest + consistency 0 ERROR
+source: review
+created_at: 2026-09-07
+task_id: TAG0032
+```
