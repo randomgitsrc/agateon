@@ -223,3 +223,99 @@ def test_resolve_terminal_failure_fail_closed(run_cli, python_exe, agate_scripts
     )
     assert result.returncode != 0
     assert "v0.99.0" in result.output  # 失败非静默：警告指出声明的未安装版本
+
+
+# ============================================================
+# TAG0032 版本管理生命周期可用性批 — 断点二：元仓库 gap 修复（RM-AG0058 本体）
+#   BDD-6 / BDD-7（1:1 映射 P1-requirements.md §3.2）
+#   命名前缀 test_tag0032_bdd_N_（区分 TAG0008 既有 test_bdd_9..14/30）
+#   被测行为由 P4 实现（决策 A1：agate_common._protocol_root helper + _resolve_version_info
+#   两处调用）——P3 当前红灯（B 类：resolve 返回 vdir 而非 vdir/agate；helper 未实现）。
+#   fixture 铁律（I-5）：_make_home_meta 严格「协议在 agate/ 子目录、vX/scripts/ 不存在」，
+#   不用「根即协议」模拟 repo 代替；_make_home_rootproto 作 BDD-7 对照。
+# ============================================================
+
+
+def _make_home_meta(tmp_path, version="v0.50.0"):
+    """元仓库形态隔离 HOME：~/.agate/<version>/agate/scripts/ 存在，<version>/scripts/ 不存在。"""
+    home = tmp_path / "home"
+    vdir = home / ".agate" / version
+    (vdir / "agate" / "scripts").mkdir(parents=True)
+    (vdir / "agate" / "rules").mkdir(parents=True)
+    (vdir / "agate" / "rules" / ".keep").write_text("", encoding="utf-8")
+    return home
+
+
+def _make_home_rootproto(tmp_path, version="v0.50.0"):
+    """「根即协议」形态隔离 HOME：~/.agate/<version>/scripts/ 直接存在。"""
+    home = tmp_path / "home"
+    (home / ".agate" / version / "scripts").mkdir(parents=True)
+    return home
+
+
+def _import_agate_common(agate_scripts):
+    import importlib
+    import sys as _sys
+
+    p = str(agate_scripts)
+    if p not in _sys.path:
+        _sys.path.insert(0, p)
+    return importlib.import_module("agate_common")
+
+
+def test_tag0032_bdd_6_meta_repo_resolve_returns_agate_subdir(
+    run_cli, python_exe, agate_scripts, tmp_path
+):
+    """BDD-6：resolve 对元仓库形态版本目录返回协议子目录 vdir/agate，版本号不回归。"""
+    home = _make_home_meta(tmp_path, "v0.50.0")
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_version_decl(project, "v0.50.0")
+
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        cwd=str(project),
+        env=_resolve_env(home),
+    )
+    assert result.returncode == 0
+    expected_root = str((home / ".agate" / "v0.50.0" / "agate").resolve())
+    assert f"AGATE_ROOT={expected_root}" in result.output, (
+        "元仓库形态应返回 vdir/agate（协议子目录），而非 vdir"
+    )
+    assert "AGATE_VERSION=v0.50.0" in result.output, "版本号不回归（I-1）"
+
+
+def test_tag0032_bdd_7_rootproto_resolve_semantics_unchanged(
+    run_cli, python_exe, agate_scripts, tmp_path
+):
+    """BDD-7：「根即协议」部署方解析语义不变（纯增量红线）。
+
+    _protocol_root 探测序 1（vdir/scripts）先命中 → 返回 vdir，不进入 vdir/agate 分支；
+    AGATE_VERSION 仍为 vX.Y.Z（与 BDD-6 对称）。
+    """
+    agate_common = _import_agate_common(agate_scripts)
+    assert hasattr(agate_common, "_protocol_root"), (
+        "决策 A1：agate_common 应新增 _protocol_root helper（P4 未实现）"
+    )
+    unit_vdir = tmp_path / "unit" / "v0.50.0"
+    (unit_vdir / "scripts").mkdir(parents=True)
+    assert agate_common._protocol_root(str(unit_vdir)) == str(unit_vdir), (
+        "探测序 1：vdir/scripts 存在 → 返回 vdir 本身（根即协议零回归）"
+    )
+
+    home = _make_home_rootproto(tmp_path, "v0.50.0")
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_version_decl(project, "v0.50.0")
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        cwd=str(project),
+        env=_resolve_env(home),
+    )
+    assert result.returncode == 0
+    expected_root = str((home / ".agate" / "v0.50.0").resolve())
+    assert f"AGATE_ROOT={expected_root}" in result.output
+    assert f"AGATE_ROOT={expected_root}/agate" not in result.output
+    assert "AGATE_VERSION=v0.50.0" in result.output
