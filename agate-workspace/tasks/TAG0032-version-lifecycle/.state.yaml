@@ -1,3 +1,11 @@
 task_id: TAG0032
-phase: P0
+phase: P1
 status: active
+judge:
+  enabled: true
+retries:
+  P1:
+    - round: 1
+      failure_mode: quality
+      prompt_changed: true
+      adjustment: add_navigation
