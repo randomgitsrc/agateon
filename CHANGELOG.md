@@ -8,6 +8,40 @@
 
 ---
 
+## [0.69.0] - 2026-09-07
+
+### 新增（TAG0032：版本管理生命周期可用性批，RM-AG0058 + DEBT0034）
+
+- **`agate-install.py` 新增 `latest` 显式别名**：`agate-install.py latest` 等价于无参 `install`
+  （装 `latest` 指针指向的最新发布版），幂等，重跑安全——补齐官方指引里"装最新版"的显式命令形态。
+- **`install.sh --versions` 新增子命令**：一键从零进入版本管理布局——建 `~/.agate/repo/` +
+  首个 `vX.Y.Z/` 版本目录 + `latest` / `current` 指针 + 根 `~/.agate/scripts/` 入口副本，
+  免去手工搭建版本目录结构。
+- **`agate-install.py` `_ensure_repo` 复用已 clone 的 `~/.agate/repo` 时新增
+  `git fetch --tags --force --prune`**（fail-open，网络失败不阻断）——令重跑 `latest`
+  能跟随上游更高 tag，不再停留在首次 clone 的旧版本。
+- **resolve 链新增「元仓库整仓形态」版本目录支持**：`agate_common._protocol_root` 对版本目录
+  按两形态探测（`vdir/scripts` 先探 → 返回 `vdir`「根即协议」；`vdir/agate/scripts` 后探 →
+  返回 `vdir/agate`「元仓库整仓」；皆无 → 返回 `vdir` 原样，下游 `resolve-entry.py` 既有
+  fail-closed 兜底不变）。探测顺序不可颠倒（「根即协议」既有部署方零回归的纯增量红线）。
+  GitHub 直装的 agateon 整仓版本目录（协议在 `agate/` 子目录）现可正确解析到协议子目录（RM-AG0058）。
+- **版本管理布局新增根 `~/.agate/scripts/` 入口副本**（决策 B1）：从当前 `current` 版本协议根的
+  `scripts/` 单源 `shutil.copytree`（非软链），随每次安装 / 升级重建刷新；`repo/` 或某
+  `vX.Y.Z/` 被删不影响已建副本；副本不参与 hook 版本解析。修复"先删软链再装则
+  `~/.agate/scripts` 不存在 → README 入口命令 No such file"的死路。
+- 关联：RM-AG0058（版本管理生命周期可用性 epic，本批交付）、DEBT0034（三步 legacy 软链迁移
+  文案在 `agate-install.py` 与 `install.sh` 双写，本任务登记 `status: open`，留后续收敛）。
+- 架构决策：新增 ADR-012（版本目录两形态探测序 + 决策 B1 根 `scripts/` 单源副本机制，
+  扩展 ADR-009 不替代）。
+
+### 变更
+
+- **`agate-install.py` / `install.sh --versions` 对 legacy 软链布局 `~/.agate` fail-closed 拒绝**
+  （**行为变化**）：此前会穿透软链把 `repo/` · `vX.Y.Z/` 静默建进源仓库 `agate/` 内；现检测到
+  `~/.agate` 为软链即拒绝并打印三步迁移指引（`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate`
+  → `install.sh --versions`）后 `exit 1`。**向后兼容红线**：legacy 单软链用户**不跑新工具**
+  （`git pull` 升级路径）行为完全不变；纯增量红线经 BDD-7 + 全量回归锁定。
+
 ## [0.68.0] - 2026-09-04
 
 ### 新增（TAG0030：验收盲区机制批，RM-AG0057 四类 + DEBT0024/25/26）

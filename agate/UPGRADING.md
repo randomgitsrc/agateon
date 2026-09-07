@@ -133,6 +133,35 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 > 升级到新版本前，检查你的项目是否触及以下变更点。
 
+### v0.69.0 — 版本管理生命周期可用性批（TAG0032：RM-AG0058 + DEBT0034）
+
+> **本版本有一处行为变化（install 对 legacy 软链布局 fail-closed 拒绝），其余为纯增量。**
+> 未改 `.state.yaml` schema / 既有任务文件格式 / 3 个 hook 薄壳（本任务改动清单无 hook `.sh`
+> 改动），无需重跑 `install-hook.py`。
+
+1. **install 对 legacy 软链布局 `~/.agate` fail-closed 拒绝（行为变化）——仅影响主动跑
+   `agate-install.py` / `install.sh --versions` 的用户**：此前这两条入口会穿透 `~/.agate`
+   软链，把 `repo/` · `vX.Y.Z/` 静默建进软链指向的源仓库 `agate/` 内；现检测到 `~/.agate`
+   为软链即拒绝、打印迁移指引后 `exit 1`。
+   **迁移动作（三步，仅当你要切到版本管理布局时才需要）**：
+   ```bash
+   mv ~/.agate ~/.agate.bak      # 1. 备份现有软链
+   mkdir -p ~/.agate             # 2. 建真实目录
+   install.sh --versions        # 3. 一键搭版本管理布局（repo/ + 首个 vX.Y.Z/ + latest/current 指针 + 根 scripts/ 副本）
+   ```
+   **legacy 单软链用户不跑 `agate-install`，行为完全不变**——沿用 `git pull` 升级 `~/.agate`
+   软链指向的仓库即可（§1 通用升级步骤），本版本对该路径零迁移动作。
+2. **`agate-install.py latest` 显式别名 + `install.sh --versions` 子命令——纯增量**：
+   `latest` = 无参 install 的显式别名（幂等）；`--versions` 一键从零搭版本管理布局。
+   既有无参 `agate-install.py` 调用行为不变。
+3. **resolve 链新增「元仓库整仓形态」版本目录支持——对既有「根即协议」部署零回归**：
+   `_protocol_root` 两形态探测（`vdir/scripts` 先 → `vdir`；`vdir/agate/scripts` 后 →
+   `vdir/agate`；皆无 → `vdir` 原样 + 下游 fail-closed 兜底不变）。探测顺序不可颠倒。
+   仅让 GitHub 直装的 agateon 整仓版本目录（协议在 `agate/` 子目录）可正确解析。
+4. **版本管理布局新增根 `~/.agate/scripts/` 入口副本——纯增量**：单源 `copytree`（非软链），
+   随每次安装 / 升级刷新；不参与 hook 版本解析。
+5. **升级动作**：软链布局 `git pull` 即完成；切版本管理布局按上述三步。
+
 ### v0.68.0 — 验收盲区机制批（TAG0030：RM-AG0057 四类 + DEBT0024/25/26）
 
 > **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 /
