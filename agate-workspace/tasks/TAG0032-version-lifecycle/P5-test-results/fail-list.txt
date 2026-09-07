@@ -1,0 +1,5 @@
+# P5 failed 测试 id（gate_commands.P5 pytest 全量）
+# 三振记录: run1=FAIL / run2=PASS(0 failed) / run3=FAIL；隔离单跑 PASS
+# 判定: flaky（-n auto 并行干扰），预存失败，与 TAG0032 改动无关（diff 不触碰 agate-next-card.py）
+# 已登记 known-failures.md
+agate/tests/unit/test_agate_next_card.py::test_nc_cross_checkout_paths_hash_consistent
