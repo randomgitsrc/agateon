@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" font-family="Georgia, 'Times New Roman', serif">
+  <defs>
+    <marker id="aCoralL" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#712B13"/>
+    </marker>
+    <marker id="aTealL" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#157A59"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="520" fill="#FAF9F4"/>
+
+  <text x="450" y="56" font-size="28" font-weight="700" fill="#1A1A18" text-anchor="middle" font-family="Noto Sans SC, serif">同一份评审，两种上下文</text>
+  <text x="450" y="88" font-size="17" font-style="italic" fill="#444441" text-anchor="middle" font-family="Noto Sans SC, serif">结论在检查开始前就定了——取决于谁握着上下文</text>
+
+  <g>
+    <rect x="40" y="120" width="390" height="320" rx="12" fill="#FAF9F4" stroke="#712B13" stroke-width="3"/>
+    <text x="235" y="158" font-family="Noto Sans SC, sans-serif" font-size="18" font-weight="700" fill="#712B13" text-anchor="middle">1 · 在作者的上下文里评审</text>
+    <circle cx="235" cy="252" r="64" fill="#E3E0F7" stroke="#4C45A8" stroke-width="3"/>
+    <text x="235" y="248" font-family="'Helvetica Neue', Arial, sans-serif" font-size="30" text-anchor="middle">✎</text>
+    <text x="235" y="286" font-family="'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="700" fill="#0E8A72" text-anchor="middle">✓</text>
+    <path d="M 180 210 C 160 168, 310 168, 290 210" fill="none" stroke="#712B13" stroke-width="4" marker-end="url(#aCoralL)"/>
+    <text x="235" y="348" font-size="15" fill="#444441" text-anchor="middle" font-family="Noto Sans SC, serif">检查的是它想写的，不是它写出来的</text>
+    <text x="235" y="404" font-size="21" font-weight="700" fill="#D85A30" text-anchor="middle" font-family="Noto Sans SC, serif">"LGTM ✓"——一个复读</text>
+  </g>
+
+  <g>
+    <rect x="470" y="120" width="390" height="320" rx="12" fill="#FAF9F4" stroke="#085041" stroke-width="3"/>
+    <text x="665" y="158" font-family="Noto Sans SC, sans-serif" font-size="18" font-weight="700" fill="#085041" text-anchor="middle">2 · 在全新的上下文里评审</text>
+    <circle cx="568" cy="252" r="36" fill="#E3E0F7" stroke="#4C45A8" stroke-width="3"/>
+    <text x="568" y="262" font-family="'Helvetica Neue', Arial, sans-serif" font-size="24" text-anchor="middle">✎</text>
+    <text x="568" y="316" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#4C45A8" text-anchor="middle" letter-spacing="2">作者</text>
+    <path d="M 608 252 L 646 252" fill="none" stroke="#712B13" stroke-width="4" marker-end="url(#aCoralL)"/>
+    <line x1="662" y1="182" x2="662" y2="330" stroke="#D85A30" stroke-width="3" stroke-dasharray="7,5"/>
+    <path d="M 678 252 L 712 252" fill="none" stroke="#157A59" stroke-width="4" marker-end="url(#aTealL)"/>
+    <circle cx="762" cy="252" r="36" fill="#FAF9F4" stroke="#1D9E75" stroke-width="3.5"/>
+    <text x="762" y="262" font-family="'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="700" fill="#0E8A72" text-anchor="middle">✓</text>
+    <text x="762" y="316" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#085041" text-anchor="middle" letter-spacing="2">JUDGE</text>
+    <text x="665" y="348" font-size="15" fill="#444441" text-anchor="middle" font-family="Noto Sans SC, serif">只看得到产出物和规范</text>
+    <text x="665" y="404" font-size="21" font-weight="700" fill="#085041" text-anchor="middle" font-family="Noto Sans SC, serif">裁决 + exit code</text>
+  </g>
+
+  <text x="450" y="482" font-size="15" font-style="italic" fill="#444441" text-anchor="middle" font-family="Noto Sans SC, serif">同一份活儿。不同的上下文。不同的结论。</text>
+</svg>
