@@ -90,11 +90,13 @@ cd <你克隆 Agateon 的目录> && git pull
 
 版本管理形态（TAG0008 起）：
 ```bash
-python3 ~/.agate/scripts/agate-install.py              # 装最新发布版（latest/current 指针就位）
+install.sh --versions                                 # 新机一键进入版本管理布局（建 repo/ + 首个版本 + 指针 + 根 scripts/ 副本）
+python3 ~/.agate/scripts/agate-install.py latest       # 更新到最新发布版（幂等；无参等价于 latest）
 python3 ~/.agate/scripts/agate-install.py v0.48.0      # 装指定版本目录（幂等）
 python3 ~/.agate/scripts/agate-install.py --uninstall v0.43.0  # 卸载版本（含项目引用保护）
 python3 ~/.agate/scripts/agate-resolve.py              # 查看当前项目解析到的版本 + 原因
 ```
+> GitHub 直装得到的元仓库整仓形态版本目录（协议在 `agate/` 子目录）由 `_protocol_root` 两形态探测（`vdir/scripts` 先、`vdir/agate/scripts` 后）适配；根 `~/.agate/scripts/` 是随每次安装/升级刷新的单源副本（非软链）。完整的安装 / 迁移 / 更新 / 回退口径以 `UPGRADING.md`「版本管理生命周期」节为权威。
 
 ## 卸载
 

@@ -174,3 +174,50 @@ def test_bdd_19_copy_mode_resolve_entry(
     result = run_cli(bash, str(hook), cwd=str(project), env=_resolve_env(home))
     # 复制模式下经 .agate-root 恢复 AGATE_ROOT → 仍按项目版本解析并跑 gate，不因复制模式失效
     assert "GATE-V043" in result.output
+
+
+# ============================================================
+# TAG0032 版本管理生命周期可用性批 — 断点二：钉版后 hook gate 路径可解析
+#   BDD-8（1:1 映射 P1-requirements.md §3.2）
+#   命名前缀 test_tag0032_bdd_N_（区分 TAG0008 既有 test_bdd_15..19）
+#   被测行为由 P4 实现（决策 A1：_protocol_root → resolve-entry.py:49 的 gate 路径
+#   拼接自然命中 vX/agate/scripts/）——P3 当前红灯（B 类：resolve 返回 vX，
+#   gate_path = vX/scripts/pre-commit-gate.py 不存在 → resolve-entry.py:50-52 exit 1）。
+#   fixture 铁律（I-5）：元仓库形态——gate 脚本在 <version>/agate/scripts/，
+#   <version>/scripts/ 不建。
+# ============================================================
+
+
+def _make_home_meta_hook(tmp_path, version="v0.50.0", marker="GATE-META-050"):
+    """元仓库形态隔离 HOME：~/.agate/<version>/agate/scripts/pre-commit-gate.py（stub 打 marker），
+    <version>/scripts/ 不建。"""
+    home = tmp_path / "home"
+    gdir = home / ".agate" / version / "agate" / "scripts"
+    gdir.mkdir(parents=True)
+    (gdir / "pre-commit-gate.py").write_text(
+        _STUB_GATE.format(marker=marker), encoding="utf-8"
+    )
+    return home
+
+
+def test_tag0032_bdd_8_meta_repo_hook_gate_path_resolves(
+    run_cli, python_exe, agate_scripts, tmp_path
+):
+    """BDD-8：元仓库形态版本 + 项目钉版 → resolve-entry.py pre-commit 解析出的 gate 路径
+    <root>/scripts/pre-commit-gate.py（root = vX/agate）存在并被 exec，不因 gate 缺失 exit 1。"""
+    home = _make_home_meta_hook(tmp_path, "v0.50.0", marker="GATE-META-050")
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_version_decl(project, "v0.50.0")
+
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "resolve-entry.py"),
+        "pre-commit",
+        cwd=str(project),
+        env=_resolve_env(home),
+    )
+    assert result.returncode == 0, (
+        "元仓库形态下 gate 路径应命中 vX/agate/scripts/，不因『gate 脚本不存在』exit 1"
+    )
+    assert "GATE-META-050" in result.output, "解析出的版本 gate 应被 exec"

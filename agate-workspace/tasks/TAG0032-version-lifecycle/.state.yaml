@@ -1,3 +1,17 @@
 task_id: TAG0032
-phase: P0
+phase: READY
 status: active
+p5_pass_commit: 1d9a32226c7aadfb7b77c413c8fedf7b93f95fd0
+retries:
+  P1:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: add_navigation
+  P4:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: add_navigation
+judge:
+  enabled: true

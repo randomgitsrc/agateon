@@ -248,3 +248,5 @@ AGATE_WORKSPACE=/srv/agate-ws/My Project   # 绝对路径（可含空格）→ �
 - 符号链接方式：什么都不用做，orchestrator 提示词自动跟着新版本。
 - 复制模式（Windows 无权限场景）：重跑步骤 2 的 `cp` 命令。
 - 两种方式都建议顺手跑一次 `python3 ~/.agate/scripts/agate-summary.py`，它会检测协议版本和本地脚本副本漂移（但目前不覆盖 orchestrator.md 复制模式的漂移，见上文已知限制）。
+
+**更新口径（与 `UPGRADING.md` 一致）**：legacy 软链布局更新 = `git pull`；版本管理布局（`~/.agate/` 为版本管理根目录）更新 = `python3 ~/.agate/scripts/agate-install.py latest`（幂等）。安装 / 迁移 / 更新 / 回退完整对照，以及 hook 重装时机、根 `~/.agate/scripts/` 副本维护语义，见 `UPGRADING.md` 的「版本管理生命周期」节。

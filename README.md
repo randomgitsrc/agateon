@@ -9,7 +9,7 @@
 > **Agateon (formerly agate)** — this project has a new name; the badge and install command below already point to the new repository.
 > An orchestration protocol that verifies AI agents the way a build system verifies a compiler.
 
-[![version](https://img.shields.io/badge/version-v0.68.0-blue)](https://github.com/randomgitsrc/agateon)
+[![version](https://img.shields.io/badge/version-v0.69.0-blue)](https://github.com/randomgitsrc/agateon)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [English](README.md) | [中文](README.zh-CN.md)
@@ -35,10 +35,11 @@ LLM agents are powerful but unreliable on long tasks: context gets polluted, sub
    ```bash
    curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh | bash
    ```
-   For **per-project version pinning**, use the version manager instead (installs versioned directories under `~/.agate/vX.Y.Z/`, keeps the legacy `~/.agate` symlink for backward compatibility):
+   For **per-project version pinning**, enter the versioned layout with `install.sh --versions` (the official path; installs versioned directories under `~/.agate/vX.Y.Z/`, keeps the legacy `~/.agate` symlink for backward compatibility), then use the version manager to update or pin. The full install / migrate / update / rollback matrix is the "版本管理生命周期" section of [`agate/UPGRADING.md`](agate/UPGRADING.md):
    ```bash
-   python3 ~/.agate/scripts/agate-install.py              # latest
-   python3 ~/.agate/scripts/agate-install.py v0.49.0      # a specific version
+   install.sh --versions                                  # enter the versioned layout (repo/ + vX.Y.Z/ + pointers)
+   python3 ~/.agate/scripts/agate-install.py latest       # update to the latest version (idempotent)
+   python3 ~/.agate/scripts/agate-install.py v0.49.0      # pin a specific version
    python3 ~/.agate/scripts/agate-install.py --check      # environment probe
    ```
 2. **Register the orchestrator.** Symbolically link `orchestrator-template.md` into your platform's agent directory and install the git hooks (`python3 ~/.agate/scripts/install-hook.py`). Platform-specific steps — OpenCode, Claude Code, and Windows fallbacks — are in [`agate/SETUP.md`](agate/SETUP.md).

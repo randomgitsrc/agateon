@@ -375,3 +375,51 @@ TAG0024（RM-AG0048 一期）新增 `agate-md-field-set.py`——给 subagent �
 - `agate-md-field-set.py` 的角色白名单（基于 `assets/review-roles/*.md` 目录动态推导）在文档/代码注释中必须明确标注"引导，非安全边界"，不得让后续维护者误以为这是防伪造机制。
 - 后续任何新增的"写入前校验/引导型"工具（不限于 frontmatter 字段），设计时应直接引用本 ADR，不必重新论证"这道检查是不是安全边界"——默认不是，除非能证明具备可靠身份认证前提（当前 agate 的 bash 执行环境不具备）。
 - 真正的防造假责任持续压在 gate 链（`agent` 字段检查 + 账本 + 独立 judge）一侧，任何工具层引导机制的增减都不改变这条责任边界。
+
+---
+
+## ADR-012: 版本目录两形态 `_protocol_root` 探测序 + 根 `~/.agate/scripts/` 单源副本（TAG0032）
+
+### 状态
+
+已接受
+
+### 语境
+
+ADR-009 落地的版本管理布局（`~/.agate` = `repo/` + `vX.Y.Z/` + `latest`/`current` 指针 + `scripts/`）隐含一个假设：`git worktree add` 检出 tag 得到的**版本目录本身即协议本体**（`vX.Y.Z/scripts/` 直接存在）。这对「从改造仓库检出 `agate/` 子目录作 tag」的部署成立，但 **GitHub 直装**（RM-AG0058 / TAG0032 断点二）得到的版本目录是 agateon **整仓**——协议在 `vX.Y.Z/agate/` 子目录，`_resolve_version_info` 返回仓库根 `vdir` 会让下游 gate 路径 `vdir/scripts/<gate>` 取不到。此外 ADR-009 §决策只写「`scripts/`（版本管理工具本体）」，未规定根 `~/.agate/scripts/` 的**建立方式**（副本 vs 软链）、刷新时机、被删影响——TAG0032 断点一（入口断链）要求它在新机稳定存在、`repo/` 被删也不失效。这两项是 ADR-009 未设想的形态与未定义的语义，`docs/reviews/agate-alignment-review-2026-09-07-TAG0032.md` A7 建议补 ADR 固化，避免后续任务重新论证。
+
+### 决策
+
+**(a) 版本目录两形态 + `_protocol_root(vdir)` 探测序（TAG0032 决策 A1）**
+
+`agate_common._resolve_version_info` 命中版本目录后，经新增 helper `_protocol_root(vdir)` 按固定顺序定位协议根：
+
+1. **探测序 1**：`isdir(vdir/scripts)` → 返回 `vdir`（**「根即协议」形态**——`git worktree add` 出的版本目录本身即协议本体）。
+2. **探测序 2**：`isdir(vdir/agate/scripts)` → 返回 `vdir/agate`（**「元仓库整仓」形态**——GitHub 直装，协议在 `agate/` 子目录）。
+3. 两形态皆无 → 返回 `vdir` 原样，下游 `resolve-entry.py` 拼 `<root>/scripts/<gate>` 不存在时命中既有 fail-closed 分支（exit 1），不新增静默放行。
+
+**探测序不可颠倒**（红线）：若先探 `vdir/agate/scripts`，某些「根即协议」且恰好含 `agate/` 子目录的既有部署方会被改判协议根 → 破坏 ADR-009 §理由 2 的向后兼容红线。「探测序 1 先」保证既有部署方零回归。消费方（`agate-resolve.py` / `agate-summary.py` 经 `resolve_version_root`；`resolve-entry.py` 经 `resolve_hook_root`）均经 `_resolve_version_info` 单点归口，自动受益，无旁路。`.agate-version` 格式、`AGATE_ROOT` env 覆盖契约、legacy 软链兜底分支均不改。current 链分支须**先** `version = os.path.basename(cur)` **再** `root = _protocol_root(cur)`，顺序倒置会让 `AGATE_VERSION` 从 `vX.Y.Z` 回归为 `agate`。
+
+**(b) 根 `~/.agate/scripts/` = 单源副本（TAG0032 决策 B1）**
+
+根 `~/.agate/scripts/` 是 `agate-install.py`（含 `latest` 别名）从当前 `current` 版本协议根（= `_protocol_root` 探测结果，`vdir` 或 `vdir/agate`）的 `scripts/` 目录 `shutil.copytree(..., dirs_exist_ok=True)` 出的**一份副本**，**非软链**；随每次安装 / 升级重建刷新。真实 agateon 每个发布 tag 的 `agate/scripts/` 恒含全套版本工具（`agate-install.py` / `agate_common.py` / `resolve-entry.py` 等），故单源 copytree 即覆盖全部入口命令。`repo/` 或某个 `vX.Y.Z/` 版本目录被删**不影响**已建立的副本可用性（独立实体，不回链）。该副本**不参与 hook 版本解析**——hook 经 `resolve-entry.py` 固定入口按项目 `.agate-version` 解析版本，切版本无需重跑 `agate-install.py`。
+
+### 理由
+
+- **纯解析侧增量（A1 vs A2）**：候选 A2（install 侧把 `vX/agate/` 提升为版本根）会破坏 `git worktree add --detach` 检出目录与 `repo/` 索引的一致性（卸载路径 `git worktree prune/remove` 依赖），且变形逻辑要在 `install-offline.py` / Windows 复制模式每条安装路径各复制一份，外溢 out-of-scope。A1 是 1 helper + 2 调用点的解析侧单点增量，回滚 = 删调用；离线包 / 复制模式解析侧经同一 `_resolve_pointer_chain` 自然受益。
+- **副本 vs 软链（B1 vs B2）**：软链方案下 `repo/` 或被指向版本目录被删 → 软链悬空 → `~/.agate/scripts/agate-install.py` No such file，正是断点一要消灭的症状；且 Windows 退化为复制后又需升级期重跑 → 跨平台双口径。副本方案跨平台语义单一、`repo/` 被删不断入口，代价（升级期须重跑 `agate-install.py latest` 刷新）明确、可单测锁、已写入 `UPGRADING.md`。
+- **方向契合 ADR-009**：两项决策都守住 ADR-009 的纯增量 / 向后兼容红线——「根即协议」部署方零回归，legacy 兜底与 fail-closed 分支不动，未新增静默放行路径。
+
+### 权衡
+
+- 每次解析多 1-2 次 `os.path.isdir`——解析非热路径，可忽略。
+- 根 `scripts/` 副本在升级期须重跑 `agate-install.py latest` 才刷新到新版本工具；不重跑则停留在上次安装的版本。已在 `UPGRADING.md`「版本管理生命周期」节写明，并有 BDD-4 判据 2 单测锁。
+- 副本可能被用户手改而漂移——非 TAG0032 范围，`agate-summary.py` 已有 `scripts/` 目录副本漂移检测思路。
+- 「元仓库整仓形态」是本次修复 RM-AG0058 断点二的坏路径（此前 resolve 返回仓库根导致 gate 取不到），本决策是修复而非行为翻转。
+
+### 后果
+
+- `agate_common.py` 新增 `_protocol_root` helper（`_resolve_version_info` 前），`.agate-version` ok 分支与 current 链分支各一处调用；`resolve-entry.py` / `agate-resolve.py` / `agate-summary.py` 零改动（受益方）。
+- `agate-install.py` 新增 `_sync_root_scripts`（单源 copytree）+ `latest` 显式别名 + `_ensure_repo` 已有 repo 分支 `git fetch --tags --force --prune`（fail-open，令重跑发现上游更高 tag）；`install.sh` 新增 `--versions` bootstrap 分支（POSIX shell）。
+- `agate/UPGRADING.md`「版本管理生命周期」节为该两项语义的单一权威口径；`agate/scripts/README.md` / `agate/AGENTS.md` / `agate/platform-notes.md` 做框架 + 指针，不复制完整对照表。
+- 本 ADR 扩展 ADR-009（版本管理根 + resolve-entry 固定入口），不替代；ADR-009 的四层解析优先级与 legacy 兜底红线继续有效。

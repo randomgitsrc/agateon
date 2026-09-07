@@ -166,6 +166,8 @@ git config --global user.name  "Your Name"
 
 `~/.agate` 版本管理根目录里的 `latest` / `current` 是**纯指针**：Linux/macOS 用 POSIX 软链（`latest → v0.48.0`），Windows 无符号链接权限（或 `AGATE_HOOK_COPY_MODE=1`）时**退化为文本指针文件**——文件内容为指向的版本目录名（如 `v0.48.0`），解析时按内容恢复目标路径（`agate_common.py` 的指针链解析兼容软链与文本两形）。`.agate-root` 标记先例沿用：复制模式下安装的 hook / orchestrator 副本写 `.agate-root` 记录安装根，解析入口（`resolve-entry.py`）据此恢复 AGATE_ROOT。行为与单软链时代一致：解析失败回退 current，绝不静默禁用 gate。
 
+`install.sh --versions`（新机一键进入版本管理布局）保持 POSIX shell（无 bash 扩展）。决策 B1 下根 `~/.agate/scripts/` 用**拷贝**（`shutil.copytree`，非软链）建立，恰好规避 Windows 符号链接权限问题——比软链更平台无关，也没有 `latest` / `current` 指针那样的文本退化形态。
+
 ### 不支持的场景
 
 - **纯 cmd/PowerShell 无 bash**：**TAG0010 起成为可行选项**——gate 脚本已全部 Python 化，`python3 ~/.agate/scripts/xxx.py` 可直接运行（P0-P8 全程可执行）。唯一受限：git hook 入口薄壳仍需 sh 执行，无 bash 时 hook 不触发（可用 CI backstop 兜底 `--no-verify` 场景）。

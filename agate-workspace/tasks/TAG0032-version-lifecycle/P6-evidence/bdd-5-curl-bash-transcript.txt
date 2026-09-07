@@ -1,0 +1,78 @@
+=== BDD-5 额外验收：隔离 HOME 真实 cat install.sh | bash -s -- --versions ===
+验收时间: 2026-09-07T21:03:00+08:00
+隔离 HOME = /tmp/tmp.ZlqQolcF47
+worktree  = /home/kity/oclab/agateon/.worktrees/agate-TAG0032
+
+--- 1. 构造元仓库形态 fixture git repo (参考 _tag_meta_upstream) ---
+fixture repo = /tmp/tmp.lSFvWPJ9US/meta-upstream
+根目录内容 (确认无 scripts/):
+agate
+tags:
+v0.43.0
+v0.50.0
+
+--- 2. 从无关目录 (/tmp/tmp.lSFvWPJ9US/unrelated) 执行 cat install.sh | bash -s -- --versions ---
+正克隆到 '/tmp/tmp.ZlqQolcF47/.agate/repo'...
+完成。
+已安装 latest → v0.50.0
+
+install.sh --versions EXIT_CODE: 0
+
+--- 3. $HOME/.agate/ 目录树（深度 3）---
+~/.agate
+~/.agate/current
+~/.agate/latest
+~/.agate/repo
+~/.agate/repo/agate
+~/.agate/repo/agate/rules
+~/.agate/repo/agate/scripts
+~/.agate/repo/.git
+~/.agate/repo/.git/branches
+~/.agate/repo/.git/config
+~/.agate/repo/.git/description
+~/.agate/repo/.git/FETCH_HEAD
+~/.agate/repo/.git/HEAD
+~/.agate/repo/.git/hooks
+~/.agate/repo/.git/index
+~/.agate/repo/.git/info
+~/.agate/repo/.git/logs
+~/.agate/repo/.git/objects
+~/.agate/repo/.git/packed-refs
+~/.agate/repo/.git/refs
+~/.agate/repo/.git/worktrees
+~/.agate/scripts
+~/.agate/scripts/agate_common.py
+~/.agate/scripts/agate-install.py
+~/.agate/scripts/pre-commit-gate.py
+~/.agate/scripts/resolve-entry.py
+~/.agate/scripts/VERSION.txt
+~/.agate/v0.50.0
+~/.agate/v0.50.0/agate
+~/.agate/v0.50.0/agate/rules
+~/.agate/v0.50.0/agate/scripts
+~/.agate/v0.50.0/.git
+
+指针:
+  current -> latest
+  latest -> v0.50.0
+
+--- 4. $HOME/.agate/scripts/agate-install.py --help ---
+用法: agate-install.py [latest | vX.Y.Z | --uninstall vX.Y.Z | --check]
+  无参 / latest    装 latest 指针（最新发布 tag 的 worktree）+ current → latest
+  vX.Y.Z           装指定版本（幂等，已装则跳过）
+  --uninstall vX   卸载指定版本（引用保护扫描 + worktree remove + 指针清理）
+  --check          环境探测 python3 / pyyaml / git / bash
+agate-install.py --help EXIT_CODE: 0
+
+--- 5. worktree 源仓库污染检查 ---
+git status --porcelain:
+ M agate-workspace/tasks/TAG0032-version-lifecycle/gate-events.jsonl
+?? agate-workspace/tasks/TAG0032-version-lifecycle/P6-dispatch-context-verifier.md
+?? agate-workspace/tasks/TAG0032-version-lifecycle/P6-evidence/
+?? agate-workspace/tasks/TAG0032-version-lifecycle/P6-progress.md
+(空 = 无污染)
+worktree 内 repo/ 或 vX.Y.Z/ 目录:
+  (无)
+
+--- 6. 清理完成：隔离 HOME 已 rm -rf，真实 ~/.agate 未触碰 ---
+真实 ~/.agate 状态: 

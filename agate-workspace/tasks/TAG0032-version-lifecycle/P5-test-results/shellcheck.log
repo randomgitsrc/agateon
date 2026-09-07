@@ -1,0 +1,8 @@
+# P5_shellcheck: shellcheck -S warning agate/scripts/*.sh
+EXIT_CODE(P5_shellcheck): 0
+
+# P5_shellcheck_root: shellcheck -S warning install.sh
+EXIT_CODE(P5_shellcheck_root): 0
+
+EXIT_CODE: 0 / 0
+EXIT_CODE: 0

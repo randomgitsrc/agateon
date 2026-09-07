@@ -2,7 +2,7 @@
 
 agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）：`check-*.py / agate-*.py` 是各检查脚本，`agate_common.py` 是公共函数库，`agate-summary.py / agate-changes.py` 是版本发现工具。仅 3 个 git hook 入口保留 `.sh` 薄壳（定位 AGATE_ROOT + python 探测 + exec 对应 `.py` 主程序 + 失败 fail-closed 阻断）。`agate/tests/scripts/` 下的 `count-tests.sh` 已改写为 pytest 收集计数（TAG0011）；`check-windows-smoke.sh` 已退役（TAG0011，Windows 冒烟由 `@pytest.mark.windows_smoke` 承接）。
 
-> **版本管理机制（TAG0008 起）**：`~/.agate` 从单一软链升级为版本管理根目录。3 个 hook 薄壳自定位到**入口根**（`ENTRY_ROOT`）后，exec `resolve-entry.py`——固定解析入口，运行时读项目 `.agate-version`（或全局 current/latest/legacy 兜底）→ 解析出对应版本目录的 AGATE_ROOT → exec 该版本的 gate py。项目锁旧版、项目用新版互不干扰，切版本不用重装 hook。版本安装/卸载/环境探测用 `agate-install.py`，解析查询用 `agate-resolve.py`。
+> **版本管理机制（TAG0008 起）**：`~/.agate` 从单一软链升级为版本管理根目录。3 个 hook 薄壳自定位到**入口根**（`ENTRY_ROOT`）后，exec `resolve-entry.py`——固定解析入口，运行时读项目 `.agate-version`（或全局 current/latest/legacy 兜底）→ 解析出对应版本目录的 AGATE_ROOT → exec 该版本的 gate py。项目锁旧版、项目用新版互不干扰，切版本不用重装 hook。版本安装/卸载/环境探测用 `agate-install.py`，解析查询用 `agate-resolve.py`。新机一键进入版本管理布局用 `install.sh --versions`，更新用 `agate-install.py latest`（`latest` 是无参 install 的显式别名，幂等）。GitHub 直装得到的**元仓库整仓形态**版本目录（协议在 `agate/` 子目录）由 `_resolve_version_info` 的 `_protocol_root` 两形态探测（`vdir/scripts` 先、`vdir/agate/scripts` 后，顺序不可颠倒）适配。版本管理布局的根 `~/.agate/scripts/` 是随每次安装/升级刷新的**单源副本**（非软链）。安装 / 迁移 / 更新 / 回退的权威口径见 `agate/UPGRADING.md`「版本管理生命周期」节，本表只做框架 + 指针。
 
 > **Windows 用户**：agate 的 gate 脚本已全部 Python 化，不再依赖 bash + GNU coreutils。仅 3 个 hook 薄壳需要 sh 执行（Git for Windows 自带）。脚本可直接 `python3 ~/.agate/scripts/xxx.py` 运行。详见 `agate/platform-notes.md`「Windows 原生」章节。
 
@@ -67,7 +67,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 
 | 脚本 | 用途 |
 |------|------|
-| `agate-install.py` | 安装/卸载 agate 版本 + 环境探测：无参 = 装 latest 指针（最新发布版）；`vX.Y.Z` = 装指定版本（repo 单克隆 + worktree add tag，幂等）；`--uninstall vX` = 删版本目录 + worktree remove + 指针清理（含项目引用保护扫描）；`--check` = 环境探测（python3/pyyaml/git/bash，分平台修复指引）|
+| `agate-install.py` | 安装/卸载 agate 版本 + 环境探测：无参 / `latest` = 装 latest 指针（最新发布版，幂等）；`vX.Y.Z` = 装指定版本（repo 单克隆 + worktree add tag，幂等）；`--uninstall vX` = 删版本目录 + worktree remove + 指针清理（含项目引用保护扫描）；`--check` = 环境探测（python3/pyyaml/git/bash，分平台修复指引）|
 | `agate-resolve.py` | 版本解析 CLI：cwd 向上找 `.agate-version` → 映射版本目录 → 输出 AGATE_ROOT/AGATE_VERSION/AGATE_REASON（优先级 env 最高 → 项目声明 → current → legacy 软链兜底）|
 | `resolve-entry.py` | hook 固定解析入口：读项目 `.agate-version`（或 current/latest/legacy 兜底）→ 得 AGATE_ROOT → exec 对应版本 gate py。切版本不用重装 hook |
 | `agate-pack-offline.py` | 外网离线打包器：`vX.Y.Z [--platform linux-x86_64|windows-x86_64] [--include-python] [--include-pillow]` → 平台标签 bundle + manifest.json（sha256 checksum）|

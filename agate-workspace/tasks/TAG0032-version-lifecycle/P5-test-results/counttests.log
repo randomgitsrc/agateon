@@ -1,0 +1,7 @@
+=== pytest 用例覆盖度自检 ===
+总计：1508 个测试用例（pytest collect-only 口径）
+
+目标：≥ 749（TAG0011 迁移基线，BDD-1）；迁移期数值单调逼近 749。
+如果此数字与 docs/plans/agate-test-plan-2026-07-01.md 附录 A 的口径不一致
+→ 文档漂移，需要更新（附录 A 已归档，口径以 BDD-1 749 为准）。
+EXIT_CODE: 0
