@@ -1,1 +1,3 @@
 {"event":"state_transition","from":"P0","phase":"P1","prev_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","to":"P1","ts":"2026-09-07T10:06:21.357587Z"}
+{"cmd":"check-gate.py P1","event":"gate_run","exit":2,"phase":"P1","prev_hash":"846423fd498263f616ba15938ab57fa3d9df4f857b5b9752eaa53603fa2648c2","runner":"pre-commit","ts":"2026-09-07T10:38:04.501172Z"}
+{"event":"state_transition","from":"P0","phase":"P1","prev_hash":"66073b3cf4e0a22e6d66a1e54a345c5865e4c34cda312bee5b33627a4afe7460","to":"P1","ts":"2026-09-07T10:38:04.501281Z"}

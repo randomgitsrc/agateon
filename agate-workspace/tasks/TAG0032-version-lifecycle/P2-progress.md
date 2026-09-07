@@ -1,0 +1,37 @@
+
+## P2-progress 2026-09-07T10:40:34Z
+- [step] 已读 architect.md 角色定义 + P2-dispatch-context-architect.md 派发指引 + P2 阶段卡片
+- 核心任务：决策 A（元仓库 gap 修复方向）+ 决策 B（根 ~/.agate/scripts/ 建立方式），各 ≥2 候选
+- 下一步：读 P1-requirements.md / P0-brief.md / P1-review.md
+- [step] 已读 P1-requirements.md（14 BDD + §4 四类扫描）/ P0-brief.md（scope 三段 + out-of-scope 四项）/ P1-review.md（approved）
+  - 决策 A 候选：A1=resolve 探测顺序 vdir/scripts 先 vdir/agate/scripts 后（agate_common.py:166）；A2=install worktree 检出后提升 agate/ 为版本根
+  - 决策 B 候选：B1=副本 copy repo/agate/scripts → ~/.agate/scripts；B2=软链 ~/.agate/scripts -> 版本目录 scripts
+  - I-1 版本号不回归红线；扫描 2 已列 ~10 resolve 消费点
+  - 下一步：读 agate-install.py / agate_common.py / resolve-entry.py / agate-resolve.py
+- [step] 已读 agate-install.py(435行,stable==worktree)/agate_common.py(1-320,663-677)/resolve-entry.py(68)/agate-resolve.py(46)
+  - 决策 A1 落点：_resolve_version_info L180-184（.agate-version ok 分支 vdir isdir）+ L188-190（current 链分支 basename(cur)）
+  - I-1 关键：current 链分支 version=os.path.basename(cur)——若 root 改 cur/agate 而 version 不先算，AGATE_VERSION 变 "agate"。须先算 version 号再拼 /agate
+  - 探测 helper 语义：vdir/scripts 存在→vdir（根即协议，红线）；否则 vdir/agate/scripts 存在→vdir/agate（元仓库）；都不在→vdir（维持既有 fail-closed 下游）
+  - resolve-entry.py:49 os.path.join(root,"scripts",gate_py)、resolve_rules_root:677 os.path.join(root,"rules")——受益方，root=vdir/agate 后自然命中
+  - resolve_hook_root L216 info=_resolve_version_info(use_legacy=False)——共用归口，探测顺序改动同时惠及 hook 侧
+  - _ensure_repo L134 os.makedirs(agate_home,exist_ok=True) 无软链检测——断点一落点
+  - 下一步：ls 测试目录 + 读既有 fixture / conftest / UPGRADING / install.sh / README / SETUP
+- [step] 已读 test_agate_version_install.py / test_agate_version_resolve.py / test_hook_resolve_entry.py / conftest.py
+  - fixture gap 实证：_make_home（resolve test）建 ~/.agate/vX/（空目录，无 scripts/）；_make_home（hook test）建 vX/scripts/ 直含（根即协议形态）；_tag_upstream 建 git_repo/agate/scripts/（元仓库形态源）但 install test 只断言 worktree/指针，从不串 resolve→gate
+  - P3 双 fixture：元仓库形态 = ~/.agate/vX/agate/scripts/ 存在 + vX/scripts/ 不存在；根即协议形态 = vX/scripts/ 直存在
+  - count-tests 实际路径 = agate/tests/scripts/count-tests.sh（dispatch 写的 agate/tests/tests/scripts/ 需校正）
+  - 测试目录：agate/tests/{unit,regression,integration} 均存在
+  - 下一步：读 UPGRADING 断点三落点 + install.sh + README×2 + SETUP + grep 消费方复核
+- [step] 已读 install.sh(55,legacy 单软链,不 clone 进 ~/.agate)/README×2(L40-42 版本块)/SETUP.md(L244 升级节)/UPGRADING.md(§1 L20-38, v0.50.0 表 L543-553, hook 口径分歧 v0.60-62 L280/315/377 vs v0.66-68 L95/117/171)
+- [step] grep 消费方复核：所有 resolve_* 消费点归口 _resolve_version_info，无 dirname 旁路；额外 check-structure-consistency.py:528/545 亦受益方
+- [step] check-frontmatter schema：P2-design.md required=candidate_count/packages/domains/ui_affected；types candidate_count:int packages:list domains:list ui_affected:bool；MAX_DEPTH=3（dispatch_plan 内联 flow YAML batches 列表深度=3 恰好通过）
+- [step] 最小验证 mv1.sh（隔离 HOME）：islink(base)=True 且 isdir(base)=True；os.makedirs(base,exist_ok=True) 对软链无报错（穿透确认）；后续 repo/ realpath 落 real_target/agate/repo（污染源仓库确认）；git clone 落软链目标确认；检测判据 = os.path.islink(agate_home) 须在 makedirs 前判
+- [step] 决策初判：A 选 A1（resolve 侧增量探测）；B 选 B1（副本）。开始写 P2-design.md
+- [step] P2-design.md 写入完成（407 行）：4 候选（A1/A2/B1/B2），影响面梳理三部分在候选前
+  - 决策 A = A1（resolve 侧增量探测 _protocol_root helper，vdir/scripts 先 vdir/agate/scripts 后）
+  - 决策 B = B1（副本 copytree dirs_exist_ok=True，跨平台单口径 + repo 删不断入口）
+  - gate_commands 7 项固化（P5_counttests 校正为 agate/tests/scripts/count-tests.sh；新增 P5_shellcheck_root 覆盖 install.sh；P5_timeout_seconds=600）
+  - dispatch_plan: serial 两批（scripts-tests high / docs-consistency medium）
+  - minimal_validation：断点一 confirmed（mv1.sh 隔离 HOME 实测）+ A1 纯代码逻辑声明
+- [step] check-frontmatter.py P2-design.md → rc=0；agate-md-field-set --list 四字段齐（candidate_count=4/packages/domains/ui_affected=False）
+- [DONE] 返回主 Agent
