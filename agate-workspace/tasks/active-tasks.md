@@ -10,7 +10,6 @@
 
 | 编号 | 任务名称 | 状态 | 阶段 | 优先级 | 依赖 | 创建日期 | 更新日期 |
 |------|----------|------|------|--------|------|----------|----------|
-| TAG0032 | 版本管理生命周期可用性批（RM-AG0058 整合：入口断链 + 元仓库 gap + update 路径） | ✅✅ | READY | 中 | RM-AG0058 | 2026-09-07 | 2026-09-07 |
 
 ### 待开始
 
@@ -32,6 +31,7 @@
 | TAG0031 | DEBT 存量修复批（DEBT0002/3/4/7/16/17/18）：版本管理域（hash 双实现合并+manifest 信任边界+卸载扫描限流 WARNING）+ 测试隔离（check_pruning 临时 git 仓库）+ check-gate.py 健壮性（resolve_workspace 权威解析/核对表整行判定/fail-closed 降级）——低风险脚本修复，仿 TAG0024 工具链批先例；15 条 BDD 全 PASS，P6.5 judge 独立复核通过，P7 一致性 BLOCKER=0 → v0.67.2 | ✅✅ | READY | 低 | 2026-09-04 |
 | TAG0029 | gate 命令解析器修复批（RM-AG0056 + DEBT0027 high + DEBT0023）：agate-read-gate-commands.py 值清洗剥离行内注释+引号闭合校验（DEBT0027 假绿灯：测试没跑却被当红灯放行）+ check-tdd-red judge 分支语法错误不得计入红灯证据 + P3* 键收集收紧（DEBT0023）+ 平台假设扫描器 fixture 数据面豁免并纳入 P3/P4 常驻面（RM-AG0056）——三处同源指向同一解析器，强合并单 task | ✅✅ | READY | 高 | 2026-09-04 |
 | TAG0030 | 验收盲区机制批（RM-AG0057 四类 + DEBT0024/25/26）：测试副作用/环境还原 gate（创建型 E2E 清理钩子）+ P1 人工体验路径验收节（seed 后页面有内容 BDD）+ plan-design-review 形态驱动化（读 ui_render_shape 加载维度组）+ 布局方案 ≥2 候选下沉 UI 层 + 视觉契约断言（DOM 度量）+ TAG0027 复盘三连（真实 gate 夹具/新 CHECK 先全量扫描/大任务拆小）——协议卡/评审角色/模板文档面 | ✅✅ | READY | 高 | 2026-09-04 |
+| TAG0032 | 版本管理生命周期可用性批（RM-AG0058 整合：入口断链 + 元仓库 gap + update 路径） | ✅✅ | DONE | 中 | 2026-09-07 |
 | TAG0027 | 编排语义统一落地（RM-AG0054，全量四 phase）：推进侧状态机 CLI（agate next/advance）+ 方案 A 渲染时注入 + 护栏 1 机械化；BDD 26/26 + judge 26/26 → v0.66.0 | ✅✅ | READY | 高 | 2026-09-03 |
 | TAG0026 | 维护性反模式 gate（RM-AG0046）：G0 两条 + check-maintainability.py + P4 三重门槛挂载；13 BDD → v0.65.0 | ✅✅ | READY | 高 | 2026-08-30 |
 | TAG0022 | 三连任务确认问题修复批（RM-AG0037 ruff 合并强制 + RM-AG0038 M2 迁移闭环 + RM-AG0039 judge 强制化 + RM-AG0040 M3 实证 + RM-AG0041 环境测试根治）：TAG0019-21 全面分析确认的 5 个问题合并处理 | ✅✅ | READY | 高 | 2026-08-23 |
