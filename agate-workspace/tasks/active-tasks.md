@@ -10,7 +10,7 @@
 
 | 编号 | 任务名称 | 状态 | 阶段 | 优先级 | 依赖 | 创建日期 | 更新日期 |
 |------|----------|------|------|--------|------|----------|----------|
-| TAG0033 | Codex 命令流适配器 + 平台接入（RM-AG0061，RM-AG0055 §3.4.4 预留扩展点的落地 + RM-AG0060 b 块前置）：CodexAdapter 加入 agate-cmdstream-adapters.py 使 subagent 存活/卡死检测覆盖 Codex + platform-notes.md Codex 章补完整 + SETUP.md Codex 小节 + fixture 单测 + 真机验证清单；检测引擎/阈值/IR/既有三平台适配器零改动。触发 SELF-GATE | 🔄 | P1 | 高 | RM-AG0061 | 2026-09-08 | 2026-09-09 |
+| TAG0033 | Codex 命令流适配器 + 平台接入（RM-AG0061，RM-AG0055 §3.4.4 预留扩展点的落地 + RM-AG0060 b 块前置）：CodexAdapter 加入 agate-cmdstream-adapters.py 使 subagent 存活/卡死检测覆盖 Codex + platform-notes.md Codex 章补完整 + SETUP.md Codex 小节 + fixture 单测 + 真机验证清单；检测引擎/阈值/IR/既有三平台适配器零改动。触发 SELF-GATE | 🔄 | P2 | 高 | RM-AG0061 | 2026-09-08 | 2026-09-09 |
 
 ### 待开始
 

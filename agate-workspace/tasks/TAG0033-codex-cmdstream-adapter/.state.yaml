@@ -1,11 +1,13 @@
 task_id: TAG0033
-phase: P1
+phase: P2
 status: active
-judge:
-  enabled: true
 retries:
   P1:
-    - round: 1
-      failure_mode: quality
-      prompt_changed: true
-      adjustment: P1-review needs-revision（B1 阻塞：capability_requirements 的 codex-api-key-account 条目 status=available + available=[] 与 note 自相矛盾）+ 2 非阻塞（同类扫描补 S12 / BDD-7 Given 补兜底 fixture 来源）；回派 analyst 定向修订后复审
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: P1-review needs-revision（B1 阻塞：capability_requirements 的 codex-api-key-account
+      条目 status=available + available=[] 与 note 自相矛盾）+ 2 非阻塞（同类扫描补 S12 / BDD-7 Given
+      补兜底 fixture 来源）；回派 analyst 定向修订后复审
+judge:
+  enabled: true
