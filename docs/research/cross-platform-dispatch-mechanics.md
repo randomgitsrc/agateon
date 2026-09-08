@@ -124,7 +124,7 @@
 ### 5.2 子代理的 model 怎么定
 - **Claude Code** `[实测]`：Task 调用时传 `model` 参数。从 Sonnet 会话派 `model: haiku` → 子代理确为 `claude-haiku-4-5-20251001`。`.claude/agents/*.md` frontmatter 的 `model` 字段是另一条路径（曾有"被忽略、只单次传参才生效"的独立报告，未在本轮测；路由用途走单次传参，不依赖它）。
 - **Codex** `[实测]`：`spawn_agent(task_name, message, model?, reasoning_effort?, fork_turns?)`。schema `[自述]`：`task_name`（必，小写字母/数字/下划线）、`message`（必）、`fork_turns`（`"none"|"all"|正整数串`，默认 `"all"` — 控制上下文 fork）、`model`（枚举，ChatGPT 账号下为 `gpt-5.6-terra | gpt-5.6-luna | gpt-5.5 | gpt-5.4-mini`——**比 `codex exec -m` 的可用集更宽**）、`reasoning_effort`（`low|medium|high|xhigh|max|ultra`）。实测：父 `reasoning effort: medium`，`spawn_agent(model="gpt-5.6-terra", reasoning_effort="high")` 起的子代理回报 `gpt-5.6-terra high`——**按次可指定 model + reasoning_effort**。
-- **OpenCode** `[实测]` `[文档]`：工具调用**不传 model**。model 定在**命名 subagent 配置**：`agents.<name>.model`（V2：`"provider/model#variant"`；V1：`model` + 独立 `variant`）。**实测 v1.18.11**：项目 `opencode.json` 配 `agent.agate-child-pro = {mode: subagent, model: "deepseek/deepseek-v4-pro"}`，父会话 `-m deepseek/deepseek-v4-flash` 用 `task` 派 `subagent_type="agate-child-pro"` → 子代理回报 `deepseek/deepseek-v4-pro`（配置的 model，非父的）。**旧"bug ① model 被忽略"在本版本不存在**；自定义 `mode: subagent` agent 也正常出现在 `task` 可派列表（旧"bug ③"同不存在——之前只见 `explore`/`general` 是因为没配自定义 agent）。官方："A child session uses its subagent's configured model, or inherits the parent when none configured"；父 `opencode run -m` 切的是 session model、不改 agent 配的 model——对"子代理跑在它被指定的 model 上"反而正好。
+- **OpenCode** `[实测]` `[文档]`：工具调用**不传 model**。model 定在**命名 subagent 配置**：`agents.<name>.model`（V2：`"provider/model#variant"`；V1：`model` + 独立 `variant`）。**实测 v1.18.11**：项目 `opencode.json` 配 `agent.agate-child-pro = {mode: subagent, model: "deepseek/deepseek-v4-pro"}`，父会话 `-m deepseek/deepseek-v4-flash` 用 `task` 派 `subagent_type="agate-child-pro"` → 子代理回报 `deepseek/deepseek-v4-pro`（配置的 model，非父的）。**旧"bug ① model 被忽略"在本版本不存在**（`[实测]` 直接复现）；自定义 `mode: subagent` agent 也正常出现在 `task` 可派列表（旧"bug ③"同不存在——之前只见 `explore`/`general` 是因为没配自定义 agent，`[实测]`）。**旧"bug ②"（父会话交互式切 model 后子代理是否跟随）——本轮未直接复现测试**，只有机制推断 + 官方文档：官方"A child session uses its subagent's configured model, or inherits the parent when none configured"，且 `opencode run -m` 切的是 session model、不改 agent 配的 model，据此推断"子代理仍跑配置 model、bug② 不影响本用途"——`[文档]` `[推断]`，非 `[实测]`。落地前补一次直接复现：配好命名 agent、交互式切 model、再派该 agent、核对子跑哪个 model。
 
 ### 5.3 深度 / 权限继承
 - OpenCode `[文档]`：`subagent_depth` 默认 `1`（primary 可派 subagent，subagent 不能再派）；设 `2` 放开一层。子代理"currently uses its own configured permissions, not a restricted copy of the parent's"。
@@ -272,6 +272,7 @@ RM-AG0055 的命令流机制是为"看不见进程"的原生派发（Task 工具
 3. **model 阵容**：Codex 随账号类型（`codex exec --json` + `spawn_agent` 的 `model` 枚举各查一次）；OpenCode `opencode models <provider>` 实际可用清单（部分配置会失效）。
 4. **子代理 model 传参**：Claude Code Task `model`、Codex `spawn_agent(model=)`、OpenCode 命名 agent `model` 各端到端跑一次（本轮三条均已通，版本升级后复跑）。
 5. **退出码 vs 结构化事件**：Codex 仍需解析 `--json`（`turn.failed`）、OpenCode `--format json` 的 `step_finish.part.reason` 判成败、OpenCode 空返回判定仍成立。
+6. **本轮"证据强度低于实测"的两项要在落地前补实测**（外部评审 B1/B2）：① OpenCode bug②（父交互式切 model 后子代理是否跟随，§5.2）——直接复现；② Codex `spawn_agent` 参数 schema 是否穷尽（§5.2 只有模型自述，未见 background/timeout/permission 字段 ≠ 确认无）——落地写调用代码时按"schema 可能不全"处理。
 
 ---
 
@@ -281,7 +282,7 @@ RM-AG0055 的命令流机制是为"看不见进程"的原生派发（Task 工具
 
 | # | 项 | 状态 |
 |---|---|---|
-| 1 | **OpenCode `agents.<name>.model` 是否生效** | ✅ **已测通**——项目配 `agent.agate-child-pro={mode:subagent, model:"deepseek/deepseek-v4-pro"}`，父 `-m deepseek/deepseek-v4-flash` 派它 → 子回报 `deepseek/deepseek-v4-pro`。旧 bug ①/③ 在 v1.18.11 均不存在。**OpenCode `cli: native` 可行**（走命名 agent 间接路，§5.2） |
+| 1 | **OpenCode `agents.<name>.model` 是否生效** | ✅ **已测通**——项目配 `agent.agate-child-pro={mode:subagent, model:"deepseek/deepseek-v4-pro"}`，父 `-m deepseek/deepseek-v4-flash` 派它 → 子回报 `deepseek/deepseek-v4-pro`。**旧 bug ①③ `[实测]` 直接复现确认不存在**；**旧 bug ②（父交互式切 model 后子跟不跟）本轮仅机制推断、未直接复现**（§5.2）——落地前补测。**OpenCode `cli: native` 可行**（走命名 agent 间接路，§5.2） |
 | 2 | **完成/失败信号 + 卡死处理** | ✅ **清楚**（§6.0 / §6.0.1）——正常完成：CLI 子进程 = 进程退出、native subagent = 工具调用返回，两条路内在可靠，不靠超时。卡死检测**直接复用 RM-AG0055 已落地的命令流日志**（`agate-cmdstream-*.py`）：Claude Code / OpenCode 适配器现成覆盖；**唯一缺口 = Codex 适配器**（按 RM-AG0055 §3.4.4"约一个文件"）。集成点 = spawn 时捕获 session id。固定紧 timeout 会误杀长任务=违规处理，不采用 |
 | 3 | **权限对等经验验证** | ✅ **已测通**——三平台加绕过 flag 均能写 cwd 外（`$HOME`）；Codex 对照 `-s read-only` 确认沙箱真会拦（§4） |
 | 4 | **Codex `spawn_agent` 完整 schema** | ✅ **已拿到**——`task_name`(必)/`message`(必)/`fork_turns`("none"\|"all"\|N，默认"all")/`model`(枚举 4 个)/`reasoning_effort`(6 档)（§5.2）。未见 background/timeout/permission 字段（模型自述称"complete"） |
