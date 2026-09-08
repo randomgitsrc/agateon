@@ -316,7 +316,7 @@ def test_bdd_6_detect_consumes_registry_zero_change(agate_scripts):
 
     # 检测引擎通过注册表消费适配器（平台无关）；模拟新增第四平台后注册表可用
     registered = set(adapters.ADAPTERS.keys())
-    assert registered == {"claude-code", "opencode", "dsh"}
+    assert {"claude-code", "opencode", "dsh"}.issubset(registered)
     # TAG0033 BDD-19：新增平台键 "codex" 后精确等值断言须改包含式（P4 落地）。
     # 现 ADAPTERS 尚无 codex 键 → 本行红；P4 加键 + 上一行改包含式后整片转绿。
     # 原语义（检测引擎零改动消费注册表）不删、不弱化。

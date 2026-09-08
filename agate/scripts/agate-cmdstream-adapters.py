@@ -35,6 +35,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -618,12 +619,236 @@ class DSHAdapter(CommandStreamAdapter):
         )
 
 
+# ---- Codex 适配器（rollout JSONL + item.exit_code 数字 exit code） ----
+
+# P5 V4 收敛锚：Codex 截断标记形态实测后收敛此常量/方法（P1 §4.1.2 / §7 V4）
+_CODEX_TRUNC_BOOL_KEYS = ("truncated", "output_truncated", "is_truncated")
+_CODEX_TRUNC_TEXT_MARKERS = (
+    "[output truncated]",
+    "output truncated",
+    "tokens truncated",
+    "[truncated]",
+)
+
+
+def _codex_int_or_none(val):
+    """epoch 毫秒字段取整数（bool 不算 int，畸形外部数据 → None）。"""
+    if isinstance(val, bool):
+        return None
+    return val if isinstance(val, int) else None
+
+
+class CodexAdapter(CommandStreamAdapter):
+    """Codex：~/.codex/sessions/YYYY/MM/DD/rollout-<ISO8601>-<uuid>.jsonl（rollout JSONL）。
+
+    首行恒为 type=="session_meta"（payload 含 cli_version / originator / id）——probe 的正向
+    信号（Claude Code 转录首行不具备）。命令流来自 type=="event_msg" 且
+    payload.type=="item_completed" 且 payload.item.type=="CommandExecution" 的事件；
+    exit 直接取 item.exit_code（数字，无需文本前缀解析），ts 取 payload.started_at_ms /
+    completed_at_ms（epoch ms int）。未结束命令 = 有 item_started 无 item_completed（或
+    item_completed 但 status!="completed"）→ 回填 exit=None / ts_end=None / "pending" 记录
+    （比照 DSHAdapter 未结束 call 补记录）。截断走双信号兜底（_detect_truncated）。
+    session_id = os.path.basename(session_path)（不取 payload.session_id——那对子会话是父 id）。
+    父会话与 spawn_agent 子会话都是同目录独立 rollout-*.jsonl → os.walk 天然同时枚举。
+    """
+
+    platform = "codex"
+
+    def probe(self, path):
+        """basename rollout-*.jsonl（排除 .jsonl.zstd）+ 首行 session_meta 含 codex 标记。
+
+        路径不存在 / 首行非 JSON / 非 dict / 无 codex 标记 → return False，绝不抛
+        （比照 DSHAdapter.probe / ClaudeCodeAdapter.probe 的异常处理）。
+        """
+        try:
+            if not isinstance(path, str):
+                return False
+            base = os.path.basename(path)
+            if not base.startswith("rollout-"):
+                return False
+            if not base.endswith(".jsonl") or base.endswith(".jsonl.zstd"):
+                return False
+            with open(path, encoding="utf-8", errors="replace") as f:
+                first = f.readline()
+            obj = json.loads(first)
+            if not isinstance(obj, dict) or obj.get("type") != "session_meta":
+                return False
+            payload = obj.get("payload")
+            if not isinstance(payload, dict):
+                return False
+            return any(k in payload for k in ("cli_version", "originator", "id"))
+        except (OSError, ValueError, TypeError):
+            return False
+
+    def list_sessions(self, cwd):
+        """os.walk 枚举 rollout-*.jsonl（排除 .jsonl.zstd）；root = cwd if cwd else
+        expanduser("~/.codex/sessions")（cwd 为 None / "" 都回落默认根——P2-review N1）。
+        返回按路径字符串 sorted() 的绝对路径 list（文件名内嵌 ISO8601，字典序≈时间序）。"""
+        root = cwd if cwd else os.path.expanduser("~/.codex/sessions")
+        sessions = []
+        for dirpath, _dirs, names in os.walk(root):
+            for name in sorted(names):
+                if (
+                    name.startswith("rollout-")
+                    and name.endswith(".jsonl")
+                    and not name.endswith(".jsonl.zstd")
+                ):
+                    sessions.append(os.path.join(dirpath, name))
+        return sorted(sessions)
+
+    def read_commands(self, session_path):
+        session_id = os.path.basename(session_path)
+        records = []
+        started = {}  # item.id → (obj, payload, item) 起始事件（item_started/item_updated）
+        emitted_ids = set()  # 已产出记录的 item.id（去重 pending 回填）
+        skipped = 0  # 畸形/非法行计数（不崩溃、计数告警，照 ClaudeCodeAdapter）
+        try:
+            fh = open(session_path, encoding="utf-8", errors="replace")
+        except OSError:
+            return records
+        with fh:
+            for raw_line in fh:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except ValueError:
+                    skipped += 1
+                    continue
+                if not isinstance(obj, dict):
+                    skipped += 1
+                    continue
+                if obj.get("type") != "event_msg":
+                    continue
+                payload = obj.get("payload")
+                if not isinstance(payload, dict):
+                    skipped += 1
+                    continue
+                item = payload.get("item")
+                if not isinstance(item, dict) or item.get("type") != "CommandExecution":
+                    continue
+                ptype = payload.get("type")
+                item_id = item.get("id")
+                if ptype in ("item_started", "item_updated"):
+                    if item_id is not None and item_id not in started:
+                        started[item_id] = (obj, payload, item)
+                    continue
+                if ptype != "item_completed":
+                    continue
+                pending = item.get("status") != "completed"
+                records.append(
+                    self._build_record(session_id, obj, payload, item, pending=pending)
+                )
+                if item_id is not None:
+                    emitted_ids.add(item_id)
+        # 未结束命令（P2 §5 设计点 2 / R3）：有 item_started 无对应 item_completed →
+        # 补一条 pending 记录（比照 DSHAdapter line 556-560）。已完成命令记录不受影响。
+        for item_id, (s_obj, s_payload, s_item) in started.items():
+            if item_id in emitted_ids:
+                continue
+            records.append(
+                self._build_record(session_id, s_obj, s_payload, s_item, pending=True)
+            )
+        if skipped:
+            sys.stderr.write(
+                f"codex 适配器: {session_id} 跳过 {skipped} 行畸形/非法 JSON\n"
+            )
+        return records
+
+    @staticmethod
+    def _join_command(command):
+        """item.command 数组 → shlex.join（元素逐个 str 强转）；非 list → ""。"""
+        if not isinstance(command, list):
+            return ""
+        return shlex.join(str(part) for part in command)
+
+    @classmethod
+    def _detect_truncated(cls, item):
+        """Codex 输出截断双信号检测（P2 §5 设计点 4，比照 DSHAdapter._detect_truncated）。
+
+        P5 V4 收敛锚：Codex 截断标记形态实测后收敛此常量/方法（P1 §4.1.2 / §7 V4）。
+        ① item 上的显式布尔字段（_CODEX_TRUNC_BOOL_KEYS）；② aggregated_output /
+        formatted_output 里的字面量标记（_CODEX_TRUNC_TEXT_MARKERS，小写子串）。
+        任一命中 → True。
+        """
+        if not isinstance(item, dict):
+            return False
+        for key in _CODEX_TRUNC_BOOL_KEYS:
+            val = item.get(key)
+            if isinstance(val, bool) and val:
+                return True
+        text = ""
+        for field in ("aggregated_output", "formatted_output"):
+            v = item.get(field)
+            if isinstance(v, str):
+                text += v
+        lowered = text.lower()
+        return any(marker in lowered for marker in _CODEX_TRUNC_TEXT_MARKERS)
+
+    def _build_record(self, session_id, obj, payload, item, *, pending):
+        """event_msg/item_* 事件 → CommandRecord（十字段映射见 P2 §4.2）。
+
+        pending（未结束）→ exit=None / ts_end=None / exit_signal="pending" /
+        output_hash=None / truncated=False。已完成 → exit 直取 item.exit_code（数字，
+        非 bool），exit_signal 留档原始形态。
+        """
+        command = self._join_command(item.get("command"))
+        ts_start = _codex_int_or_none(payload.get("started_at_ms"))
+        if ts_start is None:
+            try:
+                ts_start = _iso8601_to_epoch_ms(obj.get("timestamp", ""))
+            except (ValueError, TypeError):
+                ts_start = None
+
+        if pending:
+            return CommandRecord(
+                platform="codex",
+                session_id=session_id,
+                tool="exec",
+                command=command,
+                ts_start=ts_start,
+                ts_end=None,
+                exit=None,
+                exit_signal="pending",
+                output_hash=None,
+                truncated=False,
+            )
+
+        ts_end = _codex_int_or_none(payload.get("completed_at_ms"))
+        raw_exit = item.get("exit_code")
+        exit_code = (
+            raw_exit if isinstance(raw_exit, int) and not isinstance(raw_exit, bool) else None
+        )
+        if exit_code is not None:
+            exit_signal = f"exit_code={exit_code}"
+        else:
+            status = item.get("status")
+            exit_signal = str(status) if status else "status=completed"
+        truncated = self._detect_truncated(item)
+        output = item.get("aggregated_output", "")
+        output_hash = None if truncated else _sha1_hex(str(output or ""))
+        return CommandRecord(
+            platform="codex",
+            session_id=session_id,
+            tool="exec",
+            command=command,
+            ts_start=ts_start,
+            ts_end=ts_end,
+            exit=exit_code,
+            exit_signal=exit_signal,
+            output_hash=output_hash,
+            truncated=truncated,
+        )
+
+
 # ---- 显式注册表（P2 §2.1 候选 A，BDD-6：配置声明形态） ----
 
 ADAPTERS = {
     "claude-code": ClaudeCodeAdapter(),
     "opencode": OpenCodeAdapter(),
     "dsh": DSHAdapter(),
+    "codex": CodexAdapter(),
 }
 
 

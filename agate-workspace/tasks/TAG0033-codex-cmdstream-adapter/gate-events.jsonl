@@ -7,3 +7,4 @@
 {"cmd":"check-gate.py P2","event":"gate_run","exit":2,"phase":"P2","prev_hash":"0a3554a27890caa0d9bab8c765f91c7b58392788729bc275a87fea3c5b15cbf7","runner":"pre-commit","ts":"2026-09-08T22:29:04.354263Z"}
 {"event":"state_transition","from":"P1","phase":"P2","prev_hash":"2d8be44c90da97c2169ef5fbe552f716c19b9c86a0cb16f83e51d76691cbf32b","to":"P2","ts":"2026-09-08T22:29:04.354346Z"}
 {"event":"state_transition","from":"P2","phase":"P3","prev_hash":"2ced7c9d6cae58dd9c81ebc6dfb0d1bd573da77bfbb51acf0d80104e741525e2","to":"P3","ts":"2026-09-08T22:56:49.990425Z"}
+{"event":"state_transition","from":"P3","phase":"P4","prev_hash":"63a499a63ffc201ffe7eab69d54ac3736376422f093b3b2cb066b36abbaa207d","to":"P4","ts":"2026-09-08T23:21:57.157231Z"}
