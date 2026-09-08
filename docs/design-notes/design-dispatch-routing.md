@@ -211,9 +211,10 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 5. **与既有派发机制的交互**（本文未展开，立项设计要覆盖）：① 五模式并行批（模式 2/3）——每个并行 subagent 是否各自独立探测同一候选链、探测结果 task 内是否共享；② RM-AG0055 自主再派发的子任务——是否走路由表（倾向"不走，继承父的实际 cli/model"）；③ 单 Agent 模式（`has_task_tool:false`，如 Claude Project）——无派发动作，路由为 no-op，应显式声明出范围。
 6. **RM 编号：已申领 RM-AG0060**（`agate-workspace/roadmap/roadmap.md`，status backlog，epic）。排期——检查是否与近期涉及 `dispatch-protocol.md` / 推进侧 CLI 的任务冲突（尤其 **RM-AG0059 任务管理命令化** 有 CLI 家族重叠，backlog）。**epic 拆分**：
    - **a 配置路由核心 + `cli: native`**（Claude Code/OpenCode）——U1–U5/U10，可单独交付。
-   - **b 跨 CLI 子进程**——spawn + `--json` 解析 + D2；**Codex 接入拆到 RM-AG0061**（`CodexAdapter` + `platform-notes.md` Codex 章 + SETUP，RM-AG0055 §3.4.4 预留扩展点的落地，作 b 的前置——建议先做，去风险）。
-   - **c tmux 观测层**——U9，可后置/可选，不通过可整体移除不影响 a/b。
-   - 建议顺序：RM-AG0061（Codex 接入，去风险）与 a 可并行 → b → c。参照 RM-AG0058 epic 形态。
+   - **b 跨 CLI 子进程**——spawn + `--json` 解析 + D2；**Codex 接入拆到 RM-AG0061**（`CodexAdapter` + `platform-notes.md` Codex 章 + SETUP，RM-AG0055 §3.4.4 预留扩展点的落地，作 b 的前置——建议先做，去风险）。b 的 `cli: codex` 子进程部分依赖 RM-AG0061 的存活检测，可先发 `cli: claude-code`/`cli: opencode` 子进程。
+   - **c tmux 观测层**——U9，可后置/可选，不通过可整体移除不影响 a/b；目标环境 tmux 验证若与任务环境不同则停在"定稿 + 待落地验证"、不阻塞 P8。
+   - **一个 task 还是多个**：Codex 拆走后 a/b/c 重新评级掉到 medium 附近——**可一个 task 内分 P4a/P4b/P4c 串行子批交付**（参照 RM-AG0058/0057：epic + 一个 task），也可再拆多个 TAG。P2 立项定。
+   - 建议排期：RM-AG0061（Codex 接入，去风险）与 a 并行 → b → c。
 7. **平台机制的落地前复核**——照 `docs/research/cross-platform-dispatch-mechanics.md` §10 复核清单。本轮各条的**证据强度不一样，不能一句"已实测通过"带过**（外部评审 B1/B2）：
    - **端到端实测 `[实测]`**：Claude Code Task 传 `model`（父 Sonnet→子 Haiku）；Codex `spawn_agent(model=, reasoning_effort=)` 按次生效（父 medium→子 high）；OpenCode 命名 subagent `agents.<name>.model` 生效（父 flash→子 pro）——即 OpenCode 旧 **bug ①③ 已直接复现测试确认不存在**；三平台子进程权限绕过 + Codex 沙箱对照（`-s read-only` 拦）；结构化输出形态（Codex `--json` / OpenCode `--format json` / Claude `--output-format json`）；tmux 全链路含真人 attach。
    - **模型自述 `[自述]`，未独立验证完整性**：Codex `spawn_agent` 的参数 schema（`task_name`/`message`/`fork_turns`/`model`/`reasoning_effort`）——"未见 background/timeout/permission 字段"是"没在自述里看到"，**不等于确认没有**。落地写调用代码时不能假设 schema 已穷尽（如别假设无 timeout 参数就不处理超时）。
