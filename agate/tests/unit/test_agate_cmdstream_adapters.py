@@ -24,8 +24,10 @@
 # node 探测（DSH zstd 用例）：node 可用才跑真实解压路径，不可用 pytest.skip 并标注原因（P2-review
 # 非阻塞建议 2 / dispatch-context 约束 5）；不得硬依赖 python zstandard。
 
+import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -315,6 +317,10 @@ def test_bdd_6_detect_consumes_registry_zero_change(agate_scripts):
     # 检测引擎通过注册表消费适配器（平台无关）；模拟新增第四平台后注册表可用
     registered = set(adapters.ADAPTERS.keys())
     assert registered == {"claude-code", "opencode", "dsh"}
+    # TAG0033 BDD-19：新增平台键 "codex" 后精确等值断言须改包含式（P4 落地）。
+    # 现 ADAPTERS 尚无 codex 键 → 本行红；P4 加键 + 上一行改包含式后整片转绿。
+    # 原语义（检测引擎零改动消费注册表）不删、不弱化。
+    assert "codex" in registered
     # 检测引擎模块中存在对 ADAPTERS 的引用路径（零改动消费锚）
     detect_src = detect_path.read_text(encoding="utf-8")
     assert "ADAPTERS" in detect_src
@@ -332,6 +338,9 @@ def test_bdd_7_fixture_sanitized(load_fixture):
         "cmdstream/claude-code-session.jsonl",
         "cmdstream/dsh-session.jsonl",
         "cmdstream/opencode-part-state.json",
+        # TAG0033 N3：Codex fixture 纳入既有脱敏校验清单
+        "cmdstream/codex-session.jsonl",
+        "cmdstream/codex-subagent-session.jsonl",
     ):
         text = load_fixture(name).read_text(encoding="utf-8")
         # 不含真实用户路径（I-14：不得泄露真实用户路径/密钥/会话标识）
@@ -340,6 +349,20 @@ def test_bdd_7_fixture_sanitized(load_fixture):
         # 会话/调用标识用 demo 占位（call_demo_/ses_demo_/prt_demo_/toolu_demo_），非真实 26 位 hex
         assert not re.search(r"\b(?:ses|msg|prt|call)_[0-9a-f]{26}\b", text), f"{name} 含真实会话标识"
         assert "demo" in text, f"{name} 缺 demo 脱敏占位标记"
+
+    # TAG0033 N3：既有正则 \b(?:ses|msg|prt|call)_[0-9a-f]{26}\b 不匹配 Codex 连字符 uuid
+    # → 对 Codex fixture 补形态负向断言（无形似真实的连字符 hex uuid、无真实 rollout 会话
+    #   前缀 01a0…、无真实 ~/.codex 会话路径）。
+    for name in (
+        "cmdstream/codex-session.jsonl",
+        "cmdstream/codex-subagent-session.jsonl",
+    ):
+        text = load_fixture(name).read_text(encoding="utf-8")
+        assert not re.search(
+            r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", text
+        ), f"{name} 含形似真实的连字符 hex uuid（Codex 会话标识须 demo 占位）"
+        assert not re.search(r"\b01a0[0-9a-f]{4}\b", text), f"{name} 含真实 rollout 会话 uuid 前缀"
+        assert "/.codex/sessions/" not in text, f"{name} 含真实 ~/.codex 会话路径"
 
 
 # ================= fix1（P4-review CRITICAL-2/3/4/5/7）补充测试 =================
@@ -600,3 +623,329 @@ def test_bdd_4_dsh_truncated_marker_sets_truncated_true(agate_scripts, tmp_path)
     assert rec.output_hash is None, "truncated=True 时 output_hash 必须为 None（IR 契约）"
     # exit 解析不受影响（isError=true + 无 Error: 前缀 → isError=true 信号）
     assert rec.exit_signal == "isError=true"
+
+
+# ================= TAG0033: CodexAdapter 覆盖（BDD-1~12 / 19 / 21 + P2-review N1/N3） =================
+# 被测（P4 才新增，本节当前必须全红）：
+#   - agate/scripts/agate-cmdstream-adapters.py 的 class CodexAdapter（probe / list_sessions /
+#     read_commands + _detect_truncated + _CODEX_TRUNC_* 常量）+ ADAPTERS["codex"] 一行。
+#
+# 断言目标 = P2-design.md §5 五设计点定论 + §4.2 十字段映射表（不自创预期）：
+#   probe    = basename 正则 rollout-*.jsonl（非 .zstd）+ 首行 readline() type=="session_meta"
+#              且 payload 含 codex 标记（cli_version/originator/id）；异常 → return False 不抛
+#   session_id = os.path.basename(session_path)（不取 payload.session_id——对子会话是父 id）
+#   tool     = 常量 "exec"；command = shlex.join(item.command)（"echo hi" 子串仍 True）
+#   exit     = item.exit_code 直取数字（失败命令如实映射，未结束回落 None）
+#   exit_signal = 完成有 exit_code → "exit_code=N"；未结束 → "pending"
+#   ts_start/ts_end = payload.started_at_ms / completed_at_ms（epoch ms int）
+#   output_hash = _sha1_hex(aggregated_output)；truncated 时无条件 None
+#   截断     = 双信号（bool 键集 ∪ 文本标记集，任一命中即 True）
+#   list_sessions = os.walk 枚举 rollout-*.jsonl；root = cwd if cwd else
+#              expanduser("~/.codex/sessions")；路径字符串 sorted()；返回绝对路径 list
+#
+# 红灯性质（B 类）：adapters.CodexAdapter 触发 AttributeError（模块无该属性）；
+#   test_bdd_6_detect_consumes_registry_zero_change 的 `assert "codex" in registered` 断言失败。
+# 仅 stdlib + pytest，无第三方 import，语法干净（check-tdd-red 无 P3_formatter，靠 exit-code+关键词）。
+
+_CODEX_META_MAIN = (
+    '{"timestamp":"2026-09-08T21:01:55.000Z","ordinal":0,"type":"session_meta",'
+    '"payload":{"id":"demo0000-0000-7000-a000-000000000abc",'
+    '"session_id":"demo0000-0000-7000-a000-000000000abc","thread_source":"user",'
+    '"cli_version":"0.153.4","originator":"codex-tui"}}\n'
+)
+
+
+def _write_codex_rollout(path, body="", meta=_CODEX_META_MAIN):
+    """写一个最小 Codex rollout JSONL（首行 session_meta + body），返回 path。"""
+    path.write_text(meta + body, encoding="utf-8")
+    return path
+
+
+# ---- BDD-1: probe ----
+
+
+def test_bdd_1_codex_probe_identifies_rollout(agate_scripts, tmp_path, load_fixture):
+    """BDD-1：probe 对 Codex rollout（basename rollout-*.jsonl + 首行 session_meta 含 codex 标记）
+    返回 True；对 Claude Code 转录 jsonl（无 session_meta 首行）/ .jsonl.zstd / opencode.db 返回 False。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    codex_text = load_fixture("cmdstream/codex-session.jsonl").read_text(encoding="utf-8")
+    rollout = tmp_path / "rollout-2026-09-08T21-01-55-demo0000-0000-7000-a000-000000000abc.jsonl"
+    rollout.write_text(codex_text, encoding="utf-8")
+    assert adapter.probe(str(rollout)) is True
+
+    claude_text = load_fixture("cmdstream/claude-code-session.jsonl").read_text(encoding="utf-8")
+    faux = tmp_path / "rollout-fake.jsonl"
+    faux.write_text(claude_text, encoding="utf-8")
+    assert adapter.probe(str(faux)) is False
+
+    zstd = tmp_path / "rollout-2026-09-08T21-01-55-demo.jsonl.zstd"
+    zstd.write_text("binary-ish", encoding="utf-8")
+    assert adapter.probe(str(zstd)) is False
+
+    db = tmp_path / "opencode.db"
+    db.write_text("x", encoding="utf-8")
+    assert adapter.probe(str(db)) is False
+
+
+# ---- BDD-2: list_sessions 日期分层树 ----
+
+
+def test_bdd_2_codex_list_sessions_enumerates_date_tree(agate_scripts, tmp_path):
+    """BDD-2：list_sessions 枚举 YYYY/MM/DD 日期分层树下全部 rollout-*.jsonl，返回绝对路径。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    d1 = tmp_path / "2026" / "09" / "08"
+    d1.mkdir(parents=True)
+    d2 = tmp_path / "2026" / "09" / "09"
+    d2.mkdir(parents=True)
+    a = _write_codex_rollout(d1 / "rollout-A.jsonl")
+    b = _write_codex_rollout(d2 / "rollout-B.jsonl")
+
+    sessions = adapter.list_sessions(str(tmp_path))
+    assert str(a) in sessions
+    assert str(b) in sessions
+
+
+def test_bdd_2_codex_list_sessions_cwd_falsy_falls_back_to_default_root(
+    agate_scripts, tmp_path, monkeypatch
+):
+    """P2-review N1：list_sessions(cwd=None) / cwd="" 回落 expanduser("~/.codex/sessions")
+    （§5 设计点 5 定论 B：root = cwd if cwd else expanduser("~/.codex/sessions")）——
+    fallback 分支不得成为未测死代码。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    fallback_root = tmp_path / "codex-home"
+    d = fallback_root / "2026" / "09" / "09"
+    d.mkdir(parents=True)
+    fb = _write_codex_rollout(d / "rollout-FB.jsonl")
+
+    real_expanduser = os.path.expanduser
+
+    def fake_expanduser(p):
+        if p == "~/.codex/sessions":
+            return str(fallback_root)
+        return real_expanduser(p)
+
+    monkeypatch.setattr("os.path.expanduser", fake_expanduser)
+
+    for cwd in (None, ""):
+        sessions = adapter.list_sessions(cwd)
+        assert str(fb) in sessions, f"cwd={cwd!r} 未回落默认根目录 ~/.codex/sessions"
+
+
+# ---- BDD-3: list_sessions 不遗漏子会话 ----
+
+
+def test_bdd_3_codex_list_sessions_includes_subagent(agate_scripts, tmp_path, load_fixture):
+    """BDD-3：主会话 rollout-P.jsonl（thread_source user）与子会话 rollout-C.jsonl
+    （thread_source subagent + parent_thread_id）同目录，list_sessions 两者都枚举到。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    d = tmp_path / "2026" / "09" / "08"
+    d.mkdir(parents=True)
+    p = _write_codex_rollout(d / "rollout-P.jsonl")
+    sub_text = load_fixture("cmdstream/codex-subagent-session.jsonl").read_text(encoding="utf-8")
+    c = d / "rollout-C.jsonl"
+    c.write_text(sub_text, encoding="utf-8")
+
+    sessions = adapter.list_sessions(str(tmp_path))
+    assert str(p) in sessions
+    assert str(c) in sessions, "spawn_agent 子会话 rollout 文件被遗漏"
+
+
+# ---- BDD-4: read_commands 十字段映射 ----
+
+
+def test_bdd_4_codex_read_commands_maps_ten_fields(agate_scripts, load_fixture):
+    """BDD-4：CommandExecution item_completed（command==["/bin/bash","-lc","echo hi"]、
+    exit_code==0、aggregated_output=="hi\\n"、started_at_ms==T1、completed_at_ms==T2）→
+    恰好 1 条 CommandRecord：platform=="codex"、command 含 "echo hi"、tool 非空、
+    ts_start==T1、ts_end==T2、exit==0、exit_signal 非空、truncated is False、
+    output_hash == sha1("hi\\n")。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(str(load_fixture("cmdstream/codex-session.jsonl")))
+    hits = [r for r in records if "echo hi" in r.command]
+    assert len(hits) == 1, f"echo hi 应恰好 1 条，实际 {len(hits)}"
+    r = hits[0]
+    assert r.platform == "codex"
+    assert isinstance(r.tool, str) and r.tool != ""
+    assert r.ts_start == 1788400860000
+    assert r.ts_end == 1788400861000
+    assert r.exit == 0
+    assert isinstance(r.exit_signal, str) and r.exit_signal != ""
+    assert r.truncated is False
+    assert r.output_hash == hashlib.sha1(b"hi\n").hexdigest()
+
+
+# ---- BDD-5: 失败命令 exit_code 非 0 如实映射 ----
+
+
+def test_bdd_5_codex_failed_exit_code_verbatim(agate_scripts, load_fixture):
+    """BDD-5：CommandExecution exit_code==2 / status=="completed" → CommandRecord.exit == 2
+    （整数 2，非 None），exit_signal 留档原始形态。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(str(load_fixture("cmdstream/codex-session.jsonl")))
+    r = next(r for r in records if "make build-docs" in r.command)
+    assert r.exit == 2
+    assert r.exit is not None
+    assert isinstance(r.exit_signal, str) and r.exit_signal != ""
+
+
+# ---- BDD-6: 未结束命令 → pending ----
+
+
+def test_bdd_6_codex_unfinished_command_pending(agate_scripts, load_fixture):
+    """BDD-6：未结束命令（item_started 无对应 item_completed）→ 1 条 CommandRecord，
+    exit is None、ts_end is None、exit_signal == "pending"；已完成命令记录不受影响。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(str(load_fixture("cmdstream/codex-session.jsonl")))
+    pend = [r for r in records if "sleep 999" in r.command]
+    assert len(pend) == 1, f"未结束命令应产出 1 条，实际 {len(pend)}"
+    p = pend[0]
+    assert p.exit is None
+    assert p.ts_end is None
+    assert p.exit_signal == "pending"
+
+    done = [r for r in records if "make build-docs" in r.command]
+    assert done and done[0].exit == 2, "已完成命令记录应不受影响"
+
+
+# ---- BDD-7: 截断输出 → truncated=True 且 output_hash=None ----
+
+
+def test_bdd_7_codex_truncated_output_hash_none(agate_scripts, load_fixture):
+    """BDD-7：CommandExecution 输出携带截断标记形态（双信号：item.output_truncated bool +
+    aggregated_output 含 "[output truncated]"）→ CommandRecord.truncated is True 且
+    output_hash is None（IR 铁律，无条件）。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(str(load_fixture("cmdstream/codex-session.jsonl")))
+    r = next(r for r in records if "cat big.log" in r.command)
+    assert r.truncated is True
+    assert r.output_hash is None
+
+
+# ---- BDD-8: 非 shell 工具事件不产出 CommandRecord ----
+
+
+def test_bdd_8_codex_non_shell_tool_events_no_record(agate_scripts, load_fixture):
+    """BDD-8：custom_tool_call name=="exec" 但 input 为 tools.apply_patch(...) / tools.web__run(...)
+    （派生 FileChange / Extension item，非 CommandExecution）→ 不为其产出 CommandRecord。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(str(load_fixture("cmdstream/codex-session.jsonl")))
+    for r in records:
+        for marker in ("apply_patch", "web__run", "demo.py"):
+            assert marker not in r.command, f"非 shell 工具事件泄漏进记录: {r.command!r}"
+    assert any("echo hi" in r.command for r in records), "shell 命令记录应照常产出"
+
+
+# ---- BDD-9: 畸形行不崩溃 ----
+
+
+def test_bdd_9_codex_malformed_lines_no_crash(agate_scripts, load_fixture):
+    """BDD-9：fixture 含非 JSON 行 / JSON 数组行（非 dict）/ 缺 payload 键的对象行，其后另有
+    合法 CommandExecution → read_commands 不抛异常、坏行跳过、合法命令记录照常产出。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(str(load_fixture("cmdstream/codex-session.jsonl")))
+    assert isinstance(records, list)
+    cmds = [r.command for r in records]
+    assert any("echo hi" in c for c in cmds)
+    # cat big.log 事件位于三类畸形行之后 → 命中即证明解析器已从坏行恢复
+    assert any("cat big.log" in c for c in cmds), "畸形行之后的合法记录应保留"
+
+
+# ---- BDD-10: session_id 一致且可定位 ----
+
+
+def test_bdd_10_codex_session_id_consistent_and_locatable(agate_scripts, tmp_path, load_fixture):
+    """BDD-10：含 ≥2 条 CommandExecution 的 rollout → 所有记录 session_id 相同、非空，
+    且 == os.path.basename(session_path)（可据其定位回该会话文件）。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    name = "rollout-2026-09-08T21-01-55-demo0000-0000-7000-a000-000000000abc.jsonl"
+    dst = tmp_path / name
+    dst.write_text(
+        load_fixture("cmdstream/codex-session.jsonl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    records = adapter.read_commands(str(dst))
+    assert len(records) >= 2
+    assert len({r.session_id for r in records}) == 1
+    sid = records[0].session_id
+    assert sid != ""
+    assert sid == name
+
+
+# ---- BDD-11: 子会话记录可独立解析 ----
+
+
+def test_bdd_11_codex_subagent_session_parses_standalone(agate_scripts, load_fixture):
+    """BDD-11：spawn_agent 子会话 rollout（thread_source=="subagent"）→ read_commands 正常
+    产出该子代理的 CommandRecord（platform=="codex"），不因缺父上下文抛异常或返回空。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(
+        str(load_fixture("cmdstream/codex-subagent-session.jsonl"))
+    )
+    assert records, "子会话应正常产出记录，不因缺父上下文返回空"
+    assert all(r.platform == "codex" for r in records)
+    assert any("pytest" in r.command for r in records)
+
+
+# ---- BDD-12: 子会话 session_id 指向子会话自身 ----
+
+
+def test_bdd_12_codex_subagent_session_id_is_child_not_parent(
+    agate_scripts, tmp_path, load_fixture
+):
+    """BDD-12：子会话 session_meta 中 id（子自身）≠ session_id（父）→ read_commands 产出记录的
+    session_id 解析为子会话自身标识（os.path.basename，不取 payload.session_id 的父 id）。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    child_name = "rollout-2026-09-08T21-02-03-demo0000-80c6-7000-a000-000000000def.jsonl"
+    dst = tmp_path / child_name
+    dst.write_text(
+        load_fixture("cmdstream/codex-subagent-session.jsonl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    records = adapter.read_commands(str(dst))
+    assert records
+    sid = records[0].session_id
+    assert sid == child_name
+    assert "80c6" in sid, "session_id 未指向子会话自身标识"
+    assert sid != "demo0000-0000-7000-a000-000000000abc", "session_id 误取父会话 id"
+
+
+# ---- BDD-21: 守护测试（非红灯）——CommandRecord IR 十字段零改动 ----
+
+
+def test_bdd_21_command_record_ten_fields_unchanged(agate_scripts):
+    """BDD-21 守护（当前绿）：CodexAdapter 接入不得扩 CommandRecord IR schema——
+    dataclass 十字段名与顺序恒定（P1 §5 逃生阀）。P4 若动 IR 本测试转红。"""
+    import dataclasses
+
+    adapters = _load_adapters(agate_scripts)
+    names = [f.name for f in dataclasses.fields(adapters.CommandRecord)]
+    assert names == [
+        "platform", "session_id", "tool", "command", "ts_start",
+        "ts_end", "exit", "exit_signal", "output_hash", "truncated",
+    ]
