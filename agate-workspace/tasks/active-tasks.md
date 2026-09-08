@@ -15,6 +15,8 @@
 
 | 编号 | 任务名称 | 状态 | 阶段 | 优先级 | 依赖 | 创建日期 | 更新日期 |
 |------|----------|------|------|--------|------|----------|----------|
+| TAG0033 | Codex 命令流适配器 + 平台接入（RM-AG0061，RM-AG0055 §3.4.4 预留扩展点的落地 + RM-AG0060 b 块前置）：CodexAdapter 加入 agate-cmdstream-adapters.py 使 subagent 存活/卡死检测覆盖 Codex + platform-notes.md Codex 章补完整 + SETUP.md Codex 小节 + fixture 单测 + 真机验证清单；检测引擎/阈值/IR/既有三平台适配器零改动。触发 SELF-GATE | ⬜ | P0 | 高 | RM-AG0061 | 2026-09-08 | 2026-09-08 |
+| TAG0034 | 派发路由（配置驱动跨 CLI/model 派发 + tmux 观测）（RM-AG0060 epic）：rules/dispatch-routing.yaml 候选 {cli,model,effort?} 路由表——查表→按序探测→逐级回落（终点恒为同平台同 model），cli 可为 native 或另一个 CLI 起子进程；新增 dispatch_route 事件；决策落 agate-dispatch.py；tmux 观测层带退出倒计时。gate/状态机/phases.yaml 全不动。存活检测复用 RM-AG0055。P4a 核心+native / P4b 子进程 / P4c tmux 串行子批。设计经两轮外部评审 FAIL→PASS。触发 SELF-GATE | ⬜ | P0 | 高 | RM-AG0060 · TAG0033 | 2026-09-08 | 2026-09-08 |
 
 ### 已完成（归档）
 
