@@ -7,7 +7,7 @@
 > **机会式启用，零强制基础设施**：不配置候选 = 行为与现状逐字节一致；配了但该 CLI 未装 / 未认证 / 无 `tmux` = 探测失败自动回落。多带一个 CLI/model 或 tmux 就用，否则退回原机制，不新增任何必须先搭好的东西——所以与局限 6"零基础设施"无实质冲突（§6）。
 > **平台**：Claude Code、OpenCode、Codex。
 > **相关**：`agate/dispatch-protocol.md`（派发三铁律）、`agate/rules/phases.yaml`（`exec_role`）、`agate/LIMITATIONS.md`（局限 2/4/6）、`agate/platform-notes.md`（Codex 现为"待补充"）、`docs/design-notes/design-orchestration-semantics.md`（RM-AG0054 推进侧 CLI，§2.6 决策 CLI 化的方向来源，但具体命令为本设计新提议，非既有命令）、`docs/design-notes/260903-design-subagent-liveness-and-self-dispatch/`（RM-AG0055 subagent 存活可观测性——命令流日志机制，卡死检测直接复用它，§7 事项 6）、`docs/design-notes/design-maintainability-gate.md`（RM-AG0046 §2"模式层/检测器层分离"——本设计的架构模式沿用它，§2.1）、**`docs/research/cross-platform-dispatch-mechanics.md`（各平台 CLI 调用 / model 指定 / 子代理派发 / 返回识别 / 卡死检测复用机制的客观调查——本设计的机制事实全部引自此，不在此重复）**。
-> **沿革**：由两条讨论线合并——跨 CLI 派发路由（v1 FAIL→v2 PASS→v3/v4→v5 三产出物拆分）+ 角色-模型映射（v1 FAIL：`fallback` 权威源分裂 → v2 PASS）。两线共用同一份配置文件，分作两份文档正是那个 BLOCKER 的成因，故合并；`cli: native` 即候选表的一个特化。2026-09-08 二次精简：范围收敛为"配置路由 + tmux 观测"两机制，移除观测信号优先级原则（已在 RM-AG0055）；第三方终端工具（§2.4）与 DSH（§2.5）的排除理由保留但收紧；平台机制的实机核实明细抽到 `docs/research/cross-platform-dispatch-mechanics.md`，本文只留设计相关结论。评审打回续跑（§2.4a）一度被精简掉、2026-09-08 按"续接优先、重起兜底"重新纳入（续接的可靠性调研见 research §7）。2026-09-08 内部独立评审一轮：修 §2.4a 结构损坏（BLOCKER），补探测成本 / `cli: native` 探测方式 / 与五模式·自主再派发·单 Agent 模式的交互 / tmux×stdout 捕获 / epic 拆分等 WARNING 为 §7 待确认项。**2026-09-08 外部独立评审（`docs/reviews/review-dispatch-routing-external-20260908.md`）FAIL**：B1/B2"证据强度传递失真"（把 `[自述]` schema 和 bug② 的机制推断混同为"已实测"）+ W1 续接失败无客观信号 + W2 tmux 实测环境代表性——已逐条改（§7 事项 7 拆分证据强度、§2.3 表注、§2.4a 补软信号缺口、§3 补环境说明），待外部复审。
+> **沿革**：由两条讨论线合并——跨 CLI 派发路由（v1 FAIL→v2 PASS→v3/v4→v5 三产出物拆分）+ 角色-模型映射（v1 FAIL：`fallback` 权威源分裂 → v2 PASS）。两线共用同一份配置文件，分作两份文档正是那个 BLOCKER 的成因，故合并；`cli: native` 即候选表的一个特化。2026-09-08 二次精简：范围收敛为"配置路由 + tmux 观测"两机制，移除观测信号优先级原则（已在 RM-AG0055）；第三方终端工具（§2.4）与 DSH（§2.5）的排除理由保留但收紧；平台机制的实机核实明细抽到 `docs/research/cross-platform-dispatch-mechanics.md`，本文只留设计相关结论。评审打回续跑（§2.4a）一度被精简掉、2026-09-08 按"续接优先、重起兜底"重新纳入（续接的可靠性调研见 research §7）。2026-09-08 内部独立评审一轮：修 §2.4a 结构损坏（BLOCKER），补探测成本 / `cli: native` 探测方式 / 与五模式·自主再派发·单 Agent 模式的交互 / tmux×stdout 捕获 / epic 拆分等 WARNING 为 §7 待确认项。**外部独立评审两轮**（`docs/reviews/review-dispatch-routing-external-20260908.md` FAIL → `-round2-` PASS 附一项待办）：B1/B2"证据强度传递失真"（把 `[自述]` schema 和 bug② 的机制推断混同为"已实测"）+ W1 续接失败无客观信号 + W2 tmux 实测环境代表性。round1 后改了 B1/B2/W1（复审认可）+ W2（改得不到位）；round2 指出 W2 只动了 §3 header、没同步 §6、且没说清环境代表性——本轮补齐：§3 末详述 WSL2+tmux3.4 环境边界、§6 风险表同步、§7 事项 9 登记目标环境复跑。
 > **机制现状一句话**（详见 research 报告）：`cli: native` 三平台情况——Claude Code ✅ / Codex ✅（`spawn_agent`，按次传 `model` + `reasoning_effort`）/ OpenCode ⚠（工具调用无 model 参数，须先按角色预配命名 subagent）。子进程形式三平台都通（各有 `-m/--model` + 权限绕过 flag）。Codex 退出码不可靠须解析 `--json`；各环境可用 model 名单要自查（Codex 随账号类型、OpenCode 部分配置失效）。
 
 ---
@@ -144,7 +144,10 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
   - 兜底：wrapper 若异常未退出（倒计时脚本本身挂了），路由脚本超过 `N + 余量` 仍见 session 存在 → 强制 `kill-session`。session 存在的唯一理由是"这次派发进行中或收尾倒计时中"，之外不留。
 - `cli: native` 形式无子进程，本节不适用。
 
-**实机核实（2026-09-08，本机 = Linux/WSL2、tmux 3.4、含真人 attach）**：tmux 3.4（2023 发布）不算特别新旧；但这次"已通过"的结论仅对本环境成立，**目标部署环境需照 research §10 复核清单在自己的 tmux 版本上复跑一次**（外部评审 W2）。
+**实机核实（2026-09-08，含真人 attach）——环境代表性说明（外部评审 W2 round2）**：
+- **实测环境**：Windows 11 主机上的 **WSL2**（Windows Subsystem for Linux v2，一个轻量虚拟机里的 Ubuntu）——**不是容器、不是 CI runner、不是纯物理机 Linux**。终端是 Windows Terminal 接进 WSL2 的 pty。tmux **3.4**（一个近年的稳定版；更新的 3.5 系列已发布，本轮未在其上测）。
+- **代表性边界**：WSL2 的 pty / 进程 / 信号语义与主流 Linux 一致，本轮 tmux 生命周期 + attach/detach + kill 行为**没有 WSL 特有的偏差**，可视作 Linux 通用结果。但——① 极简容器镜像可能不装 tmux（`which tmux` 会失败 → 裸跑，本设计已覆盖）；② CI runner 通常无交互 pty，机制二"人 attach"在 CI 里本就用不上（CI 不看 pane，走 research §6 的 stdout/文件路径）；③ 不同 tmux 大版本（2.x vs 3.x）在 `pipe-pane` / `list-clients` 输出格式上有差异。
+- **落地要求**：目标部署环境照 `docs/research/cross-platform-dispatch-mechanics.md` §10 在其自己的 tmux 版本上复跑一次本节的验证项（§7 事项 9 已登记）。
 - `new-session -d` / `list-sessions` / `list-clients` / `kill-session` 起停干净、无残留。
 - **真人 attach ✅**：看到子进程输出实时滚动；`Ctrl+b d` 干净 detach、会话继续。
 - **有人 attach 时 `kill-session` ✅ 干净**（无卡住/花屏），但 client 会被整个拽出 tmux（若是 `Ctrl+b s` 切过去的工作 client，人就掉出 tmux 了）——突兀。**所以有 client attach 时不强杀，改由 wrapper 的退出倒计时（上面）自然收尾**，让人看着"N 秒后关闭"从容离开。
@@ -195,7 +198,7 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 | Codex 沙箱/派发机制首次走 SETUP，成熟度未知 | 按新增平台接入对待，落地前独立实机验证，不与 Claude Code/OpenCode 同等对待 |
 | 逐级回落链过于顺滑，"候选全灭"被悄悄吸收、成为"回避报告问题"的新出口 | §4 无差别留痕——不阻止回落，但每次回落（含回落到默认派发）都留痕、可事后追溯 |
 | 配置内容质量（把高可靠性阶段配成低质量候选优先）| 责任在用户；协议只保证过程可追溯，不做内容质量把关 |
-| 机制二 tmux 链路在目标环境有意外行为 | 本机 tmux 3.4 已含真人 attach 全链路实测通过（§3 末）；其它环境版本升级后照 research §10 复核。不通过可整体移除，不影响机制一 |
+| 机制二 tmux 链路在目标环境有意外行为 | 已含真人 attach 全链路实测通过，但**实测环境是 WSL2 + tmux 3.4**（非容器/CI/物理机，环境代表性说明见 §3 末）；目标环境需在其自己的 tmux 版本上照 research §10 复跑（§7 事项 9）。不通过可整体移除，不影响机制一 |
 
 ---
 
@@ -216,7 +219,7 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
    - 子进程形式：`wait(pid)` 完成 + `kill -0`/proc 状态判"死没死" + RM-AG0055 命令流（可直接取 `--json` stdout 流）判"卡没卡" + §3.3 式主动轮询（子进程可轮询，机制换成 PID/stdout 非心跳文件）。
    - `cli: native` 形式：无 PID，全靠 RM-AG0055 命令流机制（`agate-cmdstream-{adapters,detect,ir}.py`，TAG0028 已落地）。
    - **唯一缺口 = 写一个 `CodexAdapter`**（数据源 `~/.codex/sessions/**/*.jsonl`，按 RM-AG0055 §3.4.4"未来接 Codex：约一个文件"，检测引擎/阈值零改动）。落地衔接点：spawn / 调 `spawn_agent` 时捕获 session id。
-9. 机制二 tmux 链路本机已含真人 attach 全链路实测通过（§3 末）；落地时定：`{命令} | tee {capture}` 里 capture 文件的路径/命名与生命周期；退出倒计时的 N 默认值与可配置项；wrapper 收尾脚本的写法（`printf '\r...' ; sleep 1` 循环，纯 sh）。
+9. 机制二 tmux 链路已含真人 attach 全链路实测通过（§3 末），但**实测环境是 WSL2 + tmux 3.4**——目标部署环境需在其自己的 tmux 版本上照 research §10 复跑一次（§3 末的环境代表性说明）。落地时定：`{命令} | tee {capture}` 里 capture 文件的路径/命名与生命周期；退出倒计时的 N 默认值与可配置项；wrapper 收尾脚本的写法（`printf '\r...' ; sleep 1` 循环，纯 sh）。
 10. **（超出本设计范围，登记为独立开放问题）主 Agent 自身缺乏外部约束**：`LIMITATIONS.md` 局限 3"方向性错配"——防御机制布置在 subagent 一侧，握有全部裁量权且被实证是主要事故源的主 Agent 几乎没有外部约束（T005/T006/T016/T019 根因均为主 Agent）。这是协议当前最大的敞口，本设计（配置路由 + tmux 观测）完全不解决它，值得作为独立 design-note 另行立项讨论，本设计不认领。
 
 ---
