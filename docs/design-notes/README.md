@@ -24,6 +24,6 @@
 | `design-md-field-set.md` | 结构化字段写入工具设计（agate-md-field-set：写入即校验 + 自描述 + 权限引导，消灭手写 frontmatter 摩擦） | 设计提案（RM-AG0048）|
 | `return-to-zero-proposal.md` | 双归零方法论引入失败处理闭环（PeekView 提案收编：known-failures 补复现证据/举一反三 + 归零检查单，方案 B 参考工具非强制 gate） | backlog（RM-AG0053 参考输入）|
 | `design-orchestration-semantics.md` | 编排语义统一设计（自动化在协议内，平台只做执行环境：dispatch 五模式为唯一语义锚点 + 状态机 CLI 推进侧落地，复用 check-state-transition.py/phases.yaml，CLI 为 /loop 档位 C 可观测层） | 设计讨论 v3b（候选 RM-AG0054；评审链：v1 FAIL→v2 修复→Claude 评审 FAIL→v3 落盘复审 PASS→第三轮 Claude 元评审经时间线核验不成立，可追溯性建议已采纳）|
-| `design-dispatch-routing.md` | 派发路由设计（两机制：① `rules/dispatch-routing.yaml` 候选 `{cli, model}` 表——用户编码"复杂/专业阶段配高级模型、大批量阶段配便宜模型"，`cli` 可为 `native` 或另一个 CLI，全阶段适用，只查表不按任务内容选型，按序探测→逐级回落终点恒为同平台同 model，`dispatch_route` 留痕，决策机械化落 CLI/子进程形式可端到端自动化；② CLI 子进程形式的 tmux 观测层。动机=给角色隔离补模型维度缓解局限 2）| 设计讨论收敛（跨 CLI 线 v1 FAIL→…→v5 + 角色-模型线 v1 FAIL→v2 PASS，2026-09-08 合并并二轮精简为两机制；沿革与前身评审结论见文档头。RM 编号待申领，合并稿需重新走一轮独立评审）|
+| `design-dispatch-routing.md` | 派发路由设计（两机制：① `rules/dispatch-routing.yaml` 候选 `{cli, model}` 表——用户编码"复杂/专业阶段配高级模型、大批量阶段配便宜模型"，`cli` 可为 `native` 或另一个 CLI，全阶段适用，只查表不按任务内容选型，按序探测→逐级回落终点恒为同平台同 model，`dispatch_route` 留痕，决策机械化落 CLI/子进程形式可端到端自动化；② CLI 子进程形式的 tmux 观测层。动机=给角色隔离补模型维度缓解局限 2）| 设计收敛（跨 CLI 线 v1 FAIL→…→v5 + 角色-模型线 v1 FAIL→v2 PASS，2026-09-08 合并精简为两机制；两轮外部独立评审 FAIL→PASS + 一轮内部；机制三平台端到端实测，见 `docs/research/cross-platform-dispatch-mechanics.md`。**已申领 RM-AG0060**（backlog，epic），立项前待办见文档 §7）|
 
 新增决策记录时，按这个格式写：问题是什么 → 讨论过哪些方案及为何否决 → 最终采纳的方案及理由 → 状态（已决策待落地 / 已落地，落地位置写清楚）。
