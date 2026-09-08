@@ -7,7 +7,7 @@
 > **机会式启用，零强制基础设施**：不配置候选 = 行为与现状逐字节一致；配了但该 CLI 未装 / 未认证 / 无 `tmux` = 探测失败自动回落。多带一个 CLI/model 或 tmux 就用，否则退回原机制，不新增任何必须先搭好的东西——所以与局限 6"零基础设施"无实质冲突（§6）。
 > **平台**：Claude Code、OpenCode、Codex。
 > **相关**：`agate/dispatch-protocol.md`（派发三铁律）、`agate/rules/phases.yaml`（`exec_role`）、`agate/LIMITATIONS.md`（局限 2/4/6）、`agate/platform-notes.md`（Codex 现为"待补充"）、`docs/design-notes/design-orchestration-semantics.md`（RM-AG0054 推进侧 CLI，§2.6 决策 CLI 化的方向来源，但具体命令为本设计新提议，非既有命令）、`docs/design-notes/260903-design-subagent-liveness-and-self-dispatch/`（RM-AG0055 subagent 存活可观测性——命令流日志机制，卡死检测直接复用它，§7 事项 6）、`docs/design-notes/design-maintainability-gate.md`（RM-AG0046 §2"模式层/检测器层分离"——本设计的架构模式沿用它，§2.1）、**`docs/research/cross-platform-dispatch-mechanics.md`（各平台 CLI 调用 / model 指定 / 子代理派发 / 返回识别 / 卡死检测复用机制的客观调查——本设计的机制事实全部引自此，不在此重复）**。
-> **沿革**：由两条讨论线合并——跨 CLI 派发路由（v1 FAIL→v2 PASS→v3/v4→v5 三产出物拆分）+ 角色-模型映射（v1 FAIL：`fallback` 权威源分裂 → v2 PASS）。两线共用同一份配置文件，分作两份文档正是那个 BLOCKER 的成因，故合并；`cli: native` 即候选表的一个特化。2026-09-08 二次精简：范围收敛为"配置路由 + tmux 观测"两机制，移除观测信号优先级原则（已在 RM-AG0055）；第三方终端工具（§2.4）与 DSH（§2.5）的排除理由保留但收紧；平台机制的实机核实明细抽到 `docs/research/cross-platform-dispatch-mechanics.md`，本文只留设计相关结论。评审打回续跑（§2.4a）一度被精简掉、2026-09-08 按"续接优先、重起兜底"重新纳入（续接的可靠性调研见 research §7）。2026-09-08 内部独立评审一轮：修 §2.4a 结构损坏（BLOCKER），补探测成本 / `cli: native` 探测方式 / 与五模式·自主再派发·单 Agent 模式的交互 / tmux×stdout 捕获 / epic 拆分等 WARNING 为 §7 待确认项。合并稿仍需走一轮**外部**独立评审再立项。
+> **沿革**：由两条讨论线合并——跨 CLI 派发路由（v1 FAIL→v2 PASS→v3/v4→v5 三产出物拆分）+ 角色-模型映射（v1 FAIL：`fallback` 权威源分裂 → v2 PASS）。两线共用同一份配置文件，分作两份文档正是那个 BLOCKER 的成因，故合并；`cli: native` 即候选表的一个特化。2026-09-08 二次精简：范围收敛为"配置路由 + tmux 观测"两机制，移除观测信号优先级原则（已在 RM-AG0055）；第三方终端工具（§2.4）与 DSH（§2.5）的排除理由保留但收紧；平台机制的实机核实明细抽到 `docs/research/cross-platform-dispatch-mechanics.md`，本文只留设计相关结论。评审打回续跑（§2.4a）一度被精简掉、2026-09-08 按"续接优先、重起兜底"重新纳入（续接的可靠性调研见 research §7）。2026-09-08 内部独立评审一轮：修 §2.4a 结构损坏（BLOCKER），补探测成本 / `cli: native` 探测方式 / 与五模式·自主再派发·单 Agent 模式的交互 / tmux×stdout 捕获 / epic 拆分等 WARNING 为 §7 待确认项。**2026-09-08 外部独立评审（`docs/reviews/review-dispatch-routing-external-20260908.md`）FAIL**：B1/B2"证据强度传递失真"（把 `[自述]` schema 和 bug② 的机制推断混同为"已实测"）+ W1 续接失败无客观信号 + W2 tmux 实测环境代表性——已逐条改（§7 事项 7 拆分证据强度、§2.3 表注、§2.4a 补软信号缺口、§3 补环境说明），待外部复审。
 > **机制现状一句话**（详见 research 报告）：`cli: native` 三平台情况——Claude Code ✅ / Codex ✅（`spawn_agent`，按次传 `model` + `reasoning_effort`）/ OpenCode ⚠（工具调用无 model 参数，须先按角色预配命名 subagent）。子进程形式三平台都通（各有 `-m/--model` + 权限绕过 flag）。Codex 退出码不可靠须解析 `--json`；各环境可用 model 名单要自查（Codex 随账号类型、OpenCode 部分配置失效）。
 
 ---
@@ -75,11 +75,11 @@ P6.5:
 - 不起子进程，用当前平台的原生派发原语，只指定 `model`。探测简化为"该 model 在当前平台是否被接受"，不涉及跨平台连通性。
 - **前提：该平台得能让父会话为子代理指定 model。** 三平台情况（机制细节见 `docs/research/cross-platform-dispatch-mechanics.md` §5）：
 
-  | 平台 | `cli: native` 可行性（三条均端到端已验，2026-09-08）|
+  | 平台 | `cli: native` 可行性（"按次指定 model 能生效"这条三平台均端到端 `[实测]`，2026-09-08）|
   |---|---|
   | Claude Code | **✅ 直接**——Task/Agent 工具单次调用传 `model` 参数（Sonnet 会话 → Haiku 子代理）|
-  | Codex | **✅ 直接**——`spawn_agent(model=…, reasoning_effort=…)`，通用 prompt 驱动（父 `medium` → 子 `high`）。比 Claude Code 多一个 `reasoning_effort` 维度 |
-  | OpenCode | **✅ 间接**——`task`/`subagent` 工具调用**无 model 参数**；model 定在命名 subagent 配置 `agents.<name>.model`（实测 v1.18.11 生效：父 `deepseek-v4-flash` 派配了 `deepseek-v4-pro` 的命名 agent → 子确跑 `deepseek-v4-pro`）。要用 `cli: native` 得先按角色预配命名 agent（`agate-implementer` / `agate-judge` …），dispatch 表映射 phase→agent 名——比前两者多一层配置 |
+  | Codex | **✅ 直接**——`spawn_agent(model=…, reasoning_effort=…)`，通用 prompt 驱动（父 `medium` → 子 `high`）。比 Claude Code 多一个 `reasoning_effort` 维度。注：`spawn_agent` 的完整参数 schema 是模型自述（`[自述]`，非独立验证，见 research §5.2 / §7 事项 7）|
+  | OpenCode | **✅ 间接**——`task`/`subagent` 工具调用**无 model 参数**；model 定在命名 subagent 配置 `agents.<name>.model`（实测 v1.18.11 生效：父 `deepseek-v4-flash` 派配了 `deepseek-v4-pro` 的命名 agent → 子确跑 `deepseek-v4-pro`；即旧 bug ①③ 不存在。旧 bug ②"父会话切 model 后子代理跟不跟"未直接复现，见 §7 事项 7）。要用 `cli: native` 得先按角色预配命名 agent，dispatch 表映射 phase→agent 名——比前两者多一层配置 |
 
 - `phases.yaml` **不改**——`exec_role`（谁执行）与"该角色用什么 model"是两个关注点，分别由 `phases.yaml` 和本配置文件承载。
 - **某平台 `cli: native` 不可行 / 未配好**：该平台在该 phase 就不提供 `native` 候选（改用 `cli: <平台名>` 子进程候选，或不配 = 维持现状）。等价于"该 phase 的 `native` 候选不存在"，不产生新失败风险。
@@ -102,7 +102,8 @@ P6.5:
   - 子进程：`claude -p --resume <id> '<意见>'` / `codex exec resume <id> '<意见>'` / `opencode run -s <id> '<意见>'`
   - native：Codex `followup_task` / OpenCode `task(task_id=<id>, prompt=<意见>)` / Claude Code 续接原语待核实
   - 子代理保留"当初为什么这么设计"的上下文，比重起省一大截。
-- **续接是"重放重建"非"状态冻结"**（research §7，三平台 + DSH 共性；Claude Code 有 #43696 报告）——**不假设续接必成功**。续接后上下文明显丢失，或重做 fallback 到了**不同 target** → 旧 session 作废，退化为**全新派发**、prompt 完整带回评审意见 + 必要上下文重申。等价于该候选探测失败走 §2.2 降级逻辑，不需要额外机制。
+- **续接是"重放重建"非"状态冻结"**（research §7，三平台 + DSH 共性；Claude Code 有 #43696 报告）——**不假设续接必成功**。重做 fallback 到了**不同 target** → 旧 session 作废，退化为**全新派发**、prompt 完整带回评审意见 + 必要上下文重申。
+- **已知缺口：续接失败没有像探测失败那样的客观信号**（外部评审 W1）。探测失败 = 硬故障、走下一候选（§2.2）；但续接命令本身会**成功返回**（exit 0），只是内容表明上下文实际丢了——这是"看起来不对"的软信号，路由层没有可靠办法机械判定。目前只能靠：① 续接后的产出仍走假完成校验（D2）+ 本来就在评审循环里（续接产出质量差，下一轮评审会再打回，只是多绕一圈）；② **Claude Code 命中 #43696 的风险下，可选择对 Claude Code 默认不用续接、直接重起**（保守，落地定）。本设计不假装解决了这条，如实登记为缺口。
 - retry 计数、超限 PAUSED 与现状一致——续接只是"这次 retry 怎么执行"的优化，不改 `retries[Pn]` 语义。
 
 ### 2.5 DSH：暂不纳入 CLI 派发路径
@@ -143,7 +144,7 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
   - 兜底：wrapper 若异常未退出（倒计时脚本本身挂了），路由脚本超过 `N + 余量` 仍见 session 存在 → 强制 `kill-session`。session 存在的唯一理由是"这次派发进行中或收尾倒计时中"，之外不留。
 - `cli: native` 形式无子进程，本节不适用。
 
-**实机核实（2026-09-08，本机 tmux 3.4，含真人 attach）**：
+**实机核实（2026-09-08，本机 = Linux/WSL2、tmux 3.4、含真人 attach）**：tmux 3.4（2023 发布）不算特别新旧；但这次"已通过"的结论仅对本环境成立，**目标部署环境需照 research §10 复核清单在自己的 tmux 版本上复跑一次**（外部评审 W2）。
 - `new-session -d` / `list-sessions` / `list-clients` / `kill-session` 起停干净、无残留。
 - **真人 attach ✅**：看到子进程输出实时滚动；`Ctrl+b d` 干净 detach、会话继续。
 - **有人 attach 时 `kill-session` ✅ 干净**（无卡住/花屏），但 client 会被整个拽出 tmux（若是 `Ctrl+b s` 切过去的工作 client，人就掉出 tmux 了）——突兀。**所以有 client attach 时不强杀，改由 wrapper 的退出倒计时（上面）自然收尾**，让人看着"N 秒后关闭"从容离开。
@@ -206,7 +207,11 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 4. **探测成本与 `cli: native` 探测方式**：① task 内探测缓存（同候选一个 task 内只探一次，否则 P1–P8 × 每 phase 多候选 = 每任务几十次真 API 调用）；② `cli: native` 怎么探测"该 model 平台认不认"——起一次性子代理探测代价不小，倾向"查平台已知 alias 表 / 接受配置、让首次真派发失败时走降级"，落地定。
 5. **与既有派发机制的交互**（本文未展开，立项设计要覆盖）：① 五模式并行批（模式 2/3）——每个并行 subagent 是否各自独立探测同一候选链、探测结果 task 内是否共享；② RM-AG0055 自主再派发的子任务——是否走路由表（倾向"不走，继承父的实际 cli/model"）；③ 单 Agent 模式（`has_task_tool:false`，如 Claude Project）——无派发动作，路由为 no-op，应显式声明出范围。
 6. RM 编号申领与排期——检查是否与近期涉及 `dispatch-protocol.md` / 推进侧 CLI 的任务冲突（尤其 **RM-AG0059 任务管理命令化** 有 CLI 化重叠，backlog）。**epic 还是单 task**：跨 CLI 子进程（含 Codex 首次接入）/ `cli: native` / tmux 层是三块可分交付，倾向 epic（参照 RM-AG0058）。
-7. **平台机制的落地前复核**——照 `docs/research/cross-platform-dispatch-mechanics.md` §10 复核清单。本设计的阻断性机制项本轮已全部实测通过（三平台 `cli: native` model 指定、权限对等 + 沙箱对照、完成/失败信号机制、结构化输出形态、Codex `spawn_agent` schema）；剩余为环境自查项（Codex API-key 账号 model 阵容）与低优项（见 research §11）。版本升级后照 §10 复跑。
+7. **平台机制的落地前复核**——照 `docs/research/cross-platform-dispatch-mechanics.md` §10 复核清单。本轮各条的**证据强度不一样，不能一句"已实测通过"带过**（外部评审 B1/B2）：
+   - **端到端实测 `[实测]`**：Claude Code Task 传 `model`（父 Sonnet→子 Haiku）；Codex `spawn_agent(model=, reasoning_effort=)` 按次生效（父 medium→子 high）；OpenCode 命名 subagent `agents.<name>.model` 生效（父 flash→子 pro）——即 OpenCode 旧 **bug ①③ 已直接复现测试确认不存在**；三平台子进程权限绕过 + Codex 沙箱对照（`-s read-only` 拦）；结构化输出形态（Codex `--json` / OpenCode `--format json` / Claude `--output-format json`）；tmux 全链路含真人 attach。
+   - **模型自述 `[自述]`，未独立验证完整性**：Codex `spawn_agent` 的参数 schema（`task_name`/`message`/`fork_turns`/`model`/`reasoning_effort`）——"未见 background/timeout/permission 字段"是"没在自述里看到"，**不等于确认没有**。落地写调用代码时不能假设 schema 已穷尽（如别假设无 timeout 参数就不处理超时）。
+   - **机制推断，未直接复现**：OpenCode 旧 **bug ②**（父会话交互式切换模型后子代理是否跟随）——现有结论基于"`opencode run -m` 只改 session model、不改 agent 配置里的 model"这条机制推理 + 官方文档，**未跑直接复现测试**。落地前补一次：配好命名 agent、父会话交互式切 model、再派该 agent，核对子代理跑的是配置 model 还是父的新 model。
+   - 剩余环境自查项（Codex API-key 账号 model 阵容）与低优项见 research §11。版本升级后照 §10 复跑。
 8. **存活性 / 卡死检测复用既有机制，不自造超时**（research §6.0.1 / §6.0.2）：
    - 子进程形式：`wait(pid)` 完成 + `kill -0`/proc 状态判"死没死" + RM-AG0055 命令流（可直接取 `--json` stdout 流）判"卡没卡" + §3.3 式主动轮询（子进程可轮询，机制换成 PID/stdout 非心跳文件）。
    - `cli: native` 形式：无 PID，全靠 RM-AG0055 命令流机制（`agate-cmdstream-{adapters,detect,ir}.py`，TAG0028 已落地）。
