@@ -1,2 +1,3 @@
 {"cmd":"check-gate.py P0","event":"gate_run","exit":2,"phase":"P0","prev_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","runner":"pre-commit","ts":"2026-09-08T15:35:46.709708Z"}
 {"event":"state_transition","from":"","phase":"P0","prev_hash":"523296abb8efb53aa85e1e4553c91cf0675d94d68496aa97d7e0cfc4bb91b636","to":"P0","ts":"2026-09-08T15:35:46.710025Z"}
+{"event":"state_transition","from":"P0","phase":"P1","prev_hash":"4d8a71c6357a7c3b02c966660816630f47c0da06faf3c521bc0ce2abf95f25ec","to":"P1","ts":"2026-09-08T16:11:52.354419Z"}
