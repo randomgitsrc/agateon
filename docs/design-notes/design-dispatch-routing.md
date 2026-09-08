@@ -2,12 +2,13 @@
 
 > **做什么**：新增 `rules/dispatch-routing.yaml`——按 phase 声明候选 `{cli, model}` 列表（用户用它编码"复杂/专业的阶段配高级或专业模型、大批量的阶段配便宜模型"这类意图）。到某阶段时查表 → 按序探测「通不通」→ 派发到第一个可用候选 → 候选全不可用则自动逐级回落，终点恒为"同平台、同 model"的默认派发。`cli` 可为 `native`（同平台换 model）或另一个 CLI（`claude-code`/`codex`/`opencode`，起子进程）。查表 / 探测 / 降级是纯机械步骤，目标是落在 CLI 里做、不依赖主 Agent 临场判断（§2.6）。子进程形式下若有 `tmux`，包一层供人类 `attach` 观测。
 > **为什么**：见 §1。核心是给"角色隔离"补上模型维度——让任一阶段（尤其 P6.5 judge）能跑在与开发链不同的模型/厂商上，把 `LIMITATIONS.md` 局限 2 的"认知层隔离"往"真正的独立视角"推一步；顺带打开成本 / 模型多样性 / 专业度匹配的优化空间。
-> **不做**：主 Agent 按任务内容动态选型（§2.2 边界）；会话续接机制（评审打回 = 协议现有 retry，§2.4）；第三方终端工具（Herdr/Claude Squad 等，理由见 §2.4 附注）作为依赖；DSH（理由见 §2.5）。局限 3"主 Agent 自身缺乏外部约束"超出本设计范围，不是本设计任何一条排除决定的理由，见 `LIMITATIONS.md`。
+> **不做**：主 Agent 按任务内容动态选型（§2.2 边界）；第三方终端工具（Herdr/Claude Squad 等，理由见 §2.4）作为依赖；DSH（理由见 §2.5）。局限 3"主 Agent 自身缺乏外部约束"超出本设计范围，不是本设计任何一条排除决定的理由，见 `LIMITATIONS.md`。
+> **评审打回续跑**（§2.4a）：打回后同 target 重做时，优先用平台官方续接（`--resume` / `codex exec resume` / `opencode -s` / native 的 `followup_task`·`task_id`）把评审意见续进原会话；续接失败或 fallback 到别的 target 则退化为全新派发。续接是"重放重建"不是"状态冻结"（research §7），故按"续接优先、重起兜底"处理。
 > **机会式启用，零强制基础设施**：不配置候选 = 行为与现状逐字节一致；配了但该 CLI 未装 / 未认证 / 无 `tmux` = 探测失败自动回落。多带一个 CLI/model 或 tmux 就用，否则退回原机制，不新增任何必须先搭好的东西——所以与局限 6"零基础设施"无实质冲突（§6）。
 > **平台**：Claude Code、OpenCode、Codex。
-> **相关**：`agate/dispatch-protocol.md`（派发三铁律）、`agate/rules/phases.yaml`（`exec_role`）、`agate/LIMITATIONS.md`（局限 2/4/6）、`agate/platform-notes.md`（Codex 现为"待补充"）、`docs/design-notes/design-orchestration-semantics.md`（RM-AG0054 推进侧 CLI，§2.6 决策 CLI 化的方向来源，但具体命令为本设计新提议，非既有命令）。
-> **沿革**：由两条讨论线合并——跨 CLI 派发路由（v1 FAIL→v2 PASS→v3/v4→v5 三产出物拆分）+ 角色-模型映射（v1 FAIL：`fallback` 权威源分裂 → v2 PASS）。两线共用同一份配置文件，分作两份文档正是那个 BLOCKER 的成因，故合并；`cli: native` 即候选表的一个特化。2026-09-08 二次精简：范围收敛为"配置路由 + tmux 观测"两机制，移除会话续接 /`--resume` 可靠性分析、四平台续接机制调研、观测信号优先级原则（已在 RM-AG0055）；第三方终端工具（§2.4）与 DSH（§2.5）的排除理由保留但收紧。合并稿需重新走一轮独立评审再立项。
-> **实机核实（2026-09-08）**：`cli: native` 单次派发指定 model（Agent 工具 `model` 参数）✅ 生效（Sonnet 会话派出 Haiku 子代理确认）；`cli: claude-code` 子进程形式（`claude -p --model X --dangerously-skip-permissions`）✅ 生效、非交互干净返回；`tmux` 3.4 会话生命周期 ✅ 正常。`codex`（v0.153.4，ChatGPT 登录）✅ `codex exec --dangerously-bypass-approvals-and-sandbox` 端到端跑通、默认 model `gpt-5.6-terra` 正确应答 exit 0；`-m` 在 CLI 层被接受、`-c model_reasoning_effort=high` 可改推理档；**model 阵容受账号类型限制**——ChatGPT 账号下 `-m gpt-5` / `-m gpt-5-codex` 均被 API 400 拒（"not supported ... with a ChatGPT account"），`--json` 给干净 `turn.failed` 事件。**Codex 有原生子派发原语 `spawn_agent`**（`collaboration` 工具族），已端到端验证按次可指定 `model` + `reasoning_effort`（父 `medium` → 子 `high` 生效）——故 `cli: native` **Claude Code 与 Codex 都适用**（§2.3）。`opencode`（v1.18.11）✅ `run -m deepseek/deepseek-v4-flash` 端到端跑通。其 `task`/`subagent` 工具**调用参数无 model**（两次模型自述 + 官方文档一致），按角色换 model 走**命名 subagent 配置**（`agents.<name>.model = "provider/model#variant"`，子用自己配的 model）——所以 OpenCode 做 `cli: native` 要先按角色预配命名 agent，比 Claude Code/Codex 多一层；`cli: opencode` 子进程（`run -m` + `--variant`）则是干净直路。注：OpenCode 配了多 provider，**部分 model 失效**（`deepseek/deepseek-chat` 报错、`MiniMax-M3` 空返回），候选表里的 OpenCode model 要挑实际可用的。详见对应小节。
+> **相关**：`agate/dispatch-protocol.md`（派发三铁律）、`agate/rules/phases.yaml`（`exec_role`）、`agate/LIMITATIONS.md`（局限 2/4/6）、`agate/platform-notes.md`（Codex 现为"待补充"）、`docs/design-notes/design-orchestration-semantics.md`（RM-AG0054 推进侧 CLI，§2.6 决策 CLI 化的方向来源，但具体命令为本设计新提议，非既有命令）、`docs/design-notes/260903-design-subagent-liveness-and-self-dispatch/`（RM-AG0055 subagent 存活可观测性——命令流日志机制，卡死检测直接复用它，§7 事项 6）、`docs/design-notes/design-maintainability-gate.md`（RM-AG0046 §2"模式层/检测器层分离"——本设计的架构模式沿用它，§2.1）、**`docs/research/cross-platform-dispatch-mechanics.md`（各平台 CLI 调用 / model 指定 / 子代理派发 / 返回识别 / 卡死检测复用机制的客观调查——本设计的机制事实全部引自此，不在此重复）**。
+> **沿革**：由两条讨论线合并——跨 CLI 派发路由（v1 FAIL→v2 PASS→v3/v4→v5 三产出物拆分）+ 角色-模型映射（v1 FAIL：`fallback` 权威源分裂 → v2 PASS）。两线共用同一份配置文件，分作两份文档正是那个 BLOCKER 的成因，故合并；`cli: native` 即候选表的一个特化。2026-09-08 二次精简：范围收敛为"配置路由 + tmux 观测"两机制，移除观测信号优先级原则（已在 RM-AG0055）；第三方终端工具（§2.4）与 DSH（§2.5）的排除理由保留但收紧；平台机制的实机核实明细抽到 `docs/research/cross-platform-dispatch-mechanics.md`，本文只留设计相关结论。评审打回续跑（§2.4a）一度被精简掉、2026-09-08 按"续接优先、重起兜底"重新纳入（续接的可靠性调研见 research §7）。2026-09-08 内部独立评审一轮：修 §2.4a 结构损坏（BLOCKER），补探测成本 / `cli: native` 探测方式 / 与五模式·自主再派发·单 Agent 模式的交互 / tmux×stdout 捕获 / epic 拆分等 WARNING 为 §7 待确认项。合并稿仍需走一轮**外部**独立评审再立项。
+> **机制现状一句话**（详见 research 报告）：`cli: native` 三平台情况——Claude Code ✅ / Codex ✅（`spawn_agent`，按次传 `model` + `reasoning_effort`）/ OpenCode ⚠（工具调用无 model 参数，须先按角色预配命名 subagent）。子进程形式三平台都通（各有 `-m/--model` + 权限绕过 flag）。Codex 退出码不可靠须解析 `--json`；各环境可用 model 名单要自查（Codex 随账号类型、OpenCode 部分配置失效）。
 
 ---
 
@@ -26,7 +27,7 @@ Agateon 的质量模型是"主 Agent 派发 → 每阶段一个独立上下文�
 
 **决策机械化、不依赖主 Agent**：查表 → 探测 → 选 target → 逐级回落，全程无自由裁量，是纯脚本可完成的步骤。这承接 RM-AG0054"推进决策从 orchestrator 临场判断改为查表推进"的方向——路由决策同样应落在 CLI（本设计新提议的 `agate dispatch` 家族，非 RM-AG0054 已定义的既有命令，见 §5）里，主 Agent（或档位 C /loop）只调用、不参与判断（§2.6）。
 
-**tmux 观测（§3）服务的是另一条**：局限 4（subagent 活动不可观测）。它只覆盖"CLI 子进程"这种路由形式——该形式比原生派发更黑盒（返回格式无平台背书），至少要保证人能肉眼确认它还活着，不让新路径在可观测性上零退路。这不是解决局限 4（协议明确该局限"根治需要平台支持"），是防止新路径造成可观测性倒退。
+**可观测性（局限 4）不靠新造机制**：新路径的存活/卡死判定**直接复用 RM-AG0055 命令流日志**（子进程形式还多 `wait(pid)` / `kill -0` 这层更强信号，见 §2.6 / research §6.0.1–6.0.2），不引入固定超时。**tmux 观测（§3）只是可选的"人肉眼看"层**——让用户在不介入协议流程的前提下 `attach` 看实时输出，走不走 tmux 对 gate / 留痕 / 存活判定都零影响。它不是局限 4 的答案（协议明确该局限"根治需要平台支持"），也不承担存活判定职责。
 
 **边界**：不解决局限 3（主 Agent 单点故障）。与局限 6"零基础设施"**无实质冲突**——本机制是机会式的（头部已述）：不配 = 现状，配了但 CLI 没装/没认证 = 自动回落，没有"必须先搭好才能用"的东西。用户想用异 CLI 得自己先把那个 CLI 装好认证好，这是他自己的选择、不是协议强加的门槛。
 
@@ -55,6 +56,7 @@ P6.5:
 - `{cli, model}` 是**原子绑定**，不拆成两个维度分别配——不同平台的 model 取值空间互不兼容（`opencode` 的 `provider/model` 写法 Claude Code 完全不认），拆开会产生非法组合，应在配置校验阶段拦下。
 - **降级是一条逐级回落的链，终点固定、不可配置**：按候选声明顺序逐个探测，任一探测失败就试下一个；候选全部失败 → 自动回落到**默认派发**（当前平台原生派发工具 + 继承主 Agent 当前 model，即"同平台、同 model"）。这个终点恒等于"本机制未启用时的行为"，所以降级永远是"回到现状"，不会导致派发失败，也不需要用户声明。
 - 配置文件**不属于协议本体**，不受 SELF-GATE；协议只定义"读取 / 探测 / 降级 / 留痕"这套机制，候选内容与优先级由使用者决定、后果自负。结构合法性（非法 `cli`/`model` 组合、非法取值）做静态校验，本设计只声明该层校验应存在。
+- **架构上沿用既有的"模式层 / 检测器层分离"**（RM-AG0046 §2，已落地）：协议定义语义与机制（模式层，平台无关），具体实现归各方（检测器层）——正如 `gate_commands` 只声明"必须有检查 X"、不规定用哪个工具，`platform-notes.md` 把语义映射到各平台，RM-AG0055 的"统一 IR + 每平台适配器"。本设计里：协议定义"查表→探测→降级→留痕"这套机制 + `dispatch_route` 事件语义（模式层），"配哪些 CLI/model、探测怎么实现"归用户（检测器层）。探测是 G0 式纯机械判定（判通不通），拒绝 G3 式主观品味（"哪个 model 更适合这次任务"）进入机制——§2.2 末尾的边界就是这条。
 
 ### 2.2 查表 → 探测 → 派发
 
@@ -70,35 +72,38 @@ P6.5:
 
 ### 2.3 `cli: native`——同平台换 model
 
-- 不起子进程，用当前平台的原生派发工具，只指定 `model`。探测简化为"该 model 在当前平台是否被接受"，不涉及跨平台连通性。
-- **前提：该平台得能让父会话为子代理指定 model。** 实机核实：**Claude Code、Codex 支持按次传参**（Task `model` / `spawn_agent(model=…)`，已端到端验证）；**OpenCode 只支持"命名 subagent 配置"这条间接路**（工具调用无 model 参数，model 定在 `agents.<name>.model`），要用得先按角色预配 agent。
+- 不起子进程，用当前平台的原生派发原语，只指定 `model`。探测简化为"该 model 在当前平台是否被接受"，不涉及跨平台连通性。
+- **前提：该平台得能让父会话为子代理指定 model。** 三平台情况（机制细节见 `docs/research/cross-platform-dispatch-mechanics.md` §5）：
 
-  | 平台 | 原生子派发原语 | 状态（2026-09-08 本机核实） |
-  |---|---|---|
-  | Claude Code | Task/Agent 工具，单次调用可传 `model` 参数 | **✅ 支持 `cli: native`**——从 Sonnet 会话派 `model: haiku` → 子代理确为 `claude-haiku-4-5-20251001`。frontmatter `model` 字段路径未测（路由器走单次传参，不依赖它）|
-  | Codex | `spawn_agent`（`collaboration` 工具族之一：`spawn_agent`/`followup_task`/`send_message`/`interrupt_agent`/`list_agents`/`wait_agent`）——通用、prompt 驱动、不限于预定义 skill-agent | **✅ 支持 `cli: native`**——父会话 `reasoning effort: medium`，`spawn_agent(model="gpt-5.6-terra", reasoning_effort="high")` 起的子代理回报 `gpt-5.6-terra high`。**按次可指定 `model` 且可指定 `reasoning_effort`**（比 Claude Code 多一个维度）。注：feature flag `collaboration_modes` stage 显示 `removed` 但 effective `true`（疑似已转常开），目标版本上需复核 |
-  | OpenCode | `task`（V1）/ `subagent`（V2）工具 | **部分支持，但不是按次传 model**——工具调用参数只有 `description`/`prompt`/`subagent_type`（+ `task_id` 续接、`command`），**没有 model 参数**（两次模型自述 + 官方文档一致）。OpenCode 的按角色换 model 走**命名 subagent 配置**：`agents.<name>.model = "provider/model#variant"`，父按 `subagent_type` 名字调用，子用它自己配置的 model（官方文档："child session uses its subagent's configured model, or inherits the parent when none configured"）。→ 要在 OpenCode 上做 `cli: native`，得先按角色预定义好命名 agent（`agate-implementer` / `agate-judge` …），dispatch 表映射 phase→agent 名——比 Claude Code/Codex 的直接传参多一层配置。本次环境 `"agent": {}` 未配任何自定义 agent，故 `task` 只列出 `explore`/`general`（不是 bug，是没配）。旧"3 bug"里 ② 其实是官方设计（子用自己配的 model、不跟父会话临时切换——对本设计反而正好），① 需配好 agent 再实测 |
+  | 平台 | `cli: native` 可行性（三条均端到端已验，2026-09-08）|
+  |---|---|
+  | Claude Code | **✅ 直接**——Task/Agent 工具单次调用传 `model` 参数（Sonnet 会话 → Haiku 子代理）|
+  | Codex | **✅ 直接**——`spawn_agent(model=…, reasoning_effort=…)`，通用 prompt 驱动（父 `medium` → 子 `high`）。比 Claude Code 多一个 `reasoning_effort` 维度 |
+  | OpenCode | **✅ 间接**——`task`/`subagent` 工具调用**无 model 参数**；model 定在命名 subagent 配置 `agents.<name>.model`（实测 v1.18.11 生效：父 `deepseek-v4-flash` 派配了 `deepseek-v4-pro` 的命名 agent → 子确跑 `deepseek-v4-pro`）。要用 `cli: native` 得先按角色预配命名 agent（`agate-implementer` / `agate-judge` …），dispatch 表映射 phase→agent 名——比前两者多一层配置 |
 
 - `phases.yaml` **不改**——`exec_role`（谁执行）与"该角色用什么 model"是两个关注点，分别由 `phases.yaml` 和本配置文件承载。
-- **`cli: native` 不适用 / 验证不通过的平台**：该平台在该 phase 就不提供 `native` 候选（改用 `cli: <平台名>` 子进程候选，或不配 = 维持现状）。等价于"该 phase 的 `native` 候选不存在"，不产生新失败风险。
+- **某平台 `cli: native` 不可行 / 未配好**：该平台在该 phase 就不提供 `native` 候选（改用 `cli: <平台名>` 子进程候选，或不配 = 维持现状）。等价于"该 phase 的 `native` 候选不存在"，不产生新失败风险。
 
 ### 2.4 `cli:` 另一个 CLI——起子进程
 
-- 派发方式：起目标 CLI 子进程，传 `--model` + dispatch-context 文件路径。铁律 2（只传路径不传内容）、铁律 3（只回摘要）不变。
-- **权限拉平**：子进程要跳过该 CLI 自己的沙箱/审批，否则会出现"implementer 在子进程默认沙箱里做了权限妥协（某个该建的文件被拦），但主 Agent 用自己更宽松的原生环境跑 `gate_commands.P5` 反而通过"——产出环境比验证环境严格，gate 失真。
+- 派发方式：起目标 CLI 子进程，传 model flag + dispatch-context 文件路径。铁律 2（只传路径不传内容）、铁律 3（只回摘要）不变。三平台的非交互入口 / model flag / 权限绕过 flag 见 `docs/research/cross-platform-dispatch-mechanics.md` §1、§2、§4；速记：`claude -p --model X --dangerously-skip-permissions` / `codex exec -m X --dangerously-bypass-approvals-and-sandbox` / `opencode run -m provider/model#variant --auto`。三平台子进程形式都已 `[实测]` 跑通。
+- **权限拉平**：子进程要跳过该 CLI 自己的沙箱/审批，否则会出现"implementer 在子进程默认沙箱里做了权限妥协（某个该建的文件被拦），但主 Agent 用自己更宽松的原生环境跑 `gate_commands.P5` 反而通过"——产出环境比验证环境严格，gate 失真。flag 名落地前逐平台复核（research §10 清单）。
+- **探测 / 结果识别按平台差异处理**（research §6）：Codex 退出码不可靠（未认证 = 401 重试循环；账号不支持的 model 会先过"已认证"层、真派发才 `turn.failed{400}`）——探测/派发对 Codex 必须**解析 `--json` 事件流**，不能只看退出码，`--json` 正好给了机器可读的失败原因。OpenCode 失效 model 可能空返回或结构化 Error JSON。这与 §2.2"真跑失败就走下一候选、不做预测性预判"一致。
+- **Codex 按新增平台接入对待**：CLI 已核实（装好、ChatGPT 登录、`codex exec` + `-m` + `-c model_reasoning_effort` + `--dangerously-bypass-approvals-and-sandbox` + `spawn_agent` 均端到端生效），落地环境仍需自查可用 model 名单（随账号类型）与 `multi_agent` feature flag 状态（`codex features list`，命名有变更史，research §5.1）。`platform-notes.md` 的 Codex 章节从"待补充"补为完整设计 + 实机验证记录（素材即 research 报告）。
+- **推理档位是与 model 正交的独立维度**（research §3）：`{cli, model}` 二元组不够，见 §7 事项 1、§8。
+- **不采用第三方终端工具（Herdr / Claude Squad 等）作为正式依赖**：这类工具改善的是可观测性体验层（终端管理、agent 状态识别），但① 需要安装独立二进制或依赖工具，与协议"读文件就能用"的零基础设施原则冲突；② 不解决协议真正的核心矛盾——`LIMITATIONS.md` 局限 3"方向性错配"；③ 对应的局限 4 本身是协议主动选择不根治的次要局限（"根治需要平台支持，超出协议范围"）；④ 屏幕解析这条技术路线本身不可靠（业界方案也在往"优先用官方结构化信号、屏幕解析仅兜底"演化）。本设计的 tmux 观测（§3）只做最低限度"人能看"，不做状态识别，不与这类工具定位重叠。
 
-  | 平台 | 非交互入口 + model flag | 权限绕过 | 本机核实 |
-  |---|---|---|---|
-  | Claude Code | `claude -p --model <alias或ID>` | `--dangerously-skip-permissions`（≡ `--permission-mode bypassPermissions`）| ✅ `claude -p --model haiku --dangerously-skip-permissions` 实测非交互返回 `claude-haiku-4-5-...`、exit 0 |
-  | Codex | `codex exec -m/--model <MODEL>`（或 `-c model="..."`）；推理档 `-c model_reasoning_effort=<low\|medium\|high>` | `--dangerously-bypass-approvals-and-sandbox`（"skip all prompts + no sandbox, 仅供已外部隔离环境"）；中间档 = `-s <read-only\|workspace-write\|danger-full-access>` + `--approve-for-me`。**`--full-auto` / `-a` 已从 `codex exec` 移除**（旧设计"折中方案 `-a never -s workspace-write`"的写法已过期）| ✅ ChatGPT 登录后 `codex exec --dangerously-bypass-approvals-and-sandbox` 端到端跑通、默认 `gpt-5.6-terra` 应答 exit 0；`-m` / `-c model_reasoning_effort` 均在 CLI 层生效。**model 阵容受账号类型限制**：ChatGPT 账号下 `-m gpt-5-codex` 被 API 400 拒——见下"探测注意" |
-  | OpenCode | `opencode run -m provider/model`（`--variant` 可选）| `opencode run --auto`（"auto-approve permissions that are not explicitly denied"，官方标注 dangerous）——**非默认，需显式传** | ✅ v1.18.11、多 provider 已认证；`run --auto -m deepseek/deepseek-v4-flash` 端到端跑通。**部分配置的 model 失效**（`deepseek/deepseek-chat` UnknownError、默认 `MiniMax-M3` 空返回）——用 `opencode models <provider>` 查有效 id |
+### 2.4a 评审打回后的续跑（子进程 + native 两种形式都适用）
 
-  flag 名落地前逐平台对最新官方文档复核一次（版本变化会改名）。**推理档位是与 model 正交的独立维度**：OpenCode `--variant`（high/max/minimal）、Codex `exec` 启动 banner 有独立的 `reasoning effort` 行——`{cli, model}` 二元组可能不够，见 §7 事项 1、§8。
-  **探测注意**（§2.2）：Codex 的失败不总是干净的非零退出——未认证时打 banner 后对 websocket 反复 401 重试；**账号不支持所配 model 时先通过"CLI 已认证"这层、再在真派发时被 API 以 400 拒**（实测：ChatGPT 账号 `-m gpt-5-codex` → `{"type":"turn.failed","error":{...400...}}`）。所以探测/派发对 Codex 要**解析 `--json` 事件流**（`turn.failed` / `item.type:error`），不能只看退出码——这与 §2.2"真跑失败就走下一候选、不做预测性预判"一致，`--json` 正好给了机器可读的失败原因。
-- **Codex 按新增平台接入对待**，落地前独立实机验证。已核实：CLI 装好、ChatGPT 登录后 `codex exec` 端到端跑通、`-m` / `-c model_reasoning_effort` / `--dangerously-bypass-approvals-and-sandbox` 生效、默认 `gpt-5.6-terra`；**原生子派发 `spawn_agent` 存在且按次可指定 `model` + `reasoning_effort`**（端到端已验，见 §2.3），故 Codex 既能作 `cli: codex` 子进程候选、也能作 `cli: native` 候选。剩余：可用 model 名单随账号类型（ChatGPT vs API key）而变，需落地环境自查；`collaboration_modes` feature flag 在目标版本上的开启状态需复核。`platform-notes.md` 的 Codex 章节从"待补充"补为完整设计 + 实机验证记录。
-- **Codex 子进程形式有原生结构化输出优势**：`codex exec --json` 直接吐 JSONL 事件流、`-o <FILE>` 落最终消息——比裸文本采集更适合 §4 留痕与假完成校验。
-- **评审打回**：不做任何续接机制。打回就是协议现有的 retry——重新起一次该候选的派发，prompt 里带上评审意见与必要的上下文重申。计入 `retries[Pn]`，超限走 PAUSED，与现状完全一致。
-- **不采用第三方终端工具（Herdr / Claude Squad 等）作为正式依赖**：这类工具改善的是可观测性体验层（终端管理、agent 状态识别），但① 需要安装独立二进制或依赖工具，与协议"读文件就能用"的零基础设施原则冲突；② 不解决协议真正的核心矛盾——`LIMITATIONS.md` 局限 3"方向性错配"（防御机制布置在 subagent 一侧，握有全部裁量权且被实证是主要事故源的主 Agent 几乎没有外部约束）；③ 对应的局限 4（subagent 活动不可观测）本身是协议主动选择不根治的次要局限（"根治需要平台支持，超出协议范围"）；④ 这类工具自身的屏幕解析这条技术路线也不完全可靠（业界方案本身也在往"优先用 agent 官方结构化信号，屏幕解析仅兜底"演化）。本设计的 tmux 观测（§3）只做最低限度的"人能看"，不做状态识别，不与这类工具的定位重叠。
+设计 1 → 评审打回 → 续原会话改 → 重交评审，这个循环**优先走平台官方续接、不重起**：
+
+- **session id 已捕获**：spawn 子进程 / 调 native 派发原语时已记录 session id（存活监控要用，§7 事项 6）。候选项状态里一并存这个 id。
+- **同 target 重做 → 续接**：cli+model（或 native 的目标 subagent）未变 → 用平台续接命令/原语，把评审意见作为新 prompt 传入：
+  - 子进程：`claude -p --resume <id> '<意见>'` / `codex exec resume <id> '<意见>'` / `opencode run -s <id> '<意见>'`
+  - native：Codex `followup_task` / OpenCode `task(task_id=<id>, prompt=<意见>)` / Claude Code 续接原语待核实
+  - 子代理保留"当初为什么这么设计"的上下文，比重起省一大截。
+- **续接是"重放重建"非"状态冻结"**（research §7，三平台 + DSH 共性；Claude Code 有 #43696 报告）——**不假设续接必成功**。续接后上下文明显丢失，或重做 fallback 到了**不同 target** → 旧 session 作废，退化为**全新派发**、prompt 完整带回评审意见 + 必要上下文重申。等价于该候选探测失败走 §2.2 降级逻辑，不需要额外机制。
+- retry 计数、超限 PAUSED 与现状一致——续接只是"这次 retry 怎么执行"的优化，不改 `retries[Pn]` 语义。
 
 ### 2.5 DSH：暂不纳入 CLI 派发路径
 
@@ -113,10 +118,12 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 
 目标是"派发不依赖主 Agent"。拆成两层看：
 
-- **路由决策层（查表 → 探测 → 选 target → 逐级回落 → 写 `dispatch_route` 事件）**：100% 机械，无自由裁量，应实现为 CLI（扩展 `agate-dispatch.py` 或新增 `agate-route.py`，归入 RM-AG0054 的 `agate next`/`agate advance`/`agate dispatch` 推进侧 CLI 家族）。主 Agent 或档位 C /loop 只调用，不参与判断。这一层**完全可自动化**。
+- **路由决策层（查表 → 探测 → 选 target → 逐级回落 → 写 `dispatch_route` 事件）**：100% 机械，无自由裁量，应实现为 CLI（**优先扩展 `agate-dispatch.py`**，不成再新增 `agate-route.py`——§7 事项 3；归入 RM-AG0054 的 `agate next`/`agate advance`/`agate dispatch` 推进侧 CLI 家族）。主 Agent 或档位 C /loop 只调用，不参与判断。这一层**完全可自动化**。
 
 - **派发执行层**：能不能脱离主 Agent，取决于路由形式——
-  - **`cli:` 另一个 CLI（子进程形式）**：派发就是一条子进程命令（`codex exec --model X …` 之类）。CLI/脚本可完全接管 spawn → （§3 的 tmux 包裹）→ 等待 → 采集结果 → 跑假完成校验 → 写事件，主 Agent / 档位 C 只需 `agate dispatch <phase>` 拿回"路径 + 摘要"。**这条形式能真正做到"派发不依赖主 Agent"。**
+  - **`cli:` 另一个 CLI（子进程形式）**：派发就是一条子进程命令（`codex exec --model X …` 之类）。CLI/脚本可完全接管 spawn → （§3 的 tmux 包裹）→ 等待**子进程退出**（正常完成的内在信号，不靠超时）→ 解析结构化输出判成败（research §6）→ 跑假完成校验 → 写事件，主 Agent / 档位 C 只需 `agate dispatch <phase>` 拿回"路径 + 摘要"。**这条形式能真正做到"派发不依赖主 Agent"。**
+  - **存活性：子进程形式是三种路由里最好的**（research §6.0.2）——① `wait(pid)` = 完成信号；② `kill -0 pid` / proc 状态 = "死没死"的直接、极便宜信号（抓崩溃/OOM/僵尸），native 形式没有 PID、只能由 RM-AG0055「活动冻结」间接推；③ "卡没卡"复用 **RM-AG0055 命令流机制**（`agate-cmdstream-*.py`），子进程形式还能直接取 `--json` stdout 实时事件流、省去找会话文件；④ 路由脚本不被阻塞 → 走 RM-AG0055 §3.3 主动轮询，不是 §3.4 降级路径。`kill -0` 与命令流互补，两者都不是固定超时。
+  - **不用固定紧超时**：固定紧超时会把本该跑久的合法任务强杀 = 违规处理。若确需外层 `timeout` 兜底，值须匹配任务预期、宁宽勿紧。
   - **`cli: native`（同平台换 model）**：实际启动 subagent 仍须走平台自己的派发工具（铁律 1"通过平台派发工具启动 subagent"），只有驱动会话能调用它。所以启动动作仍在会话侧——但**调用参数（目标 model）由决策层全量算好，会话零判断**。决策自动化，机械启动搭平台工具的车。
 
 - 这就是摘要里"（如果可能的话）"的边界：子进程形式可端到端自动化；`native` 形式受平台约束，做到"决策自动、启动动作仍由会话代发但不掺判断"为止。两种形式的 gate 判定、留痕完全一致。
@@ -127,12 +134,22 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 
 - **目的**：让人类用户在不介入协议流程的前提下，肉眼查看某个正在跑的子进程派发的实时输出。
 - **机制**：起子进程时若 `which tmux` 成功 → `tmux new-session -d -s {session_name} '{命令}'` 包一层；失败则裸跑子进程。两条路径产出的 gate 结果、`dispatch_route` 留痕完全一致，走不走 tmux 不影响协议判断的任何环节。
+- **与结果/存活捕获的衔接**（机制一要抓子进程 `--json` stdout，见 §2.6 / research §6）：tmux 包裹时子进程 stdout 进的是 pane 不是路由脚本的管道。解法——命令里带重定向 `tmux new-session -d -s {name} '{命令} > {capture.jsonl} 2>&1'`，路由脚本 tail 该文件（或用 `tmux pipe-pane`）。人看 pane、脚本读文件，两不误。落地时定这一处。
 - **session 命名必须带命名空间**：如 `agate-{task_id}-{phase}-{短时间戳}`。同一机器上常已有别的 tmux session（本机核实：存在 `0` 和用户自己的 `cc`），裸名 `test` 之类会碰撞或误清理。所有 `list-clients`/`kill-session` 一律带 `-t {session_name}` 精确定位。
 - **明确不做**：`send-keys` 交互、`capture-pane` 内容解析给主 Agent 用、跨轮次 session 复用。
-- **session 生命周期**：该次派发结束（无论成败）即 `tmux kill-session -t {session_name}`；session 存在的唯一理由是"这次派发进行中"，理由不再成立就清理。唯一例外：清理前 `tmux list-clients -t {session_name}` 非空（有人正 attach）→ 延迟清理，待客户端断开后再清理。
+- **session 生命周期（带退出倒计时，改善 attach 端体验）**：
+  - wrapper 命令末尾自带收尾：`{命令} | tee {capture}` 跑完后，在 pane 里打 `=== 派发结束 ===` + 一个 N 秒倒计时（`本窗口将在 N 秒后关闭…，Ctrl+b d 可提前离开`，N 默认 ~15，可配），倒计时完 wrapper 自行退出 → 会话自然结束。
+  - 路由脚本清理逻辑：`tmux list-clients -t {session_name}` **空**（没人看）→ 直接 `kill-session`，跳过倒计时；**非空**（有人正 attach）→ **不动手**，让 wrapper 的倒计时走完自然结束——attach 的人看着"N 秒后关闭"从容离开，比被瞬间踢出干净（本机实测：`kill-session` 时 client 会被整个拽出 tmux，无卡但突兀）。
+  - 兜底：wrapper 若异常未退出（倒计时脚本本身挂了），路由脚本超过 `N + 余量` 仍见 session 存在 → 强制 `kill-session`。session 存在的唯一理由是"这次派发进行中或收尾倒计时中"，之外不留。
 - `cli: native` 形式无子进程，本节不适用。
 
-**实机核实（2026-09-08，本机 tmux 3.4）**：`new-session -d` / `list-sessions` / `list-clients` / `kill-session` 均按预期工作，起停干净、无残留。**仍待验证**：① 真人 `attach` 看实时滚动输出 + `Ctrl+b d` 退出不杀会话；② 有人 attach 时触发清理，attach 端是正常提示还是被直接踢出；③ 某 CLI 在非真实 TTY 下是否拒绝正常输出。验证前本节视为设计意向；不通过则机制二整体移除，不影响机制一。
+**实机核实（2026-09-08，本机 tmux 3.4，含真人 attach）**：
+- `new-session -d` / `list-sessions` / `list-clients` / `kill-session` 起停干净、无残留。
+- **真人 attach ✅**：看到子进程输出实时滚动；`Ctrl+b d` 干净 detach、会话继续。
+- **有人 attach 时 `kill-session` ✅ 干净**（无卡住/花屏），但 client 会被整个拽出 tmux（若是 `Ctrl+b s` 切过去的工作 client，人就掉出 tmux 了）——突兀。**所以有 client attach 时不强杀，改由 wrapper 的退出倒计时（上面）自然收尾**，让人看着"N 秒后关闭"从容离开。
+- **tmux 包裹 × 抓 stdout ✅**：`tmux new-session -d "{命令} | tee {capture}"` → pane 实时滚 + 文件同步在长，人看 pane / 脚本 tail 文件互不干扰（对应 §3 上面那条 W4 落地方式）。
+- **非真实 TTY 输出 ✅**：本会话所有 `printf ... | codex exec` / `claude -p` / `opencode run` 的 stdout 都非 tty、输出正常；`--json` / `--format json` 本就为非交互设计。
+本节已从"设计意向"转为可写进定稿。
 
 ---
 
@@ -159,7 +176,7 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 ## 5. 影响面
 
 - 新增 `rules/dispatch-routing.yaml`（配置文件，非协议本体，不受 SELF-GATE）。
-- **路由决策 CLI 化**：新增 `agate-route.py`（或扩展现有脚本，具体落点待定，见 §7 事项4），把"查表 → 探测 → 选 target → 逐级回落 → 写 `dispatch_route` 事件"实现为脚本步骤。**命令名 `agate dispatch`/`agate route` 是本设计新提议，不是 RM-AG0054 已经定义的既有命令**——RM-AG0054 定义的是 `agate next`/`agate advance`（状态机推进决策，"该不该进入下一 phase"），本设计要落地的是派发决策（"这一步该派给哪个 CLI/model"），两者是不同性质的决策，只是都遵循"决策查表化、落在 CLI 里做"这个同一方向，建议归入同一个 CLI 家族统一维护，但命令本身需要新增，不能假设已存在。子进程形式下由该脚本端到端接管 spawn/tmux/采集/校验（§2.6）。档位 C /loop 全自动路径下，该命令内联执行这条链。
+- **路由决策 CLI 化**：优先扩展 `agate-dispatch.py`（不成再新增 `agate-route.py`，见 §7 事项 3），把"查表 → 探测 → 选 target → 逐级回落 → 写 `dispatch_route` 事件"实现为脚本步骤。**派发决策命令是本设计新提议，不是 RM-AG0054 已定义的既有命令**——RM-AG0054 定义的是 `agate next`/`agate advance`（状态机推进决策，"该不该进入下一 phase"），本设计要落地的是派发决策（"这一步该派给哪个 CLI/model"），两者性质不同，只是都遵循"决策查表化、落在 CLI 里做"这个同一方向，归入同一 CLI 家族统一维护。子进程形式下由该脚本端到端接管 spawn/tmux/采集/校验（§2.6）。档位 C /loop 全自动路径下内联执行这条链。
 - `dispatch-protocol.md` 新增一节：铁律 1 之前的"查表 → 探测 → 定 target → 再派发"这一步；并显式写明"gate 判定不认谁生产的"这条解耦关系，防止未来有人误以为需要为跨 CLI 派发单独定制 gate。
 - 新增 `dispatch_route` 事件：`gate-events.jsonl` 写入端 + `check-events.py` 校验端同步支持（复用既有哈希链完整性校验，不新增校验机制）。
 - `platform-notes.md`：Codex 章节从"待补充"补为完整设计 + 实机验证记录。
@@ -177,32 +194,33 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 | Codex 沙箱/派发机制首次走 SETUP，成熟度未知 | 按新增平台接入对待，落地前独立实机验证，不与 Claude Code/OpenCode 同等对待 |
 | 逐级回落链过于顺滑，"候选全灭"被悄悄吸收、成为"回避报告问题"的新出口 | §4 无差别留痕——不阻止回落，但每次回落（含回落到默认派发）都留痕、可事后追溯 |
 | 配置内容质量（把高可靠性阶段配成低质量候选优先）| 责任在用户；协议只保证过程可追溯，不做内容质量把关 |
-| 机制二 tmux 链路在目标环境有意外行为 | §3 待实机验证；不通过则机制二整体移除，不影响机制一 |
+| 机制二 tmux 链路在目标环境有意外行为 | 本机 tmux 3.4 已含真人 attach 全链路实测通过（§3 末）；其它环境版本升级后照 research §10 复核。不通过可整体移除，不影响机制一 |
 
 ---
 
 ## 7. 待确认事项
 
-1. `rules/dispatch-routing.yaml` 的确切 schema（本文候选结构为示意；已定：无 `fallback` 字段，终点回落恒为默认派发）。**候选项需加可选推理档字段**——已实测两平台都有：OpenCode `--variant`（high/max/minimal）、Codex `-c model_reasoning_effort`（low/medium/high），与 model 正交。`{cli, model}` 不够，需 `{cli, model, effort?}`（字段名待定）。
-2. 各 CLI 权限绕过 flag 的准确名称——落地前逐平台对最新官方文档复核（本机已核实 `claude --dangerously-skip-permissions`；`opencode run --auto` flag 存在但未跑；Codex 未装）。
-3. `dispatch_route` 事件的 JSON schema 细节。
-4. **路由决策 CLI 的落点**：扩 `agate-dispatch.py` 还是新增 `agate-route.py`；`cli: native` 形式下"决策层算出目标 model、启动仍由驱动会话代发平台派发工具"这一步的具体衔接方式（会话侧读什么、怎么保证零判断）。
-5. RM 编号申领与排期——检查是否与近期其他涉及 `dispatch-protocol.md` / 推进侧 CLI 的任务冲突（参照 RM-AG0054/RM-AG0055 立项前的排期检查惯例）。
-6. **三平台 `cli: native` 已核清**（§2.3）：Claude Code ✅ 按次传参、Codex ✅ 按次传参（`spawn_agent`，含 `reasoning_effort`）、OpenCode ⚠ 只能走"命名 subagent 配置"间接路（工具调用无 model 参数）。剩余复核点：OpenCode 配好命名 agent 后 `agents.<name>.model` 是否真生效（旧 bug ① 是否仍在）；`collaboration_modes` flag 在目标 Codex 版本的开启状态；Claude Code frontmatter-model 路径（路由器不依赖，低优）。
-7. **各环境的有效 model 名单要自查**——Codex 受账号类型限制（ChatGPT 账号只 `gpt-5.6-terra`）；OpenCode 配了多 provider 但部分失效（`opencode models <provider>` 查）。候选表里写的 model 必须是落地环境实际可用的，否则探测/派发失败走回落。
-8. 机制二 tmux 链路剩余验证项（§3 末：真人 attach 滚动 / 清理时 attach 端体验 / 非真实 TTY 输出）。
-9. **（超出本设计范围，登记为独立开放问题）主 Agent 自身缺乏外部约束**：`LIMITATIONS.md` 局限 3"方向性错配"——防御机制布置在 subagent 一侧，握有全部裁量权且被实证是主要事故源的主 Agent 几乎没有外部约束（T005/T006/T016/T019 根因均为主 Agent）。这是协议当前最大的敞口，本设计（配置路由 + tmux 观测）完全不解决它，值得作为独立 design-note 另行立项讨论，本设计不认领。
+1. `rules/dispatch-routing.yaml` 的确切 schema（本文候选结构为示意；已定：无 `fallback` 字段，终点回落恒为默认派发）。**候选项需加可选推理档字段**——research §3 已确认 OpenCode / Codex 都有独立推理档维度，与 model 正交。`{cli, model}` 不够，需 `{cli, model, effort?}`（字段名待定）。
+2. `dispatch_route` 事件的 JSON schema 细节 + `check-events.py` 校验端如何识别新事件类型（不能把未知 event 判为非法）。
+3. **路由决策 CLI 的落点**（全文统一为：**优先扩展 `agate-dispatch.py`**，不成再新增 `agate-route.py`）：`cli: native` 形式下"决策层算出目标 model、启动仍由驱动会话代发平台派发工具"这一步的具体衔接方式（会话侧读什么文件、怎么保证零判断）；与 RM-AG0054 已落地的 `agate dispatch`（渲染 dispatch-context）是串联还是同一步。
+4. **探测成本与 `cli: native` 探测方式**：① task 内探测缓存（同候选一个 task 内只探一次，否则 P1–P8 × 每 phase 多候选 = 每任务几十次真 API 调用）；② `cli: native` 怎么探测"该 model 平台认不认"——起一次性子代理探测代价不小，倾向"查平台已知 alias 表 / 接受配置、让首次真派发失败时走降级"，落地定。
+5. **与既有派发机制的交互**（本文未展开，立项设计要覆盖）：① 五模式并行批（模式 2/3）——每个并行 subagent 是否各自独立探测同一候选链、探测结果 task 内是否共享；② RM-AG0055 自主再派发的子任务——是否走路由表（倾向"不走，继承父的实际 cli/model"）；③ 单 Agent 模式（`has_task_tool:false`，如 Claude Project）——无派发动作，路由为 no-op，应显式声明出范围。
+6. RM 编号申领与排期——检查是否与近期涉及 `dispatch-protocol.md` / 推进侧 CLI 的任务冲突（尤其 **RM-AG0059 任务管理命令化** 有 CLI 化重叠，backlog）。**epic 还是单 task**：跨 CLI 子进程（含 Codex 首次接入）/ `cli: native` / tmux 层是三块可分交付，倾向 epic（参照 RM-AG0058）。
+7. **平台机制的落地前复核**——照 `docs/research/cross-platform-dispatch-mechanics.md` §10 复核清单。本设计的阻断性机制项本轮已全部实测通过（三平台 `cli: native` model 指定、权限对等 + 沙箱对照、完成/失败信号机制、结构化输出形态、Codex `spawn_agent` schema）；剩余为环境自查项（Codex API-key 账号 model 阵容）与低优项（见 research §11）。版本升级后照 §10 复跑。
+8. **存活性 / 卡死检测复用既有机制，不自造超时**（research §6.0.1 / §6.0.2）：
+   - 子进程形式：`wait(pid)` 完成 + `kill -0`/proc 状态判"死没死" + RM-AG0055 命令流（可直接取 `--json` stdout 流）判"卡没卡" + §3.3 式主动轮询（子进程可轮询，机制换成 PID/stdout 非心跳文件）。
+   - `cli: native` 形式：无 PID，全靠 RM-AG0055 命令流机制（`agate-cmdstream-{adapters,detect,ir}.py`，TAG0028 已落地）。
+   - **唯一缺口 = 写一个 `CodexAdapter`**（数据源 `~/.codex/sessions/**/*.jsonl`，按 RM-AG0055 §3.4.4"未来接 Codex：约一个文件"，检测引擎/阈值零改动）。落地衔接点：spawn / 调 `spawn_agent` 时捕获 session id。
+9. 机制二 tmux 链路本机已含真人 attach 全链路实测通过（§3 末）；落地时定：`{命令} | tee {capture}` 里 capture 文件的路径/命名与生命周期；退出倒计时的 N 默认值与可配置项；wrapper 收尾脚本的写法（`printf '\r...' ; sleep 1` 循环，纯 sh）。
+10. **（超出本设计范围，登记为独立开放问题）主 Agent 自身缺乏外部约束**：`LIMITATIONS.md` 局限 3"方向性错配"——防御机制布置在 subagent 一侧，握有全部裁量权且被实证是主要事故源的主 Agent 几乎没有外部约束（T005/T006/T016/T019 根因均为主 Agent）。这是协议当前最大的敞口，本设计（配置路由 + tmux 观测）完全不解决它，值得作为独立 design-note 另行立项讨论，本设计不认领。
 
 ---
 
-## 8. 参考：各平台模型 / 档位速览（非规范，时效性强）
+## 8. 怎么填 `candidates` 表（非规范）
 
-用来帮用户填 `candidates` 表，**不是协议规则**——模型阵容变化快，落地前逐平台对最新官方文档复核；协议本身不定义"档位"，也不声明跨厂商档位等价（那是主观判断，与"只做可判定"冲突）。`candidates` 里写的是具体 model 串，不是抽象档位。
+model 写法、可用 model 名单、推理档语法逐平台的细节见 `docs/research/cross-platform-dispatch-mechanics.md` §2 / §3。要点：
 
-| CLI | model 写法 | 大致档位（低成本 → 高能力）| 额外维度 |
-|---|---|---|---|
-| **Claude Code**（`--model` / Agent 工具 `model` 参数）| alias 或完整 ID | `fable`（`claude-fable-5-1`，小而快）< `haiku`（`claude-haiku-4-5-20251001`）< `sonnet`（`claude-sonnet-5`）< `opus`（`claude-opus-5`）| `--fallback-model` 为 CLI 自带的降级（与本设计的候选链正交，可叠加）|
-| **OpenCode**（子进程 `opencode run -m provider/model` 直路；`cli: native` 需先按角色预配命名 subagent，工具调用本身无 model 参数）| `provider/model#variant`，取值空间取决于用户配的 provider；**部分配置的 model 实际失效**，用 `opencode models <provider>` 查有效 id | 由所选 provider 决定，协议无从枚举 | model 串里 `#high` 之类即 `--variant`（provider-specific reasoning effort），见 §7 事项 1 |
-| **Codex**（子进程 `codex exec -m/--model`；`native` 走 `spawn_agent`）| **随账号类型而变**：ChatGPT 登录只 `gpt-5.6-terra`（实测；`gpt-5` / `gpt-5-codex` 均 400）。API key 账号才有 gpt-5 家族——落地环境自查 | 推理档：子进程 `-c model_reasoning_effort=<low\|medium\|high>`、`native` 传 `spawn_agent(reasoning_effort=...)`（均实测生效，与 model 正交）；`--json` 原生 JSONL 事件流利于留痕/探测。**`spawn_agent` 支持按次 `model`+`reasoning_effort`，两种形式都可用** |
-
-典型配法（示意）：judge / architect / consistency-reviewer 这类"要专业判断"的阶段配 `opus` 或异厂商高能力 model；implementer（P4，产出量最大）配 `haiku` 或 `fable` / 便宜 provider model；analyst / test-designer 视需求配中档。**具体怎么配、配得好不好，是用户的事**（§2.1）。
+- `candidates` 里写**具体 model 串**（Claude Code alias/ID、`provider/model#variant`、Codex 白名单），**不是抽象档位**——协议不定义"档位"、不声明跨厂商档位等价（主观判断，与"只做可判定"冲突）。
+- 推理档在 model 之外单列（`{cli, model, effort?}`，见 §7 事项 1）。
+- **可用 model 随环境变**：Codex 随账号类型、OpenCode 部分配置失效——落地时各自 `codex exec --json` / `opencode models <provider>` 自查。
+- 典型意图（示意）：judge / architect / consistency-reviewer 配高能力或异厂商 model；implementer（P4，产出量最大）配便宜 model；其余视需求。**具体怎么配、配得好不好是用户的事**（§2.1）。
