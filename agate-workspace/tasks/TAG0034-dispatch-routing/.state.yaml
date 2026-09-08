@@ -1,0 +1,5 @@
+task_id: TAG0034
+phase: P0
+status: active
+judge:
+  enabled: true
