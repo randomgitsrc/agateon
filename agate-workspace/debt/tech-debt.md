@@ -1214,3 +1214,31 @@ source: review
 created_at: 2026-09-07
 task_id: TAG0032
 ```
+
+## DEBT0035
+
+```yaml
+id: DEBT0035
+category: technical
+title: "CodexAdapter pending 判据 status!='completed' 误判真机 Codex status=='failed' 终态为 pending（P5→P4 回退，TAG0033）"
+status: in_progress
+priority: high
+evidence:
+  - ref: "52fe210"
+    note: "retreat: P5 -> P4 提交（P6 真机 V6 发现 F1）"
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/.archived/p6-pre-retreat-20260909/real-machine-p6.md
+    note: "P6 verifier 首轮真机 V6：spin 会话 7 条 status=failed/exit_code=2 命令被 CodexAdapter 映射为 pending（exit=None/output_hash=None），detect 判不出 SPIN"
+  - path: agate/scripts/agate-cmdstream-adapters.py
+    note: "line ~739 pending = item.get('status') != 'completed'——未识别真机终态 'failed'"
+impact: "不修则 CodexAdapter 对真机 Codex 已结束但非0退出的命令丢失 exit_code + output_hash：detect 对真机重复失败会话判不出 SPIN（BDD-15 真机侧不成立）；真机失败命令 CommandRecord.exit 恒 None；BDD-6 pending 判据真机假阳性。TAG0033 的 P6 验收声明会因此变假。"
+recommendation: "pending 判据改为「无终态信号」口径：status in ('completed','failed') 或存在 completed_at_ms/exit_code → 走已完成路径提取 exit_code；仅 status in ('in_progress', 其它未知) 且缺 completed_at_ms/exit_code 时才算 pending。fixture codex-session.jsonl 补真机 status=='failed' 形态；P3 测试加覆盖（BDD-5/BDD-15 或新守护）。platform-notes.md Codex 章补真机 status 取值集（completed/failed/in_progress）。P1 §4.1 spike 描述补 'failed' 终态。"
+closure_criteria:
+  - "CodexAdapter 对 status=='failed' 且带 exit_code 的 item 映射为 exit=<非0 int> / ts_end=<完成时刻> / output_hash=<真实哈希>，非 pending"
+  - "P3 测试覆盖 status=='failed' 形态；fixture 含真机 failed 样本"
+  - "detect 对真机重复失败会话（复跑 P6 V6 ③）判 SPIN"
+  - "全量 pytest 全绿 + consistency 0 ERROR + P5/P6 重新通过"
+  - "platform-notes.md Codex 章含真机 status 取值集；P1 §4.1 补 'failed' 终态"
+source: retreat
+created_at: 2026-09-09
+task_id: TAG0033
+```
