@@ -1221,7 +1221,7 @@ task_id: TAG0032
 id: DEBT0035
 category: technical
 title: "CodexAdapter pending 判据 status!='completed' 误判真机 Codex status=='failed' 终态为 pending（P5→P4 回退，TAG0033）"
-status: in_progress
+status: closed
 priority: high
 evidence:
   - ref: "52fe210"
@@ -1230,6 +1230,14 @@ evidence:
     note: "P6 verifier 首轮真机 V6：spin 会话 7 条 status=failed/exit_code=2 命令被 CodexAdapter 映射为 pending（exit=None/output_hash=None），detect 判不出 SPIN"
   - path: agate/scripts/agate-cmdstream-adapters.py
     note: "line ~739 pending = item.get('status') != 'completed'——未识别真机终态 'failed'"
+  - ref: "5f704a0"
+    note: "closure: TAG0033 P5 r3 F1 修复后重新技术验证通过（gate_commands.P5 全绿 + 真机 V1/V6③ 证 F1 已修）"
+  - ref: "49d3353"
+    note: "closure: TAG0033 P6 重做验收 30/30 PASS（F1 修复后；真机 V6 三态 FROZEN/NORMAL/SPIN 齐）"
+  - ref: "f484895"
+    note: "closure: TAG0033 P6.5 judge 独立复核通过（criteria 30/30 passed，partial: false）"
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P7-consistency.md
+    note: "P7 §6-B 确认 5 条 closure_criteria 本任务 5/5 全满足（P5/P6 重新通过条补齐）"
 impact: "不修则 CodexAdapter 对真机 Codex 已结束但非0退出的命令丢失 exit_code + output_hash：detect 对真机重复失败会话判不出 SPIN（BDD-15 真机侧不成立）；真机失败命令 CommandRecord.exit 恒 None；BDD-6 pending 判据真机假阳性。TAG0033 的 P6 验收声明会因此变假。"
 recommendation: "pending 判据改为「无终态信号」口径：status in ('completed','failed') 或存在 completed_at_ms/exit_code → 走已完成路径提取 exit_code；仅 status in ('in_progress', 其它未知) 且缺 completed_at_ms/exit_code 时才算 pending。fixture codex-session.jsonl 补真机 status=='failed' 形态；P3 测试加覆盖（BDD-5/BDD-15 或新守护）。platform-notes.md Codex 章补真机 status 取值集（completed/failed/in_progress）。P1 §4.1 spike 描述补 'failed' 终态。"
 closure_criteria:
@@ -1241,4 +1249,29 @@ closure_criteria:
 source: retreat
 created_at: 2026-09-09
 task_id: TAG0033
+closed_at: 2026-09-09
+```
+
+## DEBT0036
+
+```yaml
+id: DEBT0036
+category: technical
+title: "platform-notes.md Codex 章「spawn_agent 嵌套深度未测 / max_depth=1 待 V7 复核」措辞滞后——P6 V7 已两次实测 depth=2 可用"
+status: open
+priority: low
+evidence:
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P6-evidence/real-machine-p6.md
+    note: "P6 V7 重做 attempt 2 实测 source.subagent.thread_spawn.depth == 2 的孙会话（agent_path == /root/p6redo2_child/p6redo2_grand）；.archived 首轮 V7 亦得 depth 1→2——两次独立证实"
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P7-consistency.md
+    note: "P7 §5 / §6-A：deviation_count: 1（WARNING 级）——platform-notes.md 子代理派发小节 + 行 136 时效指针仍写「未测 / 待 V7 复核」，与实测事实滞后"
+impact: "权威源（platform-notes.md，平台适配权威源）携带指向已实测事实的「未测」指针，误导读者；不影响 CodexAdapter 契约或 BDD-25（现「待复核」时效指针本身合规，test_bdd_25 现绿）"
+recommendation: "把「未测」收敛为「已实测 depth=2 可用（P6 V7，2026-09，两次独立证实）」，保留 max_depth=1 事实行 + 交叉引用结构；回跑 test_bdd_25 + check-protocol-consistency.py --strict-errors-only 确认 BDD-25 不破、0 ERROR"
+closure_criteria:
+  - "platform-notes.md 子代理派发小节 + 行 136 时效指针措辞收敛为「已实测 depth=2 可用」"
+  - "test_codex_platform_docs.py::test_bdd_25 绿"
+  - "check-protocol-consistency.py --strict-errors-only 0 ERROR"
+source: retrospective
+created_at: 2026-09-09
+task_id: null
 ```

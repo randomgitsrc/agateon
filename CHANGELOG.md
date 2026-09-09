@@ -8,6 +8,40 @@
 
 ---
 
+## [0.70.0] - 2026-09-09
+
+### 新增（TAG0033：Codex 命令流适配器 + 平台接入，RM-AG0061 + DEBT0035）
+
+- **`agate-cmdstream-adapters.py` 新增 `CodexAdapter`**（`ADAPTERS` 注册表键 `"codex"`）——
+  RM-AG0055 命令流机制新增 Codex 平台适配器，subagent 存活/卡死检测（调用冻结 / 活动冻结 /
+  逻辑空转）覆盖 Codex：把 `~/.codex/sessions/**/rollout-*.jsonl`（含 `spawn_agent` 子会话的
+  独立 rollout 文件）解析为统一 `CommandRecord` IR；实现 `probe` / `list_sessions` /
+  `read_commands` 三方法。**检测引擎 / 阈值（RM-AG0055 §3.4.3）/ `CommandRecord` IR / 既有三
+  平台适配器（Claude Code / OpenCode / DSH）零改动**——兑现 RM-AG0055 §3.4.4「未来接新平台
+  只写一个适配器、检测引擎零改动」扩展点（`agate-cmdstream-adapters.py` +252 insertions / 0
+  deletions）。
+- **`agate/platform-notes.md` Codex 章**从「待补充」占位补为完整能力矩阵：非交互 `codex exec` /
+  `-m`/`--model` 与 `-c model_reasoning_effort` 推理档 / 权限绕过 `--dangerously-bypass-approvals-and-sandbox`
+  与中间档 `-s <read-only|workspace-write|danger-full-access>` / `spawn_agent` 原生子派发 /
+  `--json` 结构化输出 / `resume`；退出码不可靠须解析 `--json`；model 阵容随账号类型变
+  （ChatGPT 账号默认 model、`spawn_agent` model 枚举）；`multi_agent` feature flag。附实机
+  验证记录（codex-cli **0.153.4** + ChatGPT 登录，2026-09）。
+- **`agate/SETUP.md` 新增「步骤 2-Codex」接入小节**：`npm i -g @openai/codex` + `codex login`
+  （ChatGPT vs API key 影响可用 model）+ 自动化环境绕过 flag + `codex features list` /
+  `codex exec --json` 冒烟验证。
+- 关联：RM-AG0061（RM-AG0055 §3.4.4 预留扩展点落地 + RM-AG0060 派发路由 epic 的 b 块前置）、
+  DEBT0035（本版本关闭，见「修复」）。
+
+### 修复
+
+- **`CodexAdapter` pending 判据收紧（F1 / DEBT0035，P5→P4 回退修复）**：pending 判据从
+  `item.status != "completed"` 收紧为「无终态信号才算 pending」——新增模块级 helper
+  `_codex_is_finished(payload, item)`：已结束 = `status ∈ {"completed","failed"}` ∪
+  `payload.completed_at_ms` 非 None ∪ `item.exit_code` 是 int 非 bool（三者任一）。修复真机
+  Codex 把「已结束但非 0 退出」的命令记为 `status:"failed"`（携带完整 `exit_code` /
+  `completed_at_ms`）时被旧口径误判为 pending、丢弃真实 `exit_code` / `output_hash`，导致
+  `agate-cmdstream-detect.py` 对真机重复失败会话判不出 SPIN 的缺陷。
+
 ## [0.69.0] - 2026-09-07
 
 ### 新增（TAG0032：版本管理生命周期可用性批，RM-AG0058 + DEBT0034）
