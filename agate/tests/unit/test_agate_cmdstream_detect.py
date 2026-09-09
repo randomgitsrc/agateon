@@ -498,12 +498,16 @@ def _load_cmdstream_adapters(agate_scripts):
     return mod
 
 
-def _cx_exec(item_id, cmd, exit_code, out, t0, t1, truncated=False):
-    """构造一行 event_msg/item_completed CommandExecution（rollout 封套形态）。"""
+def _cx_exec(item_id, cmd, exit_code, out, t0, t1, truncated=False, status="completed"):
+    """构造一行 event_msg/item_completed CommandExecution（rollout 封套形态）。
+
+    status 默认 "completed"；真机把已结束但非 0 退出的命令记为 "failed"（DEBT0035 / P6 V6）,
+    调用方按需传入。CodexAdapter 以「有终态信号」判已结束，两种取值均映射为非 pending。
+    """
     item = {
         "type": "CommandExecution", "id": item_id,
         "command": ["/bin/bash", "-lc", cmd],
-        "exit_code": exit_code, "status": "completed",
+        "exit_code": exit_code, "status": status,
         "aggregated_output": out,
     }
     if truncated:
@@ -596,13 +600,18 @@ def test_bdd_14_codex_activity_freeze_frozen(agate_scripts, tmp_path):
 
 def test_bdd_15_codex_invalid_repeat_spin(agate_scripts, tmp_path):
     """BDD-15：Codex 会话窗口内同 (command, exit, output_hash) 组合重复 ≥ 5 次
-    （exit_code 与 aggregated_output 均不变、无截断）→ verdict == "SPIN"。"""
+    （exit_code 与 aggregated_output 均不变、无截断）→ verdict == "SPIN"。
+
+    真机形态（DEBT0035 / P6 V6）：重复失败命令记为 status=="failed" + exit_code 非 0 +
+    completed_at_ms——CodexAdapter 须据「有终态信号」判已结束，提取 exit + output_hash，
+    detect 才能算出重复结果签名判 SPIN（旧 pending 口径下这些命令 exit/output_hash 全 None，
+    判不出 SPIN）。"""
     detect_mod = _load_detect(agate_scripts)
     adapters = _load_cmdstream_adapters(agate_scripts)
 
     t0 = 1788400000000
-    lines = [_cx_exec(f"r{i}", "retry_convert", 1, "same failure\n",
-                      t0 + i * 2000, t0 + i * 2000 + 1000) for i in range(6)]
+    lines = [_cx_exec(f"r{i}", "retry_convert", 2, "same failure\n",
+                      t0 + i * 2000, t0 + i * 2000 + 1000, status="failed") for i in range(6)]
     session = _write_cx_rollout(tmp_path, lines)
     records = adapters.CodexAdapter().read_commands(str(session))
     events = _records_to_events(records)

@@ -638,6 +638,31 @@ def _codex_int_or_none(val):
     return val if isinstance(val, int) else None
 
 
+def _codex_is_finished(payload, item):
+    """Codex CommandExecution item 是否已结束——「无终态信号才算 pending」口径。
+
+    P6 V6 实测修正（DEBT0035）：真机 Codex 把**已结束但非 0 退出**的命令记为
+    ``item.status == "failed"``（不是 ``"completed"``），且该 item 仍携带完整
+    ``exit_code`` + ``payload.completed_at_ms``。旧口径 ``status != "completed"`` 把这些
+    已结束命令误判为 pending，丢失真实 exit_code + output_hash（→ detect 判不出 SPIN）。
+
+    已结束的判据 = 三者任一成立：
+    - ``item.status`` ∈ ``{"completed", "failed"}``（Codex 已知终态取值）
+    - ``payload.completed_at_ms`` 非 None（有完成时刻）
+    - ``item.exit_code`` 是 int 且非 bool（有退出码）
+
+    仅 ``status`` ∈ ``{"in_progress", 其它未知}`` 且缺 completed_at_ms/exit_code 时才算
+    未结束（真·pending）。
+    """
+    if isinstance(item, dict):
+        if item.get("status") in ("completed", "failed"):
+            return True
+        raw_exit = item.get("exit_code")
+        if isinstance(raw_exit, int) and not isinstance(raw_exit, bool):
+            return True
+    return isinstance(payload, dict) and payload.get("completed_at_ms") is not None
+
+
 class CodexAdapter(CommandStreamAdapter):
     """Codex：~/.codex/sessions/YYYY/MM/DD/rollout-<ISO8601>-<uuid>.jsonl（rollout JSONL）。
 
@@ -646,8 +671,10 @@ class CodexAdapter(CommandStreamAdapter):
     payload.type=="item_completed" 且 payload.item.type=="CommandExecution" 的事件；
     exit 直接取 item.exit_code（数字，无需文本前缀解析），ts 取 payload.started_at_ms /
     completed_at_ms（epoch ms int）。未结束命令 = 有 item_started 无 item_completed（或
-    item_completed 但 status!="completed"）→ 回填 exit=None / ts_end=None / "pending" 记录
-    （比照 DSHAdapter 未结束 call 补记录）。截断走双信号兜底（_detect_truncated）。
+    item_completed 但无终态信号——status∉{completed,failed} 且缺 completed_at_ms/exit_code，
+    _codex_is_finished）→ 回填 exit=None / ts_end=None / "pending" 记录（比照 DSHAdapter
+    未结束 call 补记录）。真机 status=="failed" 携 exit_code 属已结束，走非 pending 路径
+    （DEBT0035 / P6 V6）。截断走双信号兜底（_detect_truncated）。
     session_id = os.path.basename(session_path)（不取 payload.session_id——那对子会话是父 id）。
     父会话与 spawn_agent 子会话都是同目录独立 rollout-*.jsonl → os.walk 天然同时枚举。
     """
@@ -736,7 +763,7 @@ class CodexAdapter(CommandStreamAdapter):
                     continue
                 if ptype != "item_completed":
                     continue
-                pending = item.get("status") != "completed"
+                pending = not _codex_is_finished(payload, item)
                 records.append(
                     self._build_record(session_id, obj, payload, item, pending=pending)
                 )

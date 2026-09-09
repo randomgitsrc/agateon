@@ -85,6 +85,7 @@
 
 - `agate/scripts/agate-cmdstream-adapters.py` 的 **`CodexAdapter`（TAG0033 落地，2026-09）** 覆盖 Codex 平台的 subagent 存活 / 卡死检测。数据源 = `~/.codex/sessions/**/rollout-*.jsonl`（rollout JSONL），`ADAPTERS` 注册表键 `"codex"`；检测引擎 / 阈值 / `CommandRecord` IR / 既有三适配器零改动。
 - **per-command 退出码**：rollout 的 `CommandExecution` item **带数字 `exit_code` 字段**（实测观察 `0` / 非 0）——`CommandRecord.exit` 直取，比 Claude Code / DSH 干净。上方「退出码不可靠」只针对 **turn 级失败**（`turn.failed{status:400}` / `item.type=="error"`），对 per-command shell 执行不成立。
+- **`payload.item.status` 真机取值集**（P6 V6 实测，DEBT0035）：`completed`（成功终态）/ `failed`（**已结束但非 0 退出**——仍携带完整 `exit_code`（如 `2` / `137`）+ `payload.completed_at_ms` + `aggregated_output`；`sleep` 被 SIGINT 也落 `failed` + `exit_code=137`）/ `in_progress`（未结束）。`CodexAdapter` 以「有终态信号」判已结束——`status ∈ {completed, failed}` **或** 有 `completed_at_ms` **或** 有数字 `exit_code`（`_codex_is_finished`）；仅真·未结束（`item_started` 无 `item_completed`，或 `item_completed` 但三信号皆缺）才映射 `exit_signal="pending"`。旧口径 `status != "completed"` 会把真机 `failed` 终态误判为 pending 而丢失 `exit_code` + `output_hash`（P6 V6 修正 / DEBT0035）。
 - **输出截断标记实测形态**（P5 V4）：item 上**无**布尔截断字段；截断标记出现在 `formatted_output`——`Warning: truncated output (original token count: N)` + 省略号包夹的 `…N tokens truncated…`（U+2026 省略号字符，非三个点）。`CodexAdapter` 截断检测据此（`_CODEX_TRUNC_TEXT_MARKERS` 的 `"tokens truncated"` 子串命中）→ `truncated=True` + `output_hash=None`。供未来复核 / RM-AG0055 §3.4.2 差异点 4 的 Codex 侧记录。
 
 ### 验证记录（Codex）

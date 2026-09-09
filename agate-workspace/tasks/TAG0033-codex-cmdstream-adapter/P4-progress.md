@@ -60,3 +60,67 @@
 - ruff check agate/ → All checks passed
 - 无 [SCOPE+]；research doc 用逐处回写（非文首总说明）
 - 注：git status 另见 agate/tests/fixtures/cmdstream/codex-session.jsonl 1 行改动 = P5 V4 verifier 已收敛的 fixture（未 commit），非本批产物，未触碰
+
+## 重试 #1（F1 / DEBT0035 修复）start 2026-09-09
+
+- 读取：P4-dispatch-context-implementer-r1.md（阶段卡片注入）、implementer.md「如果是重试」节、DEBT0035、.archived/p6-pre-retreat-20260909/real-machine-p6.md（F1 节）+ real-machine-v6-detect.log（真机 read-commands 摘要）、agate-cmdstream-adapters.py CodexAdapter、codex-session.jsonl fixture、test_agate_cmdstream_adapters.py（bdd_5/6）、test_agate_cmdstream_detect.py（bdd_15 + _cx_exec）、platform-notes.md「命令流适配」小节、P1 §6 BDD-5/6/15
+- F1 根因确认：`CodexAdapter.read_commands` line ~739 `pending = item.get("status") != "completed"` —— 真机 Codex 把「已结束但非 0 退出」记为 `status=="failed"`（带 exit_code + completed_at_ms），旧口径误判为 pending → 丢 exit_code + output_hash → detect 拿不到重复结果签名 → 真机重复失败会话判不出 SPIN
+
+### 改动落地
+
+1. `agate/scripts/agate-cmdstream-adapters.py`
+   - 新增模块级 helper `_codex_is_finished(payload, item)`（`_codex_int_or_none` 之后，+29 行含 docstring）：已结束 = `item.status ∈ {completed,failed}` 或 `item.exit_code` 是 int 非 bool 或 `payload.completed_at_ms` 非 None
+   - line ~739 `pending = item.get("status") != "completed"` → `pending = not _codex_is_finished(payload, item)`（-1/+1）
+   - `CodexAdapter` class docstring「未结束命令 =」句改口径（-2/+4）
+2. `agate/tests/fixtures/cmdstream/codex-session.jsonl`
+   - `make build-docs` item（BDD-5）`"status":"completed"` → `"status":"failed"`（exit_code:2 / started_at_ms / completed_at_ms / aggregated_output 不变）（-1/+1）
+   - 追加 6 行真机形态重复失败簇（BDD-15）：`ls /demo/nonexistent-xyz`、`exit_code:2`、`status:"failed"`、同 aggregated_output、各带 completed_at_ms（item-demo-r1..r6，ordinal 10-15）（+6）
+   - 保留真·未结束样本（item-demo-3 `sleep 999` item_started 无 item_completed）+ 畸形行 + 截断样例，脱敏不变（demo 前缀 / 无 /home/kity / 无连字符 hex uuid / 无 /.codex/sessions/）
+3. `agate/tests/unit/test_agate_cmdstream_adapters.py`
+   - `test_bdd_5_codex_failed_exit_code_verbatim`：Given → `status="failed"`；Then → `exit==2` / `exit_signal=="exit_code=2"` / `ts_end is not None` / `output_hash is not None`（-3/+7 断言+docstring）
+   - 新增 `test_bdd_5_codex_failed_status_not_pending_guard`（无新 BDD 编号，挂 BDD-5 名下）：6 条重复失败命令 → `exit_signal != "pending"` / `exit==2` / `ts_end`、`output_hash` 非 None（+20）
+   - `test_bdd_6_codex_unfinished_command_pending`：未动（仍测 item-demo-3 真·未结束；`done[0].exit==2` 走新 finished 路径仍成立）
+4. `agate/tests/unit/test_agate_cmdstream_detect.py`
+   - `_cx_exec(...)` 增可选参 `status="completed"`（默认不变）（-1/+6 含 docstring）
+   - `test_bdd_15_codex_invalid_repeat_spin`：重复失败行改 `status="failed"` + `exit_code=2`；docstring 补真机形态说明（-2/+9）
+5. `agate/platform-notes.md`「命令流适配（RM-AG0055 / CodexAdapter）」小节：per-command 退出码 bullet 后新增 1 bullet —— 真机 `payload.item.status` 取值集（completed/failed/in_progress）+ CodexAdapter「有终态信号」判已结束口径 + 旧口径误判说明（DEBT0035）（+1 bullet）
+
+### 自查结果
+
+- `pytest test_agate_cmdstream_adapters.py test_agate_cmdstream_detect.py test_codex_platform_docs.py -q` → 67 passed
+- `pytest agate/tests/unit/ -q --tb=no` → 1390 passed / 0 failed / 2 skipped（1389 基线 + 1 守护）
+- `ruff check agate/` → All checks passed（首轮 SIM103 命中 helper 末尾 if→return，已改为直接 return 条件）
+- `check-protocol-consistency.py --strict-errors-only` → EXIT 0 / 0 ERROR / 329 WARNING（全既有叙事文件引用，未新增）
+
+### 真机复验 V6 ③（codex-cli 0.153.4 + ChatGPT 登录）
+
+命令：
+```
+cd <scratchpad> && codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check \
+  "Run exactly this shell command seven times in a row ... ls /nonexistent-xyz-r1check . ... After the 7th run, stop immediately."
+RL=$(ls -t ~/.codex/sessions/2026/09/09/rollout-*.jsonl | head -1)
+python3 agate/scripts/agate-cmdstream-detect.py read-commands codex "$RL"
+python3 agate/scripts/agate-cmdstream-detect.py detect "$RL" --platform codex --now 1788924619
+```
+rollout：`rollout-2026-09-09T11-29-48-01a08436-f250-7dc2-b7e2-8d254686de7e.jsonl`
+
+read-commands（7 条，均真机 `status=failed`）→ 修复后每条：`exit=2` / `exit_signal="exit_code=2"` / `output_hash="fca0f86e...5a41"` / `ts_end` 非 None（修复前均为 `exit=null` / `exit_signal="pending"` / `output_hash=null`）
+
+detect `--now +5s` →
+```
+VERDICT: SPIN
+  · 空转：同 (命令, exit, 输出哈希) 组合 ("/bin/bash -lc 'ls /nonexistent-xyz-r1check .'", 2, 'fca0f86ef91d0880417a3541041e402cb8be5a41') 在窗口 10 内重复 7 次 ≥ 5 → 疑似逻辑空转，建议核查
+EXIT_CODE: 0
+```
+不再 FROZEN/NORMAL。**F1 已修，真机复现通过。**
+
+补充 fixture 侧证据（改好的 codex-session.jsonl 经 read_commands → detect）：
+```
+python3 agate/scripts/agate-cmdstream-detect.py detect agate/tests/fixtures/cmdstream/codex-session.jsonl --platform codex --now 1788400887
+→ VERDICT: SPIN（"ls /demo/nonexistent-xyz", 2, '28a08b08...626c' 窗口 10 内重复 6 次 ≥ 5）
+```
+
+### 范围外 / DESIGN_GAP
+
+- `[SCOPE+]`：无
+- 新 DESIGN_GAP：无

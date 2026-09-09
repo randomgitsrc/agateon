@@ -1,7 +1,6 @@
 task_id: TAG0033
 phase: P4
 status: active
-p5_pass_commit: 90e00dbc3feec9877515dd7f8669411245ce96b0
 retries:
   P1:
   - round: 1

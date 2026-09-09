@@ -108,6 +108,11 @@ verification_env_budget: "止损轮次 2（独立计数，不占 retries[P5]）�
   - `item.command`：数组，形如 `["/bin/bash", "-lc", "<命令文本>"]`
   - `item.exit_code`：**数字**（`[已实测]` 观察到 `0`；失败时为对应非 0）——见 §4.1.1
   - `item.status`：`"completed"`（未结束时预期为 `"in_progress"` 或缺 completed 事件）
+    - `[BASELINE_CHANGE: spike 取样未覆盖 "failed" 终态]` P6 V6 实测：真机 Codex 把已结束但非 0 退出的
+      命令记为 `item.status == "failed"`，仍携带完整 `exit_code` + `payload.completed_at_ms`。真机
+      `item.status` 取值集 = `completed`（成功终态）/ `failed`（已结束非 0 退出）/ `in_progress`（未结束）。
+      `read_commands` 的「已结束」判据据此改口径（见 P2 §5 设计点 2 的 BASELINE_CHANGE / DEBT0035）。
+      Given/When/Then 语义不变，仅补充真机事实。
   - `item.stdout` / `item.stderr` / `item.aggregated_output` / `item.formatted_output`
   - `item.parsed_cmd`：`[{type, cmd, name, path}]`（Codex 对命令的结构化解析）
   - `item.duration`：`{secs, nanos}`
@@ -287,12 +292,20 @@ P1 分析**未发现**需超出四交付面的情形：
 - Then 产出恰好 1 条 `CommandRecord`：`platform=="codex"`、`command` 含 `"echo hi"`、`tool` 非空字符串、`ts_start==T1`、`ts_end==T2`、`exit==0`、`exit_signal` 为非空原始形态留档、`truncated is False`、`output_hash == sha1("hi\n")`
 
 #### BDD-5: 失败命令的 exit_code 非 0 如实映射，不回落 None
-- Given rollout fixture 含一条 `CommandExecution`，`item.exit_code==2`、`item.status=="completed"`
+- Given rollout fixture 含一条 `CommandExecution`，`item.exit_code==2`、`item.status=="failed"`
+  `[BASELINE_CHANGE: item.status 从 "completed" 改为 "failed"]` P6 V6 实测真机已结束非 0 退出命令记
+  `status:"failed"`（DEBT0035）——Given 改用真机形态，Then 判定语义不变（仍是"失败命令 exit_code 非 0
+  如实映射，不回落 None"），并加强断言 `ts_end`/`output_hash` 非 None（证明不被误判 pending）
 - When `read_commands`
-- Then 对应 `CommandRecord.exit == 2`（整数 2，非 None），`exit_signal` 留档原始形态
+- Then 对应 `CommandRecord.exit == 2`（整数 2，非 None），`exit_signal` 留档原始形态（`"exit_code=2"`），
+  `ts_end` 非 None、`output_hash` 非 None
 
 #### BDD-6: 未结束命令 → exit=None / ts_end=None / exit_signal="pending"，不静默丢弃
-- Given rollout fixture 含一条命令事件处于未结束状态（`item.status != "completed"` 或有起始无对应完成事件），同文件另有一条已完成命令
+- Given rollout fixture 含一条命令事件处于**真·未结束**状态（有 `item_started`/`item_updated` 无对应
+  `item_completed`，且无 `completed_at_ms` / `exit_code`），同文件另有一条已完成命令
+  `[BASELINE_CHANGE: "item.status != completed" 措辞收紧为"真·未结束"]` P6 V6 发现 `status:"failed"` 是
+  已结束终态、不是未结束——pending 判据改为「无终态信号才算 pending」（`status ∉ {completed,failed}`
+  且无 `completed_at_ms`/`exit_code`），见 P2 §5 设计点 2 BASELINE_CHANGE / DEBT0035。Then 语义不变
 - When `read_commands`
 - Then 未结束命令产出 1 条 `CommandRecord`，`exit is None`、`ts_end is None`、`exit_signal == "pending"`；已完成命令记录不受影响（`exit` 为其数字值）
 

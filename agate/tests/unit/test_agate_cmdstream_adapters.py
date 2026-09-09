@@ -788,8 +788,10 @@ def test_bdd_4_codex_read_commands_maps_ten_fields(agate_scripts, load_fixture):
 
 
 def test_bdd_5_codex_failed_exit_code_verbatim(agate_scripts, load_fixture):
-    """BDD-5：CommandExecution exit_code==2 / status=="completed" → CommandRecord.exit == 2
-    （整数 2，非 None），exit_signal 留档原始形态。"""
+    """BDD-5：CommandExecution exit_code==2 / status=="failed"（真机形态，P6 V6 / DEBT0035
+    实测修正——真机把已结束但非 0 退出的命令记为 status=="failed"，仍带 exit_code +
+    completed_at_ms）→ CommandRecord.exit == 2（整数 2，非 None）、exit_signal == "exit_code=2"、
+    ts_end 非 None、output_hash 非 None。status=="failed" 属已结束，绝不被当 pending。"""
     adapters = _load_adapters(agate_scripts)
     adapter = adapters.CodexAdapter()
 
@@ -797,7 +799,28 @@ def test_bdd_5_codex_failed_exit_code_verbatim(agate_scripts, load_fixture):
     r = next(r for r in records if "make build-docs" in r.command)
     assert r.exit == 2
     assert r.exit is not None
-    assert isinstance(r.exit_signal, str) and r.exit_signal != ""
+    assert r.exit_signal == "exit_code=2"
+    assert r.ts_end is not None
+    assert r.output_hash is not None
+
+
+def test_bdd_5_codex_failed_status_not_pending_guard(agate_scripts, load_fixture):
+    """守护（DEBT0035，无新增 BDD 编号）：item_completed 且 status=="failed"、带 exit_code
+    + completed_at_ms 的 item → 不进 pending 回填分支——exit_signal != "pending"、exit 为
+    数字、ts_end / output_hash 非 None。旧口径 `status != "completed"` 会把它误判 pending
+    丢失 exit_code + output_hash（→ detect 判不出 SPIN），本测试锁定「无终态信号才算
+    pending」新口径。"""
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.CodexAdapter()
+
+    records = adapter.read_commands(str(load_fixture("cmdstream/codex-session.jsonl")))
+    failed = [r for r in records if "ls /demo/nonexistent-xyz" in r.command]
+    assert len(failed) == 6, f"重复失败命令应产出 6 条，实际 {len(failed)}"
+    for r in failed:
+        assert r.exit_signal != "pending", "status=failed 的已结束命令被误判 pending"
+        assert r.exit == 2
+        assert r.ts_end is not None
+        assert r.output_hash is not None
 
 
 # ---- BDD-6: 未结束命令 → pending ----

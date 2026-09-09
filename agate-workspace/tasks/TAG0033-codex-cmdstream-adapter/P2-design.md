@@ -114,7 +114,7 @@ dispatch_plan:
 |---|---|---|
 | R1 | `ADAPTERS` 加第四键打破 `test_bdd_6`(:317) 精确等值断言 → 整片 `test_agate_cmdstream_adapters.py` 红 | P4 **同批**改断言为包含式（BDD-19）；`:298` 已是 `>=` 无需动；改后整片 pytest 复跑全绿是 P4 自检项 |
 | R2 | 截断信号形态 `[未实测]`（V4 前）→ 双信号常量猜错 → 漏判 `truncated` → 截断输出参与哈希 → 误判 SPIN（违反 BDD-17）| 比照 `DSHAdapter._detect_truncated` 保守双信号（bool 键集 ∪ 文本标记集，任一命中即 True）；**收敛面收窄**为 `CodexAdapter._detect_truncated` 一个 classmethod + 上方 2 个模块常量 + `# P5 V4 收敛锚` 注释；P5 V4 实测后**定向改这三处**，不动其它。`truncated=True ⇒ output_hash=None` 在 `_build_record` 无条件强制（IR 铁律，不放宽）|
-| R3 | 未结束 / pending 命令的 rollout 形态 `[未实测]`（minimal_validation 未捕获 `item_started` CommandExecution）→ BDD-6 映射规则可能与真机不符 | 双判据：`item_completed` 且 `item.status != "completed"` **∪**「同 `item.id` 有 `item_started`/`item_updated` 无 `item_completed`」；fixture 手造（BDD-6 Given 明确允许）；写成 P5 易替换形式；detect CLI 已能跳过 `ts_start is None` 记录 |
+| R3 | 未结束 / pending 命令的 rollout 形态 `[未实测]`（minimal_validation 未捕获 `item_started` CommandExecution）→ BDD-6 映射规则可能与真机不符 | 判据（P6 V6 修正，见设计点 2 BASELINE_CHANGE / DEBT0035）：「无终态信号才算 pending」——`item.status ∉ {completed,failed}` 且无 `completed_at_ms`/`exit_code`，**∪**「同 `item.id` 有 `item_started`/`item_updated` 无 `item_completed`」；fixture 手造（BDD-6 Given 明确允许）+ P6 补真机 `status:"failed"` 样本；detect CLI 已能跳过 `ts_start is None` 记录 |
 | R4 | `probe` 只看 basename → Claude Code 转录若命名近似 `rollout-*.jsonl` 误判 True（且 `ClaudeCodeAdapter.probe` 对同扩展名文件也返回 True，二者重叠）| basename 正则（`rollout-` 前缀 + `.jsonl` 后缀 + 非 `.zstd`）**+** 首行 `readline()` sniff `type=="session_meta"` 且 payload 含 codex 标记（`cli_version` / `originator` / `id`）。Claude Code 转录首行无 `session_meta` → False。BDD-1 覆盖（含 `.jsonl.zstd` / `opencode.db` 负例）|
 | R5 | 子会话 `session_id` 误取 `session_meta.session_id`（minimal_validation 证实该字段对子会话 = **父** id）→ 违反 BDD-12 | `session_id = os.path.basename(session_path)`（照搬 `ClaudeCodeAdapter`/`DSHAdapter`）——子会话 rollout 文件名含**子自身** uuid；明确**不取** `payload.session_id`；§5 设计点 3 详述 |
 | R6 | 改 adapters.py + tests/ + platform-notes.md + SETUP.md → 触发 SELF-GATE 未留痕 | P4/P7 commit message 强制 `self-gate-review:` 路径 或 `self-gate-skip:` 理由（`commit-msg-self-gate.sh` hook）；P7 派 protocol-alignment-review 走 A1-A6，产出 `agent != main`（BDD-28）。§6 SELF-GATE 预告 |
@@ -245,9 +245,16 @@ output_hash)` 组合去重仍有效。）
 失败命令 `exit_code==2` 如实映射为 `2`，**不回落 None**（P0_STALE 已修正，Codex 比 Claude/DSH 更干净）。
 
 **pending（BDD-6）**：维护 `started_ids`（见过 `item_started`/`item_updated` 的 `item.id`）与 `completed_ids`；
-`item_completed` 且 `status != "completed"` 直接产出 pending 记录；结束时对 `started_ids - completed_ids`
-各补一条 `exit=None / ts_end=None / exit_signal="pending"` 记录（照 `DSHAdapter` line 556-560）。
-已完成记录不受影响。
+结束时对 `started_ids - completed_ids` 各补一条 `exit=None / ts_end=None / exit_signal="pending"` 记录
+（照 `DSHAdapter` line 556-560）。已完成记录不受影响。
+
+`[BASELINE_CHANGE: pending 判据从 "status != completed" 收紧为「无终态信号才算 pending」]`
+P6 V6 实测（DEBT0035）：真机 Codex 把已结束但非 0 退出的命令记为 `item.status == "failed"`（仍带
+`exit_code` + `completed_at_ms`），原判据把它误判成 pending → 丢真实 exit/output_hash → detect 对真机
+重复失败会话判不出 SPIN。改口径为：**已结束** = `item.status ∈ {"completed","failed"}` **或**
+`payload.completed_at_ms` 非 None **或** `item.exit_code` 是 int 非 bool（三者任一）；`pending = not 已结束`。
+逻辑抽 `_codex_is_finished(payload, item)` helper 集中。`item_completed` 事件在改口径下几乎恒为已结束
+（有终态信号），真正走 pending 的只有「`item_started`/`item_updated` 无对应 `item_completed`」的记录。
 
 ### 设计点 3 —— `session_id` 取法
 

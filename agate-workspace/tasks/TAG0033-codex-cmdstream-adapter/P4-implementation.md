@@ -161,3 +161,74 @@ BDD-29 / BDD-30（真机验证清单结构守护，本就绿）：未触碰 `P1-
 - `[SCOPE+]`：**无**。
 - research doc 第 4 项：采用**逐处回写**（L169 + L286 各一句），非文首总说明——两处即全部命中点，回写精确且最小；文档 §10 复核清单对 flag 名 / model 阵容等其它时效条目仍有效，故不加「全文皆快照」式总说明以免过度声明陈旧。
 - `agate/tests/fixtures/cmdstream/codex-session.jsonl` 的 1 行改动（git status 可见）= P5 verifier 已做的 V4 fixture 收敛，属未 commit 的 P5 产出，**非本批产物**，未触碰。
+
+## 重试 #1（F1 修复）
+
+**触发**：P5→P4 单步回退（retreat commit `52fe210`）。P6 真机验证 V6 ③ 发现 **F1 / DEBT0035**——`CodexAdapter` pending 判据误判真机 Codex `status=="failed"` 终态为 pending。
+
+### F1 根因
+
+`agate/scripts/agate-cmdstream-adapters.py` `CodexAdapter.read_commands` 内（旧 line ~739）：
+
+```python
+pending = item.get("status") != "completed"
+```
+
+真机 Codex 把**已结束但非 0 退出**的命令记为 `payload.item.status == "failed"`（**不是** `"completed"`），且该 item 仍携带完整 `exit_code`（2 / 137）、`aggregated_output`、`payload.completed_at_ms`。旧口径把这些**已结束**命令误判为 pending，连锁：
+
+1. `_build_record` 走 pending 路径 → `exit=None` / `ts_end=None` / `exit_signal="pending"` / `output_hash=None`
+2. `detect` 对真机重复失败会话拿不到 `(command, exit, output_hash)` 结果签名 → 判不出 SPIN（P6 V6 ③ 实测得 FROZEN/NORMAL）
+3. BDD-6「未结束命令 → pending」真机假阳性
+
+### 改了哪几处（逐行增量）
+
+| 文件 | 改动 | 增量 |
+|---|---|---|
+| `agate/scripts/agate-cmdstream-adapters.py` | 新增模块级 helper `_codex_is_finished(payload, item)`（`_codex_int_or_none` 之后） | +25 |
+| 同上 | `pending = item.get("status") != "completed"` → `pending = not _codex_is_finished(payload, item)` | -1/+1 |
+| 同上 | `CodexAdapter` class docstring「未结束命令 =」句改口径 | -2/+4 |
+| `agate/tests/fixtures/cmdstream/codex-session.jsonl` | `make build-docs` item `status` `completed`→`failed`（BDD-5 真机形态） | -1/+1 |
+| 同上 | 追加 6 行真机重复失败簇 `ls /demo/nonexistent-xyz`（`status:"failed"` + `exit_code:2` + `completed_at_ms`，BDD-15） | +6 |
+| `agate/tests/unit/test_agate_cmdstream_adapters.py` | `test_bdd_5_codex_failed_exit_code_verbatim` Given/Then 改真机形态断言 | -3/+7 |
+| 同上 | 新增 `test_bdd_5_codex_failed_status_not_pending_guard`（无新 BDD 编号，守护「status=failed → 非 pending」） | +20 |
+| `agate/tests/unit/test_agate_cmdstream_detect.py` | `_cx_exec` 增可选参 `status="completed"` | -1/+6 |
+| 同上 | `test_bdd_15_codex_invalid_repeat_spin` 重复失败行改 `status="failed"` + `exit_code=2` | -2/+9 |
+| `agate/platform-notes.md` | 「命令流适配（RM-AG0055 / CodexAdapter）」小节新增 1 bullet：真机 `status` 取值集 + 判已结束口径 | +1 bullet |
+
+**未动**：`detect.py` / `agate-cmdstream-ir.py` `CommandRecord` / `ClaudeCodeAdapter` / `OpenCodeAdapter` / `DSHAdapter` / `CodexAdapter.probe` / `list_sessions` / `_detect_truncated` / `_join_command` / `session_id` 取法 / `ADAPTERS` / `test_bdd_6:319` 断言 / P1/P2/P3 基线文件。
+
+### pending 判据新口径（一句）
+
+「无终态信号才算 pending」——已结束 = `item.status ∈ {"completed","failed"}` **或** `item.exit_code` 是 int 非 bool **或** `payload.completed_at_ms` 非 None（三者任一），逻辑集中在模块级 helper `_codex_is_finished(payload, item)`；仅真·未结束（`item_started` 无 `item_completed`，或 `item_completed` 但三信号皆缺）才映射 `exit_signal="pending"`。
+
+### 受影响 BDD 转绿确认（pytest failed 数 = 0）
+
+| BDD | 验证点 | 结果 |
+|---|---|---|
+| BDD-5 | `status="failed"` + `exit_code=2` → `exit==2` / `exit_signal=="exit_code=2"` / `ts_end`、`output_hash` 非 None | PASS |
+| BDD-5 守护 | 6 条 `status="failed"` 重复失败命令 → 全部非 pending | PASS |
+| BDD-6 | `item_started` 无 `item_completed` 的 `sleep 999` → `exit is None` / `exit_signal=="pending"`；`make build-docs` 已结束记录不受影响 | PASS |
+| BDD-15 | 真机形态（`status="failed"`）重复失败 ≥5 → `detect` == `SPIN` | PASS |
+
+`pytest agate/tests/unit/test_agate_cmdstream_adapters.py test_agate_cmdstream_detect.py test_codex_platform_docs.py -q` → **67 passed / 0 failed**
+
+### 真机复验 V6 ③ → SPIN
+
+`codex exec`（codex-cli 0.153.4 + ChatGPT 登录）连跑 7 次 `ls /nonexistent-xyz-r1check .` → rollout `rollout-2026-09-09T11-29-48-01a08436-...jsonl`：
+
+- `read-commands` → 7 条，均真机 `status=failed` → 修复后 `exit=2` / `exit_signal="exit_code=2"` / `output_hash="fca0f86e...5a41"` / `ts_end` 非 None（修复前全 pending/None）
+- `detect ... --platform codex --now +5s` → **`VERDICT: SPIN`**（窗口 10 内重复 7 次 ≥ 5），不再 FROZEN/NORMAL；EXIT_CODE 0
+
+fixture 侧对照证据：`detect agate/tests/fixtures/cmdstream/codex-session.jsonl --platform codex --now 1788400887` → `VERDICT: SPIN`（`ls /demo/nonexistent-xyz` 重复 6 次）。
+
+### 全量自查（自查 ≠ gate）
+
+| 命令 | 结果 |
+|---|---|
+| `pytest agate/tests/unit/ -q --tb=no` | **1390 passed / 0 failed / 2 skipped**（1389 基线 + 1 守护） |
+| `ruff check agate/` | All checks passed（首轮 SIM103 命中 helper 末尾，已改直接 return 条件） |
+| `check-protocol-consistency.py --strict-errors-only` | EXIT 0 / 0 ERROR / 329 WARNING（全既有叙事引用，未新增） |
+
+### 范围外
+
+`[SCOPE+]`：无。新 DESIGN_GAP：无。
