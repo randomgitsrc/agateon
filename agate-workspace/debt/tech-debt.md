@@ -1275,3 +1275,87 @@ source: retrospective
 created_at: 2026-09-09
 task_id: null
 ```
+
+## DEBT0037
+
+```yaml
+id: DEBT0037
+category: protocol
+title: "check-gate.py P4 完整度判据（暂存区有非 md/yaml 文件）在多提交阶段 / 回退后推进场景不完备——agate-next.py 因此拒绝推进，主 Agent 需手动 _advance"
+status: open
+priority: medium
+evidence:
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md
+    note: "TAG0033 复盘「问题 1」+「agate 反馈」条 1：P4 跨两批 commit（adapter-core / protocol-docs）与 P5→P4 回退后修复 commit 两个场景，check-gate.py P4 看 git diff --cached 无代码文件 → exit 1 → agate-next.py 查 P4 retreat=null → 「提示重试本阶段，不推进」"
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md
+    note: "技术债登记核对清单「.state.yaml phase 同步」行：P4→P5 ×2 + P8→READY 因该局限手动 _advance + 补 state_transition 事件"
+  - ref: agate/scripts/check-gate.py
+    note: "_gate_p4：完整度代理判据 = 暂存区有非 md/yaml 文件；假设「离开 P4 时暂存区必有代码 diff」，多提交阶段 / 回退后再推进破坏该假设"
+  - ref: agate/scripts/agate-next.py
+    note: "_advance 前的 gate 判定消费 check-gate.py P4 exit 码；exit 1 + retreat=null → 不推进"
+impact: "多提交阶段任务 / 有回退的任务，主 Agent 必须手动改 .state.yaml phase + append_event state_transition 绕过——绕过路径未走 gate 校验，且违反「不用手动替代脚本」的编排纪律；后续同形态任务复发"
+recommendation: "P4 完整度判据从「当前暂存区有代码 diff」放宽为「本 phase 的任一 commit 引入过代码 diff」（git log --oneline <phase 起点>..HEAD 扫非 md/yaml），或显式识别「回退后再推进」（.state.yaml retries[P4] 非空 + 已存在 wf(...-P4): commit）。落点 check-gate.py _gate_p4 + agate-next.py。同类扫描：其它 phase 的 check-gate 完整度判据是否共用同一「看暂存区」假设"
+closure_criteria:
+  - "check-gate.py P4 对「阶段工作已 commit、暂存区空」场景不再 exit 1（多提交阶段 + 回退后推进两个回归用例）"
+  - "agate-next.py 在该场景正常推进 P4→P5，无需手动 _advance"
+  - "P4 之外的 phase 完整度判据已同类核查，结论落盘"
+  - "全量 pytest 全绿 + consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-09
+task_id: null
+```
+
+## DEBT0038
+
+```yaml
+id: DEBT0038
+category: protocol
+title: "check-judge-verdict.py 信息隔离黑/白名单扫描误判 P6.5 dispatch-context——阶段卡片引用 / 角色文件路径 / P6-evidence 裸文件名三处假阳性"
+status: open
+priority: medium
+evidence:
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md
+    note: "TAG0033 复盘「问题 2」+「agate 反馈」条 2：P6.5 judge verdict 本体（30/30 passed）已通过，卡在 dispatch-context 措辞，主 Agent 重写后转绿"
+  - ref: agate/scripts/check-judge-verdict.py
+    note: "_check_blacklist：`p6-acceptance.md` 子串纯匹配命中 agate/phase-cards/P6-acceptance.md（阶段规格卡片，非 verifier 自述）——无 agate/phase-cards/ 路径豁免"
+  - ref: agate/scripts/check-judge-verdict.py
+    note: "_check_whitelist：白名单不含角色定义文件路径，与「每个 dispatch-context『输入文件』节都列角色文件」的通用惯例冲突；P6-evidence/ 目录白名单不认目录下裸文件名（如 real-machine-p6.md）"
+  - ref: agate/dispatch-protocol.md
+    note: "「Judge 信息隔离」节未写明 P6.5 dispatch-context 是「不列角色文件」的唯一例外"
+impact: "P6.5 dispatch-context 按通用惯例列角色文件 / 引用阶段卡片 / 用 P6-evidence 裸文件名，均触发信息隔离拦截 → judge 已产出正确 verdict 仍需返工重写 dispatch-context；每个走 P6.5 的任务都可能踩"
+recommendation: "① 黑名单 p6-acceptance.md 匹配加 agate/phase-cards/ 路径豁免；② 白名单显式允许角色定义文件路径，或在派发模板 / P6 卡片写明「P6.5 dispatch-context『输入文件』节不列角色文件（派发机制注入）」；③ P6-evidence/ 目录白名单认「目录下裸文件名」。落点 check-judge-verdict.py（_check_blacklist / _check_whitelist）+ dispatch-protocol.md「Judge 信息隔离」节 + P6 卡片"
+closure_criteria:
+  - "check-judge-verdict.py 对「dispatch-context 引用 agate/phase-cards/P6-acceptance.md」不再假阳性（回归用例）"
+  - "角色定义文件路径 + P6-evidence/ 目录裸文件名两类引用不再被白名单拦截，或派发模板 / P6 卡片显式写明 P6.5 例外惯例"
+  - "dispatch-protocol.md「Judge 信息隔离」节说明 P6.5 dispatch-context 的输入文件惯例"
+  - "全量 pytest 全绿 + consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-09
+task_id: null
+```
+
+## DEBT0039
+
+```yaml
+id: DEBT0039
+category: protocol
+title: "dispatch_plan 批次「执行阶段」标注易把「补协议文档正文」误标到 P7——architect 把 protocol-docs 批标 P7、主 Agent 判定后拉回 P4"
+status: open
+priority: low
+evidence:
+  - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md
+    note: "TAG0033 复盘「做得好」第 4 条 + 「agate 反馈」条 4：architect 原把 protocol-docs 批（补 platform-notes.md Codex 章 + SETUP.md 小节）标「P7 执行」；主 Agent 比照 TAG0030（doc-assertion 审计 P3 写红、内容 P4 补绿）拉回 P4，避免 P5/P6 带 6 条 by-design 红推进"
+  - ref: agate/assets/execution-roles/architect.md
+    note: "「批次设计」节未写明「补协议文档正文 = P4 实现工作」的边界"
+  - ref: agate/dispatch-protocol.md
+    note: "「派发编排机制」未区分「author 文档内容（P4）」vs「跨文件一致性验证（P7）」"
+impact: "架构师把「补协议文档正文」误标 P7 → 若主 Agent 未纠正，P5/P6 会带着 by-design 红（文档正文未补）推进，或 P7 阶段做了本属 P4 的实现工作、越权 author 内容"
+recommendation: "在 architect 角色文件「批次设计」节 + dispatch-protocol.md「派发编排机制」写明：补协议文档正文（platform-notes / SETUP / phase-cards 等）= P4 实现工作，批次执行阶段标 P4；P7 只做跨文件一致性验证、不 author 文档内容。可附 TAG0030 / TAG0033 两处先例"
+closure_criteria:
+  - "architect.md「批次设计」节含「补协议文档正文 = P4」的显式边界说明"
+  - "dispatch-protocol.md「派发编排机制」区分 author 内容（P4）vs 一致性验证（P7）"
+  - "consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-09
+task_id: null
+```
