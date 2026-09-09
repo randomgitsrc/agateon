@@ -77,3 +77,39 @@
 - [DESIGN_GAP] ×2（P4b 文件内，行首单行）：#1 _route_main 端到端「约定产出文件路径」走 env AGATE_DISPATCH_EXPECT、未设保守回落；#2 中段 native 候选 → HAS_OUTPUT 占位交驱动会话。无 [SCOPE+]/[SCOPE_GAP]/[CLARIFY]。
 - I4/I6 未做（INFORMATIONAL，理由记 P4b 文件）：I4 改 check-dispatch-routing.py 属 P4a schema 层、跨批改同文件违反 §4.1 批次边界；I6 sys.path 收窄与 P4b 目标无关且 _route_main import 依赖该路径。I5 已做（try_and_fall 用 _VALID_REASONS 自校）。
 - [PROD_NOT_TOUCHED]：全程仅 worktree 内写，未碰主 checkout / ~/.agate。
+
+## P4c 批 implementer — tmux 观测层 (session_014jKy7LxVHNa1uwrMxuZ1Mz) — 2026-09-10
+
+- 输入读毕：implementer.md 角色 / P4-dispatch-context-implementer-P4c.md（强制指令）/ AGENTS.md / P0-brief.md / test_tag0034_tmux.py 契约（BDD-37/38 全文）/ P2-design.md §3.10 + §3.9 + §4.1 P4c 行 / P4-review.md P4b 节 3 条 INFORMATIONAL / P4-implementation-P4b.md（hook 位 + 决策）/ P4-progress.md 尾部 / dispatch-protocol.md「### 0. 派发路由」子节 / design-dispatch-routing.md §2.6+§3 / check-protocol-consistency.py CHECK 14 平台名护栏 / regression baseline json（不含 agate_dispatch_route.py / dispatch-protocol.md）。
+- 实现（implementation_dir = agate/）：
+  * agate/scripts/agate_dispatch_route.py：新增纯逻辑 helper build_subprocess_launch（tmux_available=True → tmux new-session -d -s <ns> '<cmd> | tee <cap>; echo 结束标记; echo 倒计时; sleep N'；False → list(cmd) 裸跑）+ tmux_cleanup_action（falsy session→noop / 无 client→kill_now / 有 client 且 elapsed<=N+margin→let_countdown / 否则→force_kill）。接入 _default_subprocess_run：_maybe_tmux_wrap（默认关 AGATE_DISPATCH_TMUX=1 + shutil.which("tmux") 才包裹，session=agate-{TASK_ID}-{PHASE}-{int(time.time())}）+ _tmux_teardown（has-session 判断 + 容忍 kill-session 非零退出）+ _tmux_collect（new-session -d 立即返回后轮询生命周期，命令跑完按 tmux_cleanup_action 决定 kill / 等待，返回 capture 全文）。P4b-I1 stderr 透传 sys.stderr（不并入判定文本）。P4b-I2 except (FileNotFoundError, OSError) → except OSError。import 增 shutil/tempfile/time。classify_outcome/resolve/load_config/try_and_fall/dispatch_once/presence_parse_ok 未改签名未改行为。
+  * agate/dispatch-protocol.md「### 0. 派发路由」子节：新增「tmux 观测层（可选，仅子进程形式）」小段——包裹判定 / 命名空间 session / 退出倒计时（默认 15s）/ 清理逻辑（list-clients 空→kill 跳倒计时 / 非空→让倒计时收尾 / 挂死超 N+余量10s→兜底 kill，先 has-session）/ 明确不做（send-keys / capture-pane 回传 / 跨轮复用）/ 目标环境代表性 W2（WSL2+tmux3.4，非容器/CI/物理机，须复跑落地前复核项，未通过停在「定稿+待落地验证」不阻塞、可整体切除）/ 本机默认关。全中文、无 CHECK 14 禁词。
+  * agate/tests/unit/test_tag0034_p4c.py：12 例（build_subprocess_launch 边界 / tmux_cleanup_action noop+精确边界 / _maybe_tmux_wrap 默认关=现状 3 态 / _default_subprocess_run P4b-I1 stderr 透传+不并入 / P4b-I2 FileNotFoundError→spawn_oserror / P4b-I3 桥接端到端 真 append_event 账本 1 条 dispatch_route 事件）。
+- P4b-review 3 条 INFORMATIONAL：I1（stderr）做——透传诊断面不并入判定；I2（冗余 except）做——收敛 except OSError；I3（_route_main 无 CI 覆盖）部分做——加桥接端到端单测（partial + 适配层闭包 + 真哈希链账本），完整 _route_main 进程级调用注明不做（连字符模块 + form=default 门控 + 假 CLI 平台敏感，与 AGENTS.md 平台无关硬约束冲突）+ 理由。
+- 切除条款处理：不整体切除。两个 helper 纯逻辑（BDD-37/38 转绿），_default_subprocess_run 接入 feature flag AGATE_DISPATCH_TMUX 默认关。标 [DESIGN_GAP: tmux 包裹待目标环境验证]（本机 WSL2+tmux3.4 冒烟通过，目标环境代表性未定 R10/W2，按 P2-design §3.10「停在定稿+待落地验证不阻塞 P8」）。
+- 自查（非 gate）：
+  * pytest -k tag0034 = 90 passed / 0 failed（test_bdd_37/38 转绿；新增 test_tag0034_p4c.py 12 passed；P3 断言未改不回归）。
+  * 回归护栏 test_tag0034_zero_change + test_check_events + test_tag0027_b2 ×2 = 25 passed（BDD-39 字节基线 + BDD-40 不配置=现状仍绿）。
+  * check-protocol-consistency.py --strict-errors-only exit 0（CHECK 1~15 全 PASS，0 ERROR / 329 WARNING —— 与 P4b 后基线一致，tmux 小段未新增 WARNING、未触 CHECK 14）。
+  * check-events.py agate-workspace/tasks/TAG0034-dispatch-routing exit 0（账本 14 行，哈希链完整，ts 单调）。
+  * ruff check agate/scripts/agate_dispatch_route.py agate/tests/unit/test_tag0034_p4c.py → All checks passed。
+  * 本机 tmux 冒烟（timeout 30，WSL2 + tmux 3.4）：包裹 launch 跑通 → _tmux_collect 读到 capture → session 清理干净、has-session 非零退出容忍；裸路径返回原样 cmd；中文收尾 echo 在 pane 无报错。
+- 产出记录：P4-implementation-P4c.md（frontmatter agent: implementer + implementation_dir: agate/ 经 agate-md-field-set.py 写入/复核）；[DESIGN_GAP] ×1（grep -c '^\[DESIGN_GAP:' = 1）；无 [SCOPE+]/[SCOPE_GAP]/[CLARIFY]。
+- SELF-GATE 预告：改 agate/scripts/agate_dispatch_route.py + agate/dispatch-protocol.md + agate/tests/** → 触发。commit 前主 Agent 派 protocol-alignment-review (A1-A7) + C8 review，commit message 带 self-gate-review: trailer。
+- [PROD_NOT_TOUCHED]：全程仅 worktree 内写，未碰主 checkout / ~/.agate（agate-md-field-set.py 用 ~/.agate 稳定版只读调用、只写 worktree 内产出文件）。
+
+## P4c 批 review (review 子 Agent) — 2026-09-10
+
+- 输入读毕：coordinator P4c dispatch message / P4-implementation-P4c.md + [DESIGN_GAP_REVIEWED] / git diff agate_dispatch_route.py + dispatch-protocol.md 逐行 / test_tag0034_p4c.py 全文 12 例。
+- 重点复核：
+  * ① R1 不受 tmux 影响：classify_outcome / try_and_fall / resolve / dispatch_once / build_dispatch_command / presence_parse_ok 逐 hunk 核零改动（diff 仅命中 module docstring + import 三行 + 新增 tmux 节 + _default_subprocess_run 体）。tmux 路径 classify_outcome 拿到的 stdout = tee capture 全文 = 裸跑 stdout（tee 不改字节、收尾 echo/sleep 在 ; 后不进 tee 管道）。stderr 透传只写诊断面不进判定文本（test_default_subprocess_run_stderr_not_merged_into_stdout 锁死）。
+  * ② feature flag 默认关 ≡ P4b：_maybe_tmux_wrap `!= "1" or not which(tmux)` 短路 → flag 未设时 which(tmux) 都不调、返回裸 argv + (None,None)。launch=list([str(a) for a in argv]) → subprocess.run(launch) == P4b。TimeoutExpired/正常返回分支 `if tmux_capture:` 均 None → 走 P4b 原路。except OSError vs except (FileNotFoundError, OSError) 捕获集合相同。唯一新增副作用 = flag 关时若 _default_subprocess_run 被调且 stderr 非空 → 多一行 sys.stderr.write（P4b-I1 要求的修复、不改返回/判定/路由/gate）。「不配置=现状」不受影响（无配置 → form=default → _default_subprocess_run 根本不被调）。
+  * ③ tmux 分支健康：new-session -d 立即返回、外层 subprocess.run 有 timeout；_tmux_collect 有 hard_cap_s=timeout_s（默认1800s）硬上限 → 无死循环无泄漏；_tmux_teardown 先 has-session 判断 + 容忍 kill-session 非零退出 + except OSError pass。附 P4c-I2：内层 has-session/list-clients/kill-session 三处 subprocess.run 无 timeout=（loop 由 hard_cap_s 兜底不致无界，仅 flag-ON 路径）。
+  * ④ [DESIGN_GAP tmux 待目标环境验证]：feature flag 默认关是 P2-design §3.10「定稿+待落地验证、不阻塞、可切除」条款的正确落地形态——机制完整实现+单测覆盖、IO 集成 gated。默认路径无副作用。[DESIGN_GAP_REVIEWED] 已确认，评审同意，非切除非偏离。
+  * ⑤ P4b-I1 已做（透传诊断面、双侧 test 锁死）；P4b-I2 已做（except OSError 收敛、捕获集合不变）；P4b-I3 部分闭合（test_route_bridge_end_to_end 以 _route_main 相同组合 partial+闭包+真 append_event 哈希链跑 try_and_fall）+ 残留理由复核站得住（平台敏感假 CLI 与 AGENTS.md「测试不得硬编码单平台假设」冲突 / env-DI seam 触 R1 判定路径；桥接测试已覆盖真实风险；人工真机复核为文档化兜底）。
+  * ⑥ 抽查 test_build_subprocess_launch_wrap_has_countdown_and_tee / test_tmux_cleanup_action_boundary_inclusive / test_default_subprocess_run_stderr_not_merged_into_stdout / test_route_bridge_end_to_end —— 断言与实现逐段吻合、真实语义校验、非绕过。
+  * 回归 diff：phases.yaml / check-gate / check-state-transition / 状态机 / check-judge-verdict / check-p6-provenance / check-events（1-8条+哈希链）/ check-dispatch-routing / agate-cmdstream-adapters / agate-dispatch（含渲染路径）/ dispatch-tiers.yaml = git diff --stat 空。本批仅改 agate_dispatch_route.py + dispatch-protocol.md + 新增 test_tag0034_p4c.py。
+- 门槛复跑：pytest -k tag0034 = 90 passed / 0 failed（test_bdd_37/38 转绿）；check-protocol-consistency --strict-errors-only exit 0（329 WARNING / 0 ERROR，与 P4b 基线一致）；check-maintainability agate-workspace/tasks/TAG0034-dispatch-routing exit 0（violations 空）；check-events task dir exit 0（14 行）；回归 25 passed；ruff 2 文件 clean。
+- INFORMATIONAL（不阻断，均限 flag-ON 待落地验证路径）：P4c-I1（tmux 路径 exit_code=None → 窄口径「非零退出+无结构化信号+无产出文件」时 reason 码 INFRA_ERROR↔NO_PARSEABLE_OUTPUT 分叉；两者都回落、gate 结果一致、仅审计串不同）/ P4c-I2（tmux IO helper 内层 subprocess.run 缺 timeout=）/ P4b-I3 残留（完整进程级集成测试转未来任务）/ P4a I4/I6（主 Agent 择机）。
+- 产出：P4-review.md 追加「## P4c 批评审」+ 更新「## 合并结论（P4a + P4b + P4c）」；Header status = approved（三批合并、CRITICAL 0、无需切除），agent = review（非 main）。
+- [PROD_NOT_TOUCHED]：仅 worktree 内读；写仅 P4-review.md + P4-progress.md。

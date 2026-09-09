@@ -41,6 +41,20 @@ import。暴露：
       写 dispatch_route 事件，复用 agate_common.append_event 哈希链。
   * should_consult_routing_table(dispatch_kind) -> bool
   * route_is_noop(executor_env) -> bool
+  * build_subprocess_launch(cmd, *, capture_path, tmux_available, session_name)
+      -> list[str]
+      tmux 观测层（P4c / P2-design §3.10）——tmux_available=True 时把子进程命令包成
+      `tmux new-session -d -s <ns> '<cmd> | tee <capture>; <收尾倒计时>'`（人看 pane、
+      路由脚本读 capture 文件取结构化流）；False 时返回裸 cmd。纯逻辑、无 IO。
+  * tmux_cleanup_action(session_name, *, has_clients, elapsed_s, countdown_n, margin_s)
+      -> str ∈ {"kill_now", "let_countdown", "force_kill", "noop"}
+      路由脚本对 tmux session 的清理动作判定（P2-design §3.10）——`list-clients` 空 →
+      kill_now；有人 attach 且未超 N+余量 → let_countdown；超过 → force_kill。纯逻辑。
+
+tmux 包裹在 _default_subprocess_run 内接入（_maybe_tmux_wrap），**默认关**——
+`AGATE_DISPATCH_TMUX=1` 且 `which tmux` 成功才启用；目标环境代表性未定（R10 / 外部
+评审 W2）→ 默认关、待落地验证。包裹 / 裸跑两路径经 tee 的 capture 内容与裸跑 stdout
+一致 → classify_outcome 判定逐字节一致（BDD-37 / R1）。
 
 完整性不变量（P2-design R1）：回落**只**在 LAUNCH_FAIL / INFRA_ERROR /
 NO_PARSEABLE_OUTPUT 三类基础设施信号触发；gate 判定不是 Outcome.kind 的取值、
@@ -50,7 +64,10 @@ NO_PARSEABLE_OUTPUT 三类基础设施信号触发；gate 判定不是 Outcome.k
 """
 
 import os
+import shutil
 import sys
+import tempfile
+import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -491,11 +508,169 @@ def presence_parse_ok(path, *, required_anchors=None):
     return all(anchor in text for anchor in (required_anchors or []))
 
 
+# ───────────────────────── tmux 观测层（P4c，纯逻辑 helper） ─────────────────────────
+
+
+def build_subprocess_launch(cmd, *, capture_path, tmux_available, session_name,
+                            countdown_n=15):
+    """子进程派发命令的 launch argv（P2-design §3.10 / BDD-37）。
+
+    tmux_available=True → `["tmux","new-session","-d","-s",<session_name>,
+      "<cmd 串> | tee <capture_path>; <收尾: 打结束标记 + N 秒倒计时后 wrapper 自退>"]`
+      —— 人 `tmux attach` 看 pane；路由脚本读 capture 文件取结构化流。经 tee 的 capture
+      内容 == 裸跑 stdout（`tee` 只旁路一份、不改字节）→ gate 判定逐字节一致（R1）。
+    tmux_available=False → `list(cmd)` 原样裸跑（现状）。
+
+    纯逻辑、无 IO——`which tmux` 由调用方判定后传 tmux_available。
+    """
+    if not tmux_available:
+        return list(cmd)
+    inner = " ".join(str(c) for c in cmd)
+    wrapper = (
+        f"{inner} | tee {capture_path}; "
+        f"echo '=== 派发结束 ==='; "
+        f"echo '本窗口将在 {countdown_n} 秒后关闭…（Ctrl+b d 可提前离开）'; "
+        f"sleep {countdown_n}"
+    )
+    return ["tmux", "new-session", "-d", "-s", str(session_name), wrapper]
+
+
+def tmux_cleanup_action(session_name, *, has_clients, elapsed_s, countdown_n,
+                        margin_s):
+    """路由脚本对 tmux session 的清理动作（P2-design §3.10 / BDD-38）。
+
+    返回值 ∈ {"kill_now", "let_countdown", "force_kill", "noop"}：
+      * session_name falsy → "noop"（无可清理对象）。
+      * has_clients=False → "kill_now"（没人 attach，`list-clients` 空 → 直接
+        `kill-session` 跳倒计时）。
+      * has_clients=True 且 elapsed_s <= countdown_n + margin_s → "let_countdown"
+        （有人 attach，不强杀，让 wrapper 的 N 秒倒计时收尾——被瞬间踢出突兀）。
+      * has_clients=True 且 elapsed_s > countdown_n + margin_s → "force_kill"
+        （倒计时脚本本身挂死、超过 N + 余量仍在 → 兜底强杀，session 不久留）。
+
+    纯逻辑、无 IO；elapsed_s 语义 = 子进程命令已结束、进入收尾倒计时后经过的秒数
+    （P2-design §3.10：余量 = 10s，N 默认 15s）。
+    """
+    if not session_name:
+        return "noop"
+    if not has_clients:
+        return "kill_now"
+    if elapsed_s <= countdown_n + margin_s:
+        return "let_countdown"
+    return "force_kill"
+
+
+def _tmux_teardown(session_name):
+    """强制收尾一个 tmux session——先 `has-session` 判断、容忍 `kill-session` 对已消失
+    session 的 exit 1（MV11 实测）。IO helper，仅 tmux 包裹路径调用。"""
+    import subprocess
+
+    try:
+        alive = subprocess.run(
+            ["tmux", "has-session", "-t", str(session_name)],
+            capture_output=True, text=True,
+        ).returncode == 0
+        if alive:
+            subprocess.run(
+                ["tmux", "kill-session", "-t", str(session_name)],
+                capture_output=True, text=True,
+            )
+    except OSError:
+        pass
+
+
+def _tmux_collect(session_name, capture_path, *, countdown_n=15, margin_s=10,
+                  poll_s=0.5, hard_cap_s=1800.0):
+    """`tmux new-session -d` 立即返回后，轮询 session 生命周期并收 capture 文件内容。
+
+    子进程命令跑完（capture 出现成功 / 基础设施失败签名）后进入收尾倒计时——按
+    tmux_cleanup_action 决定：没人 attach → 立即 `kill-session` 跳倒计时；有人 attach
+    → 让倒计时走完；倒计时脚本挂死超过 N + 余量 → 兜底强杀。返回 capture 文件全文
+    （== 裸跑 stdout）。IO helper，仅 tmux 包裹路径调用。
+    """
+    import subprocess
+
+    start = time.time()
+    done_at = None
+
+    def _slurp():
+        try:
+            with open(str(capture_path), encoding="utf-8", errors="replace") as fh:
+                return fh.read()
+        except OSError:
+            return ""
+
+    while True:
+        try:
+            alive = subprocess.run(
+                ["tmux", "has-session", "-t", str(session_name)],
+                capture_output=True, text=True,
+            ).returncode == 0
+        except OSError:
+            break
+        if not alive:
+            break
+
+        now = time.time()
+        text = _slurp()
+        cmd_done = _has_any(text, _SUCCESS_SIGNALS) or _has_any(text, _INFRA_SIGNALS)
+        if cmd_done and done_at is None:
+            done_at = now
+
+        if done_at is not None:
+            clients = subprocess.run(
+                ["tmux", "list-clients", "-t", str(session_name)],
+                capture_output=True, text=True,
+            )
+            has_clients = bool((clients.stdout or "").strip())
+            action = tmux_cleanup_action(
+                str(session_name), has_clients=has_clients,
+                elapsed_s=now - done_at, countdown_n=countdown_n, margin_s=margin_s,
+            )
+            if action in ("kill_now", "force_kill"):
+                _tmux_teardown(session_name)
+                break
+
+        if now - start > hard_cap_s:
+            _tmux_teardown(session_name)
+            break
+        time.sleep(poll_s)
+
+    return _slurp()
+
+
+def _maybe_tmux_wrap(argv_str):
+    """P4c 默认关：`AGATE_DISPATCH_TMUX=1` 且 `which tmux` 成功 → 用 build_subprocess_launch
+    把子进程命令包成 `tmux new-session -d`（stdout 经 `| tee <capture>` 落文件、人可
+    attach 看 pane、路由脚本读 capture 取结构化流）。否则返回裸 argv——与现状逐字节一致。
+
+    session 名 = `agate-{task_id}-{phase}-{int(time.time())}`（带命名空间，P2-design §3.10）。
+    目标环境代表性未定（R10 / 外部评审 W2）→ 默认关、待落地验证。
+    返回 (launch_argv, capture_path 或 None, session_name 或 None)。
+    """
+    if os.environ.get("AGATE_DISPATCH_TMUX") != "1" or not shutil.which("tmux"):
+        return list(argv_str), None, None
+    task_id = os.environ.get("AGATE_DISPATCH_TASK_ID", "task")
+    phase = os.environ.get("AGATE_DISPATCH_PHASE", "P")
+    session_name = f"agate-{task_id}-{phase}-{int(time.time())}"
+    capture_path = os.environ.get("AGATE_DISPATCH_CAPTURE") or os.path.join(
+        tempfile.gettempdir(), session_name + ".log"
+    )
+    launch = build_subprocess_launch(
+        list(argv_str), capture_path=capture_path,
+        tmux_available=True, session_name=session_name,
+    )
+    return launch, capture_path, session_name
+
+
 def _default_subprocess_run(argv, *, timeout_s=None):
     """裸 subprocess 跑候选命令，收 (stdout, exit_code, killed_reason)。
 
-    P4c hook 位：tmux 包裹（build_subprocess_launch）+ RM-AG0055 命令流阈值卡死检测
-    在此处接入——本批直接裸跑 + 宽超时兜底（P2-design §3.7 N6「宁宽勿紧」）。
+    P4c：tmux 观测层包裹在此接入（_maybe_tmux_wrap，**默认关**——`AGATE_DISPATCH_TMUX=1`
+    且 `which tmux` 成功才启用；目标环境代表性未定 R10 / W2 → 默认关、待落地验证）。
+    包裹 / 裸跑两路径经 tee 的 capture 内容与裸跑 stdout 一致 → classify_outcome 判定
+    逐字节一致（BDD-37 / R1）。RM-AG0055 命令流阈值卡死检测仍留后续接入位。
+    宽超时兜底（P2-design §3.7 N6「宁宽勿紧」）。
     """
     import subprocess
 
@@ -504,15 +679,33 @@ def _default_subprocess_run(argv, *, timeout_s=None):
             timeout_s = float(os.environ.get("AGATE_DISPATCH_TIMEOUT_S", "1800"))
         except ValueError:
             timeout_s = 1800.0
+
+    launch, tmux_capture, tmux_session = _maybe_tmux_wrap([str(a) for a in argv])
+
     try:
         proc = subprocess.run(
-            [str(a) for a in argv], capture_output=True, text=True,
+            launch, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=timeout_s,
         )
-    except (FileNotFoundError, OSError):
+    except OSError:                                         # FileNotFoundError ⊂ OSError（P4b-I2）
         return "", None, "spawn_oserror"
     except subprocess.TimeoutExpired as exc:
+        if tmux_capture:
+            _tmux_teardown(tmux_session)
         return (exc.stdout or ""), None, "wait_timeout"
+
+    # P4b-I1：透传子进程 stderr 供人排查（诊断面）——**不并入** classify_outcome 的判定
+    # 文本，判定输入与裸跑保持一致 → R1 完整性不破。
+    if proc.stderr and proc.stderr.strip():
+        sys.stderr.write(proc.stderr)
+
+    if tmux_capture:
+        # tmux new-session -d 立即返回 → 轮询 session 生命周期 + 收 capture 文件。
+        # 退出码不经 tmux 透出 → None（Codex 退出码本不可靠、判定走结构化流，§3.7）。
+        return _tmux_collect(
+            tmux_session, tmux_capture, hard_cap_s=timeout_s,
+        ), None, None
+
     return (proc.stdout or ""), proc.returncode, None
 
 

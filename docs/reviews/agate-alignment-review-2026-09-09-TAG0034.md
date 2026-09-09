@@ -5,11 +5,12 @@ change_summary: TAG0034 P4a+P4b 批——P4a：派发路由 schema 层 + 引擎�
 files_changed:
   - agate/rules/dispatch-tiers.yaml (P4a 新)
   - agate/scripts/check-dispatch-routing.py (P4a 新)
-  - agate/scripts/agate_dispatch_route.py (P4a 新；P4b 加 dispatch_once/presence_parse_ok/_default_subprocess_run/routed_away_verdict_location/DispatchContractError/_FALLBACK_KINDS/_SUBPROCESS_CLIS + try_and_fall I1/I5；P4b A1 fix：classify_outcome 基础设施信号按 cli 细分（_BARE_TOP_ERROR_SIGNALS 仅 codex / _INFRA_SIGNALS_CLAUDE_ONLY + _claude_api_error 仅 claude-code / 分支 2b opencode 裸 error → NO_PARSEABLE_OUTPUT）)
+  - agate/scripts/agate_dispatch_route.py (P4a 新；P4b 加 dispatch_once/presence_parse_ok/_default_subprocess_run/routed_away_verdict_location/DispatchContractError/_FALLBACK_KINDS/_SUBPROCESS_CLIS + try_and_fall I1/I5；P4b A1 fix：classify_outcome 基础设施信号按 cli 细分（_BARE_TOP_ERROR_SIGNALS 仅 codex / _INFRA_SIGNALS_CLAUDE_ONLY + _claude_api_error 仅 claude-code / 分支 2b opencode 裸 error → NO_PARSEABLE_OUTPUT）；P4c 加 tmux 观测层 build_subprocess_launch/tmux_cleanup_action 纯逻辑 helper + _maybe_tmux_wrap/_tmux_teardown/_tmux_collect + _default_subprocess_run tmux 分支（feature flag AGATE_DISPATCH_TMUX 默认关）+ P4b-review I1 stderr 透传 / I2 except OSError 收敛)
+  - agate/tests/unit/test_tag0034_p4c.py (P4c 新，12 例 —— build_subprocess_launch/tmux_cleanup_action 边界 + _maybe_tmux_wrap 默认关 + P4b-I1/I2/I3)
   - agate/scripts/agate-dispatch.py (P4a route 子命令骨架；P4b _route_main form==chain 端到端 try-and-fall + I3 适配层闭包)
   - agate/scripts/check-events.py (P4a 第 8 条审计链 + DISPATCH_ROUTE_REASONS；P4b 零改动)
   - agate/scripts/check-protocol-consistency.py (P4a 复审轮：SCRIPT_ALIGNMENT_ANCHORS 补 check-dispatch-routing.py 锚点条目)
-  - agate/dispatch-protocol.md (P4a「### 0. 派发路由」新子节 + DEBT0039 措辞②；P4b 评审打回续跑段 + `> 实现注记：` 平台续接原语块)
+  - agate/dispatch-protocol.md (P4a「### 0. 派发路由」新子节 + DEBT0039 措辞②；P4b 评审打回续跑段 + `> 实现注记：` 平台续接原语块；P4c「tmux 观测层（可选，仅子进程形式）」小段)
   - agate/assets/execution-roles/architect.md (P4a DEBT0039 措辞①)
   - agate/platform-notes.md (P4a effort 能力探测行；P4b「## 跨 CLI 子进程结构化输出判成败字段」小节 + routed-away judge verdict 落 TASK_DIR 说明)
   - agate/SETUP.md (P4b M9「### 步骤 2-dispatch-routing：机器级档位绑定 scaffold」小节)
@@ -17,15 +18,16 @@ files_changed:
   - agate-workspace/dispatch-routing.yaml (P4a 新，非协议本体)
   - docs/design-notes/design-dispatch-routing.md (P4a M12，走 docs commit)
   - agate-workspace/roadmap/roadmap.md (P4a M12，走 docs commit)
-review_scope: TAG0034 P4a + P4b 批 agate/** 改动（SELF-GATE 语义 gate，agent≠main）；P4a 三轮（首审 misaligned → 复审 aligned）、P4b 增量两轮（首轮 A1 misaligned → A1 fix 复审 aligned，本文件「# P4b 批复审」节）
+review_scope: TAG0034 P4a + P4b + P4c 批 agate/** 改动（SELF-GATE 语义 gate，agent≠main）；P4a 三轮（首审 misaligned → 复审 aligned）、P4b 增量两轮（首轮 A1 misaligned → A1 fix 复审 aligned）、P4c 增量一轮（aligned，本文件「# P4c 批复审」节）
 prod_isolation: "[PROD_NOT_TOUCHED]"
 conclusion: aligned
-review_rounds: 4
-pytest_full_run: "P4b A1 fix 复审轮（2026-09-10）：2 failed / 1611 passed / 2 skipped（161.50s，exit 0）—— 2 red 全部为 P4c 批次边界 by-design：test_bdd_37 + test_bdd_38（tmux 观测层未实现）。test_bdd_42 + test_bdd_50 转绿；A1 fix 补 test_tag0034_p4b.py 3 例（→18 例）全绿、零回归；P4a 复审轮修的 test_sg_6 保持绿。"
+review_rounds: 5
+pytest_full_run: "P4c 轮（2026-09-10）：1625 passed / 0 failed / 2 skipped（164.01s，exit 0）—— tag0034 全绿：test_bdd_37 + test_bdd_38（tmux 观测层）转绿，P4a 起一路带的批次边界 red 至此清零。check-protocol-consistency --strict-errors-only exit 0（CHECK 1~15 PASS，329 WARNING / 0 ERROR）。"
 round1_conclusion: "P4a 首审：misaligned（A3/A4/A6 同一根因 = CHECK 9 锚点表缺 check-dispatch-routing.py；A5.3/A7.4 NEEDS_HUMAN_REVIEW）"
 round2_conclusion: "P4a 复审：aligned（A3/A4/A6 修复已落地复核确认；A5.3/A7.4 用户 2026-09-09 已 HUMAN_CONFIRMED，两条 doc-sync 落 P8 收尾，不阻断 P4a commit）"
 round3_conclusion: "P4b 增量首轮：misaligned（A1 —— platform-notes.md M10 判定表两处 reason-code 归类与 classify_outcome 实际行为不一致：OpenCode UnknownError / Claude Code stop_reason==\"error\"·api_error_status；低严重度，路由行为一致、仅账本 reason 标签差，须修脚本或修文档二选一。A2/A3/A4/A5/A6/A7 delta 全 ALIGNED）"
 round4_conclusion: "P4b 增量复审（A1 fix）：aligned（implementer 按 option (a) 改 classify_outcome —— 基础设施信号按 cli 细分：通用集去裸 '\"type\":\"error\"'；_BARE_TOP_ERROR_SIGNALS 仅 codex；_INFRA_SIGNALS_CLAUDE_ONLY + _claude_api_error 仅 claude-code；分支 2b opencode 裸 error 无具名 → NO_PARSEABLE_OUTPUT。补 3 条断言消除 dead fixture。逐格核实 M10 表 vs 代码一致；R1 三值 reason / I2 边界 / P4a 函数 + 第 8 条 + 哈希链未破；全量 pytest 1611 passed / 2 failed（P4c by-design）零回归。P4a+P4b 合并 = aligned）"
+round5_conclusion: "P4c 增量：aligned（tmux 观测层 —— build_subprocess_launch / tmux_cleanup_action 纯逻辑 helper + _maybe_tmux_wrap 接入 feature flag AGATE_DISPATCH_TMUX 默认关。A1 tmux 小段 vs helper 逐条一致 + 与 design-note §3 一致；A5 CHECK 14 PASS（tmux 子命令不在护栏 1 禁词清单）+ 6 冻结脚本 + classify_outcome/resolve/try_and_fall 零改动；A4 全量 pytest 1625 passed / 0 failed / 2 skipped，tag0034 全绿。feature flag 默认关对应 [DESIGN_GAP_REVIEWED: 已确认]，原则 6 记 A2/A7 ALIGNED + [KNOWN_DEVIATION]。无 MISALIGNED / NEEDS_HUMAN_REVIEW。P4a+P4b+P4c 三批合并 = aligned；A5.3/A7.4 + tmux 目标环境复跑为 P8 交付项、不阻断 P4 commit）"
 ---
 
 # 协议-脚本对齐审查 — TAG0034 P4a 批
@@ -672,3 +674,177 @@ P4b **未确立新架构决策**：M5 端到端 spawn 是 P2-design §3.1/§3.7 
 - `check-events.py agate-workspace/tasks/TAG0034-dispatch-routing` → exit 0（14 行，哈希链完整，ts 单调，judge 轮次×0）。
 - `git diff HEAD --name-only`（HEAD = `d1c2aca` P4a commit）→ `agate/SETUP.md` / `agate/dispatch-protocol.md` / `agate/platform-notes.md` / `agate/scripts/agate-dispatch.py` / `agate/scripts/agate_dispatch_route.py` / `agate/tests/unit/test_tag0034_p4b.py`（未跟踪）/ 任务 `gate-events.jsonl`（P4a commit 留痕 +2 行）—— 6 个冻结脚本 + `agate-cmdstream-*.py` + `check-events.py` + `check-dispatch-routing.py` + `dispatch-tiers.yaml` **均不在 diff 内**（回归硬约束成立）。
 - `grep -n "resume\|followup\|--resume" agate/scripts/agate_dispatch_route.py agate/scripts/agate-dispatch.py` → 零命中（续接自动化未落地，与「只留 hook 位」一致）。
+
+---
+---
+
+# P4c 批复审（2026-09-10）
+
+> **范围**：TAG0034 P4c 批（static-batch 第 3 批，`complexity: low`，依赖 P4b，**可整体切除**）的 `agate/**` 改动增量。P4a / P4b 的 A1-A7 结论见上文；本节只增量审 **P4c delta**。
+> **审查对象**：`git diff HEAD`（HEAD = `99a4c19` P4b commit）—— `agate/scripts/agate_dispatch_route.py`（+201/-4：新增 tmux 观测层纯逻辑 helper `build_subprocess_launch` / `tmux_cleanup_action` + IO helper `_maybe_tmux_wrap` / `_tmux_teardown` / `_tmux_collect` + `_default_subprocess_run` 的 tmux 包裹分支 + P4b-review I1 stderr 透传 / I2 `except OSError` 收敛）、`agate/dispatch-protocol.md`（+16：「### 0. 派发路由」子节新增「**tmux 观测层（可选，仅子进程形式）**」小段）、`agate/tests/unit/test_tag0034_p4c.py`（新，12 例）。
+> **对齐基准**：`P2-design.md` §3.10（tmux 观测层全节）+ §4.1 P4c 行 + §10 完成标志 9 + `design-dispatch-routing.md` §3（机制二：tmux 观测）+ `P1` BDD-37 / BDD-38。
+> **DESIGN_GAP**：`P4-implementation-P4c.md` 一条 `[DESIGN_GAP]`，`[DESIGN_GAP_REVIEWED: 已确认（主 Agent 2026-09-10）]`：tmux 包裹待目标环境验证 —— 两个 helper 为纯逻辑（测试转绿），`_default_subprocess_run` 的 tmux 包裹接入用 feature flag `AGATE_DISPATCH_TMUX` **默认关**；目标环境代表性未定（非容器 / CI runner / 纯物理机，外部评审 W2 / P0-brief R10）→ 停在「定稿 + 待落地验证」、不阻塞 P8。本机 WSL2 + tmux 3.4 冒烟通过。经核：这正是 P2-design §3.10 切除条款 + P0-brief R10 + 外部评审 W2 明确的落地形态，**非切除、非偏离**。
+
+`[PROD_NOT_TOUCHED]` —— 仅 worktree 内读取 + 写本报告；未触碰主 checkout 与 `~/.agate`。
+
+## P4c delta 审查结论汇总
+
+| # | 审查项 | P4c delta 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** —— `dispatch-protocol.md` tmux 小段与 `build_subprocess_launch` / `tmux_cleanup_action` / `_maybe_tmux_wrap` / `_tmux_teardown` 逐条一致；与 `design-dispatch-routing.md` §3 一致 |
+| A2 | 脚本→文档对齐 | **ALIGNED** —— 所有 P4c 脚本行为在 tmux 小段有对应；feature flag `AGATE_DISPATCH_TMUX` 语义（「本机接入默认关，环境开关启用，待落地验证姿态」）在协议正文有描述，非裸露行为（literal env var 名未入 SETUP.md 属观察项，对应已确认 DESIGN_GAP，附 `[KNOWN_DEVIATION]`） |
+| A3 | 一致性连锁 + 反向传播 | **ALIGNED** —— A3a 无新 event 类型；A3b：tmux 小段权威源唯一（`dispatch-protocol.md`）、design-note §3 已同源；`test_tag0034_p4c.py` → tests/README 观察项（同 P4a/P4b） |
+| A4 | 测试覆盖 | **ALIGNED** —— 全量 pytest **1625 passed / 0 failed / 2 skipped**；`test_bdd_37` + `test_bdd_38` 转绿、tag0034 **0 红**；`test_tag0034_p4c.py` 12 例覆盖 helper 边界 + `_maybe_tmux_wrap` 默认关 + P4b-I1/I2/I3 |
+| A5 | 下游影响 + 文档传播 | **ALIGNED** —— CHECK 14 实跑 PASS（tmux 子命令不在护栏 1 禁词清单）；6 冻结脚本 + `check-events.py`（第 1-8 条 + 哈希链）+ `agate-cmdstream-*.py` + `agate-dispatch.py` 渲染路径 + `classify_outcome` / `resolve` / `try_and_fall` **零改动确认**；stderr 透传只到诊断面、不并入判定文本（R1 不破，`test` 锁定）；CHANGELOG 待 P8 |
+| A6 | 锚点表覆盖 | **ALIGNED** —— P4c 未新增 `check-*.py`，CHECK 9 锚点表无需再动 |
+| A7 | 设计原则一致性 | **ALIGNED** —— P4c 未确立新架构决策；tmux 观测层沿用 P2-design §3.10 + RM-AG0046 模式层 / 检测器层分离；feature flag 默认关对应已确认 DESIGN_GAP，附 `[KNOWN_DEVIATION]` |
+
+**P4c delta 结论：aligned**（无 MISALIGNED、无 NEEDS_HUMAN_REVIEW）
+
+**P4a + P4b + P4c 三批合并总结论：aligned**
+
+> A5.3 / A7.4 的两条 doc-sync（`LIMITATIONS.md` 局限 2 缓解链 + ADR-013「gate 生产者无关性」）仍为 **P8 交付项**（P4a 复审轮已 HUMAN_CONFIRMED，草案见上文附录），**不阻断 P4c commit**。
+
+---
+
+## P4c 逐项审查
+
+### A1（P4c delta）：文档→脚本对齐 — ALIGNED
+
+`dispatch-protocol.md` 新增「**tmux 观测层（可选，仅子进程形式）**」小段（+546~+562）逐条核对：
+
+| 文档声明 | 脚本实现 | 判定 |
+|---|---|---|
+| `which tmux` 成功则包 `tmux new-session -d -s <命名空间> '<命令> \| tee <capture>; <收尾>'`；失败则裸跑 | `_maybe_tmux_wrap`：`if os.environ.get("AGATE_DISPATCH_TMUX") != "1" or not shutil.which("tmux"): return list(argv_str), None, None`；否则 `build_subprocess_launch(...)`。`build_subprocess_launch`：`tmux_available=False → list(cmd)`；`True → ["tmux","new-session","-d","-s",<session_name>, "<inner> \| tee <capture_path>; echo '=== 派发结束 ==='; …; sleep <N>"]` | ALIGNED |
+| 经 `tee` 的 `<capture>` 内容与裸跑 stdout 逐字节一致 → 两路径 `dispatch_route` 留痕 + gate 结果完全一致 | `_default_subprocess_run` tmux 路径 `return _tmux_collect(tmux_session, tmux_capture, ...), None, None` —— `_tmux_collect` 返回 capture 文件全文（`| tee` 只旁路一份不改字节）；`classify_outcome` 拿到的 `stdout` 与裸跑一致。`test_tag0034_p4c.py::test_build_subprocess_launch_wrap_has_countdown_and_tee` 断言 `shell.startswith("claude -p \| tee cap/d.log")` | ALIGNED |
+| session 名带命名空间 `agate-<任务>-<阶段>-<短时间戳>`（防碰撞） | `_maybe_tmux_wrap`：`session_name = f"agate-{task_id}-{phase}-{int(time.time())}"`（`task_id` / `phase` 取 `AGATE_DISPATCH_TASK_ID` / `AGATE_DISPATCH_PHASE`）。`test_maybe_tmux_wrap_on_wraps_with_namespaced_session` 断言 `sess.startswith("agate-TAG0034-P4-")` | ALIGNED |
+| wrapper 末尾自带退出倒计时（默认 15s、可配），倒计时完自退 → session 自然结束 | `build_subprocess_launch`：`countdown_n=15` 默认；wrapper 串末 `sleep {countdown_n}`。`test_build_subprocess_launch_countdown_configurable` 断言 `countdown_n=30 → "sleep 30"` | ALIGNED |
+| 清理：`list-clients` 空 → 直接 `kill-session` 跳倒计时；非空 → 不强杀让倒计时收尾；倒计时脚本挂死超「倒计时 + 余量 10s」→ 兜底 `kill-session` | `tmux_cleanup_action(session_name, *, has_clients, elapsed_s, countdown_n, margin_s)`：`not session_name → "noop"`；`not has_clients → "kill_now"`；`has_clients and elapsed_s <= countdown_n + margin_s → "let_countdown"`；else `→ "force_kill"`。`_tmux_collect` 以「capture 出现成功 / 基础设施失败签名」为「命令跑完」锚点后计 `elapsed`，`action in ("kill_now","force_kill") → _tmux_teardown`。`test_tmux_cleanup_action_boundary_inclusive`：`(True, elapsed==N+margin) → let_countdown` / `(True, 越界) → force_kill`。P2-design §3.10「余量 = 10s，N 默认 15s」逐值对应 | ALIGNED |
+| 先 `has-session` 判断、容忍对已消失 session 的非零退出 | `_tmux_teardown`：`alive = subprocess.run(["tmux","has-session","-t",...]).returncode == 0`；`if alive: subprocess.run(["tmux","kill-session",...])`；`except OSError: pass`（MV11 实测容忍） | ALIGNED |
+| 明确不做：`send-keys` 交互 / `capture-pane` 内容解析回传主 Agent / 跨轮次 session 复用 | `grep -n "send-keys\|capture-pane\|pipe-pane" agate/scripts/agate_dispatch_route.py` → 零命中；`_tmux_collect` 每次派发独立 session（无跨轮复用）。与 `design-dispatch-routing.md` §3「明确不做」逐条一致 | ALIGNED |
+| 目标环境代表性：WSL2 + tmux 3.4（非容器 / CI / 物理机）——目标环境须在其自己 tmux 版本复跑落地前复核项；未通过则停在「定稿 + 待落地验证」、不阻塞发布（可整体切除）；本机接入默认关亦为「待落地验证」姿态的一部分 | `_maybe_tmux_wrap` docstring +「`AGATE_DISPATCH_TMUX=1` 且 `which tmux` 成功才启用；目标环境代表性未定（R10 / 外部评审 W2）→ 默认关、待落地验证」。与 `design-dispatch-routing.md` §3「实机核实……环境代表性说明（外部评审 W2 round2）」+ P2-design §3.10 R10 一致 | ALIGNED |
+
+**tmux 路径 `exit_code=None`**：`_default_subprocess_run` tmux 分支 `return _tmux_collect(...), None, None` —— 退出码不经 `tmux new-session -d` 透出，返 `None` 使 `classify_outcome` 的「非零退出兜底」分支（`exit_code is not None`）被跳过，判定纯走结构化信号 + `produced_files`。与 P2-design §3.7「退出码对 Codex 不可靠、必须解析事件流」一致，**不引入新判定语义**。**ALIGNED**。
+
+**结论：ALIGNED**。
+
+---
+
+### A2（P4c delta）：脚本→文档对齐 — ALIGNED
+
+| P4c 脚本行为 | 文档对应 | 判定 |
+|---|---|---|
+| `build_subprocess_launch` / `tmux_cleanup_action`（纯逻辑 helper） | `agate_dispatch_route.py` docstring 暴露清单逐条 + `dispatch-protocol.md` tmux 小段（包裹形态 + 清理判定）+ P2-design §3.10 | ALIGNED |
+| `_maybe_tmux_wrap` / `_tmux_teardown` / `_tmux_collect`（IO helper） | 模块 docstring「tmux 包裹在 `_default_subprocess_run` 内接入（`_maybe_tmux_wrap`），**默认关**」+ `dispatch-protocol.md` tmux 小段。IO helper 为实现细节，不要求逐个写进协议正文 | ALIGNED |
+| feature flag `AGATE_DISPATCH_TMUX`（默认关）| `dispatch-protocol.md` tmux 小段末句「本机接入默认关（环境开关启用），亦为『待落地验证』姿态的一部分」——**协议正文明确了「默认关 + 需环境开关 + 待落地验证」这一语义状态**，非「脚本做了文档没写」的裸露行为。literal env var 名 `AGATE_DISPATCH_TMUX` 未写进 `SETUP.md`（`AGATE_DISPATCH_TASK_ID` / `_PHASE` / `_CAPTURE` / `_TIMEOUT_S` 同）—— 属观察项 | ALIGNED（附 `[KNOWN_DEVIATION]`） |
+| P4b-review I1（stderr 透传）| `_default_subprocess_run` 内注释「P4b-I1：透传子进程 stderr 供人排查（诊断面）——**不并入** classify_outcome 的判定文本」+ `P4-implementation-P4c.md` I1 处理段。诊断面行为、非协议语义 | ALIGNED |
+| P4b-review I2（`except OSError`）/ P4b-review I3（桥接端到端测试）| `P4-implementation-P4c.md` I2/I3 处理段 + `test_tag0034_p4c.py::test_route_bridge_end_to_end_writes_single_dispatch_route_event` | ALIGNED |
+
+`[KNOWN_DEVIATION: 来源 TAG0034 P4-implementation-P4c.md DESIGN_GAP_REVIEWED（主 Agent 2026-09-10），理由摘要——tmux 观测层接入 feature flag `AGATE_DISPATCH_TMUX` **默认关**、待目标环境（非 WSL2）复跑 research §10 tmux 验证项后再开启；此为 P2-design §3.10 切除条款 + P0-brief R10 + 外部评审 W2 的落地形态。协议正文已表述「默认关 + 待落地验证」语义状态；literal env var 名与 SETUP onboarding 步骤留待观测层开启默认时补（P8 / 未来迭代）。非普通 MISALIGNED。]`
+
+**结论：ALIGNED**（无裸露行为；feature flag 语义状态在协议正文有描述）。
+
+---
+
+### A3（P4c delta）：一致性连锁 + 反向传播 — ALIGNED
+
+**A3a（连锁）**：P4c 未新增 event 类型（`dispatch_route` 是 P4a 已有；P4c tmux 包裹只影响「子进程怎么起 + 人能不能 attach」，`_default_subprocess_run` 返回契约 `(stdout, exit_code, killed_reason)` 不变，`try_and_fall` / `write_dispatch_route_event` 逐字节未动）。`check-events.py` 第 1-8 条 + 哈希链 **零改动**（不在 diff；`check-events.py agate-workspace/tasks/TAG0034-dispatch-routing` exit 0）。**ALIGNED**。
+
+**A3b（反向传播）**：
+
+| 应被影响文件 | 影响到了没 | 判定 |
+|---|---|---|
+| tmux 小段 → 别处权威源 | `dispatch-protocol.md` 的 tmux 小段是唯一协议权威；`design-dispatch-routing.md` §3（机制二：tmux 观测）已同源（`which tmux` / 命名空间 / 退出倒计时 / 清理逻辑 / 明确不做 / 目标环境代表性逐条一致）。无别处需同步 | ALIGNED |
+| `agate/SETUP.md` / onboarding 索引 | tmux 观测层默认关、「待落地验证」姿态 —— 开启默认前不需要 onboarding 步骤（见 A2 `[KNOWN_DEVIATION]`）。`SETUP.md` 无「步骤 2-*」索引需同步 | ALIGNED（观察项） |
+| `check-platform-assumptions.py` 扫描面 | 仅扫 `*.bats`/`*.bash`/`*.sh`/`*.py`；`agate_dispatch_route.py` 的 tmux helper 是 Python `subprocess.run(["tmux",...])` 调用 —— `check-platform-assumptions.py` 的 Unix 假设检出针对 shell 脚本习语（裸 `grep`/`sed` 等），`subprocess.run` 传 list 不触发；`check-protocol-consistency.py --strict-errors-only` exit 0 确认无新 ERROR/WARNING（329 不变） | ALIGNED |
+| `agate/tests/README.md` per-script 计数表 | 新增 `test_tag0034_p4c.py` —— 观察项（非硬校验，同 P4a/P4b：`test_tag0030_assertions.py::BDD-19` 只校 tests/README「何时更新」节措辞；无 `test_tag0034_*` 行，历轮未判 MISALIGNED） | ALIGNED（观察项，与 P4a/P4b 一致） |
+| CHECK 9 锚点表 | P4c 未新增 `check-*.py` | ALIGNED |
+
+**ALIGNED**。
+
+---
+
+### A4（P4c delta）：测试覆盖 — ALIGNED
+
+**P4c 轮全量 pytest 实跑（本次审查执行，2026-09-10）**：
+
+```
+$ python3 -m pytest agate/tests/ -q --tb=no
+（worktree 根 /home/kity/oclab/agateon/.worktrees/agate-TAG0034）
+
+1625 passed, 2 skipped in 164.01s (exited with code 0)
+```
+
+**計數：passed 1625 / failed 0 / skipped 2**（P4b A1 fix 复审轮 = passed 1611 / failed 2；P4c 新增 `test_tag0034_p4c.py` 12 例 + `test_bdd_37` 转绿 + `test_bdd_38` 转绿 → passed +14 / failed −2）。**tag0034 全绿 0 红**（首轮 P4a 起一路带的 `test_bdd_37/38` P4c 批次边界 red 至此清零）。
+
+**P4c 新逻辑边界覆盖评估**（`test_tag0034_p4c.py` 12 例）：
+- `build_subprocess_launch` 纯逻辑边界 3 例：裸路径返回新 list 且不别名 `cmd`（`out is not cmd` + `"tmux" not in " ".join(out)`）/ 包裹路径含 `tee <capture>` + 末尾 `sleep <N>` 退出倒计时 / `countdown_n` 可配（30 → `"sleep 30"`）。
+- `tmux_cleanup_action` 边界 2 例：空 session → `noop` / `elapsed == N + margin` 边界含入 `let_countdown` / 越界 → `force_kill`。
+- `_maybe_tmux_wrap` 3 例：默认关（无 `AGATE_DISPATCH_TMUX`）→ 裸 argv 逐字节现状 / 开关开但 `which tmux` 失败 → 裸 argv / 开关开 + `which tmux` 成功 → `tmux new-session` 包裹 + 命名空间 session（`agate-<task>-<phase>-<ts>`）。
+- `_default_subprocess_run` P4b-I1 2 例：stderr 透传诊断面（`capsys.readouterr().err` 含 `ProviderAuthError`）/ stderr **不并入** stdout（`stdout == "clean stdout"`）。
+- P4b-I2 1 例：`FileNotFoundError` → `spawn_oserror`（`("", None, "spawn_oserror")`）→ 下游 `LAUNCH_FAIL`。
+- P4b-I3 1 例：`_route_main` 相同组合（`functools.partial` + 适配层闭包 + 真 `agate_common.append_event` 哈希链）跑 `try_and_fall`，mock 子进程候选链（首候选 `INFRA_ERROR` 回落、次候选 `HAS_OUTPUT`）→ 一次回落落 **1 条**合法 `dispatch_route` 事件，`tried[0].result=="failed"` / `reason=="infra_error"`，`tried[1].result=="success"`，`final == {"cli":"opencode","model":"prov/y"}`，`routed[0].phase == "P4"`。
+- `test_tag0034_tmux.py::test_bdd_37` + `test_bdd_38`（P3 契约断言，逐字节未改）→ 转绿。
+- P3 既有断言未改：`test_tag0034_tryfall.py` / `test_tag0034_p4b.py`(18) / `test_tag0034_subprocess.py` 等仍绿。
+
+**结论：ALIGNED**（全量实跑 0 failed，tag0034 全绿；P4c 新逻辑 helper 边界 + I1/I2/I3 覆盖充分）。
+
+---
+
+### A5（P4c delta）：下游影响 + 文档传播 — ALIGNED
+
+**A5.1 CHECK 14 护栏 1 — ALIGNED（实跑核实）**
+
+`dispatch-protocol.md` tmux 小段含 `tmux new-session` / `list-clients` / `kill-session` / `has-session` / `send-keys` / `capture-pane` 等 tmux 子命令名。核 `check-protocol-consistency.py` CHECK 14 平台词表 `PLATFORM_TOKEN_RE = re.compile(r"(?<![\w-])(?:OpenCode|Claude Code|DSH|workflow|ralph|goal|task)(?![\w-])")` —— **`tmux` 及其子命令不在护栏 1 禁词清单**（护栏 1 针对「以平台工具命名的 workflow / ralph / goal / task 概念」，`tmux` 与 `git` / `pytest` 同为通用工具，P2-design §3.10 亦按通用观测工具处理）。小段全中文叙述、无禁词。**实跑确认：`check-protocol-consistency.py --strict-errors-only` → `✅ PASS CHECK 14 md 叙述段落平台名扫描` + `✅ PASS CHECK 15` + exit 0（329 WARNING / 0 ERROR，与 P4b 后基线一致，tmux 小段未新增 WARNING）**。护栏 1 合规成立，**不需要 `> 实现注记：` 块**。**ALIGNED**。
+
+**A5.2 冻结脚本 / R1 完整性 — ALIGNED**
+
+`git diff HEAD --stat` 确认 P4c 只改 `agate/dispatch-protocol.md`（+16）+ `agate/scripts/agate_dispatch_route.py`（+201/-4）+ `agate-workspace/tasks/.../P4-progress.md`（任务追踪）。`git diff HEAD -- agate/scripts/agate_dispatch_route.py` 核：`classify_outcome` / `resolve` / `try_and_fall` / `load_config` / `build_dispatch_command` / `dispatch_once` / `presence_parse_ok` **函数体逐字节未动**（+/- 行只含新增 tmux helper + `_default_subprocess_run` 内 tmux 分支 + stderr 透传 + `except OSError` 收敛）。`agate/rules/phases.yaml` / `check-gate.py` / `check-state-transition.py` / `state-machine.md` / `check-judge-verdict.py` / `check-p6-provenance.py` / `check-events.py` / `check-dispatch-routing.py` / `dispatch-tiers.yaml` / `agate-cmdstream-adapters.py` / `agate-dispatch.py` **均不在 diff 内**。
+
+R1 完整性洞守住：tmux 包裹只影响「子进程怎么起 + 人能不能 attach」；`classify_outcome` 拿到的 stdout（经 `tee` 的 capture）与裸跑一致；stderr 透传只到诊断面、**不并入** `_INFRA_SIGNALS` 扫描文本（`test_default_subprocess_run_stderr_not_merged_into_stdout` 锁死）。feature flag 默认关 → 裸路径与 P4b 逐字节等价（返回契约 `(stdout, exit_code, killed_reason)` 不变；stderr 透传为 P4b-review I1 INFORMATIONAL 落地，不影响 classify_outcome 输入）。回归护栏 25 passed（`P4-progress` 自查 + A4 全量实跑确认）。**ALIGNED**。
+
+**A5.3 CHANGELOG — 待 P8（非 MISALIGNED）**
+
+P4c 同为协议语义变更（tmux 观测层小段 + helper）。`check-changelog.py` 仅 P8 触发（P4a 轮已核实）。CHANGELOG 待 P8 统一补，**不判 MISALIGNED**。
+
+---
+
+### A6（P4c delta）：锚点表覆盖 — ALIGNED
+
+P4c **未新增任何 `check-*.py`**（`build_subprocess_launch` / `tmux_cleanup_action` / `_maybe_tmux_wrap` 等均在 helper 模块 `agate_dispatch_route.py` 内，非独立 gate 脚本）。CHECK 9 `SCRIPT_ALIGNMENT_ANCHORS` 无需再动（P4a 复审轮补的 `check-dispatch-routing.py` 条目仍成立、`test_sg_6` 保持绿）。**ALIGNED**。
+
+---
+
+### A7（P4c delta）：设计原则一致性 — ALIGNED
+
+P4c **未确立新架构决策**：tmux 观测层是 P2-design §3.10 既定机制的落地，架构沿用 RM-AG0046「模式层 / 检测器层分离」（协议定义「包裹 / 清理 / 留痕」语义，`tmux` 具体命令归实现）。两路径 gate 判定 / 留痕逐字节一致（BDD-37）与「gate 生产者无关性」（ADR-013 草案，P4a 复审轮 HUMAN_CONFIRMED、落 P8）一致 —— 走不走 tmux 不影响协议判断的任何环节。
+
+tmux 包裹 feature flag `AGATE_DISPATCH_TMUX` **默认关**、目标环境代表性未定 → 对应 `[DESIGN_GAP_REVIEWED: 已确认（主 Agent 2026-09-10）]`。按原则 6，此为 P2-design §3.10「不通过则停在『定稿 + 待落地验证』、不阻塞 P8」切除条款 + P0-brief R10 + 外部评审 W2 的**落地形态**（非切除、非偏离），记 **ALIGNED**，追加 `[KNOWN_DEVIATION: 来源 TAG0034 P4-implementation-P4c.md DESIGN_GAP_REVIEWED（主 Agent 2026-09-10），理由摘要——tmux 观测层「两 helper 纯逻辑（测试转绿）+ 接入 feature flag 默认关」是 §3.10 切除条款的落地姿态；目标环境（非 WSL2）复跑 research §10 tmux 验证项后再开启默认，登记 P8 / 未来迭代；裸路径逐字节不变（BDD-37）+ 本机 WSL2/tmux 3.4 冒烟通过。尚无 P7 记录（任务在 P4），P7 阶段须由 consistency-reviewer 复核确认]`。
+
+**结论：ALIGNED**。
+
+---
+
+## P4c 闭环规则
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| ALIGNED | A1 / A2（附 `[KNOWN_DEVIATION]`）/ A3 / A4 / A5 / A6 / A7（附 `[KNOWN_DEVIATION]`） | 通过，可 P4c commit。P4c 全量 pytest **1625 passed / 0 failed / 2 skipped**，tag0034 全绿。 |
+| （P8 交付项，非 P4c 阻断） | A5.3 / A7.4（P4a 复审轮遗留）+ P4c 的 tmux 观测层目标环境复跑 | `LIMITATIONS.md` 局限 2 缓解链 + ADR-013（HUMAN_CONFIRMED 已落）+ tmux 观测层在目标环境复跑 research §10 验证项后开启默认 —— 均 P8 / 未来迭代事项，**不阻断 P4c commit**。 |
+
+**P4c delta 总结论：aligned**（A1-A7 全 ALIGNED，其中 A2 / A7 附 `[KNOWN_DEVIATION]` 对应已确认 DESIGN_GAP；无 MISALIGNED、无 NEEDS_HUMAN_REVIEW）。
+
+**P4a + P4b + P4c 三批合并总结论：aligned** —— P4a 三轮终态 aligned（A5.3/A7.4 HUMAN_CONFIRMED、落 P8）；P4b 两轮终态 aligned（A1 fix `classify_outcome` 按 cli 细分）；P4c 一轮 aligned（tmux 观测层，feature flag 默认关对应已确认 DESIGN_GAP）。全量 pytest **1625 passed / 0 failed / 2 skipped**（tag0034 全绿）；`check-protocol-consistency.py --strict-errors-only` exit 0（CHECK 1~15 PASS，329 WARNING / 0 ERROR）；6 冻结脚本 + `check-events.py` + `agate-cmdstream-*.py` + `agate-dispatch.py` 渲染路径零改动。**P4 三批可全部 commit**（各带 `self-gate-review:` trailer）。A5.3 / A7.4 + tmux 目标环境复跑为 P8 交付项，不阻断 P4 commit。
+
+---
+
+## 附：P4c 轮补充实跑（本次审查执行，2026-09-10）
+
+- `python3 -m pytest agate/tests/ -q --tb=no` → **1625 passed / 0 failed / 2 skipped**（164.01s，exit 0）；tag0034 全绿（`test_bdd_37` + `test_bdd_38` 转绿）。
+- `python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` → exit 0；**CHECK 1~15 全 PASS**（含 `✅ PASS CHECK 14 md 叙述段落平台名扫描` / `✅ PASS CHECK 15`）；329 WARNING / 0 ERROR（与 P4b 后基线一致，tmux 小段未新增 WARNING）。
+- `python3 agate/scripts/check-events.py agate-workspace/tasks/TAG0034-dispatch-routing` → exit 0（14 行，哈希链完整，ts 单调）。
+- `python3 -m pytest agate/tests/unit/test_tag0034_p4c.py agate/tests/unit/test_tag0034_p4b.py agate/tests/unit/test_tag0034_subprocess.py agate/tests/unit/test_tag0034_tryfall.py agate/tests/regression/test_tag0034_zero_change.py agate/tests/unit/test_check_events.py -q` → **49 passed**（P4c 12 + P4b 18 + subprocess/tryfall/zero_change/check_events 回归护栏）。
+- `~/.venvs/agate-dev/bin/ruff check agate/scripts/agate_dispatch_route.py` → All checks passed。
+- `git diff HEAD --stat`（HEAD = `99a4c19` P4b commit）→ `agate/dispatch-protocol.md`（+16）+ `agate/scripts/agate_dispatch_route.py`（+201/-4）+ `agate-workspace/tasks/TAG0034-dispatch-routing/P4-progress.md`（任务追踪）—— 6 冻结脚本 + `check-events.py` + `check-dispatch-routing.py` + `dispatch-tiers.yaml` + `agate-cmdstream-*.py` + `agate-dispatch.py` **均不在 diff 内**。
+- `git diff HEAD -- agate/scripts/agate_dispatch_route.py` +/- 行核 → `classify_outcome` / `resolve` / `try_and_fall` / `load_config` / `build_dispatch_command` / `dispatch_once` / `presence_parse_ok` 函数体逐字节未动（仅新增 tmux helper + `_default_subprocess_run` tmux 分支 + stderr 透传 + `except OSError` 收敛）。
+- `grep -n "send-keys\|capture-pane\|pipe-pane" agate/scripts/agate_dispatch_route.py` → 零命中（「明确不做」项未落地代码，与协议一致）。

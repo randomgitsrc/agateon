@@ -546,6 +546,22 @@ trigger: gate_fail
 `cli:` 另一个 CLI（`claude-code` / `codex` / `opencode`，起子进程）是**强缓解**——真正的
 异源独立视角，可端到端自动化。两形式 gate 判定 / 留痕一致。
 
+**tmux 观测层（可选，仅子进程形式）**：子进程形式派发前若 `which tmux` 成功，可把命令
+包一层 `tmux new-session -d -s <命名空间> '<命令> | tee <capture>; <收尾>'`——人 `tmux
+attach` 肉眼看实时输出，路由脚本读 `<capture>` 文件取结构化流；`which tmux` 失败则裸跑。
+经 `tee` 旁路的 `<capture>` 内容与裸跑 stdout 逐字节一致 → **两路径的 `dispatch_route`
+留痕 + gate 结果完全一致**，走不走 tmux 不影响协议判断的任何环节。session 名带命名空间
+（`agate-<任务>-<阶段>-<短时间戳>`，防与机器上既有 session 碰撞）；wrapper 末尾自带退出
+倒计时（默认 15s、可配），倒计时完自退 → session 自然结束。路由脚本清理：`list-clients`
+空 → 直接 `kill-session` 跳倒计时；非空（有人 attach）→ 不强杀、让倒计时收尾；倒计时脚本
+本身挂死、超过「倒计时 + 余量」（余量 10s）仍在 → 兜底 `kill-session`（先 `has-session`
+判断、容忍对已消失 session 的非零退出）。**明确不做**：`send-keys` 交互、`capture-pane`
+内容解析回传主 Agent、跨轮次 session 复用。**目标环境代表性**：落地验证环境为 WSL2 +
+tmux 3.4（非容器 / CI runner / 纯物理机 Linux）——目标部署环境须在其自己的 tmux 版本上
+复跑跨平台机制调查的落地前复核项；未复跑通过则该观测层停在「定稿 + 待落地验证」、**不阻塞
+发布**（可整体切除，不影响配置路由核心与跨 CLI 子进程两层）。本机接入默认关（环境开关
+启用），亦为「待落地验证」姿态的一部分。
+
 **单 Agent 模式（`executor_env.has_task_tool: false`，如 Claude Project 会话）**：无派发
 动作 → **路由为 no-op**，本节不适用（显式出范围）。
 
