@@ -113,3 +113,51 @@ CODE-MAP 机制已采用（`agate-workspace/agents/CODE-MAP.md` 存在）。
 - `[SCOPE+]`：**无**。
 - `DESIGN_GAP`：**无**。fixture 数据形态与 P2 §5 / §4.2 定论一致，未发现矛盾，未改 fixture。
 - 说明：全量单测运行期间，某个非 cmdstream 测试向 `agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/gate-events.jsonl` 追加了 2 行 gate 台账事件（P3 phase 台账补记，非本阶段代码产物）——已 `git checkout` 还原，不在本次改动 diff 内。仅 cmdstream 两个测试文件不触发该追加。
+
+---
+
+## protocol-docs 批（2/2）
+
+> P2 dispatch_plan `static-batch` 第 2 批（第 1 批 `adapter-core` 已在 `835c9b9` 落地）。
+> 纯 `.md` 文档补齐——让 `test_codex_platform_docs.py::test_bdd_22`~`test_bdd_27`（6 条 doc-assertion 审计，P4~P6 期间 by-design 红）自然转绿。**不改** `agate/scripts/*.py` / `agate/tests/`。
+
+### 改动文件清单（行数增量）
+
+| 文件 | 改动 | 增量 |
+|---|---|---|
+| `agate/platform-notes.md` | `## Codex / Hermes / OpenClaw 等` 节的「待补充」占位 → 完整 `## Codex` 章：平台形态 + 能力矩阵（`codex exec` / `-m`/`--model` / `model_reasoning_effort` / `--dangerously-bypass-approvals-and-sandbox` / `-s <read-only\|workspace-write\|danger-full-access>` + `--approve-for-me` + 注明 `--full-auto`/`-a` 已从 `codex exec` 移除 / `--json` / `resume` / 退出码不可靠须解析 `--json`）+ model 阵容小节（ChatGPT 账号默认 `gpt-5.6-terra`、`-m gpt-5`/`-m gpt-5-codex` 被 400 拒、`spawn_agent` model 枚举 4 个标 `[自述]`、API-key 账号「待有该环境时补（非阻塞）」）+ `spawn_agent` 子派发时效小节（`multi_agent` stable/true、单层已实测、嵌套未测、与既有 `max_depth=1` 注记交叉引用并标时效）+ `spawn_agent` 参数 schema `[自述]` 小节（不写「确认无字段」、穷尽实测归 V2 待执行）+ 命令流适配小节（`CodexAdapter` TAG0033 落地、per-command 数字 `exit_code`、V4 截断标记实测形态 `formatted_output` 的 `Warning: truncated output (original token count: N)` + `…N tokens truncated…`）+ Codex 验证记录表（含 `0.153.4` / `ChatGPT` / `2026-09` / `codex features list` 复核）；Hermes/OpenClaw 拆为独立 `## Hermes / OpenClaw 等` 节续保「待补充」；既有「Hardening-roadmap 跨平台适配」节「Codex 兼容性」注记下加 1 行时效指针（既有 `max_depth=1` / CI backstop 表等事实行**未动**）| +67 / -3 |
+| `agate/SETUP.md` | DSH 小节（`### 步骤 2-DSH`）后新增 `### 步骤 2-Codex：codex-cli（Codex）接入`：安装（`npm i -g @openai/codex`）/ `codex login`（ChatGPT vs API key 影响可用 model）/ 自动化绕过 flag（`--dangerously-bypass-approvals-and-sandbox`、`--skip-git-repo-check`、`--json`）/ 验证接入（`codex features list` grep `multi_agent` + `codex exec --json` 冒烟）| +43 / -0 |
+| `agate-workspace/agents/CODE-MAP.md` | line 33「三平台命令流适配器：… DSH JSONL.zstd」→「四平台命令流适配器：… DSH JSONL.zstd / Codex rollout JSONL（`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`，CodexAdapter 于 TAG0033 补齐）」| +1 / -1 |
+| `docs/research/cross-platform-dispatch-mechanics.md` | **逐处回写**（非文首总说明；未做大规模重写）：L169 §6.0.1 映射表 Codex 行「⚠ 缺 `CodexAdapter`」→「✅ `CodexAdapter` 已补（TAG0033，2026-09；本文调查快照期 2026-09-08 为『⚠ 缺』）」；L286 §11 未尽项 #2「唯一缺口 = Codex 适配器」→ 划除 + 「`CodexAdapter` 已补（TAG0033，2026-09）」| +2 / -2 |
+
+新增源码文件：**无**。改测试：**无**（`test_codex_platform_docs.py` 是 P3 产出，仅补文档使其自然转绿；锚词与文档措辞对齐以 BDD 断言为准）。
+
+### BDD-22~27 逐条转绿确认
+
+`timeout 120s python3 -m pytest agate/tests/unit/test_codex_platform_docs.py -q` → **8 passed / 0 failed**（改前 6 failed / 2 passed）：
+
+| BDD | 断言要点 | 转绿点 |
+|---|---|---|
+| BDD-22 | `## Codex` 节无「待补充」；11 个能力锚点 grep 命中 | 新 `## Codex` 章逐锚点覆盖；「待补充」仅存于拆出的独立 `## Hermes / OpenClaw 等` 节（不在 `_codex_section` 截取范围）|
+| BDD-23 | `0.153.4` / `ChatGPT` / `2026-09` / `features list` | 章首时效注记 + 验证记录表 + model 阵容小节 |
+| BDD-24 | `spawn_agent` schema 段标 `[自述]`；无「确认无」字样；指明穷尽实测为待执行项 | schema 小节标 `[自述]`，措辞「不得升级为『这些字段一定不存在』的断言」（回避 `确认无` 子串）+「真机验证清单 V2 待执行项」|
+| BDD-25 | `max_depth=1` 仍在全文；`## Codex` 节交叉引用 `max_depth` + `multi_agent` + 标时效 | 子派发时效小节交叉引用既有注记 + `multi_agent` stable/true + 「待 V7…复核」；既有注记行未删，其下加时效指针 |
+| BDD-26 | `gpt-5.6-terra` + `API` + 「待有该环境时补」/「待补」 | model 阵容小节三点齐备 |
+| BDD-27 | SETUP.md 独立 Codex 小节 + 4 锚点 + `API key` | `### 步骤 2-Codex` 小节 |
+
+BDD-29 / BDD-30（真机验证清单结构守护，本就绿）：未触碰 `P1-requirements.md`，保持绿。
+
+### 自查判据结果（自查 ≠ gate）
+
+| 命令 | 结果 |
+|---|---|
+| `timeout 120s python3 -m pytest agate/tests/unit/test_codex_platform_docs.py -q` | **8 passed**（BDD-22~27 红转绿）|
+| `timeout 300s python3 -m pytest agate/tests/unit/ -q --tb=no` | **1389 passed / 0 failed / 2 skipped**（原 6 条 doc-audit 红全转绿，无新增失败）|
+| `timeout 120s python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` | **EXIT 0 / 0 ERROR**（329 WARNING，全为既有叙事文件引用，未新增本质条目；新增 Codex 章 / SETUP 小节未引入死链 / 行号引用漂移 / 平台名污染 ERROR）|
+| `timeout 60s ~/.venvs/agate-dev/bin/ruff check agate/` | **All checks passed!**（本批未改 .py）|
+
+### 范围外 / 说明
+
+- `[SCOPE+]`：**无**。
+- research doc 第 4 项：采用**逐处回写**（L169 + L286 各一句），非文首总说明——两处即全部命中点，回写精确且最小；文档 §10 复核清单对 flag 名 / model 阵容等其它时效条目仍有效，故不加「全文皆快照」式总说明以免过度声明陈旧。
+- `agate/tests/fixtures/cmdstream/codex-session.jsonl` 的 1 行改动（git status 可见）= P5 verifier 已做的 V4 fixture 收敛，属未 commit 的 P5 产出，**非本批产物**，未触碰。

@@ -41,3 +41,22 @@
 ## [review C8] 产出完成
 - P4-review.md 写入完成，status=approved，frontmatter 经 agate-md-field-set 写入（status/phase/task_id/parent/trace_id/created/type）+ 手写 agent:review（agent 非 field-set 合法 key，同 P2-review.md 先例）
 - check-frontmatter.py P4-review.md → EXIT 0
+
+## protocol-docs 批（2/2）start 2026-09-09
+- 读取 dispatch-context-implementer-protocol-docs.md + test_codex_platform_docs.py（BDD-22~27 锚词）
+- 读取事实来源：research doc §0/§1.2/§2/§3/§4.2/§5、P1 §4/§6.6-6.7/§7、P5-test-results/real-machine.md (V1/V3/V4/V5)、platform-notes.md 现状、SETUP.md DSH 小节、CODE-MAP.md:33
+- 下一步：改 4 文件
+
+## protocol-docs 批（2/2）改动落地 2026-09-09
+- agate/platform-notes.md：`## Codex / Hermes / OpenClaw 等`「待补充」→ 完整 `## Codex` 章（能力矩阵 + model 阵容 + spawn_agent 派发时效 + schema [自述] + 命令流适配 + 验证记录表）；Hermes/OpenClaw 拆为独立 `## Hermes / OpenClaw 等` 节保「待补充」；line ~131「Codex 兼容性」注记下加 1 行时效指针（既有事实行不动）。+67/-3
+- agate/SETUP.md：DSH 小节后新增 `### 步骤 2-Codex：codex-cli（Codex）接入`（安装/codex login/绕过 flag/验证接入）。+43
+- agate-workspace/agents/CODE-MAP.md:33：三平台→四平台，补 Codex rollout JSONL 源。+1/-1
+- docs/research/cross-platform-dispatch-mechanics.md：L169 + L286 两处「缺 CodexAdapter」逐处回写「已补（TAG0033，2026-09）」。+2/-2（未做大规模重写）
+
+## protocol-docs 批（2/2）自查 2026-09-09
+- pytest test_codex_platform_docs.py → 8 passed（BDD-22~27 由红转绿；BDD-29/30 守护绿）
+- pytest agate/tests/unit/ -q --tb=no → 1389 passed / 0 failed / 2 skipped
+- check-protocol-consistency.py --strict-errors-only → EXIT 0，0 ERROR，329 WARNING（未新增本质条目）
+- ruff check agate/ → All checks passed
+- 无 [SCOPE+]；research doc 用逐处回写（非文首总说明）
+- 注：git status 另见 agate/tests/fixtures/cmdstream/codex-session.jsonl 1 行改动 = P5 V4 verifier 已收敛的 fixture（未 commit），非本批产物，未触碰

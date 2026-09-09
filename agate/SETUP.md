@@ -172,6 +172,49 @@ python3 ~/.agate/scripts/install-hook.py
 > preset/skill 发现机制可能随版本变化——升级 DSH 后若会话选择器找不到「Agateon 编排者」，
 > 重跑上方命令块即可。
 
+### 步骤 2-Codex：codex-cli（Codex）接入
+
+Codex 无「宿主 orchestrator 注册」步骤（out-of-scope）——它作为 agate 的**被派发执行环境**接入，只需装 CLI + 登录 + 配好自动化环境的绕过 flag。已实机验证：codex-cli **0.153.4** + **ChatGPT 登录**账号（能力矩阵与时效注记见 `platform-notes.md`「Codex」章）。
+
+**1. 安装**：
+
+```bash
+npm i -g @openai/codex        # 官方分发；或按 openai/codex 仓库 README 的其它官方方式
+codex --version               # 应输出版本号（验证基线 0.153.4）
+```
+
+**2. 登录**（`codex login`）：
+
+```bash
+codex login                  # 浏览器走 ChatGPT 登录；或设 OPENAI_API_KEY 环境变量用 API key
+```
+
+- **ChatGPT 登录账号**：`codex exec -m` 默认 `gpt-5.6-terra`；`-m gpt-5` / `-m gpt-5-codex` 会被 API 400 拒（`"not supported when using Codex with a ChatGPT account"`）。
+- **API key 账号**：可用 model 阵容不同（`gpt-5` / `o3` 等可能可用）——agate 本会话未在该环境核实，接入后自己跑 `codex exec --json -m <model> <<< "hi"` 确认。
+- 账号类型影响可用 model；`~/.codex/models_cache.json` 是本机 model 白名单。
+
+**3. 自动化环境的绕过 flag**（非交互派发必备）：
+
+```bash
+codex exec --json \
+  --dangerously-bypass-approvals-and-sandbox \
+  --skip-git-repo-check \
+  '<prompt>'
+```
+
+- `--dangerously-bypass-approvals-and-sandbox`：跳过全部确认 + 无沙箱执行。**仅用于外层已隔离的自动化环境**（CI / 专用 worktree）——它真能拆掉工作区边界。中间档见 `platform-notes.md`「Codex」能力矩阵（`-s <mode>` + `--approve-for-me`；`--full-auto` / `-a` 已从 `codex exec` 移除）。
+- `--skip-git-repo-check`：`codex exec` 默认拒绝在非 git 仓库运行，自动化环境按需加。
+- `--json`：结构化 JSONL 事件流。**Codex 退出码不可靠**（认证失败 / model 不可用都可能 `exit 0`），须解析 `--json` 的 `turn.failed` / `item.type=="error"` 判成败。
+
+**4. 验证接入**：
+
+```bash
+timeout 60s codex features list | grep -iE 'multi_agent'   # multi_agent 应为 stable / true（撑 spawn_agent 子派发）
+timeout 120s codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <<< 'print ok'
+```
+
+会话记录落 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`——agate 的 `CodexAdapter`（命令流卡死检测，RM-AG0055）读此路径。
+
 ## 步骤 3（可选）：设成默认 agent
 
 > ⚠️ **默认保持非默认（三平台通用原则）**：标准步骤 2 完成后，orchestrator 只是「可手动选择」的角色，

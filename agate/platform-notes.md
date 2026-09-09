@@ -40,7 +40,70 @@
 
 ---
 
-## Codex / Hermes / OpenClaw 等
+## Codex
+
+> 接入步骤见 `SETUP.md`「步骤 2-Codex」。已实机验证（**2026-09**，codex-cli **0.153.4**，**ChatGPT 登录**账号，本机 Linux/WSL2）——新兴平台，机制随版本变化快，落地前须在目标版本上 `codex features list` + `codex exec --help` 复核（比照本文件 DSH 章 / OpenCode 章「新兴平台需持续复核」惯例）。涉及账号类型差异的项（尤其 model 阵容）本机为 ChatGPT 账号，API-key 账号环境本质不可得，标「待有该环境时补（非阻塞）」。
+
+**平台形态**：Rust CLI（`@openai/codex`，`npm i -g`）；非交互入口 `codex exec`；会话记录为 rollout JSONL，落 `~/.codex/sessions/YYYY/MM/DD/rollout-<ISO8601 秒精度>-<uuid>.jsonl`（按 UTC 日期分层，非 cwd 分层）。认证 `codex login`（ChatGPT 或 API key，账号类型影响可用 model）。
+
+### 能力矩阵
+
+| 能力 | 状态 | 说明 |
+|------|------|------|
+| 非交互入口 | ✅ 可用 | `codex exec '<prompt>'`（别名 `codex e`），prompt 作参数或 stdin。子命令 `resume` / `fork` / `review` |
+| 本地开发环境 | ✅ 完整 | P0-P8 全部阶段可执行（`WORKFLOW.md`「已知适用环境」表已登记）|
+| model 指定（子进程）| ✅ | `-m` / `--model <MODEL>` 或 `-c model="..."`（TOML 覆盖 `~/.codex/config.toml`）|
+| 推理档（与 model 正交）| ✅ | `-c model_reasoning_effort=<low\|medium\|high>`（`spawn_agent` 侧为 `reasoning_effort` 参数，另含 `xhigh`/`max`/`ultra` 档）；启动 banner 有独立 `reasoning effort` 行 |
+| 权限 / 沙箱绕过（最高档）| ✅ | `--dangerously-bypass-approvals-and-sandbox`（跳过全部确认 + 无沙箱执行，仅用于外层已隔离环境；实测真能拆掉工作区边界）|
+| 权限 / 沙箱（中间档）| ✅ | `-s` / `--sandbox <read-only\|workspace-write\|danger-full-access>` + `--approve-for-me`（把审批走自动 review）。**注：`--full-auto` / `-a` 已从 `codex exec` 移除**——旧资料里「`-a never -s workspace-write` 折中」写法已过期 |
+| 非 git 仓库运行 | 默认拒绝 | 需 `--skip-git-repo-check` |
+| 结构化输出 | ✅ | `--json`（JSONL 事件流：`thread.started` / `turn.started` / `item.started` / `item.completed` / `turn.completed` / `turn.failed`）；`-o` / `--output-last-message <FILE>`；`--output-schema <FILE>` 约束最终响应 JSON Schema |
+| 退出码可靠性 | ⚠ **不可靠** | 未认证（banner 后对 `wss://api.openai.com/.../responses` 反复 401 重试）与「账号不支持所配 model」（真派发才 `turn.failed{status:400}`）两类失败都可能落在 `exit 0` 的进程里——**退出码不可靠，须解析 `--json` 事件流**（`turn.failed` / `item.type=="error"`）判成败。此结论只针对 **turn 级失败**；per-command shell 执行的退出码见下「命令流适配」小节（rollout item 带数字 `exit_code`）|
+| 会话续接（子进程）| ✅ | `codex exec resume <uuid> '<新 prompt>'` / `--last`；rollout JSONL 存 `~/.codex/sessions/`。属「读 transcript 重放重建」非「模型状态冻结」（官方明示）——实测续接确带上下文 |
+| 会话续接（native）| ✅ | `followup_task`（对既有 spawned agent 追发；`send_message` 是 agent 间通信、非续接）|
+| 原生子代理派发 | ✅ 见下 | 会话内工具 `spawn_agent`（`collaboration` 工具族）——顶层 CLI 无「派子代理」子命令 |
+
+### model 阵容（随账号类型变）
+
+- **ChatGPT 登录账号（本机验证环境）**：`codex exec -m` 默认 `gpt-5.6-terra`，实测可用；`-m gpt-5` / `-m gpt-5-codex` **被 API 400 拒**（`"The 'gpt-5' model is not supported when using Codex with a ChatGPT account."`）。model 白名单见 `~/.codex/models_cache.json`。
+- **`spawn_agent` 的 `model` 枚举**（`[自述]`——运行中模型报告，非逐字 schema dump）：`gpt-5.6-terra` / `gpt-5.6-luna` / `gpt-5.5` / `gpt-5.4-mini`（比 `codex exec -m` 的可用集更宽）。`reasoning_effort` 枚举 `low|medium|high|xhigh|max|ultra`。
+- **API-key 账号 model 阵容**：本会话未核实——本机为 ChatGPT 账号，API-key 账号环境本质不可得。**待有该环境时补（非阻塞）**（`codex exec --json -m gpt-5 <<< "hi"` + `spawn_agent(model=…)` 各枚举跑一遍；`verification_env_budget` 止损轮次 2）。
+
+### 子代理派发（`spawn_agent`）与既有「Codex 兼容性」注记的时效
+
+- backing feature flag：`multi_agent` = **stable / effective true**（实测 `codex features list`，0.153.4）——`spawn_agent` 无需任何 `--enable` 即可用。命名有变更史：`collaboration_modes` / `multi_agent_mode` 已 `removed`，`multi_agent_v2` stable 但 false（子会话 `session_meta` 却见 `multi_agent_version: "v2"` 字样——内部版本仍在演进）。**目标版本上 `codex features list` 复核一次**。
+- `spawn_agent` 子会话是**独立的 `rollout-*.jsonl` 文件**（非父文件内嵌事件），与父文件同目录；子文件 `session_meta` 含 `parent_thread_id` / `thread_source=="subagent"` / `source.subagent.thread_spawn.depth`。**单层 `spawn_agent` 已实测可用**（P5 V3）；**嵌套深度（`spawn_agent` 内再 `spawn_agent`）未测**（归 P6 V7）。
+- **与本文件下方「Hardening-roadmap 跨平台适配」节「Codex 兼容性」注记的交叉引用 + 时效**：那条 `Codex subagent max_depth=1` /「Codex 单层任务工具无法再派发」注记**写于 subagent workflows 默认启用之前**——按当前实测，`multi_agent` flag 已 stable/true、单层派发已实测可用；既有 `max_depth=1` 结论待 V7 嵌套深度实测后复核。既有注记那几行事实内容不变（本章只做时效指针，不删既有行），全文档以本小节为该维度的时效口径，**不存在**「一处说无法再派发、另一处说已支持多层」的未标时效对立陈述。
+
+### `spawn_agent` 参数 schema —— 证据强度 `[自述]`
+
+`spawn_agent(task_name, message, model?, reasoning_effort?, fork_turns?)`：`task_name`（必，小写字母/数字/下划线）、`message`（必）、`fork_turns`（`"none"|"all"|正整数串`，默认 `"all"`）、`model`（枚举见上）、`reasoning_effort`（6 档）。
+
+此 schema 为 **`[自述]`**（运行中模型报告自己的工具参数）——**不是**逐字 tool JSON schema dump（P1 spike 实测：令模型逐字输出内部 tool schema 被模型受训拒绝）。因此「未见 `background` / `timeout` / `permission` 字段」**只能表述为「`[自述]` 未提及」，不得升级为「这些字段一定不存在」的断言**。「穷尽 `spawn_agent` 参数 schema 直接实测」是**真机验证清单 V2 待执行项**（P5-P6，换法：读 codex 二进制 `strings` / 内省包内 schema 定义 / 或跨大量真实调用归纳 `function_call.arguments` 键并集），P6 归纳键并集后如实回写本段。
+
+### 命令流适配（RM-AG0055 / CodexAdapter）
+
+- `agate/scripts/agate-cmdstream-adapters.py` 的 **`CodexAdapter`（TAG0033 落地，2026-09）** 覆盖 Codex 平台的 subagent 存活 / 卡死检测。数据源 = `~/.codex/sessions/**/rollout-*.jsonl`（rollout JSONL），`ADAPTERS` 注册表键 `"codex"`；检测引擎 / 阈值 / `CommandRecord` IR / 既有三适配器零改动。
+- **per-command 退出码**：rollout 的 `CommandExecution` item **带数字 `exit_code` 字段**（实测观察 `0` / 非 0）——`CommandRecord.exit` 直取，比 Claude Code / DSH 干净。上方「退出码不可靠」只针对 **turn 级失败**（`turn.failed{status:400}` / `item.type=="error"`），对 per-command shell 执行不成立。
+- **输出截断标记实测形态**（P5 V4）：item 上**无**布尔截断字段；截断标记出现在 `formatted_output`——`Warning: truncated output (original token count: N)` + 省略号包夹的 `…N tokens truncated…`（U+2026 省略号字符，非三个点）。`CodexAdapter` 截断检测据此（`_CODEX_TRUNC_TEXT_MARKERS` 的 `"tokens truncated"` 子串命中）→ `truncated=True` + `output_hash=None`。供未来复核 / RM-AG0055 §3.4.2 差异点 4 的 Codex 侧记录。
+
+### 验证记录（Codex）
+
+| 项 | 结论 | 阶段 |
+|---|---|---|
+| rollout JSONL 目录结构 / `CommandExecution` 字段形态 | 与解析假设一致（V1 PASS）| P5 |
+| `spawn_agent` 子会话独立文件 + 父子关联字段 | 独立 `rollout-*.jsonl`，`thread_source=="subagent"` + `parent_thread_id`（V3 PASS）| P5 |
+| 输出截断标记确切形态 | `formatted_output` 的 `Warning: truncated output ...` + `…N tokens truncated…`（V4 命中）| P5 |
+| `multi_agent` feature flag | stable / true（V5 PASS）| P5 |
+| 检测引擎对真实 Codex 会话判三态 | 归 P6（V6）| P6 |
+| `spawn_agent` 嵌套深度 + `spawn_agent` schema 穷尽 | 归 P6（V7 / V2）| P6 |
+| API-key 账号 model 阵容 | 待有该环境时补（非阻塞，budget 轮次 2）| 待环境 |
+
+验证环境：codex-cli **0.153.4**、**ChatGPT** 登录账号、本机 Linux（WSL2），验证日期 **2026-09**。
+
+---
+
+## Hermes / OpenClaw 等
 
 待补充——如有使用经验，欢迎 PR。
 
@@ -68,6 +131,8 @@ hardening-roadmap 设计的核心 gate 机制（pre-commit hook + CI backstop）
 - Codex 单层任务工具无法"再派发"——这种情况下 P2 review 必须由主 Agent 自己跑（agent=main）
 - `check-gate.py` P2 对 `agent=main` 硬拦截（exit 1，不可自行批准评审）
 - 升级到 Codex 多层派发（待官方发布）后兼容自动生效
+
+> ↑ 上述 `max_depth=1` /「无法再派发」记于 subagent workflows 默认启用之前；时效更新见上方 `## Codex` 章「子代理派发（`spawn_agent`）」小节（`multi_agent` flag 实测 stable/true、`spawn_agent` 单层已实测可用、嵌套深度未测待复核）。
 
 ---
 
