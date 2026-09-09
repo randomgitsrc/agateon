@@ -48,3 +48,4 @@
 - Write P1-review.md 追加「## 复核轮（P1 retry #1）」节 + 改 Header 结论行；agate-md-field-set status approved；check-frontmatter.py exit 0
 - [PROD_NOT_TOUCHED]：仅 worktree 内读；写入仅 P1-review.md + P1-progress.md（本任务目录）
 - P1-review approved 后两处收尾：§3 第 8 行 BDD-44/47 → BDD-46/47；6 条 SUGGEST 登记为主 Agent 已采纳——agate-md-field-set 拒写 suggest_resolved（追加/嵌套字段一期不支持），改手工在 frontmatter 加合法 YAML list（6 条），check-frontmatter.py exit 0，agate-md-field-get.py 可读回全部 6 条；§5 每条 SUGGEST 后 + 末尾补「已采纳 by 主 Agent 2026-09-09 作 P2 设计输入」。BDD 仍 53 条，其它未动。
+- [BASELINE_CHANGE] 授权（用户 2026-09-09）：P2 MV10 实测本机 Claude Code 2.1.266 有 --effort flag（2.1.263 无）。改三处：① BDD-10 整条重写（保留编号，行首 [BASELINE_CHANGE:]，判据改为按 claude --help 能力探测分流、不硬编码版本）；② §1 两轴段改「Claude Code 按能力探测」；③ §2 证据强度诚实段改「effort 轴 2.1.26x 起有、三平台均可用」+ OpenCode bug② 措辞对齐 P2 MV7。frontmatter 新增 baseline_changes 列表登记（agate-md-field-set 不支持追加字段，手工加合法 YAML，check-frontmatter.py exit 0）。BDD 仍 53 条连续。

@@ -12,6 +12,8 @@ ceremony: standard
 phases: [P1, P2, P3, P4, P5, P6, P7, P8]
 packages: [agate-scripts, agate-rules, agate-docs, agate-tests]
 domains: [backend, cli]
+baseline_changes:
+  - "BDD-10（用户批准 2026-09-09）：Claude Code effort 由『无旋钮→静默忽略』改为『按 claude --help 是否含 --effort 能力探测分流』——P2 minimal_validation MV10 实测本机 2.1.266 有 --effort，2.1.263 无；不硬编码版本号。标记在 BDD-10 行首 [BASELINE_CHANGE:]"
 suggest_resolved:
   - "tier 三档命名 bulk/standard/deep（已采纳 by 主 Agent 2026-09-09）"
   - "{cli: native, model: null} 合法，null = 该 CLI 默认 model（已采纳 by 主 Agent 2026-09-09）"
@@ -74,7 +76,7 @@ verification_env_budget: "止损轮次 2（独立计数，不占 retries[P5/P6]�
 
 **配置三层**（P0-brief scope 定案）：① **协议本体**（`agate/rules/` 下新文件或 `phases.yaml` 旁）—— 档位词表 + 每档语义画像 + 出厂默认 `(phase,role)`→档位映射（全 `standard`），改它**走 SELF-GATE**；② **机器/安装级** —— 档位→有序跨 CLI 候选链 `[{cli,model,effort}]` 的具体绑定，落 `~/.config/agate/` 类**非版本控制**路径，由 SETUP 流程 scaffold；③ **项目级** `agate-workspace/dispatch-routing.yaml` —— `(phase,role)`→档位映射 + 直接值覆盖。全兜底：任一层缺失/损坏/类型坏 → 出厂默认（= 现状），不报错不静默跳过（复用 `check-maintainability.py:_load_config` 模式）。MVP 可合并 ①③ 为单文件 + 内联档位定义（是否真拆机器级档位文件由 P2 按「多机可移植性是否真需求」定）。
 
-**两轴**：`tier`（能力档，`bulk` / `standard` / `deep`）与 `effort`（`low`/`medium`/`high`，可选）**正交** —— 「便宜模型 + 高 effort」「顶配 + 低 effort」都合法。`effort` 映射各平台推理档 flag：Codex `-c model_reasoning_effort=` / OpenCode `--variant` / **Claude Code CLI 无干净旋钮 → 该平台静默忽略、不报错，`platform-notes.md` 注明**。
+**两轴**：`tier`（能力档，`bulk` / `standard` / `deep`）与 `effort`（`low`/`medium`/`high`，可选）**正交** —— 「便宜模型 + 高 effort」「顶配 + 低 effort」都合法。`effort` 映射各平台推理档 flag：Codex `-c model_reasoning_effort=` / OpenCode `--variant` / **Claude Code 按能力探测**——`claude --help` 含 `--effort` 则映射（本机 2.1.266 [实测] 有），旧版本无该 flag 则静默忽略、不报错。引入版本未核实（2.1.263 [实测] 无 / 2.1.266 [实测] 有）。
 
 **决策落点**：优先扩 `agate/scripts/agate-dispatch.py`（不成再新增 `agate-route.py`）。查表/回落/降级是纯机械步骤。
 
@@ -99,7 +101,7 @@ verification_env_budget: "止损轮次 2（独立计数，不占 retries[P5/P6]�
 | 边界 | 候选全灭 / 配了但 CLI 未装未认证 / 配置文件损坏 / gate FAIL 后同阶段 retry（同候选，BDD-26）/ P5→P4 跨阶段回退后重新机械解析一次路由（BDD-51）/ 五模式并行批 / 自主再派发 / 单 Agent 模式（`has_task_tool:false`）各自的路由行为 | 完整性不变量（模型购物洞）+ 「不启用 = 现状」不变量都在边界上；两类 retry 的路由行为须显式区分（同阶段 = 同候选 / 跨阶段回退 = 机械重解析、无升档逻辑）|
 | 兼容 | 「不配置 = 逐字节现状」；`standard` 语义必须钉死为「继承主 Agent 当前 model 的原生派发」，否则出厂默认全 `standard` ≠ 现状 | 破坏「机会式启用」不变量 = 破坏局限 6「零基础设施」 |
 
-**证据强度诚实（外部评审 B1/B2）**：`cli: native` 是**弱缓解**（同厂商换 model 盲区基本共享）；`effort` 轴在 Claude Code CLI **基本是空的**；OpenCode bug②（父会话交互式切 model 后子代理跟不跟）是**机制推断、本会话未直接复现**（列为 P1 前置真机核实项，见 §6）。BDD / 正文表述不得把 `[自述]` / 推断写成「已实测」。
+**证据强度诚实（外部评审 B1/B2）**：`cli: native` 是**弱缓解**（同厂商换 model 盲区基本共享）；`effort` 轴**早期 Claude Code 版本无 effort 旋钮、2.1.26x 起有**（按能力探测映射，见 BDD-10 `[BASELINE_CHANGE]`）——现三平台均可用；OpenCode bug② 是**机制推断 + P2 已真机核实机制一致**（见 P2-design §5 MV7，交互式 TUI 切换路径仍为推断）。表述不得把 `[自述]` / 推断写成「已实测」。
 
 ---
 
@@ -177,10 +179,13 @@ verification_env_budget: "止损轮次 2（独立计数，不占 retries[P5/P6]�
 - When 路由决策层构造该 OpenCode 派发命令
 - Then 命令含 `--variant high`（或等价 `provider/M#high` 后缀）
 
-#### BDD-10: effort 在 Claude Code CLI 静默忽略、不报错
+#### BDD-10: effort 按能力探测映射到 Claude Code `--effort`，无该 flag 时静默忽略
+
+[BASELINE_CHANGE: 用户批准 2026-09-09。原 BDD-10 假设「Claude Code CLI 无 effort 旋钮 → 静默忽略」基于 research 的 2.1.263 实测；P2 minimal_validation MV10 实测本机 2.1.266 已有可用的 `--effort <low|medium|high|xhigh|max>` flag。判据改为按能力探测（`claude --help` 是否含 `--effort`）分流，不硬编码版本号——实测仅知 2.1.266 有 / 2.1.263 无，引入版本未核实。]
+
 - Given 候选 `{cli: claude-code, model: haiku, effort: high}`
-- When 路由决策层构造该 Claude Code 派发命令
-- Then 派发正常进行、无 error、无非零退出；构造出的命令不含任何 effort/reasoning flag；`platform-notes.md` 存在一句注明「Claude Code CLI 无 effort 旋钮 → 静默忽略」
+- When 路由决策层构造该 Claude Code 派发命令，并探测 `claude --help` 是否含 `--effort`
+- Then 探测到 `--effort` → 命令含 `--effort high`（effort ∈ {low,medium,high}）；未探测到（旧版本）→ 命令不含任何 effort/reasoning flag、不报错、无非零退出；两分支均正常派发；`platform-notes.md` 如实注明「2.1.266 [实测] 有 / 2.1.263 [实测] 无 / 引入版本未核实」
 
 ### 4.3 解析顺序
 
