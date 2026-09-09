@@ -5,8 +5,13 @@
 > 一轮内部——`docs/reviews/review-dispatch-routing-external-20260908.md` 与 `-round2-`）。机制调查
 > `docs/research/cross-platform-dispatch-mechanics.md`（三平台 CLI 调用 / model 指定 / 子代理派发 /
 > 返回识别 / 续接，A1-A19 实测记录 + §10 落地前复核清单 + §11 未尽项状态）。
-> **前置**：**RM-AG0061 / TAG0033**（Codex 命令流适配器 + 平台接入）——b 块的 `cli: codex` 子进程
-> 存活检测依赖它；建议 TAG0033 与本任务 P4a 并行，P4b 的 codex 部分待 TAG0033 合并。
+> **前置（已解除）**：**RM-AG0061 / TAG0033**（Codex 命令流适配器 + 平台接入）**已于 2026-09-09
+> 合并 main → v0.70.0**（PR #298）。`agate-cmdstream-adapters.py` 现含 `CodexAdapter`（`ADAPTERS["codex"]`），
+> b 块的 `cli: codex` 子进程存活检测直接复用它，检测引擎 / 阈值 / IR 零改动。TAG0033 复盘
+> （`agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md`）三条 agate 反馈落
+> DEBT0037（check-gate P4 多提交阶段判据）/ DEBT0038（check-judge-verdict 信息隔离误判）/ DEBT0039
+> （dispatch_plan 批次执行阶段标注）——**DEBT0037 与本任务直接相关**（本任务是 static-batch 多提交
+> 阶段任务，P4a/P4b/P4c 分批 commit 会命中该局限，见 known_risks）。
 > **epic 形态**：Codex 接入拆走后按五维评级 ≈ medium，一个 task 内分 P4a/P4b/P4c 串行子批（参照
 > RM-AG0058/0057：epic + 一个 task），P2 若判需再拆多 TAG 则另起。
 
@@ -41,7 +46,14 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
     cli/model」）；③ 单 Agent 模式（`has_task_tool:false`）——路由为 no-op，显式声明出范围
 - **P1/P2 前置真机核实**（design-note §7、research §10/§11；外部评审 B1/B2）
   - OpenCode 旧 bug②（父会话交互式切 model 后子代理跟不跟——本会话只机制推断未直接复现）**直接复现测试**
-  - Codex `spawn_agent` 完整 schema 直接实测（与 TAG0033 共用）
+  - Codex `spawn_agent` 完整 schema **TAG0033 已直接实测**（P6 V7：`spawn_agent` 嵌套 depth 1→2
+    生效、`fork_turns` / `model` / `reasoning_effort` 按次可传；V2：跨 9 次真实调用键并集无 `[自述]`
+    之外的键）——本任务直接引用 `TAG0033/retrospective.md` §一 + `platform-notes.md` Codex 章，不再重测；
+    仅需补 TAG0033 out-of-scope 的 V8（API-key 账号 model 阵容，本机 ChatGPT 账号环境不可得、登记待补）
+  - **TAG0033 F1 / DEBT0035 的连带认知**：真机 Codex 把「已结束但非 0 退出」的命令记为
+    `payload.item.status == "failed"`（携带完整 `exit_code` / `completed_at_ms`）——子进程结构化输出
+    解析判成败时（P4b），`codex exec --json` 的 `turn.failed` 与 item 级 `status: "failed"` 是两层，
+    P2 设计须明确取哪层、与退出码不可靠如何叠加
 - **P4a — 配置路由核心 + `cli: native`**（design-note §2.1-§2.6，机制细节 research §5）
   - `rules/dispatch-routing.yaml`（新，**非协议本体、不受 SELF-GATE**）+ 静态校验器
   - `agate-dispatch.py` 扩展：读表 → 按序探测（发极简请求判硬故障，**只判「通不通」、不掺任务
@@ -61,8 +73,8 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
     Codex `--json`（`turn.completed` vs `turn.failed`——**退出码对 Codex 不可靠必须解析事件流**）、
     OpenCode `--format json`（`step_finish.part.reason`）+ 空返回判定
   - D2 假完成校验集成；`SETUP.md` 各 CLI 自动化环境 flag 小节
-  - `cli: codex` 子进程的存活检测走 **TAG0033 的 CodexAdapter**（依赖）；claude-code/opencode 子进程
-    走既有适配器 + 子进程形式的 `wait(pid)` / `kill -0`（research §6.0.2）
+  - `cli: codex` 子进程的存活检测走 **TAG0033 已合并的 `CodexAdapter`**（`ADAPTERS["codex"]`，v0.70.0）；
+    claude-code/opencode 子进程走既有适配器 + 子进程形式的 `wait(pid)` / `kill -0`（research §6.0.2）
   - 评审打回续跑（design-note §2.4a）：同 target 优先平台官方续接（`--resume` / `codex exec resume` /
     `opencode -s` / native 的 `followup_task` / `task_id`），失败或换 target 则全新派发——**续接失败
     无客观信号是已知缺口**，按「续接优先、重起兜底」处理，不假装解决
@@ -80,7 +92,7 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
 
 ### out-of-scope
 
-- **Codex 接入**（CodexAdapter + platform-notes Codex 章 + SETUP Codex）——RM-AG0061 / TAG0033，本任务前置
+- **Codex 接入**（CodexAdapter + platform-notes Codex 章 + SETUP Codex）——RM-AG0061 / TAG0033 **已完成合并（v0.70.0，2026-09-09）**，本任务直接消费不重做
 - 主 Agent 按任务内容动态选型（design-note §2.2 边界，与局限 3 同构，明确排除）
 - 会话续接的「软信号」根治（design-note §2.4a 已如实登记为缺口，本任务按「续接优先、重起兜底」处理）
 - 第三方终端工具（Herdr/Claude Squad）作为依赖；DSH 纳入 CLI 派发路径（design-note §2.5，能力现状
@@ -103,9 +115,10 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
 - "SELF-GATE：改 `agate/dispatch-protocol.md` + `agate/scripts/agate-dispatch.py`（+ 可能
   `check-events.py` 扩展 / 新增校验器）+ `agate/SETUP.md` + `agate/tests/` → 触发，commit message
   须含 `self-gate-review:` 或 `self-gate-skip:`；`rules/dispatch-routing.yaml` 新增（非协议本体、不触发）"
-- "证据强度（外部评审 B1/B2 教训）：本会话对三平台『按次指定 model 生效』是 `[实测]`；但 Codex
-  `spawn_agent` schema 是 `[自述]`、OpenCode bug② 是机制推断未直接复现——P1/P2 前置核实必须把这
-  两项补成直接实测，P1/P2 表述不得把 `[自述]`/推断混同为『已实测』"
+- "证据强度（外部评审 B1/B2 教训）：本会话对三平台『按次指定 model 生效』是 `[实测]`；Codex
+  `spawn_agent` schema 原为 `[自述]`——**TAG0033 P6 已补成直接实测**（`platform-notes.md` Codex 章
+  为准）；仅剩 OpenCode bug② 机制推断未直接复现，P1 前置核实须补成直接实测，P1/P2 表述不得把
+  `[自述]`/推断混同为『已实测』"
 - "探测成本：无 task 内缓存则 P1-P8 × 每 phase 多候选 = 每任务几十次真 API 调用——P2 必须定探测缓存策略"
 - "`cli: native` on OpenCode 的间接路复杂度：要 dispatch 表 phase→预配命名 agent 的映射 + 预注册
   机制，比 Claude Code/Codex 的直接传参多一层——P2 评审须确认这层不失控"
@@ -116,13 +129,20 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
   环境须在其自己的 tmux 版本上复跑 research §10 的验证项"
 - "机会式启用（局限 6 张力）：不配置候选 = 行为与现状逐字节一致；配了但 CLI 未装/未认证 = 探测失败
   自动回落——回归测试须证明『不启用 = 现状』"
+- "多提交阶段命中 DEBT0037（TAG0033 复盘新登记）：本任务 `dispatch_plan` = static-batch P4a/P4b/P4c
+  分批 commit，`check-gate.py P4` 的完整度判据（暂存区有非 md/yaml 文件）在『某批已 commit、暂存区
+  空』时 exit 1、`agate-next.py` 拒绝推进 → 需主 Agent 手动 `_advance` + 补 `state_transition` 事件
+  （TAG0033 P4→P5 两次即如此）。P2 排期时预留这个手动步；若 DEBT0037 在本任务启动前已修复则直接受益"
+- "TAG0033 F1 类缺陷预防（DEBT0035 教训）：P4b 子进程结构化输出解析（Codex `--json` 判成败）的 P1
+  spike / P2 minimal_validation 必须**主动构造** `turn.failed` / item `status:failed` / 空返回 /
+  非 0 退出各终态的真实样本，不能只读已有会话——TAG0033 正是漏采 `status:failed` 终态、P6 真机才发现"
 
 ## env_constraints
 
 - 本任务改 `agate/dispatch-protocol.md` + `agate/scripts/agate-dispatch.py`（+ 可能新增校验器 /
   `check-events.py` 扩展）+ `agate/SETUP.md` + `agate/tests/` → **触发 SELF-GATE**（commit message
   `self-gate-review:` / `self-gate-skip:`）；`rules/dispatch-routing.yaml` 新增（非协议本体、不触发）
-- P4b `cli: codex` 子进程的存活检测依赖 TAG0033 合并；P4b codex 部分与 TAG0033 排期对齐
+- P4b `cli: codex` 子进程的存活检测依赖 **TAG0033（已合并 v0.70.0，2026-09-09）的 `CodexAdapter`**——依赖已满足，P4b codex 部分无排期阻塞
 - 真机验证需要 Claude Code / OpenCode / Codex 三 CLI 已装已认证（本机具备）
 - 用系统 python 跑 pytest/pyyaml；ruff 用 `~/.venvs/agate-dev/bin/ruff`；基线用 `--strict-errors-only`
 - 派发类工具用 `~/.agate` 稳定版，不用 worktree 相对路径（TAG0016 教训）
