@@ -20,3 +20,4 @@
 {"event":"state_transition","from":"P5","phase":"P6","prev_hash":"e322be0e663ba82b6071b112217449f0867e1905ea25b222d8ea131db87232fd","to":"P6","ts":"2026-09-09T04:18:47.881213Z"}
 {"cmd":"check-gate.py P6","event":"gate_run","exit":2,"phase":"P6","prev_hash":"d2b6cb7d41ef52a25dbefb423d021a9cba4618b5576f8226fa2261363bffc111","runner":"pre-commit","ts":"2026-09-09T04:19:16.349155Z"}
 {"event":"state_transition","from":"P5","phase":"P6","prev_hash":"b8c76e44ac38fb8ac87f39d229adecedb52653cb3963e7d7d4ba361fb4e151b9","to":"P6","ts":"2026-09-09T04:19:16.349242Z"}
+{"criteria_passed":30,"criteria_total":30,"event":"judge_verdict","partial":false,"phase":"P6.5","prev_hash":"29941be3c082bb67c937ce180a3b411a58f6985247bf81eb81d4e08fc9c6df12","ts":"2026-09-09T04:29:57.575572Z","verdict":"passed","verdict_hash":"106c42ff12dc389279937f816bb5d465a169a8f6482275a57dacf5b3b5b7f1c0"}
