@@ -88,6 +88,11 @@ verification_env_budget: "止损轮次 2（独立计数，不占 retries[P5/P6]�
 
 `[SCOPE+ from user-approval：DEBT0039 并入 TAG0034]`（来源：用户批准 + DEBT0039 并入，主会话已确认转交条件，2026-09-09）—— **DEBT0039 文档边界澄清**并入本任务范围，作显式交付项（非顺手改漏）。DEBT0039 根因：TAG0033 复盘中 architect 把「补协议文档正文」批（`platform-notes.md` Codex 章 + `SETUP.md` 小节）误标为 P7 执行，主 Agent 比照 TAG0030 先例（doc-assertion 审计 P3 写红、正文 P4 补绿）拉回 P4 才避免带 by-design 红推进；两处权威文档没写清「author 文档内容（P4）」vs「跨文件一致性验证（P7）」的阶段边界。本任务交付：① `agate/assets/execution-roles/architect.md`「批次设计」节增补「补协议文档正文 = P4」的显式边界措辞；② `agate/dispatch-protocol.md`「派发编排机制」节显式区分 author 内容（P4）vs 跨文件一致性验证（P7）。**只做这两处纯文档边界澄清**，不扩到其它 DEBT、不改任何脚本 / gate 逻辑。承接 DEBT0039 `closure_criteria` 三条 → 转 BDD-48/49/50。
 
+`[SCOPE+ from user-approval：P4a alignment review A5.3/A7.4 — 2026-09-09]`（来源：P4a `protocol-alignment-review` 提出 2 项 NEEDS_HUMAN_REVIEW，用户 2026-09-09 批准「两项都补，落 P8 收尾，标 `[HUMAN_CONFIRMED]`」）—— 两条**文档传播交付项**并入本任务范围（P2-design §4.4 / §10 未覆盖，属经用户批准新增的改动面）：
+① **`agate/LIMITATIONS.md` 局限 2（同源模型系统性盲区）补一段「部分缓解链」**：指向本任务的路由机制（`cli: native` 弱缓解 / 跨 CLI 子进程强缓解 / `dispatch_route` 留痕 + 两条完整性不变量），与 TAG0020 P6.5 Judge 落地时给局限 3 补「P6.5 独立 Judge 缓解链」的先例对称。**措辞务必保留诚实边界句**：「仍非根治 —— 主 Agent 自身选型 / 横传 model 无外部约束（与局限 3 同构）」。
+② **`agate/adr.md` 补 ADR-013「派发路由 / gate 生产者无关性」**：记录红线级架构决策「gate 只认产出文件 + exit code、不认谁生产的；这条解耦是跨 CLI/model 派发设计成立的前提；未来不得为跨 CLI 派发定制 gate」，关联 ADR-002（可判定性）/ ADR-006（同源盲区）/ RM-AG0060。理由：`dispatch-protocol.md` 散文承载不够稳（会被后人改），红线决策须进 `adr.md`。
+**两条均落 P8 收尾批**（内容基于 P4a-P4c 最终落地的机制形态，措辞最准），P8 dispatch-context 显式列为 doc-sync 交付项。alignment review 复审时以 `[HUMAN_CONFIRMED: 2026-09-09 …（P8 落地）]` 闭合 A5.3 / A7.4。
+
 ---
 
 ## 2. 隐含需求识别（逐维度）
@@ -510,7 +515,7 @@ verification_env_budget: "止损轮次 2（独立计数，不占 retries[P5/P6]�
 - **P4**：P4a/P4b/P4c 分批 commit，注意 DEBT0037 手动步。**DEBT0039 两处纯文档修订（`architect.md` + `dispatch-protocol.md`）= P4 author 工作**，随对应批提交。
 - **P6**：逐条对照本文件 53 条 BDD（PASS/FAIL 总数 ≥ 53）。
 - **P7**：`packages` 声明做跨文件一致性核对；改动面文件清单（`dispatch-protocol.md` / `agate-dispatch.py` / `check-events.py` / rules 档位词表 / `SETUP.md` / `platform-notes.md` / `architect.md` / design-note / roadmap）交叉引用检查。
-- **P8**：roadmap RM-AG0060 回写 done；**DEBT0039 置 `status: closed`、`task_id: null` → `task_id: TAG0034`**（tech-debt.md）。
+- **P8**：roadmap RM-AG0060 回写 done；**DEBT0039 置 `status: closed`、`task_id: null` → `task_id: TAG0034`**（tech-debt.md）；**SCOPE+（P4a alignment review A5.3/A7.4，用户 2026-09-09 批准）两条 doc-sync**：① `agate/LIMITATIONS.md` 局限 2 补「部分缓解链」段（含诚实边界句「仍非根治 / 主 Agent 自身选型·横传 model 无外部约束，与局限 3 同构」）；② `agate/adr.md` 补 ADR-013「派发路由 / gate 生产者无关性」（关联 ADR-002 / ADR-006 / RM-AG0060）。P8 dispatch-context 显式列。CHANGELOG `[Unreleased]` 段随 P8 补（`check-changelog.py` 仅 P8 触发）。
 
 ---
 

@@ -1,6 +1,8 @@
 # 派发路由设计（agate 协议增强提案）
 
-> **做什么**：新增 `rules/dispatch-routing.yaml`——按 phase 声明候选 `{cli, model}` 列表（用户用它编码"复杂/专业的阶段配高级或专业模型、大批量的阶段配便宜模型"这类意图）。到某阶段时查表 → 按序探测「通不通」→ 派发到第一个可用候选 → 候选全不可用则自动逐级回落，终点恒为"同平台、同 model"的默认派发。`cli` 可为 `native`（同平台换 model）或另一个 CLI（`claude-code`/`codex`/`opencode`，起子进程）。查表 / 探测 / 降级是纯机械步骤，目标是落在 CLI 里做、不依赖主 Agent 临场判断（§2.6）。子进程形式下若有 `tmux`，包一层供人类 `attach` 观测。
+> **做什么**：新增**项目级** `agate-workspace/dispatch-routing.yaml`（`routes:` + `tier_bindings:`，非协议本体、不受 SELF-GATE、全兜底）+ 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`（`bulk`/`standard`/`deep` 语义画像 + 出厂默认）——按 `(phase, role)` 声明候选 `{cli, model, effort?}` 路由（或引用命名**档位** `tier`；`tier` 与 `effort` 是两个**正交轴**）。到某阶段派某角色时**查表 → 直接派首选候选（第一个动作即派真实 dispatch-context，无 probe）→ 若『起不来 / 基础设施失败 / 无可解析产出』三类之一则逐级回落到下一候选 → 全落空则默认派发（同平台同 model，恒等于本机制未启用）**——**try-and-fall，不是 probe-then-commit**。`cli` 可为 `native`（同厂商换 model，不脱离原生派发工具——**弱缓解**）或另一个 CLI（`claude-code`/`codex`/`opencode`，起子进程——**强缓解**）。查表 / 回落 / 降级是纯机械步骤，落在 CLI 里做、不依赖主 Agent 临场判断（§2.6）。新增 `dispatch_route` 事件无差别留痕。子进程形式下若有 `tmux`，包一层供人类 `attach` 观测。
+>
+> **本任务定案（2026-09-09 重写，纳入 §2.1 / §2.2 / 头部）**：① **三层落点**——配置文件**不在** `agate/rules/`（① 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`；②③ 项目级 `agate-workspace/dispatch-routing.yaml`）；② 核心循环去「按序探测 probe」改 **try-and-fall**；③ `tier` + `effort` 两**正交轴** + `(phase,role)` key（role 可选）；④ `cli: native` = **弱缓解**（同训练系谱盲区基本共享，且做不到「不依赖主 Agent」——自动化天花板是主 Agent 机械横传 model），跨 CLI 起子进程 = **强缓解**（真正异源独立视角、可端到端自动化）——**自动化不对称**；effort 轴现三平台均可用（Claude Code `--effort` 按能力探测，本机 2.1.266 [实测] 有 / 引入版本未核实）；⑤ 两条**完整性不变量**——「**候选回落 ≠ 状态机 retry**」（回落只在基础设施失败发生，不占 `retries[Pn]`、不写 `state_transition`、不触发 PAUSED，只写 `dispatch_route`）与「**gate FAIL 绝不换候选**」（收到任何 gate 能评产出即停止回落；gate FAIL → 同一候选正常阶段 retry；`dispatch_route` 理由码枚举无 `gate_fail` 值、`check-events.py` 机械拒绝）；⑥ **routing 是 per-machine 机会式、不追求跨机可复现**（只有抽象 `(phase,role)`→档位映射可 commit 共享）。
 > **为什么**：见 §1。核心是给"角色隔离"补上模型维度——让任一阶段（尤其 P6.5 judge）能跑在与开发链不同的模型/厂商上，把 `LIMITATIONS.md` 局限 2 的"认知层隔离"往"真正的独立视角"推一步；顺带打开成本 / 模型多样性 / 专业度匹配的优化空间。
 > **不做**：主 Agent 按任务内容动态选型（§2.2 边界）；第三方终端工具（Herdr/Claude Squad 等，理由见 §2.4）作为依赖；DSH（理由见 §2.5）。局限 3"主 Agent 自身缺乏外部约束"超出本设计范围，不是本设计任何一条排除决定的理由，见 `LIMITATIONS.md`。
 > **评审打回续跑**（§2.4a）：打回后同 target 重做时，优先用平台官方续接（`--resume` / `codex exec resume` / `opencode -s` / native 的 `followup_task`·`task_id`）把评审意见续进原会话；续接失败或 fallback 到别的 target 则退化为全新派发。续接是"重放重建"不是"状态冻结"（research §7），故按"续接优先、重起兜底"处理。
@@ -8,7 +10,7 @@
 > **平台**：Claude Code、OpenCode、Codex。
 > **相关**：`agate/dispatch-protocol.md`（派发三铁律）、`agate/rules/phases.yaml`（`exec_role`）、`agate/LIMITATIONS.md`（局限 2/4/6）、`agate/platform-notes.md`（Codex 现为"待补充"）、`docs/design-notes/design-orchestration-semantics.md`（RM-AG0054 推进侧 CLI，§2.6 决策 CLI 化的方向来源，但具体命令为本设计新提议，非既有命令）、`docs/design-notes/260903-design-subagent-liveness-and-self-dispatch/`（RM-AG0055 subagent 存活可观测性——命令流日志机制，卡死检测直接复用它，§7 事项 6）、`docs/design-notes/design-maintainability-gate.md`（RM-AG0046 §2"模式层/检测器层分离"——本设计的架构模式沿用它，§2.1）、**`docs/research/cross-platform-dispatch-mechanics.md`（各平台 CLI 调用 / model 指定 / 子代理派发 / 返回识别 / 卡死检测复用机制的客观调查——本设计的机制事实全部引自此，不在此重复）**。
 > **沿革**：由两条讨论线合并——跨 CLI 派发路由（v1 FAIL→v2 PASS→v3/v4→v5 三产出物拆分）+ 角色-模型映射（v1 FAIL：`fallback` 权威源分裂 → v2 PASS）。两线共用同一份配置文件，分作两份文档正是那个 BLOCKER 的成因，故合并；`cli: native` 即候选表的一个特化。2026-09-08 二次精简：范围收敛为"配置路由 + tmux 观测"两机制，移除观测信号优先级原则（已在 RM-AG0055）；第三方终端工具（§2.4）与 DSH（§2.5）的排除理由保留但收紧；平台机制的实机核实明细抽到 `docs/research/cross-platform-dispatch-mechanics.md`，本文只留设计相关结论。评审打回续跑（§2.4a）一度被精简掉、2026-09-08 按"续接优先、重起兜底"重新纳入（续接的可靠性调研见 research §7）。2026-09-08 内部独立评审一轮：修 §2.4a 结构损坏（BLOCKER），补探测成本 / `cli: native` 探测方式 / 与五模式·自主再派发·单 Agent 模式的交互 / tmux×stdout 捕获 / epic 拆分等 WARNING 为 §7 待确认项。**外部独立评审两轮**（`docs/reviews/review-dispatch-routing-external-20260908.md` FAIL → `-round2-` PASS 附一项待办）：B1/B2"证据强度传递失真"（把 `[自述]` schema 和 bug② 的机制推断混同为"已实测"）+ W1 续接失败无客观信号 + W2 tmux 实测环境代表性。round1 后改了 B1/B2/W1（复审认可）+ W2（改得不到位）；round2 指出 W2 只动了 §3 header、没同步 §6、且没说清环境代表性——本轮补齐：§3 末详述 WSL2+tmux3.4 环境边界、§6 风险表同步、§7 事项 9 登记目标环境复跑。
-> **机制现状一句话**（详见 research 报告）：`cli: native` 三平台情况——Claude Code ✅ / Codex ✅（`spawn_agent`，按次传 `model` + `reasoning_effort`）/ OpenCode ⚠（工具调用无 model 参数，须先按角色预配命名 subagent）。子进程形式三平台都通（各有 `-m/--model` + 权限绕过 flag）。Codex 退出码不可靠须解析 `--json`；各环境可用 model 名单要自查（Codex 随账号类型、OpenCode 部分配置失效）。
+> **机制现状一句话**（详见 research 报告）：`cli: native` 三平台情况——Claude Code ✅（Task 单次传 `model`；`--effort` flag 本机 2.1.266 [实测] 有 / 引入版本未核实，路由按能力探测映射）/ Codex ✅（`spawn_agent` 按次传 `model` + `reasoning_effort`）/ OpenCode ⚠（命名 subagent 间接路，bug② 经真机核实不影响本用途）。子进程形式三平台都通（各有 `-m/--model` + 权限绕过 flag）。Codex 退出码不可靠须解析 `--json`（turn 层为准）；各环境可用 model 名单要自查（Codex 随账号类型、OpenCode 部分配置失效）。effort 轴现三平台均可用（Codex `-c model_reasoning_effort=` / OpenCode `--variant` / Claude Code `--effort` 按能力探测）。
 
 ---
 
@@ -35,40 +37,51 @@ Agateon 的质量模型是"主 Agent 派发 → 每阶段一个独立上下文�
 
 ## 2. 机制一：配置路由
 
-### 2.1 配置结构
+### 2.1 配置结构（三层落点，2026-09-09 定案）
 
-`rules/dispatch-routing.yaml`：按 phase 声明候选链。
+**配置文件不在 `agate/rules/` 之下**（`agate/rules/` 就是协议本体，与"非协议本体"自相矛盾）。三层：
 
-```yaml
-# 候选结构示意，非最终 schema
-P4:
-  candidates:
-    - {cli: native, model: "claude-haiku-4-5"}   # 同平台换 model：implementer 派到便宜模型
-    - {cli: opencode, model: "deepseek/deepseek-v4-flash"}
-  # 两个候选都探测不过 → 自动回落到默认派发（同平台、同 model），不需要也不能配置
+| 层 | 落点 | SELF-GATE | 内容 |
+|---|---|---|---|
+| ① 协议本体 | `agate/rules/dispatch-tiers.yaml` | **触发**（改"什么是 `deep`"本就该评审）| 档位（tier）词表 `bulk` / `standard` / `deep` + 每档语义画像 + 出厂 `(phase,role)`→tier 映射（全 `standard`，MVP 空 map ⇒ 隐式全 standard）|
+| ②③ 项目级 | `agate-workspace/dispatch-routing.yaml` | **不触发**（非协议本体，同 `maintainability.yaml`）| `tier_bindings:`（机器 / 安装级——tier→有序跨 CLI 候选链 `[{cli, model, effort?}]`，本机现状为准，SETUP scaffold）+ `routes:`（`(phase,role)`→ `{tier, effort?}` 引用 **或** `{candidates: [...]}` 直接值）|
 
-P6.5:
-  candidates:
-    - {cli: codex, model: null}                   # judge 派到异厂商模型；null = 该 CLI 默认模型
+MVP 不拆机器级②独立文件（`maintainability.yaml` 单项目文件先例）；加载器按"层"合并，将来把 `tier_bindings:` 移到 `~/.config/agate/` 是纯机械重构。
+
+```text
+# agate-workspace/dispatch-routing.yaml （形态示意）
+schema_version: 1
+tier_bindings:
+  deep:  [{cli: codex, model: gpt-5.6-terra, effort: high}, {cli: claude-code, model: opus}]
+  bulk:  [{cli: native, model: claude-haiku-4-5}, {cli: opencode, model: deepseek/deepseek-v4-flash}]
+routes:
+  P2:  {architect: {tier: deep}}          # (phase,role) key，role 段可选
+  P4:  {tier: bulk}                        # phase 级
+  P6.5: {judge: {candidates: [{cli: codex, model: null}]}}   # 直接值，跳过档位间接层
 ```
 
-- `cli` 取值：`native`（不脱离当前会话的原生派发工具）| `claude-code` | `codex` | `opencode`（起子进程）。
-- `{cli, model}` 是**原子绑定**，不拆成两个维度分别配——不同平台的 model 取值空间互不兼容（`opencode` 的 `provider/model` 写法 Claude Code 完全不认），拆开会产生非法组合，应在配置校验阶段拦下。
-- **降级是一条逐级回落的链，终点固定、不可配置**：按候选声明顺序逐个探测，任一探测失败就试下一个；候选全部失败 → 自动回落到**默认派发**（当前平台原生派发工具 + 继承主 Agent 当前 model，即"同平台、同 model"）。这个终点恒等于"本机制未启用时的行为"，所以降级永远是"回到现状"，不会导致派发失败，也不需要用户声明。
-- 配置文件**不属于协议本体**，不受 SELF-GATE；协议只定义"读取 / 探测 / 降级 / 留痕"这套机制，候选内容与优先级由使用者决定、后果自负。结构合法性（非法 `cli`/`model` 组合、非法取值）做静态校验，本设计只声明该层校验应存在。
+- **两个正交轴**：`tier`（能力档 `bulk`/`standard`/`deep`）与 `effort`（`low`/`medium`/`high`，可选）是**正交轴**——"便宜 tier + 高 effort""顶配 tier + 低 effort"都合法。`effort` 映射各平台推理档：Codex `-c model_reasoning_effort=` / OpenCode `--variant` / Claude Code `--effort`（按 `claude --help` 能力探测，无该 flag 的旧版省略不报错）。
+- **路由 key = `(phase, role)`**，role 段可选：`(phase,role)` → `phase` → `standard` 解析顺序。想让 reviewer 跑异模型就显式配 `P4.review:`。
+- `cli` 取值：`native`（不脱离当前会话的原生派发工具）| `claude-code` | `codex` | `opencode`（起子进程）；`model` 允许 `null`（= 该 CLI 默认）。`tier:` 与 `candidates:` 互斥。
+- **`standard` 是不变量锚**：`standard` 档**不经 `tier_bindings` 展开**，硬编码 = "继承主 Agent 当前 model + 原生派发"。出厂默认全 `standard` ⇒ "不配置 = 逐字节现状"。
+- **终点回落固定、不可配置**：候选全部失败 → 自动回落**默认派发**（同平台、同 model），恒等于"本机制未启用时的行为"。schema 无 `fallback` 字段（静态校验器 `check-dispatch-routing.py` 拦 `fallback:` / 非法 `cli` / 非法 `effort` / `tier`+`candidates` 同现）。
+- **routing 是 per-machine 机会式、不追求跨机可复现**：只有抽象 `(phase,role)`→档位映射可 commit 共享；档位→具体 model 的绑定就是"本机实际能跑什么"，别的机器复现不了不是缺陷。
 - **架构上沿用既有的"模式层 / 检测器层分离"**（RM-AG0046 §2，已落地）：协议定义语义与机制（模式层，平台无关），具体实现归各方（检测器层）——正如 `gate_commands` 只声明"必须有检查 X"、不规定用哪个工具，`platform-notes.md` 把语义映射到各平台，RM-AG0055 的"统一 IR + 每平台适配器"。本设计里：协议定义"查表→探测→降级→留痕"这套机制 + `dispatch_route` 事件语义（模式层），"配哪些 CLI/model、探测怎么实现"归用户（检测器层）。探测是 G0 式纯机械判定（判通不通），拒绝 G3 式主观品味（"哪个 model 更适合这次任务"）进入机制——§2.2 末尾的边界就是这条。
 
-### 2.2 查表 → 探测 → 派发
+### 2.2 查表 → 派首选 → 逐级回落 → 再派发（try-and-fall，无 probe）
 
-主 Agent 到某阶段，在铁律 1"通过平台派发工具启动 subagent"之前插一步：
+主 Agent 到某阶段派某角色，在铁律 1"通过平台派发工具启动 subagent"之前插一步机械路由（**此步在铁律 1 之前**）：
 
-1. 读表取该 phase 的候选链（无该 phase 条目 = 走默认派发，等价未启用）。
-2. **按声明顺序**逐个探测——向候选 CLI/model 发一条极简请求（如 "hi"），只判硬故障（未认证 / 服务下线 / 未安装）。未登录 = 不可用，跳下一候选，留痕注明原因。
-3. 第一个探测通过的候选 → 作为本次派发 target。
-4. 全部失败 → 自动回落到默认派发（同平台、同 model），留痕（§4）。
+1. **查表**：`resolve((phase, role))` —— 按优先级序（项目级直接值 `candidates:` > 项目级档位映射 `tier:` > 机器级绑定 `tier_bindings:` 展开 > 出厂默认 → `standard`）解析出「默认派发」或「有序跨 CLI 候选链 `[{cli, model, effort?}, ...]`」。`(phase,role)` 命中优先于 `phase` 级。
+2. `standard` / 无配置 → 直接默认派发（同平台、同 model），**不写** `dispatch_route` 事件（等价机制未启用）。
+3. **try-and-fall**（不是 probe-then-commit）：**第一个动作就是把真实 dispatch-context 派给首选候选**——没有 "hi" 预探测。逐候选派发：
+   - 起不来（`launch_fail`）/ 基础设施失败（`infra_error`：401 循环 / 网络不可达 / 429 / 进程崩溃 / `turn.failed` / 挂死被杀）/ 跑了但无可解析产出（`no_parseable_output`）→ 记理由码，试下一候选。
+   - **收到任何 gate 能评的产出**（产出文件非空、presence 级骨架可解析）→ **停止回落**，交 gate。产出质量差 / 不完整**不是**回落信号（归 `HAS_OUTPUT`，走同候选正常 retry）。
+4. 候选链耗尽 → 回落默认派发（`final = {"cli": "default"}`），留痕（§4）。
+5. 写 1 条 `dispatch_route` 事件（`candidates_tried` 带理由码 + `final`），复用哈希链账本。
 
-- **探测尽量便宜**：不做预测性负载校验（"这次任务量该模型吃不吃得消"只有真跑才知道；撑爆了就是明确失败信号，走下一候选）。与 gate"只信客观结果、不做主观预判"一致。
-- **探测只判"通不通"这一个二元结果**，不依据任务内容调整候选顺序。一旦探测逻辑开始按任务内容动态排序（"这次看着简单，跳过第一候选直接用便宜的"），即越界为"主 Agent 语义选型"——那是需要理解任务语义、无客观验证手段、与局限 3 同构的自由裁量，本设计明确排除。落地时对探测逻辑做显式约束（仅允许"是否可用"判断，不允许基于任务内容的顺序调整）。
+- **无预测性负载校验**：不预判"这次任务量该模型吃不吃得消"——撑爆了就是明确失败信号、走下一候选。与 gate"只信客观结果、不做主观预判"一致。
+- **回落条件是纯机械的基础设施信号**，理由码枚举只有 `launch_fail` / `infra_error` / `no_parseable_output` 三值，**没有 `gate_fail`**。查表 / 回落不依据任务内容调整候选顺序——一旦按任务内容动态排序即越界为"主 Agent 语义选型"（与局限 3 同构的自由裁量），本设计明确排除。
 
 ### 2.3 `cli: native`——同平台换 model
 

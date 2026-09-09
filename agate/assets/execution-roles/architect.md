@@ -222,6 +222,8 @@ P2 方案含多个独立子任务（多包 / 多模块 / 高复杂度）时，**
 
 **检查方式**：写完 P2-design.md 后，核对 frontmatter 的 `dispatch_plan:`（若适用）——`mode` 枚举合法、批数 ≤ parallel_limit、每批含 id + complexity。缺字段时 P2 gate 跳过（可选字段），但 high 复杂度不拆批会被 P7 一致性检查捕获为 DEVIATION。
 
+> **补协议文档正文 = P4，不是 P7**（DEBT0039）：`dispatch_plan` 批次表的「执行阶段」标注里，补写 / 修订协议文档正文（`platform-notes.md` / `SETUP.md` / `dispatch-protocol.md` / phase-cards 等的新增章节、措辞修订、per-platform 说明）属 **P4 实现工作**——随对应批次在 P4 提交、批次执行阶段标 **P4**。**P7 一致性检查只做跨文件一致性验证**（各文档、脚本、schema 之间的措辞 / 字段 / 引用是否对齐、有无矛盾），**不 author 文档内容**、不新增或改写正文。architect 设计批次表时不得把「补文档正文」批标成 P7。先例：TAG0030（doc-assertion 审计测试 P3 写红、正文 P4 补绿）、TAG0033 复盘（protocol-docs 批被 architect 误标 P7、主 Agent 比照 TAG0030 拉回 P4，避免带 by-design 红推进）。
+
 **批次设计前置检查项**（拆批之前先过，缺任一项先补齐再拆）：
 
 - [ ] **影响面梳理已完成**：批次边界必须建立在影响面梳理的"改什么 / 不改什么 / 风险在哪"三部分之上——没梳理清楚改动落点就拆批，会拆出跨批重复改同一文件的批次表。要求见 P2 卡片「影响面梳理（强制节）」，本节不重复展开

@@ -24,6 +24,7 @@
 |------|------|------|
 | task 工具派发 subagent | ✅ 可用 | Task tool 支持独立上下文 |
 | 本地开发环境 | ✅ 完整 | P3-P8 全部阶段可执行 |
+| 推理档（effort，与 model 正交）| ⚠ 按能力探测 | `claude` CLI 的 `--effort <low\|medium\|high>` flag——**2.1.266 [实测] 有** / **2.1.263 [实测] 无** / **引入版本未核实**。派发路由（TAG0034）按 `claude --help` 是否含 `--effort` 做**能力探测**分流：含则映射 `--effort <e>`、不含（旧版本）则省略该 flag、不报错。**不硬编码版本号**。`--effort bogus` 实测仅 Warning 不失败 |
 
 ---
 

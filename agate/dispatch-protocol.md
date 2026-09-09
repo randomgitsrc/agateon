@@ -503,6 +503,64 @@ trigger: gate_fail
 
 > 本节是 subagent 派发编排的**权威来源**（TAG0014，RM-AG0016）：工作量评估、编排模式、并行规则全阶段适用。既有有效规则（输入/产出数量上限、拆分判据、T016/T026 教训、P7 例外、状态机不变）保留在本节下方，不分散到各阶段卡片。各阶段卡片的「按包拆分并行」节引用本节（仅保留阶段特定约束）。
 
+### 0. 派发路由（查表 → 派首选 → 逐级回落 → 再派发）
+
+> 配置驱动的跨 CLI / model 派发（TAG0034 / RM-AG0060）。**机会式启用**：不配置 =
+> 行为与现状逐字节一致（全 `(phase, role)` 解析为 `standard` 档 = 继承主 Agent 当前
+> model 的原生派发）。配置文件 = 项目级 `agate-workspace/dispatch-routing.yaml`（`routes:`
+> + `tier_bindings:`，非协议本体、不受 SELF-GATE，全兜底）+ 协议本体档位词表
+> `agate/rules/dispatch-tiers.yaml`（`bulk` / `standard` / `deep` 语义画像 + 出厂默认）。
+
+**此步在铁律 1 启动 subagent 之前插入。** 主 Agent 到阶段 `Pn` 派角色 `R` 时，
+在渲染好 dispatch-context 之后、调用平台派发工具启动 subagent 之前，先跑一步机械路由：
+
+```text
+1. 查表：resolve(Pn, R) —— 按优先级序（项目级直接值 candidates: > 项目级档位映射
+   tier: > 机器级绑定 tier_bindings: 展开 > 出厂默认 → standard）解析出「默认派发」
+   或「有序跨 CLI 候选链 [{cli, model, effort?}, ...]」。(phase,role) 命中优先于 phase 级。
+2. standard / 无配置 → 直接默认派发（同平台、同 model），不写 dispatch_route 事件。
+3. 候选链 → try-and-fall（无 probe，第一个动作即把真实 dispatch-context 派给首选候选）：
+   逐候选派发 → 若「起不来 / 基础设施失败 / 无可解析产出」三类之一 → 记理由码、试下一个；
+   → 收到任何 gate 能评的产出（产出文件非空、presence 级骨架可解析）→ 停止回落、交 gate。
+4. 候选链耗尽 → 回落默认派发（final = {"cli": "default"}）。
+5. 写 1 条 dispatch_route 事件（带 candidates_tried 理由码 + final），复用哈希链账本。
+```
+
+**gate 判定只认产出文件 + exit code，不认谁生产的。** 这条解耦是设计成立的前提——
+`check-gate.py` / `check-judge-verdict.py` / `check-p6-provenance.py` 对跨 CLI 派发的产出
+零特殊处理，谁跑出来的都一样评。未来不得为跨 CLI 派发定制 gate。
+
+**两条完整性不变量（机械强制，防「换模型试到出 green」的完整性洞）：**
+
+1. **候选回落 ≠ 状态机 retry**：候选回落只在 `launch_fail` / `infra_error` /
+   `no_parseable_output` 三类基础设施信号时发生——**不占 `retries[Pn]`、不写
+   `state_transition`、不触发 PAUSED**，只写 1 条 `dispatch_route` 事件。
+2. **gate FAIL 绝不换候选**：一旦某候选产出了 gate 能评的东西，这条路由即成功——
+   哪怕 gate 判 FAIL，那是**正常阶段 retry（在同一候选上重跑）**，`dispatch_route`
+   事件计数不增。`dispatch_route` 理由码枚举里**没有 `gate_fail` 值**，
+   `check-events.py` 第 8 条机械拒绝任何 `gate_fail` / 非三值理由码。
+
+**弱缓解 vs 强缓解 + 自动化不对称**：`cli: native`（同厂商换 model，不脱离原生派发
+工具）是**弱缓解**——同训练系谱盲区基本共享，只省成本 + 一点 failure-mode 多样性；
+且原理上做不到「不依赖主 Agent」，自动化天花板是**主 Agent 读文件机械横传 model**。
+`cli:` 另一个 CLI（`claude-code` / `codex` / `opencode`，起子进程）是**强缓解**——真正的
+异源独立视角，可端到端自动化。两形式 gate 判定 / 留痕一致。
+
+**单 Agent 模式（`executor_env.has_task_tool: false`，如 Claude Project 会话）**：无派发
+动作 → **路由为 no-op**，本节不适用（显式出范围）。
+
+**retry / 回退时的路由**：
+- **同阶段 gate-FAIL retry**：不重跑路由、用上次成功的同一候选重跑，`dispatch_route` 计数不增。
+- **P5→P4 等跨阶段回退后的 P4 retry**：主 Agent **机械重解析一次 `(phase, role)` 路由**
+  （按当时候选可用性落候选，可能与回退前不同），**不注入**「上次失败 → 升档 / 换更强
+  model」逻辑——retry 是状态机行为、路由是机械查表，两者不耦合。
+
+**author 文档内容 vs 跨文件一致性验证的阶段边界**：`dispatch_plan` 批次表里，
+「补 / 改协议文档正文」（新增章节、修订既有措辞、补 per-platform 说明）是 **P4 author
+工作**，标 P4、随批提交；**P7 只验证跨文件一致性**（多个文档 / 脚本 / schema 间的
+措辞与引用是否对齐、有无矛盾），P7 **不** author、不改写文档正文。architect 设计批次表
+时不得把「补文档正文」批标成 P7。
+
 ### 1. 工作量评估（五维评级）
 
 派发前先评估任务工作量，决定编排模式。每个维度按 low / medium / high 评级，综合定级取各维度评级的**最高档**（任一维度 high → 整体 high）：

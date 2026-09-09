@@ -161,9 +161,77 @@ def _render_dispatch_context(template, phase, role, task_id, guide, card_content
     return "\n".join(out) + "\n"
 
 
+def _route_main(argv_rest):
+    """agate-dispatch.py route PHASE ROLE [TASK_DIR] —— 派发路由决策子命令（TAG0034）。
+
+    读 dispatch-routing.yaml + dispatch-tiers.yaml → resolve(phase, role) → stdout 输出
+    单行 target 描述 JSON {"cli","model","effort","form","dispatch_context"[,"chain"]}。
+    无 `route` 参数时 main() 的既有渲染路径逐字节不变——本函数是纯新增分支。
+    子进程 spawn / try-and-fall 端到端执行由 P4b 在本骨架上追加。
+    """
+    import json
+
+    if len(argv_rest) < 2:
+        sys.stderr.write("用法: agate-dispatch.py route PHASE ROLE [TASK_DIR]\n")
+        sys.exit(1)
+    phase = argv_rest[0]
+    role = argv_rest[1]
+    task_dir = argv_rest[2] if len(argv_rest) > 2 else os.getcwd()
+
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import agate_dispatch_route as adr
+    except ImportError as exc:
+        sys.stderr.write(f"agate-dispatch.py route: 无法 import agate_dispatch_route: {exc}\n")
+        sys.exit(1)
+
+    agate_root = _resolve_agate_root()
+    project_root = os.getcwd()
+    workspace = os.path.join(project_root, "agate-workspace")
+    try:
+        from agate_common import resolve_workspace
+
+        workspace = resolve_workspace(project_root)[0]
+    except Exception:
+        pass
+
+    routes, tier_bindings = adr.load_config(workspace)
+    _tier_names, factory_defaults = adr.load_factory_defaults(agate_root)
+    current_model = os.environ.get("AGATE_CURRENT_MODEL", "")
+
+    resolved = adr.resolve(
+        phase, role,
+        routes=routes, tier_bindings=tier_bindings,
+        factory_defaults=factory_defaults, current_model=current_model,
+    )
+
+    safe_role = re.sub(r"[^a-zA-Z0-9_-]", "_", role)
+    ctx_path = os.path.join(task_dir, f"{phase}-dispatch-context-{safe_role}.md")
+
+    if resolved["form"] == "default":
+        out = {
+            "cli": "default", "model": resolved["model"], "effort": None,
+            "form": "default", "dispatch_context": ctx_path,
+        }
+    else:
+        first = resolved["chain"][0]
+        form = "native" if first.get("cli") == "native" else "subprocess"
+        out = {
+            "cli": first.get("cli"), "model": first.get("model"),
+            "effort": first.get("effort"), "form": form,
+            "chain": resolved["chain"], "dispatch_context": ctx_path,
+        }
+
+    sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
+    sys.exit(0)
+
+
 def main():
     # CLI: agate-dispatch.py PHASE ROLE [TASK_DIR] [--guide FILE]
     args = sys.argv[1:]
+    if args and args[0] == "route":
+        _route_main(args[1:])
+        return
     if len(args) < 2:
         sys.stderr.write("用法: agate-dispatch.py PHASE ROLE [TASK_DIR] [--guide FILE]\n")
         sys.exit(1)
