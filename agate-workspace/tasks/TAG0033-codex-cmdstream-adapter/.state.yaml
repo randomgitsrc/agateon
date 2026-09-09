@@ -1,5 +1,5 @@
 task_id: TAG0033
-phase: P5
+phase: P4
 status: active
 p5_pass_commit: 90e00dbc3feec9877515dd7f8669411245ce96b0
 retries:
@@ -10,5 +10,13 @@ retries:
     adjustment: P1-review needs-revision（B1 阻塞：capability_requirements 的 codex-api-key-account
       条目 status=available + available=[] 与 note 自相矛盾）+ 2 非阻塞（同类扫描补 S12 / BDD-7 Given
       补兜底 fixture 来源）；回派 analyst 定向修订后复审
+  P4:
+  - attempt: 1
+    reason: P6 真机验证 V6 发现 F1：真机 Codex 把已结束但非0退出的命令记为 payload.item.status=='failed'（携带完整
+      exit_code/completed_at_ms），CodexAdapter._build_record 的 pending 判据 status!='completed'（adapters.py:739）误判其为
+      pending，丢失真实 exit_code+output_hash。连锁：detect 对真机重复失败会话拿不到结果签名→判不出 SPIN（BDD-15
+      真机侧不成立）；真机失败命令 CommandRecord.exit 恒 None（BDD-5 单测因 fixture 用 status=completed
+      未覆盖）；BDD-6 pending 在真机有假阳性。P1 §4.1 spike 取样未覆盖 status=='failed' 终态。回 P4 修 pending
+      判据口径 + fixture 补真机 failed 形态 + 测试覆盖。
 judge:
   enabled: true
