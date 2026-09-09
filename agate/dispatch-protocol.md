@@ -555,6 +555,20 @@ trigger: gate_fail
   （按当时候选可用性落候选，可能与回退前不同），**不注入**「上次失败 → 升档 / 换更强
   model」逻辑——retry 是状态机行为、路由是机械查表，两者不耦合。
 
+**评审打回后的续跑（子进程 / native 两种形式都适用）**：设计 → 评审打回 → 改 → 重交评审
+这个循环**优先走平台官方续接、不重起**：
+
+- **同 target（cli + model / native 的目标 subagent 未变）→ 续接**：把评审意见作为新 prompt
+  传入平台续接原语；子代理保留「当初为什么这么设计」的上下文，比重起省一大截。
+- **续接失败 / 换 target → 全新派发**（重新跑一次 `agate dispatch route`）。
+- 续接产出**仍走假完成校验（D2）**，且本就在人的评审循环里。
+- **续接失败无客观信号是已知缺口**——按「续接优先、重起兜底」处理，**不假装解决**。
+  **不需要实现续接的自动化**（人在评审循环里）；决策层留 hook 位给未来，不落自动续接逻辑。
+
+> 实现注记：续接原语随平台而异，属平台适配实现细节、非协议语义——子进程 `claude -p --resume <id>` /
+> `codex exec resume <id>` / `opencode run -s <id>`；native 侧 Codex `followup_task`、OpenCode 命名
+> subagent 的续接工具调用、Claude Code 续接原语待核实。设计依据见 `docs/design-notes/design-dispatch-routing.md` §2.4a。
+
 **author 文档内容 vs 跨文件一致性验证的阶段边界**：`dispatch_plan` 批次表里，
 「补 / 改协议文档正文」（新增章节、修订既有措辞、补 per-platform 说明）是 **P4 author
 工作**，标 P4、随批提交；**P7 只验证跨文件一致性**（多个文档 / 脚本 / schema 间的

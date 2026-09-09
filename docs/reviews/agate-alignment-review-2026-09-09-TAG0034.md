@@ -1,26 +1,31 @@
 ---
 review_date: 2026-09-09
 reviewer: protocol-alignment-review
-change_summary: TAG0034 P4a 批——派发路由 schema 层（dispatch-tiers.yaml 档位词表 + check-dispatch-routing.py 静态校验器 + dispatch-routing.yaml 项目级 scaffold）+ 引擎层（agate_dispatch_route.py resolve/classify_outcome/try_and_fall helper + agate-dispatch.py route 子命令骨架 + check-events.py 第 8 条 dispatch_route 理由码枚举审计）+ 协议正文（dispatch-protocol.md「派发路由」新子节 + architect.md/dispatch-protocol.md DEBT0039 边界措辞 + platform-notes.md effort 能力探测行）
+change_summary: TAG0034 P4a+P4b 批——P4a：派发路由 schema 层 + 引擎骨架 + 协议正文。P4b：M5 端到端子进程 spawn（dispatch_once / _default_subprocess_run / presence_parse_ok / _route_main 端到端 try-and-fall）+ I1 白名单化（DispatchContractError）+ I2 presence-parse 落 produced_files 侧 + I5 reason 自校 + BDD-42（routed_away_verdict_location）+ M9（SETUP scaffold 小节）+ M10（platform-notes 跨 CLI 结构化输出判成败字段小节）+ dispatch-protocol.md 评审打回续跑段。
 files_changed:
-  - agate/rules/dispatch-tiers.yaml (新)
-  - agate/scripts/check-dispatch-routing.py (新)
-  - agate/scripts/agate_dispatch_route.py (新)
-  - agate/scripts/agate-dispatch.py (route 子命令 + _route_main)
-  - agate/scripts/check-events.py (第 8 条审计链 + DISPATCH_ROUTE_REASONS)
-  - agate/dispatch-protocol.md (「### 0. 派发路由」新子节 + DEBT0039 措辞②)
-  - agate/assets/execution-roles/architect.md (DEBT0039 措辞①)
-  - agate/platform-notes.md (effort 能力探测行)
-  - agate-workspace/dispatch-routing.yaml (新，非协议本体)
-  - docs/design-notes/design-dispatch-routing.md (M12，走 docs commit)
-  - agate-workspace/roadmap/roadmap.md (M12，走 docs commit)
-review_scope: TAG0034 P4a 批 agate/** 改动（SELF-GATE 语义 gate，agent≠main）
+  - agate/rules/dispatch-tiers.yaml (P4a 新)
+  - agate/scripts/check-dispatch-routing.py (P4a 新)
+  - agate/scripts/agate_dispatch_route.py (P4a 新；P4b 加 dispatch_once/presence_parse_ok/_default_subprocess_run/routed_away_verdict_location/DispatchContractError/_FALLBACK_KINDS/_SUBPROCESS_CLIS + try_and_fall I1/I5；P4b A1 fix：classify_outcome 基础设施信号按 cli 细分（_BARE_TOP_ERROR_SIGNALS 仅 codex / _INFRA_SIGNALS_CLAUDE_ONLY + _claude_api_error 仅 claude-code / 分支 2b opencode 裸 error → NO_PARSEABLE_OUTPUT）)
+  - agate/scripts/agate-dispatch.py (P4a route 子命令骨架；P4b _route_main form==chain 端到端 try-and-fall + I3 适配层闭包)
+  - agate/scripts/check-events.py (P4a 第 8 条审计链 + DISPATCH_ROUTE_REASONS；P4b 零改动)
+  - agate/scripts/check-protocol-consistency.py (P4a 复审轮：SCRIPT_ALIGNMENT_ANCHORS 补 check-dispatch-routing.py 锚点条目)
+  - agate/dispatch-protocol.md (P4a「### 0. 派发路由」新子节 + DEBT0039 措辞②；P4b 评审打回续跑段 + `> 实现注记：` 平台续接原语块)
+  - agate/assets/execution-roles/architect.md (P4a DEBT0039 措辞①)
+  - agate/platform-notes.md (P4a effort 能力探测行；P4b「## 跨 CLI 子进程结构化输出判成败字段」小节 + routed-away judge verdict 落 TASK_DIR 说明)
+  - agate/SETUP.md (P4b M9「### 步骤 2-dispatch-routing：机器级档位绑定 scaffold」小节)
+  - agate/tests/unit/test_tag0034_p4b.py (P4b 新，18 例 / 56 asserts —— 首轮 15 + A1 fix 补 3：api_error→infra_error / unknown_error→no_parseable_output / codex 裸 type:error→infra_error 不回归)
+  - agate-workspace/dispatch-routing.yaml (P4a 新，非协议本体)
+  - docs/design-notes/design-dispatch-routing.md (P4a M12，走 docs commit)
+  - agate-workspace/roadmap/roadmap.md (P4a M12，走 docs commit)
+review_scope: TAG0034 P4a + P4b 批 agate/** 改动（SELF-GATE 语义 gate，agent≠main）；P4a 三轮（首审 misaligned → 复审 aligned）、P4b 增量两轮（首轮 A1 misaligned → A1 fix 复审 aligned，本文件「# P4b 批复审」节）
 prod_isolation: "[PROD_NOT_TOUCHED]"
 conclusion: aligned
-review_rounds: 2
-pytest_full_run: "复审轮（2026-09-09，锚点修复后）：3 failed / 1592 passed / 2 skipped（175.29s，exit 0）—— 3 red 全部为批次边界 by-design：test_bdd_42(P4b) + test_bdd_37/38(P4c)。首审轮的第 4 红 test_sg_6_check9_anchor_table_covers_all_gate_scripts 已转绿（SCRIPT_ALIGNMENT_ANCHORS 补 check-dispatch-routing.py 条目）。"
-round1_conclusion: "misaligned（A3/A4/A6 同一根因 = CHECK 9 锚点表缺 check-dispatch-routing.py；A5.3/A7.4 NEEDS_HUMAN_REVIEW）"
-round2_conclusion: "aligned（A3/A4/A6 修复已落地复核确认；A5.3/A7.4 用户 2026-09-09 已 HUMAN_CONFIRMED，两条 doc-sync 落 P8 收尾，不阻断 P4a commit）"
+review_rounds: 4
+pytest_full_run: "P4b A1 fix 复审轮（2026-09-10）：2 failed / 1611 passed / 2 skipped（161.50s，exit 0）—— 2 red 全部为 P4c 批次边界 by-design：test_bdd_37 + test_bdd_38（tmux 观测层未实现）。test_bdd_42 + test_bdd_50 转绿；A1 fix 补 test_tag0034_p4b.py 3 例（→18 例）全绿、零回归；P4a 复审轮修的 test_sg_6 保持绿。"
+round1_conclusion: "P4a 首审：misaligned（A3/A4/A6 同一根因 = CHECK 9 锚点表缺 check-dispatch-routing.py；A5.3/A7.4 NEEDS_HUMAN_REVIEW）"
+round2_conclusion: "P4a 复审：aligned（A3/A4/A6 修复已落地复核确认；A5.3/A7.4 用户 2026-09-09 已 HUMAN_CONFIRMED，两条 doc-sync 落 P8 收尾，不阻断 P4a commit）"
+round3_conclusion: "P4b 增量首轮：misaligned（A1 —— platform-notes.md M10 判定表两处 reason-code 归类与 classify_outcome 实际行为不一致：OpenCode UnknownError / Claude Code stop_reason==\"error\"·api_error_status；低严重度，路由行为一致、仅账本 reason 标签差，须修脚本或修文档二选一。A2/A3/A4/A5/A6/A7 delta 全 ALIGNED）"
+round4_conclusion: "P4b 增量复审（A1 fix）：aligned（implementer 按 option (a) 改 classify_outcome —— 基础设施信号按 cli 细分：通用集去裸 '\"type\":\"error\"'；_BARE_TOP_ERROR_SIGNALS 仅 codex；_INFRA_SIGNALS_CLAUDE_ONLY + _claude_api_error 仅 claude-code；分支 2b opencode 裸 error 无具名 → NO_PARSEABLE_OUTPUT。补 3 条断言消除 dead fixture。逐格核实 M10 表 vs 代码一致；R1 三值 reason / I2 边界 / P4a 函数 + 第 8 条 + 哈希链未破；全量 pytest 1611 passed / 2 failed（P4c by-design）零回归。P4a+P4b 合并 = aligned）"
 ---
 
 # 协议-脚本对齐审查 — TAG0034 P4a 批
@@ -416,3 +421,254 @@ retry，绝不触发换候选。
 - 新增 gate 脚本时，若其判定逻辑试图区分产出来源，应视为违反本 ADR。
 - 关联：RM-AG0060（派发路由 epic）、ADR-002、ADR-006、LIMITATIONS.md 局限 2。
 ```
+
+---
+---
+
+# P4b 批复审（2026-09-10）
+
+> **范围**：TAG0034 P4b 批（static-batch 第 2 批，`complexity: medium`，依赖 P4a）的 `agate/**` 改动增量。P4a 部分的 A1-A7 结论见上文（三轮，终态 aligned）；本节只增量审 **P4b delta**，含 A1 fix 复审轮（round 4）。
+> **P4b 增量两轮**：**首轮（2026-09-10）** = A1 MISALIGNED（低严重度，`platform-notes.md` M10 判定表 2 处 reason-code 归类 ≠ `classify_outcome`），A2-A7 delta 全 ALIGNED；**复审轮（round 4，A1 fix，2026-09-10）** = implementer 按 option (a) 改 `classify_outcome`（基础设施信号按 cli 细分对齐 §3.7 / M10）+ 补 3 条断言，逐格核实通过 → **A1 改判 ALIGNED，P4b delta = aligned，P4a+P4b 合并 = aligned**。
+> **审查对象**：`git diff HEAD`（HEAD = `d1c2aca` P4a commit）—— `agate/scripts/agate_dispatch_route.py`（首轮 +164/-7；A1 fix 后 +217/-7）、`agate/scripts/agate-dispatch.py`（`_route_main` `form==chain` 端到端分支 + I3 桥接）、`agate/SETUP.md`（M9 新小节）、`agate/platform-notes.md`（M10 新小节）、`agate/dispatch-protocol.md`（评审打回续跑段）、`agate/tests/unit/test_tag0034_p4b.py`（新，首轮 15 例 → A1 fix 后 18 例）。
+> **对齐基准**：`P2-design.md` §3.4 / §3.7（判定表）/ §3.9 / §4.1（P4b 批次行）+ `design-dispatch-routing.md` §2.4a（评审打回续跑）+ `P1` BDD-33~36 / BDD-42。
+> **DESIGN_GAP**：`P4-implementation-P4b.md` 两条 `[DESIGN_GAP]`，均 `[DESIGN_GAP_REVIEWED: 已确认（主 Agent 2026-09-10）]`：① `_route_main` 端到端时「约定产出文件路径」经 `AGATE_DISPATCH_EXPECT` 环境变量解析、未设则保守回落（宁可回落也不把「无法核实产出」当成功）；② 候选链中段 `cli: native` → `dispatch_once` 返回 `HAS_OUTPUT` 占位（交驱动会话代发）。经核：两条方向与 P2-design 意图一致，且**均不涉及**下方 A1 finding（A1 是 `classify_outcome` 信号表精度 vs `platform-notes.md` M10，与这两条 DESIGN_GAP 无关，原则 6 不适用于 A1）。
+
+`[PROD_NOT_TOUCHED]` —— 仅 worktree 内读取 + 写本报告；未触碰主 checkout 与 `~/.agate`。
+
+## P4b delta 审查结论汇总
+
+| # | 审查项 | P4b delta 首轮 | P4b delta 复审（终结论） |
+|---|--------|------|------|
+| A1 | 文档→脚本对齐 | MISALIGNED（低严重度） | **ALIGNED**（复审：按 option (a) 修 `classify_outcome` —— 基础设施信号按 cli 细分对齐 §3.7 / M10，`unknown_error.jsonl` → NO_PARSEABLE_OUTPUT、`api_error.json` → INFRA_ERROR，Codex 裸 `type:error` 不回归；补 3 条断言消除 dead fixture；R1 三值 `reason` 未破。逐格核实见 A1 复审段） |
+| A2 | 脚本→文档对齐 | ALIGNED | **ALIGNED** |
+| A3 | 一致性连锁 + 反向传播 | ALIGNED | **ALIGNED**（A3a 无新 event 类型 / 枚举；A3b：SETUP 新小节无索引需同步、platform-notes 不在 `check-platform-assumptions.py` 扫描面、tests/README 非硬校验） |
+| A4 | 测试覆盖 | ALIGNED | **ALIGNED**（复审轮全量实跑见 A4 复审段 + 文末「附」——仅剩 `test_bdd_37` / `test_bdd_38`（P4c 批次边界 by-design）红；`test_bdd_42` + `test_bdd_50` 转绿；A1 fix 3 断言 passed） |
+| A5 | 下游影响 + 文档传播 | ALIGNED | **ALIGNED**（评审打回续跑段平台续接原语在 `> 实现注记：` 块内 → CHECK 14 实跑 PASS；6 个冻结脚本零改动确认；CHANGELOG 待 P8） |
+| A6 | 锚点表覆盖 | ALIGNED | **ALIGNED**（P4b 未新增 `check-*.py`，CHECK 9 锚点表无需再动） |
+| A7 | 设计原则一致性 | ALIGNED | **ALIGNED**（P4b 未确立新架构决策；A7.4 的 ADR-013 已在 P4a 复审轮 HUMAN_CONFIRMED、落 P8） |
+
+**P4b delta 结论：aligned**（首轮 1 项 A1 MISALIGNED 低严重度，implementer 按 option (a) 修 `classify_outcome` 细分、补断言，复核确认）｜ **P4a+P4b 合并总结论：aligned**
+
+> A5.3 / A7.4 的两条 doc-sync（`LIMITATIONS.md` 局限 2 缓解链 + ADR-013「gate 生产者无关性」）仍为 **P8 交付项**（P4a 复审轮已 HUMAN_CONFIRMED，草案见上文附录），**不阻断 P4b commit**。
+
+---
+
+## P4b 逐项审查
+
+### A1（P4b delta）：文档→脚本对齐 — ALIGNED（首轮 MISALIGNED 低严重度，修复已落地）
+
+**M9 SETUP scaffold 措辞（`agate/SETUP.md` +218~+255）— ALIGNED**
+
+新小节「### 步骤 2-dispatch-routing」逐条核对：机会式启用（不配置 = 逐字节现状）、`dispatch-routing.yaml` 非协议本体 / 全兜底、`tier_bindings:` 按本机现状填 + 探测命令（`command -v` / `claude --help \| grep -- --effort` 能力探测不硬编码版本号 / `models_cache.json` / `opencode models`）、`routes:` 只引用档位名跨机可移植、逐级回落条件、「gate 只认产出文件 + exit code、不认谁生产的」、绕过 flag（`--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check` / `--auto`）、`check-dispatch-routing.py` 校验、OpenCode `cli: native` 命名 subagent 间接路（`agate-route-<tier>`，无则该候选 `launch_fail` 自动回落）。与 `agate_dispatch_route.resolve` / `build_dispatch_command` / `resolve_native_target` 语义逐条一致，与 P2-design §3.4 / §3.6 一致。**ALIGNED**。
+
+**`dispatch-protocol.md` 评审打回续跑段（+558~+571）vs design-note §2.4a — ALIGNED**
+
+新增「**评审打回后的续跑（子进程 / native 两种形式都适用）**」段逐条比对 `design-dispatch-routing.md` §2.4a：
+- 「优先走平台官方续接、不重起」= §2.4a 首句 ✓
+- 「同 target（cli + model / native 目标 subagent 未变）→ 续接 / 续接失败 / 换 target → 全新派发」= §2.4a「同 target 重做 → 续接」+「fallback 到不同 target → 退化为全新派发」✓
+- 「续接产出仍走假完成校验（D2），且本就在人的评审循环里」= §2.4a「续接后的产出仍走假完成校验（D2）+ 本来就在评审循环里」✓
+- 「**续接失败无客观信号是已知缺口** —— 按『续接优先、重起兜底』处理，**不假装解决**」= §2.4a「已知缺口：续接失败没有像探测失败那样的客观信号（外部评审 W1）……本设计不假装解决了这条，如实登记为缺口」✓（语义级一致：不掩盖、不假装机械可判定）
+- 「**不需要实现续接的自动化**（人在评审循环里）；决策层留 hook 位给未来，不落自动续接逻辑」= §2.4a 精神（续接是「这次 retry 怎么执行」的优化，不改 `retries[Pn]`）+ P2-design §3.9 hook 位 ✓
+
+代码侧：`_route_main` / `try_and_fall` / `dispatch_once` **未实现任何自动续接逻辑**（`grep -n "resume\|followup\|--resume" agate/scripts/agate_dispatch_route.py agate/scripts/agate-dispatch.py` 零命中）—— 与「不落自动续接逻辑、只留 hook 位」一致。**ALIGNED**。
+
+**M10 `platform-notes.md` 跨 CLI 结构化输出判成败字段表 vs `classify_outcome` / `dispatch_once` — MISALIGNED（低严重度）**
+
+新小节「## 跨 CLI 子进程结构化输出判成败字段（派发路由 / TAG0034）」的三平台判定表，逐行对照 `agate_dispatch_route.classify_outcome`（P4a 代码，P4b 未改）+ `dispatch_once`（P4b 新）实际行为：
+
+| 判据 | M10 表声明 | `classify_outcome` 实际（实跑核实） | 判定 |
+|---|---|---|---|
+| Codex `turn.completed` 且无 `turn.failed`/顶层 `type:error` + 产出文件 | HAS_OUTPUT | `_SUCCESS_SIGNALS` 含 `turn.completed`；`files` 非空 → HAS_OUTPUT | ✓ |
+| Codex `turn.failed` / 顶层 `{"type":"error","status":...}` | INFRA_ERROR | `_INFRA_SIGNALS` 含 `turn.failed` / `'"type":"error"'` → INFRA_ERROR（`turn_failed_exit0.jsonl` 即便 exit 0 亦判 INFRA_ERROR，`test_bdd_34` 锁定） | ✓ |
+| Codex item 级 `status:"failed"`（携 `exit_code`）+ 整轮 `turn.completed` | HAS_OUTPUT（永不换候选） | `item_failed_turn_completed.jsonl` → HAS_OUTPUT（`test_bdd_35` 锁定，`reason is None`） | ✓ |
+| OpenCode `step_finish` + `part.reason == "stop"` + text part + 产出文件 | HAS_OUTPUT | `_SUCCESS_SIGNALS` 含 `step_finish` / `'"reason":"stop"'`；+ `files` → HAS_OUTPUT | ✓ |
+| OpenCode `{"type":"error","error":{"name":"ProviderAuthError",...}}` | INFRA_ERROR（`infra_error`） | `_INFRA_SIGNALS` 含 `ProviderAuthError` + `'"type":"error"'` → INFRA_ERROR（`test_bdd_36` 锁定） | ✓ |
+| **OpenCode `{"type":"error","error":{"name":"UnknownError",...}}`** | **NO_PARSEABLE_OUTPUT（`no_parseable_output`）** | `_INFRA_SIGNALS` 含**裸子串 `'"type":"error"'`** → `unknown_error.jsonl` → **INFRA_ERROR / `infra_error`**（实跑 exit 0 与 exit 1 均如此）。夹具 `tag0034_opencode/unknown_error.jsonl` **存在但无任何断言** | **✗ 不一致** |
+| **OpenCode 纯空返回（无 step_finish / 无 text / 无 error 事件）** | **NO_PARSEABLE_OUTPUT** | 退出码 0 → NO_PARSEABLE_OUTPUT（`test_bdd_36` 用 `exit_code=0` 锁定）；**退出码非 0 → INFRA_ERROR**（`classify_outcome` 第 2 分支：`exit_code != 0 and not files and not _SUCCESS_SIGNALS`） | ⚠ 部分（退出码 0 一致；非 0 不一致，但真机「无 error 事件」空返回退出码待核） |
+| **Claude Code `stop_reason == "error"` / `api_error_status` 非 null（如 401）** | **INFRA_ERROR** | `api_error.json`（`stop_reason:"error"`, `is_error:true`, `api_error_status:401`, `type:"result"`）→ `_INFRA_SIGNALS` **无对应信号**（非 `"type":"error"`、无 auth 串）；退出码 0 → **NO_PARSEABLE_OUTPUT**（实跑核实）。夹具 `tag0034_claude_code/api_error.json` **存在但无断言** | **✗ 不一致（退出码 0 时）** |
+| Claude Code `stop_reason == "end_turn"` + `result` 非空 + 产出文件 | HAS_OUTPUT | `_SUCCESS_SIGNALS` 含 `'"stop_reason":"end_turn"'`；+ `files` → HAS_OUTPUT（`test_bdd_33` 锁定；`presence_parse_ok` 填 `produced_files`） | ✓ |
+| Claude Code `stop_reason == "end_turn"` 但 `result` 空 + 产出文件缺失或空 | NO_PARSEABLE_OUTPUT | `empty_result.json` + `files` 空 → NO_PARSEABLE_OUTPUT（`test_bdd_33` 锁定） | ✓ |
+
+**MISALIGNED 详情（两处，同性质）**：
+
+1. **OpenCode `UnknownError`**：P2-design §3.7 判定表（对齐基准）**显式区分** —— `ProviderAuthError` → `infra_error`，`{"type":"error","name":"UnknownError"}` → `no_parseable_output`（§3.7 表 OpenCode NO_PARSEABLE 列 + §3.7 末「纯空返回（无 error 事件也无 text）→ no_parseable_output」）。P4b `platform-notes.md` M10 **忠实转写了 §3.7 的这一区分**。但 P4a `classify_outcome` 的 `_INFRA_SIGNALS` 含**裸子串 `'"type":"error"'`**，把任何结构化 `{"type":"error",...}` 事件（含 `UnknownError`）都吞进 INFRA_ERROR —— 即代码比 §3.7 / M10 **更粗**。
+2. **Claude Code `stop_reason == "error"` / `api_error_status`**：M10 把「`api_error_status` 非 null / `stop_reason == "error"`」列入 INFRA_ERROR。`classify_outcome` 无对应信号（`_INFRA_SIGNALS` 是 `"not logged in"` / `"Invalid API key"` / `"AuthenticationError"` / `"turn.failed"` / `'"type":"error"'` 等子串，均不匹配 `api_error.json` 的 `"type":"result"` + `"api_error_status":401` + `"stop_reason":"error"`）；退出码 0 时 → 无产出文件 → NO_PARSEABLE_OUTPUT。
+
+**影响边界（务必与「必须拦截」的普通 MISALIGNED 区分）**：两处的**路由行为完全一致** —— 均回落到下一候选（`INFRA_ERROR` 与 `NO_PARSEABLE_OUTPUT` 都在 `_FALLBACK_KINDS` 白名单内）、`reason` 均为合法三值枚举、均非 `gate_fail`、两条完整性不变量（「候选回落 ≠ 状态机 retry」/「gate FAIL 绝不换候选」）**不受影响**。差异只在：① `dispatch_route` 事件账本记录的 `candidates_tried[].reason` 标签（`infra_error` vs `no_parseable_output`）；② 运维读账本 + 读 M10 表复盘「某候选为什么回落」时的理解会被误导。`platform-notes.md` ∈ `agate/**`（SELF-GATE 触发文件），M10 表是可测断言，两条相关夹具（`unknown_error.jsonl` / `api_error.json`）**存在但闲置**（仅列在 `test_tag0034_subprocess.py` 文件头注释，无断言）。
+
+**建议（修复方向，主 Agent 择一）**：
+- **(a) 修脚本（faithful，§3.7 是对齐基准且显式细分）**：收紧 `classify_outcome` —— OpenCode 仅具名 infra 错误（`ProviderAuthError` / `AuthenticationError`）→ INFRA_ERROR，裸 `UnknownError` / 无具名结构化 error → NO_PARSEABLE_OUTPUT；Claude Code `is_error: true` / `stop_reason == "error"` / `api_error_status` 非 null → INFRA_ERROR。并用现存闲置夹具 `unknown_error.jsonl` / `api_error.json` 补断言（消除 dead fixture）。
+- **(b) 修文档（若认定粗分类可接受）**：改 `platform-notes.md` M10 表与代码一致（任意结构化 `{"type":"error"}` 事件 → `infra_error`；Claude Code `is_error:true` 且退出码非 0 → `infra_error`，否则 `no_parseable_output`），并在 `P2-design.md` §3.7 标注 UnknownError / api_error_status 的细分留待 P4c/后续迭代（或补一条 `[DESIGN_GAP]`）。
+- 修完重跑 `test_tag0034_subprocess.py` + `test_tag0034_p4b.py` + 全量 pytest + `check-protocol-consistency.py --strict-errors-only`，重审本节 A1。
+
+**首轮结论：MISALIGNED（低严重度）**。
+
+---
+
+#### A1 复审（round 4，2026-09-10）：修复已落地并逐格核实 — ALIGNED
+
+**修复方式**：implementer 按 **option (a) 修脚本**（`agate/scripts/agate_dispatch_route.py` 的 `classify_outcome`，`git diff` +217/-7）—— 基础设施失败信号**按 cli 细分**对齐 P2-design §3.7 判定表 / `platform-notes.md` M10：
+
+- 从通用 `_INFRA_SIGNALS` **移除裸子串 `'"type":"error"'` / `'"type": "error"'`**（保留 `turn.failed` / `ProviderAuthError` / `AuthenticationError` / `not logged in` / `Invalid API key` / `ECONNREFUSED` / `ENOTFOUND`）。
+- 新常量 `_BARE_TOP_ERROR_SIGNALS = ('"type":"error"', '"type": "error"')` —— **仅 `cli == "codex"`** 命中时 → INFRA_ERROR（Codex MV3 顶层 `{"type":"error","status":400}`）。
+- 新常量 `_INFRA_SIGNALS_CLAUDE_ONLY = ('"stop_reason":"error"', …, '"is_error":true', …)` + `_claude_api_error(text)`（`api_error_status:` 后跟非 null 数字）—— **仅 `cli ∉ {codex, opencode}`** 命中时 → INFRA_ERROR（Claude Code §3.7 INFRA 行；夹具 `api_error.json`）。
+- 新分支 **2b**：`cli == "opencode"` 且顶层 `{"type":"error"}` 而**通用集未命中**（即无 `ProviderAuthError` 等具名）→ NO_PARSEABLE_OUTPUT，**排在「非零退出兜底」（2c）之前** —— 故 `unknown_error.jsonl` 即便 exit 1 亦判 NO_PARSEABLE_OUTPUT（MV6b `UnknownError`）。
+- `classify_outcome` 之外的 P4a 函数（`resolve` / `load_config` / `write_dispatch_route_event` / `try_and_fall` I1/I5）+ `check-events.py` 第 8 条 + 哈希链 **未动**。
+
+**逐格核实（本轮独立实跑 `python3 -c "...classify_outcome..."` + `pytest`）**：
+
+| 判据 | M10 表声明 | `classify_outcome` 复审实跑 | 判定 |
+|---|---|---|---|
+| **OpenCode `{"type":"error"...UnknownError...}`**（`unknown_error.jsonl`） | NO_PARSEABLE_OUTPUT / `no_parseable_output` | exit 0 与 exit 1 **均 → NO_PARSEABLE_OUTPUT / `no_parseable_output`**（分支 2b，早于 2c 兜底） | **✓ 一致** |
+| OpenCode `ProviderAuthError`（`provider_auth_error.jsonl`） | INFRA_ERROR / `infra_error` | → INFRA_ERROR / `infra_error`（`_INFRA_SIGNALS` 具名命中，**不回归**） | ✓ |
+| OpenCode 纯空返回（`empty_return.jsonl`） | NO_PARSEABLE_OUTPUT | exit 0 → NO_PARSEABLE_OUTPUT（`test_bdd_36` 锁定）；exit 非 0 → INFRA_ERROR（2c 兜底，真机「无 error 事件」空返回退出码待核，非 §3.7 钉死项） | ✓（exit 0）/ ⚠ 观察（exit 非 0，同首轮，非阻断） |
+| **Claude Code `stop_reason=="error"` + `api_error_status:401` + `is_error:true`**（`api_error.json`） | INFRA_ERROR | exit 0 与 exit 1 **均 → INFRA_ERROR / `infra_error`**（`_INFRA_SIGNALS_CLAUDE_ONLY` + `_claude_api_error`） | **✓ 一致** |
+| Claude Code `stop_reason=="end_turn"` 但 `result` 空（`empty_result.json`） | NO_PARSEABLE_OUTPUT | → NO_PARSEABLE_OUTPUT（`test_bdd_33` 锁定，**不回归** —— `is_error` 缺省 / 无 `api_error_status`） | ✓ |
+| Claude Code `end_turn` + 产出文件（`ok_end_turn.json`） | HAS_OUTPUT | → HAS_OUTPUT（不回归） | ✓ |
+| **Codex 裸顶层 `{"type":"error","status":400}`**（无 `turn.failed`） | INFRA_ERROR | → INFRA_ERROR / `infra_error`（`_BARE_TOP_ERROR_SIGNALS` for `cli=="codex"`，**不依赖退出码**） | **✓ 一致（守不回归）** |
+| Codex `turn.failed`（`turn_failed_exit0.jsonl`，exit 0） | INFRA_ERROR | → INFRA_ERROR（`_INFRA_SIGNALS` `turn.failed`，`test_bdd_34` 锁定，不回归） | ✓ |
+| Codex `item.status:"failed"` + 整轮 `turn.completed`（`item_failed_turn_completed.jsonl`） | HAS_OUTPUT（turn 层为准） | → HAS_OUTPUT / `reason is None`（`test_bdd_35` 锁定，不回归） | ✓ |
+| Codex `turn.completed` + 产出文件（`turn_completed_ok.jsonl`） | HAS_OUTPUT | → HAS_OUTPUT（不回归） | ✓ |
+
+**R1 三值 `reason` 未破**：所有分支产出的 `reason` ∈ `{launch_fail, infra_error, no_parseable_output}` ∪ `{None（HAS_OUTPUT）}`，**无 `gate_fail`**（`grep gate_fail agate/scripts/agate_dispatch_route.py` 仅出现在 docstring/注释否定表述）。`_FALLBACK_KINDS` 白名单 + `try_and_fall` I1/I5 守卫未改。**I2 边界未破**：分支 2b 是**信号子串匹配**（`'"type":"error"'`），非对产出文件的结构完整度解析 —— 未把结构判断塞进 NO_PARSEABLE_OUTPUT 分支；`test_classify_outcome_no_parseable_branch_has_no_structure_check` 仍绿。
+
+**断言到位（dead fixture 消除）**：`test_tag0034_p4b.py` 补 3 例（18 例，56 asserts）：`test_classify_claude_code_api_error_is_infra_error`（`api_error.json` exit 0 → `infra_error`）/ `test_classify_opencode_unknown_error_is_no_parseable_output`（`unknown_error.jsonl` **exit 1** → `no_parseable_output`）/ `test_classify_codex_bare_top_error_still_infra_error`（Codex 裸 `type:error` exit 0 → `infra_error`）—— 三例本轮实跑 passed；`unknown_error.jsonl` / `api_error.json` 不再是闲置夹具。
+
+**`platform-notes.md` M10 表逐格 vs `classify_outcome`**：现**逐格一致**（上表 10 行全 ✓，仅 OpenCode 纯空返回 exit 非 0 一格为「观察项」—— 非 §3.7 钉死区分、`test_bdd_36` 用 exit 0 锁定、真机退出码待核，与首轮同判、不阻断）。
+
+**结论：ALIGNED**（首轮 MISALIGNED 低严重度 → 复审轮修脚本细分对齐 + 补断言，逐格核实通过；R1 三值 `reason` / I2 边界 / P4a 函数 + 第 8 条 + 哈希链均未破）。
+
+---
+
+### A2（P4b delta）：脚本→文档对齐 — ALIGNED
+
+| P4b 新增/改动脚本行为 | 文档对应 | 判定 |
+|---|---|---|
+| `dispatch_once(candidate, ctx, *, effort_supported, expected_output, required_anchors, run, timeout_s, task_dir)` 端到端单候选派发 | `agate_dispatch_route.py` docstring 逐行 + `dispatch-protocol.md` 新节 step 3「try-and-fall（无 probe，第一个动作即把真实 dispatch-context 派给首选候选）」+ `platform-notes.md` M10 判定表（判据来源）+ P2-design §3.1 step 2.3 / §3.7 | ALIGNED（判据精度问题见 A1；A2 只核「行为是否被写出来」= 是） |
+| `_route_main` `form == "chain"` 且首候选子进程形态 → 端到端 `try_and_fall`；首候选 native → 仍只输出路由计划 JSON | `_route_main` docstring（「首候选为 native 时仍只输出路由计划 JSON…与 P4a DESIGN_GAP 一致」）+ `dispatch-protocol.md` 新节 step 2-3 + `P4-implementation-P4b.md` `[DESIGN_GAP_REVIEWED]` | ALIGNED |
+| stdout JSON 增 `final` / `tried` 字段（子进程分支） | P4a 契约「只增不改」—— 既有键 `cli`/`model`/`effort`/`form`/`dispatch_context`/`chain` 未变，`final`/`tried` 为新增可选键；`_route_main` docstring 描述。stdout JSON 是 CLI 内部契约（非协议语义），P2-design §3.1 step 2.6 示例形态；`dispatch_route` 事件的 `candidates_tried`/`final`（协议语义面）由 `dispatch-protocol.md` 新节 step 5 + P2-design §3.8 承载 | ALIGNED（观察项：stdout JSON 新键未逐字写进协议文档，但属实现细节，事件面已覆盖） |
+| `routed_away_verdict_location(cli)` 恒 `"TASK_DIR"` | docstring + `platform-notes.md` M10「routed-away judge 的 verdict 落点」段（verdict + 证据仍写 `TASK_DIR`，铁律 2/3 不变，两校验器零改动平台无关通过）+ P2-design §10 BDD-42 | ALIGNED |
+| `DispatchContractError` / `presence_parse_ok` / `_default_subprocess_run` / `_FALLBACK_KINDS` / `_SUBPROCESS_CLIS` | 均 `agate_dispatch_route.py` docstring + 模块级注释（含 P4a-review I1/I2/I5 溯源）；`presence_parse_ok` 的 presence 级语义在 `platform-notes.md` M10「判据只到 presence 级」句 + P2-design §3.7 N7 | ALIGNED（内部契约守卫，非协议语义面，不要求写进协议文档） |
+
+无「脚本做了但文档完全没写」的裸露行为。**ALIGNED**。
+
+---
+
+### A3（P4b delta）：一致性连锁 + 反向传播 — ALIGNED
+
+**A3a（连锁）**：P4b 未新增 event 类型（`dispatch_route` 是 P4a 已有；P4b 只是让 `_route_main` 子进程分支端到端**写**它，经 I3 适配层闭包桥接到 `write_dispatch_route_event`）。`check-events.py` 第 1-8 条 + 哈希链 **零改动**（`git diff HEAD --name-only` 不含 `check-events.py`；`check-events.py agate-workspace/tasks/TAG0034-dispatch-routing` exit 0 / 14 行 / 哈希链完整）。无「已知 event 类型」枚举清单需再动。**ALIGNED**。
+
+**A3b（反向传播：应被 P4b 影响但未在 diff 中的文件）**：
+
+| 应被影响文件 | 影响到了没 | 判定 |
+|---|---|---|
+| `agate/WORKFLOW.md` / onboarding 索引 —— M9 SETUP 新增「### 步骤 2-dispatch-routing」小节 | 不需改 —— `SETUP.md` 无 TOC / 索引，「### 步骤 2-*」小节（DSH / Codex / dispatch-routing）是内联并列，无任何 `WORKFLOW.md` / `AGENTS.md` 索引枚举它们（`grep "步骤 2-" WORKFLOW.md AGENTS.md` 零命中）；先例「### 步骤 2-Codex」（TAG0033）亦未加 `WORKFLOW.md` 引用 | ALIGNED |
+| `check-platform-assumptions.py` 扫描面 —— M10 `platform-notes.md` 新小节含 `claude` / `codex` / `opencode` / `--dangerously-*` 等 | 不需改 —— `check-platform-assumptions.py` 仅扫 `*.bats` / `*.bash` / `*.sh` / `*.py`（docstring L15），**不扫 `.md`**；且 `platform-notes.md` 是 CHECK 14 `_MD14_WHOLE_FILE_EXEMPT`（平台适配权威源），平台名在此处 by-design 合法 | ALIGNED |
+| CHECK 9 锚点表 —— M10 `platform-notes.md` 新小节 | 不需改 —— CHECK 9 锚点是 gate 脚本对齐锚点，`platform-notes.md` 非 gate 脚本；无锚点要求新小节 | ALIGNED |
+| `agate/tests/README.md` per-script 测试计数表 —— 新增 `test_tag0034_p4b.py` | 观察项（非硬校验）—— `test_tag0030_assertions.py::BDD-19` 只校 tests/README「何时更新」节措辞；`count-tests.sh` 只守特定被引用路径的用例数；tests/README.md 现表**无任何 `test_tag0034_*` 行**（P3 的 6 个模块亦缺），P4a 复审轮已按同口径列为观察项、未判 MISALIGNED。P4b 沿用 | ALIGNED（观察项，与 P4a 一致） |
+| `dispatch-protocol.md` 续跑段 → 角色文件 / 模板 | 不需改 —— 续跑段是「派发路由」子节内「这次 retry 怎么执行」的机制细节，不改任何角色 prompt / 派发模板；design-note §2.4a 已同源 | ALIGNED |
+| 6 个冻结脚本 + `agate-cmdstream-*.py` + `agate-dispatch.py` 渲染路径 | `git diff HEAD --name-only` 确认**均不在 diff 内**（仅 `agate_dispatch_route.py` / `agate-dispatch.py` 的 `_route_main` / `SETUP.md` / `platform-notes.md` / `dispatch-protocol.md` / `test_tag0034_p4b.py` + 任务 `gate-events.jsonl` 的 P4a commit 留痕 2 行）；`_default_subprocess_run` 内 tmux 包裹 + RM-AG0055 命令流阈值卡死检测的接入点仅以注释标出、未真接（归 P4c），`agate-cmdstream-adapters.py` 零改动 | ALIGNED |
+
+**ALIGNED**。
+
+---
+
+### A4（P4b delta）：测试覆盖 — ALIGNED
+
+**P4b delta 复审轮全量 pytest 实跑（A1 fix 后，本次审查执行，2026-09-10）**：
+
+```
+$ python3 -m pytest agate/tests/ -q --tb=no
+（worktree 根 /home/kity/oclab/agateon/.worktrees/agate-TAG0034）
+
+=========================== short test summary info ============================
+FAILED agate/tests/unit/test_tag0034_tmux.py::test_bdd_37_which_tmux_decides_wrap_or_bare
+       - AttributeError: module 'agate_dispatch_route' has no attribute 'build_subpr...'
+FAILED agate/tests/unit/test_tag0034_tmux.py::test_bdd_38_countdown_and_no_force_kill_with_client
+       - AttributeError: module 'agate_dispatch_route' has no attribute 'tmux_cleanu...'
+2 failed, 1611 passed, 2 skipped in 161.50s (exited with code 0)
+```
+
+**計數：passed 1611 / failed 2 / skipped 2**（P4b delta 首轮 = passed 1608 / failed 2；A1 fix 补 `test_tag0034_p4b.py` 3 例（15 → 18）→ passed +3。P4a 复审轮 = passed 1592 / failed 3）。
+
+**failed 2 条全部为 P4c 批次边界 by-design**（同首轮，A1 fix 未引入任何新失败）：`test_bdd_37`（`build_subprocess_launch` 未实现）+ `test_bdd_38`（`tmux_cleanup_action` 未实现）—— P2-design §3.10 / §4.1「tmux 观测层归 P4c、可整体切除」；`P4-implementation-P4b.md` 明文「tmux 观测层（P4c）不做——`test_bdd_37/38` 按批次边界保持红」。
+
+---
+
+**P4b delta 首轮全量 pytest（A1 fix 前，供对照）**：`2 failed / 1608 passed / 2 skipped`（164.85s）—— 同样 2 red 为 `test_bdd_37/38`（P4c）。**A1 fix 未引入任何新失败、未破坏任何既有绿**（passed 净增 3 = 新增 3 条 A1 断言）。
+
+**P4b 新逻辑边界覆盖评估**（`test_tag0034_p4b.py` 18 例 / 56 asserts，含 A1 fix 补的 3 例）：
+- `dispatch_once` 端到端 6 例：native 占位不 spawn / codex `turn.completed`+产出文件 → HAS_OUTPUT / opencode `ProviderAuthError` → INFRA_ERROR / 空返回（exit 0）→ NO_PARSEABLE_OUTPUT / spawn OSError → LAUNCH_FAIL / `wait` 超时 → INFRA_ERROR（N6）—— 全绿。
+- `presence_parse_ok` 变体：缺失 / 空 / frontmatter 未闭合 / 缺锚点 / OK / 无 frontmatter —— 全绿。
+- I2：空产出文件 → NO_PARSEABLE_OUTPUT；`classify_outcome` 的 NO_PARSEABLE_OUTPUT 分支无结构完整度判断（垃圾但非空产出 → HAS_OUTPUT）—— `test_classify_outcome_no_parseable_branch_has_no_structure_check` 锁死 R1 CRITICAL 边界。
+- I1：非契约 kind / `None` kind → `DispatchContractError`；I1 不误伤（三类基础设施 kind 仍正常回落，`reasons` 序列断言）。
+- I5：回落 kind 携非法 `reason`（`gate_fail`）→ `DispatchContractError`。
+- I3：位置回调 ↔ kw-only 写入器适配层桥接落 1 条合法 `dispatch_route` 事件（`candidates_tried` 失败候选 `reason == "infra_error"`）。
+- BDD-42：`routed_away_verdict_location` 恒 `"TASK_DIR"`。
+- **A1 fix 补 3 例（消除 dead fixture）**：`test_classify_claude_code_api_error_is_infra_error`（`api_error.json` exit 0 → `infra_error`）/ `test_classify_opencode_unknown_error_is_no_parseable_output`（`unknown_error.jsonl` **exit 1** → `no_parseable_output`）/ `test_classify_codex_bare_top_error_still_infra_error`（Codex 裸 `type:error` exit 0 → `infra_error`）—— 全绿。
+- P3 既有断言未改：`test_tag0034_tryfall.py`(10) / `test_tag0034_subprocess.py`(BDD-33~36) 等仍绿。
+
+**结论：ALIGNED**（P4b 新逻辑覆盖充分含 A1 fix 断言；复审轮全量实跑 `1611 passed / 2 failed / 2 skipped` —— 2 red 全为 P4c 批次边界 by-design，A1 fix 零回归）。
+
+---
+
+### A5（P4b delta）：下游影响 + 文档传播 — ALIGNED
+
+**A5.1 CHECK 14 护栏 1（协议语义叙述面不裸露平台名）— ALIGNED（实跑核实）**
+
+`dispatch-protocol.md` 评审打回续跑段的平台续接原语（`claude -p --resume <id>` / `codex exec resume <id>` / `opencode run -s <id>` / Codex `followup_task` / OpenCode 命名 subagent 续接 / Claude Code 续接原语待核实）**全部放在 `> 实现注记：` blockquote 块内**。核 `check-protocol-consistency.py` CHECK 14 逻辑（L1195 `_NOTE_MARKER_RE = re.compile(r"^>\s*实现注记：")`，L1248「节内任一行带 `> 实现注记：` → 整节豁免」）：`### 0. 派发路由` 节内含 `> 实现注记：` 标记行 → 整节豁免。段落正文（bullet 列表）本身亦无裸平台名（用「平台官方续接」「平台续接原语」「目标 subagent」）。**实跑确认：`check-protocol-consistency.py --strict-errors-only` → `✅ PASS CHECK 14 md 叙述段落平台名扫描` + `✅ PASS CHECK 15` + exit 0（329 WARNING / 0 ERROR）**。护栏 1 合规成立。**ALIGNED**。
+
+**A5.2 CHANGELOG — 待 P8（非 MISALIGNED）**
+
+P4b 同为协议语义变更（`agate dispatch route` 端到端 + M9/M10 协议文档小节 + 评审打回续跑段）。`check-changelog.py` 仅 P8 触发（P4a 轮已核实：`pre-commit-gate.py:480` `phase == "P8"` / `WORKFLOW.md:344` 表 1.6「仅 P8 检查，P1-P7 不触发」）。CHANGELOG 待 P8 统一补，**不判 MISALIGNED**。
+
+**A5.3 冻结脚本 / 向后兼容 — ALIGNED**
+
+`git diff HEAD --name-only` 确认 `agate/rules/phases.yaml` / `check-gate.py` / `check-state-transition.py` / `state-machine.md` / `check-judge-verdict.py` / `check-p6-provenance.py` / `check-events.py` / `agate-cmdstream-adapters.py` / `agate-dispatch.py` 既有渲染路径（`_render_dispatch_context` / `_next_card_content` / `_SOURCE_MARKER` / `generated_by` / `form == "default"` 分支）**均零改动**。`try_and_fall` / `write_dispatch_route_event` / `classify_outcome` / `resolve` / `load_config` 的 P4a 签名与行为未变（P4b 只在 `try_and_fall` 加白名单守卫 I1/I5 —— 今日行为等价，`classify_outcome` 枚举闭合下不改判定，仅把「不可能的 kind」从静默变大声失败）。`dispatch_route` 事件对既有账本审计向后兼容（既有任务无该事件 → `check-events.py` 第 8 条分支不进入）。**ALIGNED**。
+
+---
+
+### A6（P4b delta）：锚点表覆盖 — ALIGNED
+
+P4b **未新增任何 `check-*.py`**（`routed_away_verdict_location` / `dispatch_once` / `presence_parse_ok` 等均在 helper 模块 `agate_dispatch_route.py` 内，非独立 gate 脚本）。CHECK 9 `SCRIPT_ALIGNMENT_ANCHORS` 无需再动（P4a 复审轮补的 `check-dispatch-routing.py` 条目仍成立、`test_sg_6` 保持绿）。`dispatch_route` 理由码枚举锚点粒度由 `check-events.py` 既有锚点覆盖（P4a 已核）。**ALIGNED**。
+
+---
+
+### A7（P4b delta）：设计原则一致性 — ALIGNED
+
+P4b **未确立新架构决策**：M5 端到端 spawn 是 P2-design §3.1/§3.7 既定机制的落地；I1 白名单化 / I2 presence-parse 落位 / I3 签名桥接均为 P4a-review 已提出的加固项（INFORMATIONAL → 本批做实），不引入新原则。评审打回续跑「续接优先、重起兜底、不假装解决续接失败无客观信号」与 design-note §2.4a + 局限 3「主 Agent 判断力单点故障、不假装机械可判定」的诚实叙述一致。A7.4 的 ADR-013「派发路由 / gate 生产者无关性」已在 **P4a 复审轮 HUMAN_CONFIRMED、落 P8 收尾批**（草案见上文附录），P4b 无新增。`dispatch_once` 对 native / default / 未知 cli 返回 HAS_OUTPUT 占位（不 spawn）、中段 native 候选同占位 —— 对应 `[DESIGN_GAP_REVIEWED: 已确认（主 Agent 2026-09-10）]`，与「`cli: native` 弱缓解、自动化天花板 = 主 Agent 机械横传 model」（`dispatch-protocol.md` 新节 + ADR-013 草案）一致。**ALIGNED**。
+
+---
+
+## P4b 闭环规则（复审轮终态）
+
+| 结论态 | 项 | 状态 |
+|---|---|---|
+| ALIGNED | A1（P4b delta，首轮 MISALIGNED 低严重度 → 修复已落地） | 通过。修复 = implementer 按 **option (a)** 改 `classify_outcome`（基础设施信号按 cli 细分对齐 §3.7 / M10 —— 通用集去裸 `'"type":"error"'`；`_BARE_TOP_ERROR_SIGNALS` 仅 codex；`_INFRA_SIGNALS_CLAUDE_ONLY` + `_claude_api_error` 仅 claude-code；分支 2b opencode 裸 error 无具名 → NO_PARSEABLE_OUTPUT 早于 2c 兜底）+ 补 3 条断言消除 dead fixture。复核确认：`unknown_error.jsonl` → NO_PARSEABLE_OUTPUT、`api_error.json` → INFRA_ERROR、Codex 裸 `type:error` 不回归；M10 表逐格 vs 代码一致；R1 三值 `reason` / I2 边界 / P4a 函数 + 第 8 条 + 哈希链均未破；全量 pytest `1611 passed / 2 failed`（2 red = P4c by-design，零回归）；`check-protocol-consistency.py --strict-errors-only` exit 0（CHECK 1~15 PASS）。 |
+| ALIGNED | A2 / A3 / A4 / A5 / A6 / A7（P4b delta） | 通过。P4b 全量 pytest 仅剩 `test_bdd_37` / `test_bdd_38`（P4c 批次边界 by-design）。 |
+| （P8 交付项，非 P4b 阻断） | A5.3 / A7.4（P4a 复审轮遗留） | 两条 doc-sync（`LIMITATIONS.md` 局限 2 缓解链 + ADR-013）已 HUMAN_CONFIRMED、落 P8 收尾批，草案见上文附录。**不阻断 P4b commit**。 |
+
+**P4b delta 总结论：aligned**（首轮 1 项 A1 MISALIGNED 低严重度，implementer 按 option (a) 修脚本细分 + 补断言，复核逐格通过）。
+
+**P4a + P4b 合并总结论：aligned** —— P4a 三轮终态 aligned（A5.3/A7.4 已 HUMAN_CONFIRMED、落 P8）；P4b delta 四轮（首轮 misaligned → A1 fix 复审 aligned）。P4b 其余 A2-A7 delta 全 ALIGNED，全量 pytest 仅剩 `test_bdd_37/38`（P4c 批次边界 by-design）red。**可 P4b commit**（commit message 带 `self-gate-review: docs/reviews/agate-alignment-review-2026-09-09-TAG0034.md`）。A5.3 / A7.4 的两条 doc-sync 为 P8 交付项、不阻断 P4b commit。
+
+---
+
+## 附：P4b 轮补充实跑（本次审查执行，2026-09-10）
+
+### A1 fix 复审轮（终态）
+
+- `python3 -m pytest agate/tests/ -q --tb=no` → **2 failed / 1611 passed / 2 skipped**（161.50s，exit 0）；2 red = `test_bdd_37` / `test_bdd_38`（P4c 批次边界 by-design）；A1 fix 零回归（passed 1608 → 1611，净增 3 = 新增 3 条 A1 断言）。
+- `python3 -m pytest agate/tests/unit/test_tag0034_p4b.py agate/tests/unit/test_tag0034_subprocess.py agate/tests/unit/test_tag0034_tryfall.py agate/tests/regression/test_tag0034_zero_change.py agate/tests/unit/test_check_events.py -q` → **49 passed**（含 A1 fix 3 断言 + R1/I2 边界 + 回归护栏）。
+- `python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` → exit 0；**CHECK 1~15 全 PASS**；329 WARNING / 0 ERROR。
+- `~/.venvs/agate-dev/bin/ruff check agate/scripts/agate_dispatch_route.py` → All checks passed。
+- `python3 -c "...classify_outcome..."` 逐夹具实跑（A1 逐格核实依据）：`unknown_error.jsonl` (opencode) → **NO_PARSEABLE_OUTPUT/no_parseable_output**（exit 0 与 1 均）；`provider_auth_error.jsonl` (opencode) → INFRA_ERROR/infra_error（不回归）；`api_error.json` (claude-code) → **INFRA_ERROR/infra_error**（exit 0 与 1 均）；`empty_result.json` (claude-code) → NO_PARSEABLE_OUTPUT（不回归）；Codex 裸 `{"type":"error","status":400}`（无 turn.failed）→ **INFRA_ERROR**（不回归）；`turn_failed_exit0.jsonl` → INFRA_ERROR（不回归）；`item_failed_turn_completed.jsonl` + 产出文件 → HAS_OUTPUT（不回归）。
+- `git diff HEAD -- agate/scripts/agate_dispatch_route.py` → +217/-7（首轮 +164/-7；A1 fix +53：`_BARE_TOP_ERROR_SIGNALS` / `_INFRA_SIGNALS_CLAUDE_ONLY` / `_claude_api_error` + step 2 按 cli 细分 + 2b 分支）。`classify_outcome` 之外的 P4a 函数 + `try_and_fall` I1/I5 未再改。
+
+### A1 fix 前（首轮，供对照）
+
+- `python3 -m pytest agate/tests/ -q --tb=no` → **2 failed / 1608 passed / 2 skipped**（164.85s，exit 0）；2 red = `test_bdd_37` / `test_bdd_38`（P4c）。
+- `check-protocol-consistency.py --strict-errors-only` → exit 0；CHECK 1~15 PASS（含 `✅ PASS CHECK 14` / `✅ PASS CHECK 15`）；329 WARNING / 0 ERROR。
+- `check-events.py agate-workspace/tasks/TAG0034-dispatch-routing` → exit 0（14 行，哈希链完整，ts 单调，judge 轮次×0）。
+- `git diff HEAD --name-only`（HEAD = `d1c2aca` P4a commit）→ `agate/SETUP.md` / `agate/dispatch-protocol.md` / `agate/platform-notes.md` / `agate/scripts/agate-dispatch.py` / `agate/scripts/agate_dispatch_route.py` / `agate/tests/unit/test_tag0034_p4b.py`（未跟踪）/ 任务 `gate-events.jsonl`（P4a commit 留痕 +2 行）—— 6 个冻结脚本 + `agate-cmdstream-*.py` + `check-events.py` + `check-dispatch-routing.py` + `dispatch-tiers.yaml` **均不在 diff 内**（回归硬约束成立）。
+- `grep -n "resume\|followup\|--resume" agate/scripts/agate_dispatch_route.py agate/scripts/agate-dispatch.py` → 零命中（续接自动化未落地，与「只留 hook 位」一致）。

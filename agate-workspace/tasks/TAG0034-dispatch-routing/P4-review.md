@@ -201,4 +201,131 @@ I1~I6 均为 INFORMATIONAL，不构成 P4a 返工。建议：
 - I1 / I2 / I3 → 写入 P4b 的 implementer dispatch-context「约束」节（P4b 落 try-and-fall 循环 + subprocess 时必须处理），并作为 P4b review 的重点核查项。
 - I4 / I5 / I6 → 可选清理，主 Agent 择机（不阻断本任务）。
 
-status 结论：**approved**（agent = review，非 main）。
+status 结论（P4a 单批）：**approved**（agent = review，非 main）。
+
+---
+
+## P4b 批评审（review — 偏执 Staff Engineer 视角，2026-09-10）
+
+评审对象：TAG0034 派发路由 **P4b 批**（依赖 P4a，已 commit `d1c2aca`）
+- 修改：`agate/scripts/agate_dispatch_route.py`（M5 `dispatch_once` / `presence_parse_ok` / `_default_subprocess_run` / `routed_away_verdict_location` / `DispatchContractError` / 常量 `_FALLBACK_KINDS` `_SUBPROCESS_CLIS` + `try_and_fall` I1 白名单 + I5 reason 自校）、`agate/scripts/agate-dispatch.py`（`_route_main` `form=="chain"` 拆三路 + I3 适配层闭包）、`agate/SETUP.md`（M9）、`agate/platform-notes.md`（M10 结构化输出字段小节）、`agate/dispatch-protocol.md`（评审打回续跑段）
+- 新增：`agate/tests/unit/test_tag0034_p4b.py`（15 例）
+
+评审依据：coordinator P4b dispatch message（强制指令）、`P4-implementation-P4b.md` + 2 条 `[DESIGN_GAP_REVIEWED]`、`P2-design.md` §3.1/§3.4/§3.7 + N6/N7、`P0-brief.md` known_risks R1、`P4-review.md` P4a 节 I1~I6。
+
+结论（P4b 单批）：**approved**。CRITICAL = 0；BLOCKER = 0。P4a 提出的 I1/I2/I3/I5 四项均已按方向落地并复核闭合；INFORMATIONAL 3 条新增（P4b-I1~I3）+ 2 条 P4a 遗留（I4/I6，implementer 以批次边界理由暂缓，理由成立），均不阻断。
+
+`[PROD_NOT_TOUCHED]` — 仅 worktree 内读；写入仅 `P4-review.md` + `P4-progress.md`。
+
+## Pass 1（CRITICAL）— R1 + 回归（P4b 首要项）
+
+### 1. I1 白名单落地 — 真闭合 R1 稳健性缺口，PASS
+- 锚点：`agate/scripts/agate_dispatch_route.py` `try_and_fall`（diff `+551~+575` 区）。
+  `kind = getattr(outcome, "kind", None)` → `kind == "HAS_OUTPUT"` → 停、写事件、`return`；
+  `kind not in _FALLBACK_KINDS`（`frozenset({"LAUNCH_FAIL","INFRA_ERROR","NO_PARSEABLE_OUTPUT"})`，**含 `None` / 未来误加枚举**）→ `raise DispatchContractError`；
+  仅当 `kind` 在三类白名单内才继续到回落记录。
+- 即回落分支现是**显式白名单** `kind in {LAUNCH_FAIL, INFRA_ERROR, NO_PARSEABLE_OUTPUT}` 才 `continue`；
+  其它「非 HAS_OUTPUT」→ 大声失败而非静默换候选。P4a-review I1 的方向逐字落地。
+- I5 叠加：`reason not in _VALID_REASONS`（`("launch_fail","infra_error","no_parseable_output")`，无 `gate_fail`）→ 写事件前 `raise DispatchContractError`。
+  与 `check-events.py` 第 8 条（持久审计层）形成双层强制。
+- 测试真对应：`test_try_and_fall_raises_on_non_contract_kind`（`Outcome("SURPRISE_KIND","weird")` → raise）/
+  `test_try_and_fall_raises_on_none_kind`（无 `.kind` 对象 → raise）/ `test_try_and_fall_i5_raises_on_bad_reason_for_fallback_kind`（`Outcome("INFRA_ERROR","gate_fail")` → raise）/
+  `test_try_and_fall_whitelist_still_falls_back_on_three_infra_kinds`（三类仍正常回落、不误伤）。复跑绿。
+
+### 2. I2 边界守住 — R1 CRITICAL 未破，PASS
+- `presence_parse_ok(path, *, required_anchors=None)`（新函数，`+414~+438`）：文件存在且非空 +
+  frontmatter（若有 `---\n` 前缀）须闭合且至少一行 `key: value` + `required_anchors` 全部出现。
+  **不含**内容完整度 / BDD 覆盖度 / 质量判断。
+- 该判据**只**在 `dispatch_once`（`+467~+474`）填 `produced_files` 处调用：
+  `if expected_output and presence_parse_ok(...): produced_files = [expected_output]` → 再交 `classify_outcome`。
+- **`classify_outcome` 逐字节未改**（`git diff --stat` 空 + 逐行核 `:299-333`）：`NO_PARSEABLE_OUTPUT` 分支仍是
+  「无 killed_reason + 无基础设施签名 + 非（非零退出且无产出）+ `not files`」→ `return`，**未引入任何结构 / 内容完整度判断**。
+- R1 CRITICAL 边界锁死：`test_classify_outcome_no_parseable_branch_has_no_structure_check` —— `produced_files=["junk-but-nonempty.md"]` + 垃圾非结构化 stdout → `HAS_OUTPUT`（交 gate、不回落）。
+  「垃圾但非空产出 → HAS_OUTPUT」成立，未把结构完整度塞进 `NO_PARSEABLE_OUTPUT` → **不触发 CRITICAL**。
+- `test_dispatch_once_i2_empty_produced_file_is_no_parseable_output`：空产出文件 → `presence_parse_ok` False → `produced_files` 空 → `NO_PARSEABLE_OUTPUT`，结构判断落在填充侧、不在 `classify_outcome`。复跑绿。
+
+### 3. 回归 diff 逐文件核 — 零改动，PASS
+- `git diff --stat HEAD` 对 `agate/rules/phases.yaml` / `check-gate.py` / `check-state-transition.py` /
+  `agate/state-machine.md` / `check-judge-verdict.py` / `check-p6-provenance.py` / `check-events.py`（第 1-8 条 + 哈希链）/
+  `check-dispatch-routing.py` / `agate-cmdstream-adapters.py` / `agate/rules/dispatch-tiers.yaml` —— **空输出，逐字节未改**。
+- `agate-dispatch.py`：`git diff` 两个 hunk 均在 `_route_main`（`@@ -167` / `@@ -213`）内；`_render_dispatch_context` /
+  `_next_card_content` / `_SOURCE_MARKER` / `generated_by` / `main()` 分派 + `form == "default"` 分支逐字节未触碰。
+  `form == "chain"` 原 `else` 拆为 `elif 首候选 native`（输出路由计划 JSON，行为同 P4a）/ `else 子进程端到端`。
+- `check-events.py` 第 8 条（P4a 落）本批未再动。
+- BDD-42 依赖：`test_bdd_42` 断言 `check-judge-verdict.py` / `check-p6-provenance.py` 源码不含 `.codex/sessions` / `.claude/projects`
+  —— 两脚本零改动，断言成立；`routed_away_verdict_location(cli)` 恒 `"TASK_DIR"`（`+485~+496`），judge 子进程 verdict + 证据仍落 TASK_DIR、两校验器纯 TASK_DIR 文件解析。
+- 回归复跑：`test_tag0034_zero_change.py` + `test_check_events.py` + `test_tag0027_b2_*` = 25 passed。
+
+### 4. `_default_subprocess_run` 子进程健康 — PASS（附 P4b-I1）
+- `+441~+463`：`subprocess.run([str(a) for a in argv], capture_output=True, text=True, encoding="utf-8",
+  errors="replace", timeout=timeout_s)`；`timeout_s` 缺省 `float(os.environ.get("AGATE_DISPATCH_TIMEOUT_S","1800"))`
+  带 `ValueError` 兜底 —— **宽超时兜底 1800s、可配、未自造紧超时**。
+- `except (FileNotFoundError, OSError) → ("", None, "spawn_oserror")` → `classify_outcome` 归 `LAUNCH_FAIL`（`_LAUNCH_KILLED` 含 `spawn_oserror`）。
+- `except subprocess.TimeoutExpired → (exc.stdout or "", None, "wait_timeout")` → `classify_outcome` 归 `INFRA_ERROR`（N6：非 `_LAUNCH_KILLED` 的非空 killed_reason）。
+- **未改 `agate-cmdstream-adapters.py`**（零 diff）；tmux 包裹 + RM-AG0055 命令流阈值卡死检测的接入点以注释标出、归 P4c。
+- 测试：`test_dispatch_once_spawn_oserror_launch_fail` / `test_dispatch_once_wait_timeout_infra_error` 复跑绿。
+
+### 5. 两条 `[DESIGN_GAP]` — 未在端到端路径引入模型购物口子，PASS
+- **GAP #1（`expected_output` 走 `AGATE_DISPATCH_EXPECT` env、未设则保守回落）**：`expected_output is None` → `produced_files` 恒空 →
+  即便结构化输出成功也判 `NO_PARSEABLE_OUTPUT` 回落。核：这是「无法核实产出 → 保守回落」，理由码 `no_parseable_output`（合法三值之一）；
+  回落链耗尽终点恒为 `{"cli":"default"}`（当前 model 原生派发），**不是「试到某候选过 gate 就停在那」**。R1 的「换模型试到出 green」需要「产出被 gate 评过但不喜欢 → 换候选」——此路径一旦任一候选产出可核实的非空文件即 `HAS_OUTPUT` 停止回落，无该口子。方向属 R1 保守侧。
+- **GAP #2（中段 native 候选 → `HAS_OUTPUT` 占位）**：`dispatch_once` 对 `cli not in _SUBPROCESS_CLIS`（含 native）返回 `Outcome("HAS_OUTPUT", None)` →
+  `try_and_fall` 视为该候选成功、停止回落、交回驱动会话代发。核：native 派发由驱动会话执行、非路由脚本可判失败之物；
+  且该「成功」**与 gate verdict 无关**（不是「gate 过了才算」），不构成购物。与 `dispatch-protocol.md` 新节「cli: native 自动化天花板 = 主 Agent 机械横传 model」一致。
+- 两条均 `[DESIGN_GAP_REVIEWED: 已确认（主 Agent 2026-09-10）]`，与 P2-design §3.4 意图一致，无 P2 偏离。本评审复核同意。
+
+### 6. 抽查测试真对应（非实现骗断言）— PASS
+- `test_dispatch_once_codex_turn_completed_with_produced_file_has_output`：真写含 `## 改动清单` 锚点的 fixture 文件 + 注入 `turn_completed_ok.jsonl` mock stdout →
+  逐步走 `presence_parse_ok`（frontmatter 闭合 + 锚点命中 → True）→ `produced_files` 非空 → `classify_outcome` step 3 → `HAS_OUTPUT`。断言与实现路径逐行吻合。
+- `test_dispatch_once_i2_empty_produced_file_is_no_parseable_output`：空文件 → `presence_parse_ok` 于 `not text.strip()` 返 False → `produced_files=[]` → `classify_outcome` step 4 → `NO_PARSEABLE_OUTPUT`。真实语义校验。
+- `test_i3_write_event_adapter_bridges_positional_to_kwonly`：测试内 `_write_event(phase_, tried_, final_)` 位置闭包桥接到 kw-only `write_dispatch_route_event`，
+  **结构与 `_route_main` 生产代码内的 `_write_event` 闭包同构**；断言「一次回落落 1 条合法 `dispatch_route` 事件、`final` / `reason` 正确」。非绕过。
+
+## Pass 2（INFORMATIONAL）— P4b 新增（不阻断）
+
+### P4b-I1 — `_default_subprocess_run` 丢弃 stderr
+- 定位：`agate/scripts/agate_dispatch_route.py:_default_subprocess_run`。`capture_output=True` 捕获 stderr 但只回传 `proc.stdout`。
+- 影响：只往 stderr 打印的基础设施错误（部分 auth / 网络失败）不会命中 `_INFRA_SIGNALS`（仅扫 stdout）。
+  由 `classify_outcome` 的「非零退出 + 无产出 + 无成功签名 → INFRA_ERROR」兜底，但丢失诊断信息。
+- Fix 方向（P4c / 后续）：把捕获的 stderr 并入 `_INFRA_SIGNALS` 扫描文本，或至少透传到路由脚本 stderr 供人排查。
+
+### P4b-I2 — `except (FileNotFoundError, OSError)` 冗余
+- 定位：同函数。`FileNotFoundError` 是 `OSError` 子类，二者并列冗余。纯风格，可留可简化。
+
+### P4b-I3 — `_route_main` 子进程端到端路径无 CI 覆盖
+- 定位：`agate/scripts/agate-dispatch.py:_route_main` 的 `else`（子进程端到端）分支。CI 无 `dispatch-routing.yaml` → 恒走 `form=default`，
+  该分支（`functools.partial` 绑 kwargs + I3 适配层闭包 + `try_and_fall` + `DispatchContractError` → exit 1）不被执行。
+  当前仅 `test_i3_*` 在 `try_and_fall` 单元层覆盖桥接逻辑，未经 `_route_main`。
+- 影响：与 `[DESIGN_GAP_REVIEWED]`「CI 不真跑端到端、人工真机复核」一致，非阻断；但适配层接线（partial + 闭包 + exit 码）零自动化回归。
+- Fix 方向（P4c / P5）：加一条集成用例——构造含子进程候选链的临时 `dispatch-routing.yaml` + 注入 mock `run`（DI seam）+ 设 `AGATE_DISPATCH_EXPECT`，冒烟 `_route_main` 子进程分支的 JSON 输出与 `dispatch_route` 事件。
+
+### P4a 遗留 I4 / I6 — implementer 以批次边界理由暂缓，理由成立
+- I4（`check-dispatch-routing.py` 对畸形混合条目 / 孤立 `effort:` 宽松）：改它属 P4a schema 层、跨批改同文件违反 §4.1 批次边界。低影响、非合法形态、不产生错误路由。留主 Agent 择机 / 后续任务。
+- I6（`agate_dispatch_route.py` import 时 `sys.path.insert`）：收窄属跨模块风格改动、与 P4b 目标无关，且 `_route_main` 依赖该 import 路径。维持与既有脚本一致。
+- 本评审同意两项暂缓，不计入 P4b 返工。
+
+## 门槛复跑（P4b）
+
+- `python3 -m pytest agate/tests/ -k tag0034 -q` → **73 passed / 2 failed**；2 红 = `test_bdd_37` / `test_bdd_38`（P4c tmux `build_subprocess_launch` / `tmux_cleanup_action` 未实现），符合批次边界。
+- `check-protocol-consistency.py --strict-errors-only` → exit 0。
+- `check-maintainability.py agate-workspace/tasks/TAG0034-dispatch-routing` → exit 0，`god_file_count: 0` / `fuzzy_boundary_count: 0`（violations 空，无需 `known-violations.md`）。
+- `check-events.py agate-workspace/tasks/TAG0034-dispatch-routing` → exit 0（14 行哈希链完整）。
+- `check-dispatch-routing.py agate-workspace/dispatch-routing.yaml` → exit 0（未改校验器 / scaffold）。
+- 回归：`test_tag0034_zero_change.py` + `test_check_events.py` + `test_tag0027_b2_*` = 25 passed。
+- `ruff check`（`agate_dispatch_route.py` + `agate-dispatch.py` + `test_tag0034_p4b.py`）→ All checks passed。
+- 技术债：本评审未提「后续应重构 / 架构债」类结论，无需 DEBT 条目。
+
+## 修复回派建议（P4b）
+
+P4b-I1 / P4b-I3 → 写入 P4c 的 implementer dispatch-context「约束」节（P4c 落 tmux 包裹层时一并处理 stderr 透传 + 加 `_route_main` 子进程分支集成用例）。
+P4b-I2 / I4 / I6 → 可选清理，主 Agent 择机，不阻断本任务。
+
+---
+
+## 合并结论（P4a + P4b）
+
+- P4a：approved（CRITICAL 0）。P4b：approved（CRITICAL 0，且已闭合 P4a 的 I1/I2/I3/I5）。
+- R1 模型购物完整性洞三处闭合在 P4b 端到端路径下仍成立并经 I1 白名单 + I5 双层强制加固；
+  回归硬约束全部冻结文件逐字节零改动；两条 `[DESIGN_GAP_REVIEWED]` 未引入购物口子。
+- **合并 status：approved**（`agent` = review，非 main）。
+- 未决 INFORMATIONAL：P4b-I1/I2/I3 + P4a 遗留 I4/I6，全部非阻断、转 P4c / 主 Agent 择机。

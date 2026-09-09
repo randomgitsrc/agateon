@@ -105,6 +105,22 @@
 
 ---
 
+## 跨 CLI 子进程结构化输出判成败字段（派发路由 / TAG0034）
+
+> 派发路由（`agate dispatch route`）以子进程形式派 `claude-code` / `codex` / `opencode` 时，用各平台结构化输出流判「这次派发成功 / 基础设施失败 / 无可解析产出」三态（`agate_dispatch_route.classify_outcome`）。素材 = 本机真机样本（2026-09-09，Claude Code 2.1.266 / codex-cli 0.153.4 / opencode 1.18.11），夹具在 `agate/tests/fixtures/tag0034_{claude_code,codex,opencode}/`。**判据只到 presence 级**——产出文件非空 + frontmatter 可解析 + 必需锚点在即算「有产出」，内容完整度 / 质量一律交 gate（走同候选 retry，不换候选）。
+
+| 平台 | 命令 | HAS_OUTPUT（成功 → 停回落、交 gate） | INFRA_ERROR（→ 回落 `infra_error`） | NO_PARSEABLE_OUTPUT（→ 回落 `no_parseable_output`） |
+|---|---|---|---|---|
+| Claude Code | `claude -p --output-format json` | `stop_reason == "end_turn"` + `result` 非空 + 约定产出文件非空且骨架可解析。`modelUsage` 的 key 可核实实际 model（如 `claude-haiku-4-5-20251001`，非父继承） | 启动即报未登录 / `api_error_status` 非 null（如 `401`）/ `stop_reason == "error"` / 挂死被杀（`wait(pid)` 超时 / `kill -0` 探测失活） | `stop_reason == "end_turn"` 但 `result` 空 **且** 约定产出文件缺失或空 |
+| Codex | `codex exec --json` | 事件流含 `{"type":"turn.completed"}` 且**无** `{"type":"turn.failed"}`、**无**顶层 `{"type":"error"}` + 约定产出文件非空且骨架可解析。**退出码不可靠**——以 turn 层事件为准（本版 `turn.failed` → exit 1，研究记 auth 循环 → exit 0，两向都不稳） | `{"type":"turn.failed"}` 或顶层 `{"type":"error","status":...}`（如 model 不被账号支持 → `status:400`）/ 挂死被杀 | 有 `turn.completed` 但无任何 `agent_message` text **且** 约定产出文件缺失或空 |
+| OpenCode | `opencode run --format json` | `step_finish` 且 `part.reason == "stop"` + 有 `text` part + 约定产出文件非空且骨架可解析 | 顶层 `{"type":"error","error":{"name":"ProviderAuthError",...}}`（→ `infra_error`）/ 挂死被杀 | 纯空返回（无 `step_finish`、无 `text` part、无 `error` 事件）/ `{"type":"error","error":{"name":"UnknownError",...}}` / 约定产出文件缺失或空 |
+
+**Codex 两层 `status`（turn 层为准）**：item 级 `payload.item.status == "failed"`（携 `exit_code`，= agent 内部某条 shell 命令非 0 退出）**永不触发换候选**——只要整轮 `turn.completed` 即 `HAS_OUTPUT`。这与「产出质量不是回落信号」（R1）一致。per-command 退出码的可靠性见上方「命令流适配」小节（rollout item 带干净数字 `exit_code`），与 turn 级退出码不可靠是两回事。
+
+**routed-away judge 的 verdict 落点**：P6.5 judge 被路由到 codex/opencode 子进程时，其 transcript 落 `~/.codex/sessions/` 等非 `~/.claude/` 位置，但 **verdict + 证据仍写 `TASK_DIR`**（铁律 2/3 不变）。`check-judge-verdict.py` / `check-p6-provenance.py` 纯 `TASK_DIR` 文件解析、不读平台 transcript 路径——本任务**零改动**这两个脚本，跨平台产出照常平台无关通过（`agate_dispatch_route.routed_away_verdict_location(cli)` 恒 `"TASK_DIR"`）。
+
+---
+
 ## Hermes / OpenClaw 等
 
 待补充——如有使用经验，欢迎 PR。

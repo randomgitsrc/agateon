@@ -167,7 +167,14 @@ def _route_main(argv_rest):
     读 dispatch-routing.yaml + dispatch-tiers.yaml → resolve(phase, role) → stdout 输出
     单行 target 描述 JSON {"cli","model","effort","form","dispatch_context"[,"chain"]}。
     无 `route` 参数时 main() 的既有渲染路径逐字节不变——本函数是纯新增分支。
-    子进程 spawn / try-and-fall 端到端执行由 P4b 在本骨架上追加。
+
+    P4b（M5）：form == "chain" 且首候选为子进程形态（claude-code / codex / opencode）
+    时，本函数端到端跑 try_and_fall（逐候选 dispatch_once → 三类基础设施理由码回落 →
+    HAS_OUTPUT 即停、写 dispatch_route 事件、输出实际 final）。首候选为 native 时仍只
+    输出路由计划 JSON（native 由驱动会话代发，与 P4a DESIGN_GAP 一致）。
+    I3：try_and_fall 的 write_event(phase, tried, final) 位置参数回调 ↔
+    write_dispatch_route_event(task_dir, phase, *, tried, final, task_id) kw-only 写入器
+    —— 在本函数内以适配层闭包桥接（两处签名各自不动）。
     """
     import json
 
@@ -213,13 +220,46 @@ def _route_main(argv_rest):
             "cli": "default", "model": resolved["model"], "effort": None,
             "form": "default", "dispatch_context": ctx_path,
         }
-    else:
+    elif resolved["chain"][0].get("cli") == "native":
         first = resolved["chain"][0]
-        form = "native" if first.get("cli") == "native" else "subprocess"
         out = {
-            "cli": first.get("cli"), "model": first.get("model"),
-            "effort": first.get("effort"), "form": form,
+            "cli": "native", "model": first.get("model"),
+            "effort": first.get("effort"), "form": "native",
             "chain": resolved["chain"], "dispatch_context": ctx_path,
+        }
+    else:
+        # 子进程形态首候选 → 端到端 try-and-fall（M5 / I3 桥接）。
+        import functools
+
+        task_id = os.path.basename(os.path.abspath(task_dir))
+        effort_supported = os.environ.get("AGATE_EFFORT_SUPPORTED", "") == "1"
+        expected_output = os.environ.get("AGATE_DISPATCH_EXPECT") or None
+
+        def _write_event(phase_, tried_, final_):
+            adr.write_dispatch_route_event(
+                task_dir, phase_, tried=tried_, final=final_, task_id=task_id,
+            )
+
+        _once = functools.partial(
+            adr.dispatch_once, effort_supported=effort_supported,
+            expected_output=expected_output, task_dir=task_dir,
+        )
+        try:
+            result = adr.try_and_fall(
+                resolved["chain"], dispatch_context_path=ctx_path,
+                dispatch_once=_once, write_event=_write_event, phase=phase,
+            )
+        except adr.DispatchContractError as exc:
+            sys.stderr.write(f"agate-dispatch.py route: 派发契约违例: {exc}\n")
+            sys.exit(1)
+
+        final = result.final
+        form = "default" if final.get("cli") == "default" else "subprocess"
+        out = {
+            "cli": final.get("cli"), "model": final.get("model"),
+            "effort": final.get("effort"), "form": form,
+            "chain": resolved["chain"], "final": final, "tried": result.tried,
+            "dispatch_context": ctx_path,
         }
 
     sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
