@@ -1,3 +1,8 @@
-# 第 2 轮复跑（protocol-docs 批 commit 90e00db 后）：无失败
-# 全量 unit pytest: 1389 passed / 0 failed / 2 skipped / exit 0
-# 原第 1 轮 6 条 by-design 红（test_codex_platform_docs.py::test_bdd_22~27）已转绿。
+# 第 3 轮（P5→P4 回退修 F1 / DEBT0035 后的重新技术验证，HEAD 6f8422f）：无失败
+# 全量 unit pytest: 1390 passed / 0 failed / 2 skipped / exit 0
+# （1389 基线 + 1 条 F1 守护 test_agate_cmdstream_adapters.py::test_bdd_5_codex_failed_status_not_pending_guard）
+#
+# 历史：
+#  第 1 轮（protocol-docs 批前）：6 条 by-design 红 test_codex_platform_docs.py::test_bdd_22~27
+#  第 2 轮（protocol-docs 批 90e00db 后）：1389 passed / 0 failed —— 6 条转绿
+#  第 3 轮（F1 修复 6f8422f 后）：1390 passed / 0 failed —— 无失败

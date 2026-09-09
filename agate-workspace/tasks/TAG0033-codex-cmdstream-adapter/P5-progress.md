@@ -51,3 +51,31 @@
 - 刷新 P5-test-results/fail-list.txt（无失败）
 - gate_commands.P5 四命令全绿；无真回归；[PROD_NOT_TOUCHED]
 - 不做：未复跑 V1-V5、未改 .py/测试/fixture/文档、未推进 phase、未写 p5_pass_commit
+
+### 第 3 轮（P5 verifier r3 —— P5→P4 回退修 F1/DEBT0035 后重新技术验证）2026-09-09
+- 读完 P5-dispatch-context-verifier-r3.md（含阶段卡片）+ 第 1/2 轮 unit.md/real-machine.md/fail-list.txt/P5-progress.md
+- HEAD = 6f8422f（P4 重试 #1 修 F1）；工作区 M: .state.yaml(phase P4→P5, 主Agent手动_advance) + gate-events.jsonl(+2行, 主Agent补的P4→P5台账, 不还原)
+- F1 核对: agate/scripts/agate-cmdstream-adapters.py 新增 _codex_is_finished(payload,item)(~L641); read_commands pending=not _codex_is_finished(~L766)
+### A. gate_commands.P5 四命令（第 3 轮实跑）
+- 1. timeout 300s pytest agate/tests/unit/ -q --tb=no → 1390 passed / 0 failed / 2 skipped in 109.74s / exit 0（1389 + 1 条 F1 守护 test_bdd_5_codex_failed_status_not_pending_guard）
+  - 定向: -k "bdd_5 or bdd_6 or bdd_7 or truncated" → 10 passed；-k guard → 1 passed；两文件 -k truncat → 5 passed
+  - gate-events.jsonl sha256 跑前跑后逐字节一致(9b025f61…3955b8c/17行)——本轮未被测试追加, 无需还原
+- 2. timeout 120s check-protocol-consistency.py --strict-errors-only → exit 0 / 0 ERROR / 329 WARNING（历史死链）
+- 3. timeout 60s shellcheck -S warning (3 个 .sh) → 0 issue / exit 0
+- 4. timeout 60s ~/.venvs/agate-dev/bin/ruff check agate/ → All checks passed / exit 0
+### B. 真机验证（第 3 轮）
+- V1: PASS — importlib CodexAdapter 对真实 spin(status=failed×7,exit_code=2)/frozen-aborted(status=failed,exit_code=137)/normal rollout 跑 read_commands
+  → status=failed 命令映射为 exit=2/137(非None) / exit_signal="exit_code=N" / ts_end 非None / output_hash 非None（不再 pending 空壳）
+  → 对比 pre-fix log: 同 rollout 修复前全 exit=null/pending/output_hash=null
+  → 真·pending 路径(item_started无item_completed): 本机无真实样本, 单测 test_bdd_6 覆盖, pytest 绿
+- V6 ③: PASS(关键新证据) — codex exec 连跑 8 次 'ls /nonexistent-xyz-p5r3'(全 exit_code=2/status=failed/输出恒定)
+  → rollout-2026-09-09T11-51-59-01a0844b-...jsonl → detect --platform codex --now ts_start+5s → VERDICT: SPIN
+  (窗口10内同(cmd,exit=2,output_hash=20794873…)重复8次≥5) ; 正常会话 → NORMAL ; pre-fix 为 FROZEN/NORMAL
+- V3: PASS — 子会话 rollout-...5bec... list_sessions 枚举到 + read_commands session_id=子basename(含子uuid非父id)
+- V4: PASS — _detect_truncated 对 fixture 截断样例(cat big.log, formatted_output 含 'tokens truncated') → truncated=True/output_hash=None ; -k truncat 5 passed
+- V5: PASS — codex features list: multi_agent = stable/true ; collaboration_modes/multi_agent_mode = removed
+- V2/V7: 延后 P6(P6 首轮已做, .archived/p6-pre-retreat-20260909/real-machine-p6.md) ; V6 全场景 P6 ; V8 待环境(budget 0/2)
+### 产出 + 判定
+- 刷新 P5-test-results/{unit.md, fail-list.txt, real-machine.md}（第 3 轮为主体 + 保留第 1/2 轮历史说明段 ; N5 签名 passed=1390 failed=0）
+- gate_commands.P5 四命令全绿 ; 1390 passed / 0 failed ; fail-list.txt 空(无失败) ; 无真回归 ; [PROD_NOT_TOUCHED]
+- 未改任何 agate/scripts/*.py / 测试 / fixture / 文档 ; 未推进 phase ; 未写 p5_pass_commit ; 未派 review
