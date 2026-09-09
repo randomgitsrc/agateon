@@ -133,6 +133,26 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 > 升级到新版本前，检查你的项目是否触及以下变更点。
 
+### v0.70.0 — Codex 命令流适配器 + 平台接入（TAG0033：RM-AG0061 + DEBT0035）
+
+> **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 /
+> 3 个 hook 薄壳（本任务改动清单无 `.sh` 改动），无需重跑 `install-hook.py`（软链布局
+> `git pull` 即生效；Windows 复制模式重跑 SETUP.md 步骤 2 的 `cp`）。
+
+1. **新增 `CodexAdapter`（`agate-cmdstream-adapters.py` 的 `ADAPTERS` 注册表键 `"codex"`）
+   ——对已有任务零影响**：纯增量新增第四个命令流适配器（前三个既有适配器不动），把
+   `~/.codex/sessions/**/rollout-*.jsonl` 解析为既有 `CommandRecord` IR。检测引擎 / 阈值
+   （RM-AG0055 §3.4.3）/ `CommandRecord` IR / 既有三个平台适配器 class 体 **零改动**——
+   未启用 Codex 的项目行为完全不变。
+2. **F1 修复（DEBT0035，本版本关闭）——仅影响 Codex 会话解析**：`CodexAdapter` 的 pending
+   判据从 `item.status != "completed"` 收紧为「无终态信号才算 pending」（`_codex_is_finished`
+   helper）。修复对象是本任务内新增的 `CodexAdapter`，不触及任何既有平台适配器或检测引擎。
+3. **`agate/platform-notes.md` Codex 章补完整 + `agate/SETUP.md` 新增「步骤 2-Codex」小节
+   ——纯文档新增**：能力矩阵 / model 阵容 / `multi_agent` feature flag / 接入步骤；不改动
+   既有平台章节，不约束下游任务的产出格式。
+4. **升级动作**：`git pull` 即完成；无迁移动作。（CHECK 13：CHANGELOG 最新版 ↔ UPGRADING §3
+   章节一致。）
+
 ### v0.69.0 — 版本管理生命周期可用性批（TAG0032：RM-AG0058 + DEBT0034）
 
 > **本版本有一处行为变化（install 对 legacy 软链布局 fail-closed 拒绝），其余为纯增量。**

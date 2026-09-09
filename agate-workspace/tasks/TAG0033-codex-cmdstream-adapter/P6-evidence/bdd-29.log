@@ -1,0 +1,38 @@
+=== BDD-29: pytest -v ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0033
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+agate/tests/unit/test_codex_platform_docs.py::test_bdd_29_verification_checklist_shaped_four_elements PASSED [100%]
+
+============================== 1 passed in 0.03s ===============================
+
+=== BDD-29: P1 §7 table rows V1-V8 (grep '^\| V[1-8] ') ===
+450:| V1 | `~/.codex/sessions/` 目录结构与 rollout JSONL 格式与 fixture/解析假设一致 | 读若干真实 `rollout-*.jsonl` 头尾；核对 `CommandExecution` item 的 `command`/`exit_code`/`status`/`started_at_ms`/`completed_at_ms`/`aggregated_output` 字段存在且形态与 §4.1 描述一致 | P5 | fixture 字段结构逐项能在真实 rollout 找到对应；`read_commands` 对真实文件不抛异常、产出记录字段非空 | ✅ 已做（§4.1）；P5 复核为回归 |
+451:| V2 | `spawn_agent` 完整参数 schema（穷尽——是否有 `background`/`timeout`/`permission` 等 `[自述]` 未提及字段）| 换法：`strings $(command -v codex)` / 读 codex 包内 schema 定义 / 或 API-key 账号跑 `codex exec --json` 观察 `function_call.arguments` 键全集 / 或跨 ≥20 次真实 `spawn_agent` 调用归纳键并集 | P5-P6 | 给出 `spawn_agent` 参数键全集 + 每键类型/枚举/默认；platform-notes.md 对应段从 `[自述]` 升级为 `[实测]` 或如实保留 `[自述]` + 已尽力说明 | ⚠️ 部分——本机可跨真实调用归纳（ChatGPT 账号）；`[自述]` 逐字 dump 已确认不可用（§4.3）|
+452:| V3 | `spawn_agent` 子会话是独立 rollout 文件、父子关联字段稳定 | 现场派 `spawn_agent(task_name=X)`；`find ~/.codex/sessions -newermt "-2 min"`；核对新子文件 `session_meta` 含 `parent_thread_id` / `source.subagent.thread_spawn` / `thread_source=="subagent"` | P5 | 子会话为独立 `rollout-*.jsonl`；`list_sessions` 枚举到它；`read_commands` 产出 `session_id` 指向子会话自身 | ✅ 已做（§4.2）；P5 复核为回归 |
+453:| V4 | Codex 输出截断标记的确切形态 | 构造超 `max_output_tokens` 的命令（如 `yes | head -c 500000`）经 `codex exec`；读落盘 rollout 的 `CommandExecution` item，找截断字段/文本标记 | P5 | 拿到确切截断标记形态；`CodexAdapter` 截断检测对该形态命中 → `truncated=True` + `output_hash=None`（BDD-7 fixture 用该形态）| ✅ 可做（本机 ChatGPT 账号足够）|
+454:| V5 | `codex features list` 的 `multi_agent` flag 在目标版本仍 stable+on | `timeout 60s codex features list \| grep -iE "multi_agent\|spawn\|collab"` | P5/P6 | `multi_agent` = stable / true；platform-notes.md 版本注记与实测一致 | ✅ 已做（§4.4）；P6 复核 |
+455:| V6 | 检测引擎对真实 Codex 会话（非 fixture）判三态正确 | 造真实卡死场景（`codex exec` 派一个跑 `sleep 1200` 的命令并中途 SIGTERM 会话）+ 正常会话 + 重复失败会话；各跑 `agate-cmdstream-detect.py detect <rollout> --platform codex --now <虚拟时刻>` | P6 | 卡死会话 → FROZEN；正常会话 → NORMAL；重复失败会话 → SPIN（与 BDD-13~17 一致）| ✅ 可做 |
+456:| V7 | `spawn_agent` 嵌套深度（`spawn_agent` 内再 `spawn_agent`）| 派一个子代理并指示它再 `spawn_agent` 一个孙代理；观察 `~/.codex/sessions/` 是否生成孙会话文件、`session_meta.source.subagent.thread_spawn.depth` 值 | P6 | 得出嵌套是否生效 + `depth` 字段行为；platform-notes.md 如实记录（既有 max_depth=1 注记据此复核）| ✅ 可做（非阻塞——结论不改 CodexAdapter 契约，`list_sessions` 已按 `os.walk` 覆盖任意深度独立文件）|
+457:| V8 | API-key 账号 model 阵容（`gpt-5` / `o3` 等是否可用、`spawn_agent` model 枚举是否更宽）| 在 API-key 账号环境跑 `codex exec --json -m gpt-5 <<< "hi"` 与 `spawn_agent(model=...)` 各种枚举 | P5/P6 | 得出 API-key 账号可用 model 集；platform-notes.md 补 API-key 账号一列 | ❌ **待有该环境时补（非阻塞）**——本机为 ChatGPT 账号。`verification_env_budget: 止损轮次 2`；主 Agent 在 P5/P6 dispatch-context 记录轮次 |
+
+=== BDD-29: §7 header four elements + V8 待补 + verification_env_budget ===
+22:verification_env_budget: "止损轮次 2（独立计数，不占 retries[P5]）；仅适用于 API-key 账号 model 阵容项，其余真机项本机可做"
+418:- Then 注明：ChatGPT 账号下 `codex exec -m` 默认 `gpt-5.6-terra`（`-m gpt-5`/`-m gpt-5-codex` 被 400 拒）；`spawn_agent` 的 `model` 枚举为 `gpt-5.6-terra`/`gpt-5.6-luna`/`gpt-5.5`/`gpt-5.4-mini`（`[自述]`）；API-key 账号 model 阵容登记为"待有该环境时补"（非阻塞）
+439:- Then 每一项均写明「验证什么 / 怎么验（含具体命令）/ 在哪个阶段执行（P5 或 P6）/ 通过判据（可二值）」四要素；本机 ChatGPT 账号做不了的项（API-key 账号 model 阵容）显式标注"待有该环境时补（非阻塞）"并给出 `verification_env_budget` 轮次占位
+444:- Then 含一项"直接实测穷尽 `spawn_agent` 参数 schema（是否存在 `[自述]` 未提及的 `background`/`timeout`/`permission` 等字段）"，并注明 P1 已确认"令模型逐字输出内部 tool schema"此法不可用（模型拒绝），P5-P6 须换法（读 codex 二进制/内省、API-key 账号观察、或跨大量真实调用归纳），通过判据 = 给出字段全集并在 platform-notes.md 标 `[实测]`
+448:| 项 | 验证什么 | 怎么验（命令）| 阶段 | 通过判据（二值）| 本机可做？ |
+457:| V8 | API-key 账号 model 阵容（`gpt-5` / `o3` 等是否可用、`spawn_agent` model 枚举是否更宽）| 在 API-key 账号环境跑 `codex exec --json -m gpt-5 <<< "hi"` 与 `spawn_agent(model=...)` 各种枚举 | P5/P6 | 得出 API-key 账号可用 model 集；platform-notes.md 补 API-key 账号一列 | ❌ **待有该环境时补（非阻塞）**——本机为 ChatGPT 账号。`verification_env_budget: 止损轮次 2`；主 Agent 在 P5/P6 dispatch-context 记录轮次 |
+459:> V8 是唯一"环境不可得"项：按 P0-brief 核心约束 5 / research §11 #5，登记为 `verification_env` 类"待有该环境时补"，
+473:`phases: [P1, P2, P3, P4, P5, P6, P7, P8]` —— **全阶段保留，不裁剪**。
+475:| 阶段 | 保留理由 |
+477:| P1 | 核心阶段，不可裁 |
+497:  `verification_env` + `verification_env_budget: 止损轮次 2` 声明（按 P1 卡片「verification_env vs supplementable
+
+EXIT_CODE: 0

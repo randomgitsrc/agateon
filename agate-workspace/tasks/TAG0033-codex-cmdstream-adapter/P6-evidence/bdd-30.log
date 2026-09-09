@@ -1,0 +1,30 @@
+=== BDD-30: pytest -v ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0033
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+agate/tests/unit/test_codex_platform_docs.py::test_bdd_30_spawn_agent_schema_exhaustive_item_registered PASSED [100%]
+
+============================== 1 passed in 0.03s ===============================
+
+=== BDD-30: P1 §7 grep spawn_agent schema exhaustive item + method-boundary ===
+66:| 证据强度 | `spawn_agent` 完整参数 schema 是 `[自述]`——「未见 `background`/`timeout`/`permission` 字段」≠「确认无」；P1 spike 已确认穷尽 schema 需换法（模型受训拒绝逐字输出内部 tool schema） | 外部评审 B1 教训——产出表述不得混同 `[自述]`/`[推断]`/`[已实测]` |
+181:### 4.3 `spawn_agent` 完整参数 schema 直接实测 `[自述]`（穷尽实测：P1 确认路径不可用，转 P5-P6）
+184:  `message`（加密）/ `reasoning_effort`（部分调用）。**未见** `background` / `timeout` / `permission` 键——
+186:- P1 直接实测尝试：派 `spawn_agent` 子代理令其逐字输出自己的 `spawn_agent` tool JSON schema——**模型受训
+187:  拒绝**（两次尝试均拒："I can't provide verbatim internal tool schemas"）。→ **穷尽 schema 拿不到的方法边界
+190:- 穷尽 schema 登记为真机验证清单 §7 项 V2，P5-P6 执行，换法（读 codex 二进制/内省、或 API-key 账号跑
+191:  `--json` 观察、或跨大量真实调用归纳字段全集）。落地代码按「schema 可能不全」处理（不假设已穷尽）。
+405:#### BDD-24: spawn_agent schema 证据强度如实标注、不混同
+406:- Given Codex 章中关于 `spawn_agent` 参数 schema 的段落
+408:- Then 明确标注为 `[自述]`（或等价措辞）；不把"未见 `background`/`timeout`/`permission` 字段"表述为"确认无这些字段"；并指明"穷尽 schema 直接实测"是真机验证清单待执行项
+441:#### BDD-30: spawn_agent schema 穷尽实测项已登记且方法边界已注明
+444:- Then 含一项"直接实测穷尽 `spawn_agent` 参数 schema（是否存在 `[自述]` 未提及的 `background`/`timeout`/`permission` 等字段）"，并注明 P1 已确认"令模型逐字输出内部 tool schema"此法不可用（模型拒绝），P5-P6 须换法（读 codex 二进制/内省、API-key 账号观察、或跨大量真实调用归纳），通过判据 = 给出字段全集并在 platform-notes.md 标 `[实测]`
+451:| V2 | `spawn_agent` 完整参数 schema（穷尽——是否有 `background`/`timeout`/`permission` 等 `[自述]` 未提及字段）| 换法：`strings $(command -v codex)` / 读 codex 包内 schema 定义 / 或 API-key 账号跑 `codex exec --json` 观察 `function_call.arguments` 键全集 / 或跨 ≥20 次真实 `spawn_agent` 调用归纳键并集 | P5-P6 | 给出 `spawn_agent` 参数键全集 + 每键类型/枚举/默认；platform-notes.md 对应段从 `[自述]` 升级为 `[实测]` 或如实保留 `[自述]` + 已尽力说明 | ⚠️ 部分——本机可跨真实调用归纳（ChatGPT 账号）；`[自述]` 逐字 dump 已确认不可用（§4.3）|
+
+EXIT_CODE: 0

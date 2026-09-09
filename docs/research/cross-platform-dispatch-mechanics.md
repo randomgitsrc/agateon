@@ -166,7 +166,7 @@ RM-AG0055（TAG0028，**已落地**——`agate/scripts/agate-cmdstream-{adapter
   |---|---|
   | `cli: native` / 子进程 · Claude Code | ✅ `ClaudeCodeAdapter` 直接覆盖（含 Task 子代理 sidecar）|
   | `cli: native`（命名 subagent）/ 子进程 · OpenCode | ✅ `OpenCodeAdapter` 直接覆盖 |
-  | `cli: codex`（子进程）/ `spawn_agent`（`cli: native`）· Codex | ⚠ **缺 `CodexAdapter`**——数据源 `~/.codex/sessions/**/*.jsonl`（+ `codex exec --json` 事件流）；`spawn_agent` 子会话疑似同 DSH 的 `delegationDepth` 式独立文件。按 RM-AG0055 §3.4.4"未来接入 Codex/Cursor：约一个文件"——**只写一个适配器 + 注册表加一行，检测引擎/阈值零改动** |
+  | `cli: codex`（子进程）/ `spawn_agent`（`cli: native`）· Codex | ✅ **`CodexAdapter` 已补**（TAG0033，2026-09；本文调查快照期 2026-09-08 为「⚠ 缺」）——数据源 `~/.codex/sessions/**/*.jsonl`（+ `codex exec --json` 事件流）；`spawn_agent` 子会话为 DSH 的 `delegationDepth` 式独立文件（P5 V3 实测确认）。按 RM-AG0055 §3.4.4"未来接入 Codex/Cursor：约一个文件"——**一个适配器 + 注册表加一行，检测引擎/阈值零改动** |
 
 - **落地时的集成点**：spawn 子进程 / 调 `spawn_agent` 时**捕获其 session id**，交给命令流监控用来定位该会话的记录文件。这是路由层要补的唯一衔接，不是新机制。
 
@@ -283,7 +283,7 @@ RM-AG0055 的命令流机制是为"看不见进程"的原生派发（Task 工具
 | # | 项 | 状态 |
 |---|---|---|
 | 1 | **OpenCode `agents.<name>.model` 是否生效** | ✅ **已测通**——项目配 `agent.agate-child-pro={mode:subagent, model:"deepseek/deepseek-v4-pro"}`，父 `-m deepseek/deepseek-v4-flash` 派它 → 子回报 `deepseek/deepseek-v4-pro`。**旧 bug ①③ `[实测]` 直接复现确认不存在**；**旧 bug ②（父交互式切 model 后子跟不跟）本轮仅机制推断、未直接复现**（§5.2）——落地前补测。**OpenCode `cli: native` 可行**（走命名 agent 间接路，§5.2） |
-| 2 | **完成/失败信号 + 卡死处理** | ✅ **清楚**（§6.0 / §6.0.1）——正常完成：CLI 子进程 = 进程退出、native subagent = 工具调用返回，两条路内在可靠，不靠超时。卡死检测**直接复用 RM-AG0055 已落地的命令流日志**（`agate-cmdstream-*.py`）：Claude Code / OpenCode 适配器现成覆盖；**唯一缺口 = Codex 适配器**（按 RM-AG0055 §3.4.4"约一个文件"）。集成点 = spawn 时捕获 session id。固定紧 timeout 会误杀长任务=违规处理，不采用 |
+| 2 | **完成/失败信号 + 卡死处理** | ✅ **清楚**（§6.0 / §6.0.1）——正常完成：CLI 子进程 = 进程退出、native subagent = 工具调用返回，两条路内在可靠，不靠超时。卡死检测**直接复用 RM-AG0055 已落地的命令流日志**（`agate-cmdstream-*.py`）：Claude Code / OpenCode 适配器现成覆盖；~~唯一缺口 = Codex 适配器~~ → **`CodexAdapter` 已补**（TAG0033，2026-09；按 RM-AG0055 §3.4.4"约一个文件"落地，检测引擎/阈值零改动）。集成点 = spawn 时捕获 session id。固定紧 timeout 会误杀长任务=违规处理，不采用 |
 | 3 | **权限对等经验验证** | ✅ **已测通**——三平台加绕过 flag 均能写 cwd 外（`$HOME`）；Codex 对照 `-s read-only` 确认沙箱真会拦（§4） |
 | 4 | **Codex `spawn_agent` 完整 schema** | ✅ **已拿到**——`task_name`(必)/`message`(必)/`fork_turns`("none"\|"all"\|N，默认"all")/`model`(枚举 4 个)/`reasoning_effort`(6 档)（§5.2）。未见 background/timeout/permission 字段（模型自述称"complete"） |
 | 5 | **Codex API-key 账号 model 阵容** | ⏸ **环境自查**——本机 ChatGPT 账号：`codex exec -m` 只 `gpt-5.6-terra`，但 `spawn_agent` 的 `model` 枚举有 `gpt-5.6-terra/gpt-5.6-luna/gpt-5.5/gpt-5.4-mini` 4 个。API-key 账号有无 `gpt-5`/`o3` 等需在那种环境跑 `codex exec --json` 试 |

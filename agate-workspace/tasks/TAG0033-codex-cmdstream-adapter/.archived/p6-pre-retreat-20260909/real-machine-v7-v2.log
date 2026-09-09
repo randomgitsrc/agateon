@@ -1,0 +1,57 @@
+# P6 真机 V7 / V2 — spawn_agent 嵌套深度 + 参数 schema 键并集
+
+## V7：嵌套 spawn_agent（codex exec → 子代理 p6_v7_child → 孙代理 p6_v7_grand: echo v7nest）
+
+codex exec exit 0，25s。~/.codex/sessions/ 新增 3 个独立 rollout（父 + 子 + 孙）：
+  父  rollout-2026-09-09T08-20-43-01a08389-d70b-...jsonl  thread_source=user       thread_spawn=None
+  子  rollout-2026-09-09T08-20-51-01a08389-f4db-...jsonl  thread_source=subagent   depth=1  parent=01a08389-d70b  agent_path=/root/p6_v7_child
+  孙  rollout-2026-09-09T08-20-56-01a0838a-09f9-...jsonl  thread_source=subagent   depth=2  parent=01a08389-f4db  agent_path=/root/p6_v7_child/p6_v7_grand
+
+孙会话 session_meta.source.subagent.thread_spawn（逐字）：
+{
+  "subagent": {
+    "thread_spawn": {
+      "parent_thread_id": "01a08389-f4db-7c23-8e17-73d15ddfdd4f",
+      "depth": 2,
+      "agent_path": "/root/p6_v7_child/p6_v7_grand",
+      "agent_nickname": "Raman",
+      "agent_role": null
+    }
+  }
+}
+id= 01a0838a-09f9-7811-8466-7ca187808767  session_id= 01a08389-d70b-7ac2-8840-c08933d33245  parent_thread_id= 01a08389-f4db-7c23-8e17-73d15ddfdd4f  forked_from_id= 01a08389-f4db-7c23-8e17-73d15ddfdd4f  multi_agent_version= v2
+
+适配器对 depth=2 孙会话：
+  probe(孙)= True   probe(子)= True
+  list_sessions 计数= 39   孙 in list= True   子 in list= True
+  read_commands(孙): session_id= rollout-2026-09-09T08-20-56-01a0838a-09f9-7811-8466-7ca187808767.jsonl  cmd= /bin/bash -lc 'echo v7nest'  exit= 0  signal= exit_code=0
+  read_commands(子) 记录数= 0 （子只派发、未跑 shell）
+
+结论 V7：嵌套 spawn_agent 生效；depth 字段随层级递增（1→2）；每层独立 rollout 同扁平目录，
+  os.walk 全枚举，CodexAdapter 契约不受影响；孙会话 read_commands 的 session_id = 孙自身 basename。
+  → platform-notes.md 既有「Codex subagent max_depth=1」注记已被实测超越（嵌套到 depth=2 可用）。
+
+## V2：跨 ≥5 次真实 spawn_agent 调用归纳 function_call.arguments 键并集
+
+P6 本阶段真实 spawn_agent 调用（≥5）：p6_v7_child / p6_v7_grand / p6_v2_a / p6_v2_b / p6_v2_c1 / p6_v2_c2
+（另纳入本机今日更早的 3 次 schema_probe/probe_child/echo_check，合计 9 次）
+
+  schema_probe   keys=['fork_turns', 'message', 'task_name']  model=None reasoning_effort=None fork_turns=all
+  probe_child    keys=['fork_turns', 'message', 'model', 'task_name']  model=gpt-5.6-terra reasoning_effort=None fork_turns=none
+  echo_check     keys=['fork_turns', 'message', 'task_name']  model=None reasoning_effort=None fork_turns=none
+  p6_v7_child    keys=['fork_turns', 'message', 'task_name']  model=None reasoning_effort=None fork_turns=all
+  p6_v7_grand    keys=['fork_turns', 'message', 'task_name']  model=None reasoning_effort=None fork_turns=all
+  p6_v2_a        keys=['fork_turns', 'message', 'model', 'reasoning_effort', 'task_name']  model=gpt-5.6-luna reasoning_effort=high fork_turns=none
+  p6_v2_b        keys=['fork_turns', 'message', 'task_name']  model=None reasoning_effort=None fork_turns=none
+  p6_v2_c1       keys=['fork_turns', 'message', 'task_name']  model=None reasoning_effort=None fork_turns=all
+  p6_v2_c2       keys=['fork_turns', 'message', 'model', 'reasoning_effort', 'task_name']  model=gpt-5.4-mini reasoning_effort=low fork_turns=none
+
+键并集 = ['fork_turns', 'message', 'model', 'reasoning_effort', 'task_name']
+超出 [自述] 集合 {task_name,message,model,reasoning_effort,fork_turns} 的键 = (无)
+
+结论 V2：跨 9 次真实 spawn_agent 调用，function_call.arguments 键并集 = {task_name, message,
+  model, reasoning_effort, fork_turns}，未观察到 background / timeout / permission 或任何 [自述]
+  之外的键。样本量有限（只覆盖模型实际发出的键、带默认值的可选键不出现），不等于穷尽 —
+  platform-notes.md 的 [自述] 标注保持不动。
+
+EXIT_CODE: 0

@@ -25,6 +25,7 @@
 # （TAG0025 教训：不断言"Unreleased 段是否存在"类一次性事实）。
 
 import importlib.util
+import json
 
 import pytest
 
@@ -466,3 +467,215 @@ def test_bdd_8_cli_detect_expected_signal(agate_scripts, tmp_path, capsys):
     assert rc2 == 0
     assert "VERDICT: NORMAL" in out2, f"expected=200 时 350s < 400s 不应冻结（CRITICAL-3③），输出:\n{out2}"
     assert "expected=200s" in out2, "原因应注明 expected×2 主信号来源"
+
+
+# ================= TAG0033: 检测引擎对 Codex 会话判三态（BDD-13~17，检测引擎零改动） =================
+# 被测（P4 才新增，本节当前必须全红）：agate-cmdstream-adapters.py 的 class CodexAdapter。
+# 范式：比照本文件既有三态确定性试验——CodexAdapter.read_commands 解析 Codex rollout →
+#   记录转活动事件 dict（比照 agate-cmdstream-detect.py CLI 转换层 :343-369）→ detect(events, now)。
+# 阈值用 RM-AG0055 §3.4.3 既有值（调用冻结 suspect 900s / 活动冻结 suspect 300s / SPIN 阈值 5），
+#   不新造（见 test_bdd_21_detect_thresholds_unchanged 守护）。
+# 红灯性质（B 类）：adapters.CodexAdapter 触发 AttributeError（模块无该属性）。仅 stdlib + pytest。
+
+_CX_META = (
+    '{"timestamp":"2026-09-08T21:01:55.000Z","ordinal":0,"type":"session_meta",'
+    '"payload":{"id":"demo0000-0000-7000-a000-000000000abc",'
+    '"session_id":"demo0000-0000-7000-a000-000000000abc","thread_source":"user",'
+    '"cli_version":"0.153.4","originator":"codex-tui"}}\n'
+)
+
+
+def _load_cmdstream_adapters(agate_scripts):
+    """importlib 加载 agate-cmdstream-adapters.py；缺失时 pytest.fail（B 类红灯）。"""
+    path = agate_scripts / "agate-cmdstream-adapters.py"
+    if not path.is_file():
+        pytest.fail(f"被测模块未实现: {path}（TDD 红灯，P4 实现后转绿）")
+    spec = importlib.util.spec_from_file_location(
+        "agate_cmdstream_adapters_codextest", str(path)
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _cx_exec(item_id, cmd, exit_code, out, t0, t1, truncated=False, status="completed"):
+    """构造一行 event_msg/item_completed CommandExecution（rollout 封套形态）。
+
+    status 默认 "completed"；真机把已结束但非 0 退出的命令记为 "failed"（DEBT0035 / P6 V6）,
+    调用方按需传入。CodexAdapter 以「有终态信号」判已结束，两种取值均映射为非 pending。
+    """
+    item = {
+        "type": "CommandExecution", "id": item_id,
+        "command": ["/bin/bash", "-lc", cmd],
+        "exit_code": exit_code, "status": status,
+        "aggregated_output": out,
+    }
+    if truncated:
+        item["output_truncated"] = True
+        item["aggregated_output"] = out + " ...[output truncated]"
+    payload = {"type": "item_completed", "started_at_ms": t0, "completed_at_ms": t1,
+               "item": item}
+    return json.dumps({"timestamp": "2026-09-08T21:02:00.000Z", "ordinal": 1,
+                       "type": "event_msg", "payload": payload}) + "\n"
+
+
+def _cx_started(item_id, cmd, t0):
+    """构造一行 event_msg/item_started CommandExecution（未结束命令，无对应 item_completed）。"""
+    payload = {"type": "item_started", "started_at_ms": t0,
+               "item": {"type": "CommandExecution", "id": item_id,
+                        "command": ["/bin/bash", "-lc", cmd],
+                        "status": "in_progress", "aggregated_output": ""}}
+    return json.dumps({"timestamp": "2026-09-08T21:02:00.000Z", "ordinal": 1,
+                       "type": "event_msg", "payload": payload}) + "\n"
+
+
+def _write_cx_rollout(tmp_path, lines, name="rollout-demo.jsonl"):
+    p = tmp_path / name
+    p.write_text(_CX_META + "".join(lines), encoding="utf-8")
+    return p
+
+
+def _records_to_events(records, expected=None):
+    """比照 agate-cmdstream-detect.py CLI 转换层（:343-369）：CommandRecord → 活动事件 dict。"""
+    events = []
+    for idx, r in enumerate(records):
+        if r.ts_start is None:
+            continue
+        ev_id = f"{r.session_id}:{r.tool}:{r.command}#{idx}"
+        events.append({"ts": r.ts_start // 1000, "kind": "call", "id": ev_id,
+                       "cmd": r.command, "expected": expected})
+        if r.exit is not None or r.ts_end is not None:
+            ts_end = (r.ts_end if r.ts_end is not None else r.ts_start) // 1000
+            events.append({"ts": ts_end, "kind": "result", "id": ev_id, "cmd": r.command,
+                           "exit": r.exit, "out": r.output_hash, "truncated": r.truncated})
+    return events
+
+
+# ---- BDD-13: Codex 会话调用冻结 → FROZEN ----
+
+
+def test_bdd_13_codex_call_freeze_frozen(agate_scripts, tmp_path):
+    """BDD-13：Codex 会话含未结束命令、无 expected，观察时刻距其 ts_start > 900s →
+    verdict == "FROZEN"，reasons 含"调用冻结"字样。"""
+    detect_mod = _load_detect(agate_scripts)
+    adapters = _load_cmdstream_adapters(agate_scripts)
+
+    t0 = 1788400000000
+    session = _write_cx_rollout(tmp_path, [
+        _cx_exec("done1", "setup step", 0, "ok\n", t0, t0 + 1000),
+        _cx_started("hang1", "network_call_no_timeout", t0 + 2000),
+    ])
+    records = adapters.CodexAdapter().read_commands(str(session))
+    events = _records_to_events(records)
+    # 未结束命令 ts_start=(t0+2000)//1000=1788400002 秒；距今 901s > 兜底 suspect 900s
+    verdict, reasons = detect_mod.detect(events, now=1788400002 + 901)
+    assert verdict == "FROZEN"
+    assert "调用冻结" in "\n".join(reasons)
+
+
+# ---- BDD-14: Codex 会话活动冻结 → FROZEN ----
+
+
+def test_bdd_14_codex_activity_freeze_frozen(agate_scripts, tmp_path):
+    """BDD-14：Codex 会话所有命令均已结束，最后活动事件距观察时刻 > 300s →
+    verdict == "FROZEN"，reasons 含"活动冻结"字样。"""
+    detect_mod = _load_detect(agate_scripts)
+    adapters = _load_cmdstream_adapters(agate_scripts)
+
+    t0 = 1788400000000
+    session = _write_cx_rollout(tmp_path, [
+        _cx_exec("i1", "step one", 0, "a\n", t0, t0 + 1000),
+        _cx_exec("i2", "step two", 0, "b\n", t0 + 2000, t0 + 3000),
+    ])
+    records = adapters.CodexAdapter().read_commands(str(session))
+    events = _records_to_events(records)
+    # 最后活动 = (t0+3000)//1000 = 1788400003 秒；距今 301s > 活动冻结 suspect 300s
+    verdict, reasons = detect_mod.detect(events, now=1788400003 + 301)
+    assert verdict == "FROZEN"
+    assert "活动冻结" in "\n".join(reasons)
+
+
+# ---- BDD-15: Codex 会话无效重复 → SPIN ----
+
+
+def test_bdd_15_codex_invalid_repeat_spin(agate_scripts, tmp_path):
+    """BDD-15：Codex 会话窗口内同 (command, exit, output_hash) 组合重复 ≥ 5 次
+    （exit_code 与 aggregated_output 均不变、无截断）→ verdict == "SPIN"。
+
+    真机形态（DEBT0035 / P6 V6）：重复失败命令记为 status=="failed" + exit_code 非 0 +
+    completed_at_ms——CodexAdapter 须据「有终态信号」判已结束，提取 exit + output_hash，
+    detect 才能算出重复结果签名判 SPIN（旧 pending 口径下这些命令 exit/output_hash 全 None，
+    判不出 SPIN）。"""
+    detect_mod = _load_detect(agate_scripts)
+    adapters = _load_cmdstream_adapters(agate_scripts)
+
+    t0 = 1788400000000
+    lines = [_cx_exec(f"r{i}", "retry_convert", 2, "same failure\n",
+                      t0 + i * 2000, t0 + i * 2000 + 1000, status="failed") for i in range(6)]
+    session = _write_cx_rollout(tmp_path, lines)
+    records = adapters.CodexAdapter().read_commands(str(session))
+    events = _records_to_events(records)
+    last = (t0 + 5 * 2000 + 1000) // 1000
+    verdict, reasons = detect_mod.detect(events, now=last + 5)
+    assert verdict == "SPIN"
+    assert "retry_convert" in "\n".join(reasons)
+
+
+# ---- BDD-16: Codex 会话正常推进 → NORMAL（不误报） ----
+
+
+def test_bdd_16_codex_normal_progress_no_false_positive(agate_scripts, tmp_path):
+    """BDD-16：Codex 会话命令持续推进、结果签名（exit 或输出哈希）在变化、无未结束调用
+    悬挂超阈值 → verdict == "NORMAL"。"""
+    detect_mod = _load_detect(agate_scripts)
+    adapters = _load_cmdstream_adapters(agate_scripts)
+
+    t0 = 1788400000000
+    lines = [
+        _cx_exec("n1", "run_test", 1, "fail A\n", t0, t0 + 1000),
+        _cx_exec("n2", "apply_fix", 0, "patched A\n", t0 + 2000, t0 + 3000),
+        _cx_exec("n3", "run_test", 1, "fail B\n", t0 + 4000, t0 + 5000),
+        _cx_exec("n4", "apply_fix", 0, "patched B\n", t0 + 6000, t0 + 7000),
+        _cx_exec("n5", "run_test", 0, "all pass\n", t0 + 8000, t0 + 9000),
+    ]
+    session = _write_cx_rollout(tmp_path, lines)
+    records = adapters.CodexAdapter().read_commands(str(session))
+    events = _records_to_events(records)
+    last = (t0 + 9000) // 1000
+    verdict, _ = detect_mod.detect(events, now=last + 5)
+    assert verdict == "NORMAL"
+
+
+# ---- BDD-17: Codex 会话截断输出不误判 SPIN ----
+
+
+def test_bdd_17_codex_truncated_repeat_not_spin(agate_scripts, tmp_path):
+    """BDD-17：Codex 会话同命令、同 exit、输出均被截断（truncated=True → output_hash=None）
+    重复 ≥ 5 次 → verdict != "SPIN"（截断输出不参与哈希比对）。"""
+    detect_mod = _load_detect(agate_scripts)
+    adapters = _load_cmdstream_adapters(agate_scripts)
+
+    t0 = 1788400000000
+    lines = [_cx_exec(f"t{i}", "fail_task", 1, "partial", t0 + i * 2000,
+                      t0 + i * 2000 + 1000, truncated=True) for i in range(6)]
+    session = _write_cx_rollout(tmp_path, lines)
+    records = adapters.CodexAdapter().read_commands(str(session))
+    events = _records_to_events(records)
+    last = (t0 + 5 * 2000 + 1000) // 1000
+    verdict, _ = detect_mod.detect(events, now=last + 5)
+    assert verdict != "SPIN"
+
+
+# ---- BDD-21: 守护测试（非红灯）——检测引擎阈值常量零改动 ----
+
+
+def test_bdd_21_detect_thresholds_unchanged(agate_scripts):
+    """BDD-21 守护（当前绿）：Codex 三态试验用 RM-AG0055 §3.4.3 既有阈值常量，不新造。
+    P4 若改这些常量本测试转红。"""
+    mod = _load_detect(agate_scripts)
+    assert mod.CALL_ALERT_FALLBACK == 300
+    assert mod.CALL_SUSPECT_FALLBACK == 900
+    assert mod.ACTIVITY_ALERT == 60
+    assert mod.ACTIVITY_SUSPECT == 300
+    assert mod.SPIN_THRESHOLD == 5
+    assert mod.REPEAT_WINDOW == 10

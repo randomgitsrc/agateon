@@ -1,0 +1,43 @@
+=== BDD-21a: git diff main...HEAD -- agate-cmdstream-detect.py agate-cmdstream-ir.py (MUST BE EMPTY) ===
+[diff-detect-ir exit=0  (empty diff => no output above)]
+--- stat form ---
+(no line => empty)
+
+=== BDD-21b: git diff --stat main...HEAD -- agate-cmdstream-adapters.py ===
+ agate/scripts/agate-cmdstream-adapters.py | 252 ++++++++++++++++++++++++++++++
+ 1 file changed, 252 insertions(+)
+
+=== BDD-21c: adapters.py diff — check existing 3 classes untouched, only CodexAdapter/_codex_* added ===
++def _codex_int_or_none(val):
++def _codex_is_finished(payload, item):
++class CodexAdapter(CommandStreamAdapter):
++    def probe(self, path):
++    def list_sessions(self, cwd):
++    def read_commands(self, session_path):
++    def _join_command(command):
++    def _detect_truncated(cls, item):
++    def _build_record(self, session_id, obj, payload, item, *, pending):
+
+=== BDD-21d: hunk headers (context) ===
+@@ -35,6 +35,7 @@ import importlib.util
+@@ -618,12 +619,263 @@ class DSHAdapter(CommandStreamAdapter):
+
+=== BDD-21e: any '-' deletions (non +++/---) in adapters.py diff? ===
+(NO deletion lines — pure additions)
+
+=== BDD-21f: guard tests -v ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0033
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+agate/tests/unit/test_agate_cmdstream_adapters.py::test_bdd_21_command_record_ten_fields_unchanged PASSED [ 50%]
+agate/tests/unit/test_agate_cmdstream_detect.py::test_bdd_21_detect_thresholds_unchanged PASSED [100%]
+
+============================== 2 passed in 0.04s ===============================
+
+EXIT_CODE: 0

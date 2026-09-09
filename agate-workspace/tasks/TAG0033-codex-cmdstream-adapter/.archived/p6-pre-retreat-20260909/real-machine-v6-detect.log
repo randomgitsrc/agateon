@@ -1,0 +1,44 @@
+# P6 真机 V6 — 检测引擎对真实 Codex 会话判三态（agate-cmdstream-detect.py detect --platform codex）
+本机 codex-cli 0.153.4 + ChatGPT 登录。3 个真实 rollout 由 codex exec 现场造。
+
+## 造会话
+① frozen  = codex exec 派 'sleep 600'，55s 后 SIGINT → turn_aborted，命令记 status=failed/exit_code=137
+           （首轮 SIGKILL 版 rollout 未落任何 CommandExecution，弃用；SIGINT 版落盘）
+   rollout: rollout-2026-09-09T08-17-24-01a08386-cdb0-7d81-91c0-754d1650aa0e.jsonl
+② normal  = codex exec 依次跑 echo p6n-1/p6n-2/sleep 1/p6n-3/date +%s（5 条秒级完成，输出各异）
+   rollout: rollout-2026-09-09T08-14-48-01a08384-68d2-7643-86e7-ec12ce1133a5.jsonl
+③ spin    = codex exec 连跑 7 次完全相同的 'ls /nonexistent-xyz-p6spin'（每次 exit 2，输出恒定）
+   rollout: rollout-2026-09-09T08-15-30-01a08385-105e-71e1-969d-3cb40b86d4db.jsonl
+
+## read-commands 摘要（真机 rollout → CodexAdapter.read_commands）
+--- ① frozen ---
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-17-24-01a08386-cdb0-7d81-91c0-754d1650aa0e.jsonl", "tool": "exec", "command": "/bin/bash -lc 'sleep 600'", "ts_start": 1788913052782, "ts_end": null, "exit": null, "exit_signal": "pending", "output_hash": null, "truncated": false}
+--- ② normal ---
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-14-48-01a08384-68d2-7643-86e7-ec12ce1133a5.jsonl", "tool": "exec", "command": "/bin/bash -lc 'echo p6n-1'", "ts_start": 1788912894324, "ts_end": 1788912894325, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "da47d510420fa1cec41f772c7544c10086f26f0a", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-14-48-01a08384-68d2-7643-86e7-ec12ce1133a5.jsonl", "tool": "exec", "command": "/bin/bash -lc 'echo p6n-2'", "ts_start": 1788912896699, "ts_end": 1788912896699, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "532752b560223bd3dd312f77bc208b0388215463", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-14-48-01a08384-68d2-7643-86e7-ec12ce1133a5.jsonl", "tool": "exec", "command": "/bin/bash -lc 'sleep 1'", "ts_start": 1788912899844, "ts_end": 1788912900715, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "da39a3ee5e6b4b0d3255bfef95601890afd80709", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-14-48-01a08384-68d2-7643-86e7-ec12ce1133a5.jsonl", "tool": "exec", "command": "/bin/bash -lc 'echo p6n-3'", "ts_start": 1788912902954, "ts_end": 1788912902954, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "202a85f3b8e06c72b5aa08add3d34ffc7bbf958d", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-14-48-01a08384-68d2-7643-86e7-ec12ce1133a5.jsonl", "tool": "exec", "command": "/bin/bash -lc 'date +%s'", "ts_start": 1788912905151, "ts_end": 1788912905152, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "826b95da008164cd7999217722a90c23227735c3", "truncated": false}
+--- ③ spin (前 2 条) ---
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-15-30-01a08385-105e-71e1-969d-3cb40b86d4db.jsonl", "tool": "exec", "command": "/bin/bash -lc 'ls /nonexistent-xyz-p6spin'", "ts_start": 1788912938049, "ts_end": null, "exit": null, "exit_signal": "pending", "output_hash": null, "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T08-15-30-01a08385-105e-71e1-969d-3cb40b86d4db.jsonl", "tool": "exec", "command": "/bin/bash -lc 'ls /nonexistent-xyz-p6spin'", "ts_start": 1788912938102, "ts_end": null, "exit": null, "exit_signal": "pending", "output_hash": null, "truncated": false}
+
+## detect 判定
+===== ① frozen  now = ts_start + 950s =====
+VERDICT: FROZEN
+  · 调用冻结（suspect）：未结束调用 rollout-2026-09-09T08-17-24-01a08386-cdb0-7d81-91c0-754d1650aa0e.jsonl:exec:/bin/bash -lc 'sleep 600'#0（/bin/bash -lc 'sleep 600'）距今 950s ≥ 兜底阈值 900s （未声明 expected）→ 疑似卡在单次调用，建议人工核查
+===== ② normal  now = 最后活动 + 30s =====
+VERDICT: NORMAL
+  · 正常：活动持续推进，无冻结/空转信号
+===== ② normal  now = 最后活动 + 400s（对照：活动冻结）=====
+VERDICT: FROZEN
+  · 活动冻结（suspect）：最后活动事件距今 400s ≥ 300s → 疑似进程无任何活动，建议人工核查
+===== ③ spin  now = +5s =====
+  · 提示：存在未结束调用 rollout-2026-09-09T08-15-30-01a08385-105e-71e1-969d-3cb40b86d4db.jsonl:exec:/bin/bash -lc 'ls /nonexistent-xyz-p6spin'#6（/bin/bash -lc 'ls /nonexistent-xyz-p6spin'）距今 5s，未超阈值 300s（未声明 expected，兜底 300s）——长命令执行中，正常
+  · 提示：窗口 10 内唯一命令数 0 < 3，但结果签名在变化（合法迭代特征），不判空转
+  · 正常：活动持续推进，无冻结/空转信号
+===== ③ spin  now = +950s =====
+VERDICT: FROZEN
+  · 调用冻结（suspect）：未结束调用 rollout-2026-09-09T08-15-30-01a08385-105e-71e1-969d-3cb40b86d4db.jsonl:exec:/bin/bash -lc 'ls /nonexistent-xyz-p6spin'#0（/bin/bash -lc 'ls /nonexistent-xyz-p6spin'）距今 950s ≥ 兜底阈值 900s （未声明 expected）→ 疑似卡在单次调用，建议人工核查
+
+EXIT_CODE: 0

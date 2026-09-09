@@ -32,6 +32,10 @@
     `is_error` 布尔 + 失败输出文本前缀解析（`CommandRecord.exit` / `exit_signal` 字段）；
     ② `spawn_agent` 子会话文件的层级标识与定位；③ 截断标记处理（`truncated` 字段，参与冻结检测
     不参与无效重复哈希，比照 §3.4.2 差异点 4）
+    - `[P0_STALE: ① 需修正]` P1 spike 实测（2026-09-09，codex-cli 0.153.4）：Codex rollout 的
+      `CommandExecution` item 携带 `exit_code` 数字字段，per-command shell 执行的 `CommandRecord.exit`
+      直接取 `item.exit_code`，无需文本前缀解析；「无数字 exit code」只对 turn 级失败成立。轻微漂移
+      ——目标方案（加一个适配器、检测引擎零改动）不变，反使 exit 映射更简单。详见 P1-requirements.md §4.1.1。
 - **`agate/platform-notes.md` Codex 章**（「待补充」→ 完整能力矩阵）：非交互 `codex exec`
   （`-m/--model`、`-c model_reasoning_effort=<low|medium|high>` 推理档）、权限绕过
   `--dangerously-bypass-approvals-and-sandbox` 与中间档 `-s <mode>` + `--approve-for-me`

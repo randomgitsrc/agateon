@@ -9,7 +9,7 @@
 > **Agateon (formerly agate)** — this project has a new name; the badge and install command below already point to the new repository.
 > An orchestration protocol that verifies AI agents the way a build system verifies a compiler.
 
-[![version](https://img.shields.io/badge/version-v0.69.0-blue)](https://github.com/randomgitsrc/agateon)
+[![version](https://img.shields.io/badge/version-v0.70.0-blue)](https://github.com/randomgitsrc/agateon)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [English](README.md) | [中文](README.zh-CN.md)
