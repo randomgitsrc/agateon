@@ -17,10 +17,14 @@
 
 ## task
 
-"在 agate 协议层落地派发路由设计（RM-AG0060）——新增 `rules/dispatch-routing.yaml` 候选
-`{cli, model, effort?}` 路由表：主 Agent 到某阶段时**查表 → 按序探测「通不通」→ 派发到第一个
-可用候选 → 候选全不可用则逐级回落（终点恒为同平台同 model 的默认派发）**；`cli` 可为 `native`
-（同平台换 model，不脱离原生派发工具）或另一个 CLI（`claude-code`/`codex`/`opencode`，起子进程）。
+"在 agate 协议层落地派发路由设计（RM-AG0060）——新增**项目级**配置文件
+`agate-workspace/dispatch-routing.yaml`（对齐 `agate-workspace/maintainability.yaml` 先例：项目级、
+全兜底、非协议本体、不受 SELF-GATE），按 phase 声明候选 `{cli, model, effort?}` 路由（或引用命名
+**档位**——见 scope 待确认「配置分层与落点」「档位（tier）抽象」两项）：主 Agent 到某阶段时**查表 → 按序探测「通不通」→
+派发到第一个可用候选 → 候选全不可用则逐级回落（终点恒为同平台同 model 的默认派发）**；`cli` 可为
+`native`（同平台换 model，不脱离原生派发工具）或另一个 CLI（`claude-code`/`codex`/`opencode`，起
+子进程）。协议本体（`agate/rules/` 或 `phases.yaml` 旁）只放**档位词表 + 语义 + 出厂默认**（全阶段
+= `standard` ≡ 现状）；档位→具体 `{cli,model,effort}` 的绑定是**机器/安装级**、随 SETUP 流程 scaffold。
 查表/探测/降级是纯机械步骤、落在 CLI 里（优先扩 `agate-dispatch.py`），主 Agent / 档位 C 只调用。
 新增 `dispatch_route` 事件无差别留痕。子进程形式若有 `tmux` 则包一层供人 `attach` 观测（wrapper
 自带退出倒计时）。**gate / 状态机 / `phases.yaml` 全不动**——gate 只认产出文件和 exit code、不认
@@ -32,9 +36,31 @@
 
 P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial（依赖链，不并行）}`。
 
-- **P1/P2 必须先定掉的设计类待确认**（design-note §7 事项 1-5）
-  - `rules/dispatch-routing.yaml` 确切 schema（已定：无 `fallback` 字段、终点回落恒为默认派发、需
-    `effort?` 推理档字段；待定：字段名、`{cli: native, model: null}` 是否合法）+ 静态校验器落点
+- **P1/P2 必须先定掉的设计类待确认**（design-note §7 事项 1-5 + 本次新增两项）
+  - **配置分层与落点**（design-note §2.1 现把文件放 `rules/` 且写「非协议本体」自相矛盾——`agate/rules/`
+    就是协议本体；P1 须重写 §2.1 + 头部「做什么」并在本任务交付该 design-note 修订）。三层：
+    ① **协议本体**（`agate/rules/` 或 `phases.yaml` 旁）——档位词表 + 每档语义画像 + 出厂默认
+    phase→档位映射（全 `standard`），改它走 SELF-GATE（改「什么是 premium」本就该评审）；
+    ② **机器/安装级**——档位→有序候选链 `[{cli,model,effort}]` 的具体绑定（「本机 premium =
+    codex/gpt-5.6-terra 再 claude-code/opus」），依赖「装了哪些 CLI + 哪个账号 + 该账号能用哪些
+    model」，落 `~/.config/agate/` 或 `~/.agate` 同级**非版本控制**路径，由 SETUP 流程（比照
+    「步骤 2-Codex」的 per-platform onboarding）scaffold 出带注释的初始模板（探测本机已装 CLI +
+    各自默认 model）；③ **项目级**（`agate-workspace/dispatch-routing.yaml`）——phase→档位映射
+    + per-phase 直接值覆盖，只引用档位名故跨机器可移植。**MVP 可合并①③为单文件 + 内联档位定义**
+    （对齐 `maintainability.yaml`），是否真拆出机器级档位文件由 P2 按「团队/多机可移植性是否真需求」定。
+    全兜底：文件缺失/损坏/类型坏 → 出厂默认（= 现状），不报错不静默跳过（复用
+    `check-maintainability.py:_load_config` 模式）
+  - **档位（tier）抽象**（用户 2026-09-09：类比 Anthropic `haiku/sonnet/opus`、OpenAI `luna/terra/sol`）：
+    协议定义一组命名档位（提议 `bulk / standard / deep / reasoning`，或 `basic/standard/plus/pro`——
+    名字 P1 定），语义画像写进协议文档（`bulk`=高吞吐低成本产出量大 / `standard`=**恒等于继承主
+    Agent 当前 model 的原生派发、保「不配置=逐字节现状」不变量** / `deep`=高能力复杂判断 /
+    `reasoning`=显式深度推理档）。配置里 phase 可写 `tier: deep`（引用，可移植）**或**
+    `candidates: [{cli,model,effort}]`（直接值，跳过档位间接层，牺牲可移植换明确）——静态校验器
+    两种写法都要认。`effort` 字段自然归档位定义（`reasoning` → `effort: high`）。档位→候选是一条
+    有序跨 CLI 链，逐级回落逻辑不变
+  - `agate-workspace/dispatch-routing.yaml` / 档位文件的确切 schema（已定：无 `fallback` 字段、终点
+    回落恒为默认派发、需 `effort?` 字段；待定：字段名、`{cli: native, model: null}` 是否合法、
+    档位块与 phase 块的分隔形式）+ 静态校验器落点（新增校验器，非 `agate/rules/schema` 下的协议 schema）
   - `dispatch_route` 事件 JSON schema + `check-events.py` 如何识别新事件类型（不能把未知 event 判为非法）
   - 决策 CLI 落点（**优先扩 `agate-dispatch.py`**，不成再新增 `agate-route.py`）；`cli: native` 形式
     "决策层算出目标 model → 启动仍由驱动会话代发平台派发工具"的衔接方式（会话侧读什么文件、怎么
@@ -55,9 +81,13 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
     解析判成败时（P4b），`codex exec --json` 的 `turn.failed` 与 item 级 `status: "failed"` 是两层，
     P2 设计须明确取哪层、与退出码不可靠如何叠加
 - **P4a — 配置路由核心 + `cli: native`**（design-note §2.1-§2.6，机制细节 research §5）
-  - `rules/dispatch-routing.yaml`（新，**非协议本体、不受 SELF-GATE**）+ 静态校验器
-  - `agate-dispatch.py` 扩展：读表 → 按序探测（发极简请求判硬故障，**只判「通不通」、不掺任务
-    内容语义**——落地对探测逻辑做显式约束）→ 选 target → 逐级回落 → 写 `dispatch_route` 事件
+  - `agate-workspace/dispatch-routing.yaml`（新，**项目级、全兜底、非协议本体、不受 SELF-GATE**；
+    对齐 `agate-workspace/maintainability.yaml`）+ 静态校验器（新增，独立于 `agate/rules/schema`）
+  - 协议本体侧：档位词表 + 语义画像 + 出厂默认（`agate/rules/` 下新文件或 `phases.yaml` 扩字段，
+    **走 SELF-GATE**）；机器级档位绑定文件的 scaffold 接入 SETUP 流程（`agate/SETUP.md` 新小节）
+  - `agate-dispatch.py` 扩展：读表（解析档位引用 → 展开为候选链）→ 按序探测（发极简请求判硬故障，
+    **只判「通不通」、不掺任务内容语义**——落地对探测逻辑做显式约束）→ 选 target → 逐级回落 →
+    写 `dispatch_route` 事件
   - `dispatch_route` 事件：`gate-events.jsonl` 写入端 + `check-events.py` 校验端（复用既有哈希链）
   - `cli: native` 执行：Claude Code（Task 单次调用传 `model`，本会话实测生效）+ OpenCode（命名
     subagent 配置 `agents.<name>.model` 间接路——需定义 dispatch 表 phase→预配命名 agent 的映射与
@@ -85,10 +115,14 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
     `list-clients` 非空则不强杀、让倒计时收尾；兜底 `N + 余量` 强杀
   - 明确不做：`send-keys` / `capture-pane` 解析给主 Agent / 跨轮复用
   - **目标环境 tmux 版本验证若与任务环境不同则停在「定稿 + 待落地验证」、不阻塞 P8**（外部评审 W2）
-- **测试**：`agate/tests/` 新增 pytest——schema 校验 / 探测（各平台失败形态）/ 逐级回落 /
-  `dispatch_route` 事件 + check-events / `cli: native` 各平台 / 子进程 spawn + 结构化输出解析 /
-  tmux wrapper 生命周期；BDD 以 P1 定稿为准（计划 ≥18 条）；**回归证明 gate / 状态机 /
-  `phases.yaml` 零改动**
+- **测试**：`agate/tests/` 新增 pytest——schema 校验（含档位引用 + 直接值两种写法）/ 档位→候选链
+  展开 / 三层配置解析优先级 + 全兜底（缺失/损坏 → 出厂默认 = 现状）/ 探测（各平台失败形态）/
+  逐级回落 / `dispatch_route` 事件 + check-events / `cli: native` 各平台 / 子进程 spawn + 结构化
+  输出解析 / tmux wrapper 生命周期；BDD 以 P1 定稿为准（计划 ≥20 条）；**回归证明 gate / 状态机 /
+  `phases.yaml` 结构零改动 + 「不配置 = 逐字节现状」**
+- **design-note 修订**（本任务交付物之一，非 out-of-scope）：`design-dispatch-routing.md` §2.1 +
+  头部「做什么」按本 P0-brief 的三层落点 + 档位抽象重写（现文本把配置文件放 `rules/` 且称「非协议
+  本体」自相矛盾）；随 P1/P2 定稿同步，走 docs commit（非 SELF-GATE，但属协议配套设计文档）
 
 ### out-of-scope
 
@@ -113,8 +147,10 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
 - "同类/影响面预判（`check-events.py` 哈希链）：新增 `dispatch_route` 事件类型须让 check-events 认它、
   不判为非法未知 event；复用既有哈希链完整性校验不新造机制"
 - "SELF-GATE：改 `agate/dispatch-protocol.md` + `agate/scripts/agate-dispatch.py`（+ 可能
-  `check-events.py` 扩展 / 新增校验器）+ `agate/SETUP.md` + `agate/tests/` → 触发，commit message
-  须含 `self-gate-review:` 或 `self-gate-skip:`；`rules/dispatch-routing.yaml` 新增（非协议本体、不触发）"
+  `check-events.py` 扩展 / 新增校验器）+ `agate/SETUP.md` + **`agate/rules/` 下新增档位词表文件**
+  （或 `phases.yaml` 扩字段）+ `agate/tests/` → 触发，commit message 须含 `self-gate-review:` 或
+  `self-gate-skip:`；`agate-workspace/dispatch-routing.yaml`（项目级配置）+ 机器级档位绑定文件
+  （`~/.config/agate/` 类）新增**不触发** SELF-GATE（非协议本体，同 `maintainability.yaml`）"
 - "证据强度（外部评审 B1/B2 教训）：本会话对三平台『按次指定 model 生效』是 `[实测]`；Codex
   `spawn_agent` schema 原为 `[自述]`——**TAG0033 P6 已补成直接实测**（`platform-notes.md` Codex 章
   为准）；仅剩 OpenCode bug② 机制推断未直接复现，P1 前置核实须补成直接实测，P1/P2 表述不得把
@@ -128,7 +164,12 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
 - "tmux 实测环境代表性（外部评审 W2）：本会话是 WSL2 + tmux 3.4（非容器/CI/物理机）——P4c 目标
   环境须在其自己的 tmux 版本上复跑 research §10 的验证项"
 - "机会式启用（局限 6 张力）：不配置候选 = 行为与现状逐字节一致；配了但 CLI 未装/未认证 = 探测失败
-  自动回落——回归测试须证明『不启用 = 现状』"
+  自动回落——回归测试须证明『不启用 = 现状』。**档位抽象加了一层间接**（`standard` 语义必须钉死为
+  『继承主 Agent 当前 model 的原生派发』，否则出厂默认全 `standard` ≠ 现状、破坏该不变量）；三层
+  配置的解析优先级与合并语义 P2 须明确写死，避免『机器级绑定与项目级映射冲突时取谁』含糊"
+- "配置落点是 design-note 现存缺口（用户 2026-09-09 指出）：§2.1 把文件放 `agate/rules/` 又说『非
+  协议本体』矛盾。P1 须先定三层落点再据此写 schema——落点没定死就进 P2 会导致 schema / 校验器 /
+  SETUP scaffold 三处返工"
 - "多提交阶段命中 DEBT0037（TAG0033 复盘新登记）：本任务 `dispatch_plan` = static-batch P4a/P4b/P4c
   分批 commit，`check-gate.py P4` 的完整度判据（暂存区有非 md/yaml 文件）在『某批已 commit、暂存区
   空』时 exit 1、`agate-next.py` 拒绝推进 → 需主 Agent 手动 `_advance` + 补 `state_transition` 事件
@@ -140,8 +181,9 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
 ## env_constraints
 
 - 本任务改 `agate/dispatch-protocol.md` + `agate/scripts/agate-dispatch.py`（+ 可能新增校验器 /
-  `check-events.py` 扩展）+ `agate/SETUP.md` + `agate/tests/` → **触发 SELF-GATE**（commit message
-  `self-gate-review:` / `self-gate-skip:`）；`rules/dispatch-routing.yaml` 新增（非协议本体、不触发）
+  `check-events.py` 扩展）+ `agate/SETUP.md` + `agate/rules/` 下档位词表文件（或 `phases.yaml`
+  扩字段）+ `agate/tests/` → **触发 SELF-GATE**（commit message `self-gate-review:` /
+  `self-gate-skip:`）；`agate-workspace/dispatch-routing.yaml` + 机器级档位绑定文件新增不触发
 - P4b `cli: codex` 子进程的存活检测依赖 **TAG0033（已合并 v0.70.0，2026-09-09）的 `CodexAdapter`**——依赖已满足，P4b codex 部分无排期阻塞
 - 真机验证需要 Claude Code / OpenCode / Codex 三 CLI 已装已认证（本机具备）
 - 用系统 python 跑 pytest/pyyaml；ruff 用 `~/.venvs/agate-dev/bin/ruff`；基线用 `--strict-errors-only`
