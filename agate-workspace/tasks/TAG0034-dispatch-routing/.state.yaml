@@ -1,5 +1,6 @@
 task_id: TAG0034
-phase: P4
+phase: P5
 status: active
 judge:
   enabled: true
+p5_pass_commit: 92edcfc2a8e259e0d8a53b4d7771f4de65e56187
