@@ -10,7 +10,6 @@
 
 | 编号 | 任务名称 | 状态 | 阶段 | 优先级 | 依赖 | 创建日期 | 更新日期 |
 |------|----------|------|------|--------|------|----------|----------|
-| TAG0033 | Codex 命令流适配器 + 平台接入（RM-AG0061，RM-AG0055 §3.4.4 预留扩展点的落地 + RM-AG0060 b 块前置）：CodexAdapter 加入 agate-cmdstream-adapters.py 使 subagent 存活/卡死检测覆盖 Codex + platform-notes.md Codex 章补完整 + SETUP.md Codex 小节 + fixture 单测 + 真机验证清单；检测引擎/阈值/IR/既有三平台适配器零改动。触发 SELF-GATE | 🔄 | P2 | 高 | RM-AG0061 | 2026-09-08 | 2026-09-09 |
 
 ### 待开始
 
@@ -25,6 +24,7 @@
 
 | 编号 | 任务名称 | 状态 | 最终阶段 | 优先级 | 完成日期 |
 |------|----------|------|----------|--------|----------|
+| TAG0033 | Codex 命令流适配器 + 平台接入（RM-AG0061，RM-AG0055 §3.4.4 预留扩展点的落地 + RM-AG0060 b 块前置）：CodexAdapter 加入 agate-cmdstream-adapters.py 使 subagent 存活/卡死检测覆盖 Codex（rollout JSONL + spawn_agent 子会话）+ platform-notes.md Codex 章补完整 + SETUP.md 步骤 2-Codex + fixture 单测 + 真机验证清单；检测引擎/阈值/CommandRecord IR/既有三平台适配器零改动。P5→P4 回退修 F1（真机 status=failed 终态误判，DEBT0035）。30 BDD 全 PASS，P6.5 judge 30/30 passed，P7 一致性 BLOCKER=0 → v0.70.0 | ✅✅ | READY | 高 | 2026-09-09 |
 | TAG0025 | Agateon 品牌改名执行 Phase 0-1（RM-AG0035 剩余工作②）：品牌声明（Agateon formerly agate）+ GitHub 主仓改名 agate→agateon + 硬编码 URL 同批更新（design §4 实测 7 处）+ 本机 remote 迁移；按评审通过的 design-rename-execution.md 三层解耦（外部品牌改/内部命名空间不动），Phase 2（v1.0 别名+prose+brand-check）/3（门户）不在范围 | ✅✅ | READY | 高 | 2026-08-26 |
 | TAG0024 | 工具链批（RM-AG0048 一期 agate-md-field-set + DEBT0019/20 check-gate roadmap-done 健壮性 + RM-AG0049/50 协议文档自洽 + BDD-30 check-pruning 隔离修复）：结构化字段写入工具（写即校验 + 自描述 + 权限引导 + 同源铁律，消灭手写 frontmatter 摩擦）+ 5 项前置修复合并：30 条 BDD 全 PASS，P6.5 judge 独立复核 passed，P7 一致性 BLOCKER=0 → v0.63.0 | ✅✅ | READY | 中 | 2026-08-25 |
 | TAG0023 | 机制校验补强批（RM-AG0042 retries 强制记录 + RM-AG0043 roadmap 回写校验 + RM-AG0044 环境敏感测试治理 + RM-AG0045 声明写时校验）：TAG0019-21 复盘独立评审确认的 4 个 agate 机制缺口合并处理 | ✅✅ | READY | 高 | 2026-08-25 |
