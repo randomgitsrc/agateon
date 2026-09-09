@@ -15,7 +15,7 @@
 
 | 编号 | 任务名称 | 状态 | 阶段 | 优先级 | 依赖 | 创建日期 | 更新日期 |
 |------|----------|------|------|--------|------|----------|----------|
-| TAG0034 | 派发路由（配置驱动跨 CLI/model 派发 + tmux 观测）（RM-AG0060 epic）：rules/dispatch-routing.yaml 候选 {cli,model,effort?} 路由表——查表→按序探测→逐级回落（终点恒为同平台同 model），cli 可为 native 或另一个 CLI 起子进程；新增 dispatch_route 事件；决策落 agate-dispatch.py；tmux 观测层带退出倒计时。gate/状态机/phases.yaml 全不动。存活检测复用 RM-AG0055。P4a 核心+native / P4b 子进程 / P4c tmux 串行子批。设计经两轮外部评审 FAIL→PASS。触发 SELF-GATE | ⬜ | P0 | 高 | RM-AG0060 · TAG0033 | 2026-09-08 | 2026-09-08 |
+| TAG0034 | 派发路由（配置驱动跨 CLI/model 派发 + tmux 观测）（RM-AG0060 epic）：新增项目级 agate-workspace/dispatch-routing.yaml，按 (phase,role) 声明候选 {cli,model,effort?} 或引用命名档位——查表→直接派首选→仅基础设施失败（launch/infra/无可解析产出）才逐级回落→默认派发；无 probe（try-and-fall）。tier（bulk/standard/deep）+ effort 两正交轴（effort 映射各平台推理档 flag，Claude Code CLI 无则静默忽略）。cli 可为 native（弱缓解）或另一 CLI 起子进程（强缓解）。新增 dispatch_route 事件带理由码（枚举无 gate_fail 值）——候选回落≠状态机 retry，gate FAIL 绝不换候选。决策落 agate-dispatch.py。配置分三层（协议本体档位词表 / 机器安装级绑定 SETUP scaffold / 项目级映射）。gate/状态机/phases.yaml 全不动。存活检测复用 RM-AG0055。P4a 核心+native / P4b 子进程 / P4c tmux 串行子批。设计经两轮外部评审 FAIL→PASS + 2026-09-09 讨论定案。触发 SELF-GATE | ⬜ | P0 | 高 | RM-AG0060 · TAG0033（已合并 v0.70.0） | 2026-09-08 | 2026-09-09 |
 
 ### 已完成（归档）
 
