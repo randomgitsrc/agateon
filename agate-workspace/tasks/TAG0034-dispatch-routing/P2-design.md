@@ -361,10 +361,20 @@ return DEFAULT_DISPATCH                                   # 同平台同 model�
 
 ### 4.1 dispatch_plan（frontmatter 机器字段）
 
+frontmatter 实际写单行 flow YAML（见文件头 `dispatch_plan:` 行）；此处按等价 block 形态展开便于阅读：
+
 ```yaml
-dispatch_plan: {mode: static-batch, parallel_limit: 3,
-  batches: [{id: P4a, complexity: high}, {id: P4b, complexity: medium}, {id: P4c, complexity: low}],
-  serial: true}
+dispatch_plan:
+  mode: static-batch
+  parallel_limit: 3
+  batches:
+    - id: P4a
+      complexity: high
+    - id: P4b
+      complexity: medium
+    - id: P4c
+      complexity: low
+  serial: true
 ```
 
 > **`serial: true` 说明（N4）**：`mode: static-batch` + `batches: [P4a, P4b, P4c]` 是 P1 §7 / P0-brief scope 明文钉死的目标值，逐字承接。`serial: true` **非 `_gate_p2_dispatch_plan` 契约键**（gate 只校验 `mode` / `parallel_limit` / `batches` 每批 `id`+`complexity` / 批数 ≤ `parallel_limit`），其强制力落在下方「批次边界对齐」串行依赖散文 + 主 Agent 排期。若未来 `dispatch_plan` 契约新增 `serial` 语义，本任务应同步。
