@@ -1,0 +1,103 @@
+=== BDD-28: git log self-gate prefix in task commit range (main..HEAD) ===
+5f704a0 wf(TAG0033-P5): F1 修复后重新技术验证通过（gate_commands.P5 全绿 + 真机 V1/V6③ 证 F1 已修）
+6f8422f wf(TAG0033-P4): 重试 #1 —— 修 F1（CodexAdapter pending 判据误判真机 status=failed，DEBT0035）
+9a7a1f9 debt(TAG0033): 登记 DEBT0035（P5→P4 回退，F1：CodexAdapter pending 判据误判真机 status=failed）
+52fe210 retreat: P5 -> P4（诊断：P6 真机验证 V6 发现 F1：真机 Codex 把已结束但非0退出的命令记为 payload.item.status=='failed'（携带完整 exit_code/completed_at_ms），CodexAdapter._build_record 的 pending 判据 status!='completed'（adapters.py:739）误判其为 pending，丢失真实 exit_code+output_hash。连锁：detect 对真机重复失败会话拿不到结果签名→判不出 SPIN（BDD-15 真机侧不成立）；真机失败命令 CommandRecord.exit 恒 None（BDD-5 单测因 fixture 用 status=completed 未覆盖）；BDD-6 pending 在真机有假阳性。P1 §4.1 spike 取样未覆盖 status=='failed' 终态。回 P4 修 pending 判据口径 + fixture 补真机 failed 形态 + 测试覆盖。）
+6ee4465 wf(TAG0033-P5): 补 gate-events.jsonl（P5 commit 时 pre-commit hook 追加的 P4→P5 台账）+ 归档 P6 pre-retreat 勘查
+c00f97f wf(TAG0033-P5): 技术验证通过（gate_commands.P5 全绿 + 真机 V1/V3/V4/V5 PASS）
+90e00db wf(TAG0033-P4): protocol-docs 批（static-batch 2/2）—— Codex 平台文档补齐
+835c9b9 wf(TAG0033-P4): 实现 CodexAdapter（19 红灯清零，零改动约束守住）
+b5f3187 wf(TAG0033-P3): CodexAdapter TDD 测试设计（红灯确认 check-tdd-red exit 0）
+8fbb0d4 wf(TAG0033-P2): CodexAdapter 方案设计（5 设计点 + 影响面梳理 + gate_commands 固化）
+4d75958 wf(TAG0033-P1): Codex 命令流适配器需求基线（30 条 BDD + spike 现场勘查）
+e4ce90a docs: TAG0033 交接单
+
+--- grep self-gate-review / self-gate-skip in full commit messages (main..HEAD) ---
+70:self-gate-review: agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033-r3.md
+165:self-gate-review: agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033-r2.md
+200:self-gate-review: agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033.md
+238:self-gate-skip: P3 仅新增测试用例 + fixture（既有 cmdstream 测试树增量），未改协议本体 /
+268:self-gate-skip: P2 仅产出工作区任务文件（设计/评审/dispatch-context），未改 agate/scripts/ 或
+295:self-gate-skip: P1 仅产出工作区任务文件（需求/评审/dispatch-context），未改
+307:self-gate-skip: 仅新增 worktree 根交接单，未改 agate/ 协议本体或脚本
+
+=== alignment-review files ===
+-rw-r--r-- 1 kity kity  1671  9月  8 23:59 agate-alignment-2026-08-15-02.progress.md
+-rw-r--r-- 1 kity kity 10059  9月  8 23:59 agate-alignment-review-2026-08-15-02.md
+-rw-r--r-- 1 kity kity 31940  9月  9 07:21 agate-alignment-review-2026-09-09-TAG0033.md
+-rw-r--r-- 1 kity kity 36514  9月  9 07:58 agate-alignment-review-2026-09-09-TAG0033-r2.md
+-rw-r--r-- 1 kity kity 30316  9月  9 11:44 agate-alignment-review-2026-09-09-TAG0033-r3.md
+
+agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033.md
+agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033-r2.md
+agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033-r3.md
+
+=== reviewer declaration heads (agent != main) ===
+--- agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033.md ---
+---
+review_date: 2026-09-09
+task_id: TAG0033
+reviewer: protocol-alignment-review (agent≠main)
+status: approved
+change_summary: TAG0033 P4 adapter-core 批——`agate-cmdstream-adapters.py` 新增 `CodexAdapter`（+225，probe/list_sessions/read_commands + `_join_command`/`_detect_truncated`/`_build_record` + 2 模块常量 + `_codex_int_or_none`）+ `ADAPTERS` 加 `"codex"` 键 + `import shlex`；`test_agate_cmdstream_adapters.py` 1 行断言由精确等值改包含式。
+files_changed: [agate/scripts/agate-cmdstream-adapters.py, agate/tests/unit/test_agate_cmdstream_adapters.py]
+---
+
+# 协议-脚本对齐审查 — TAG0033 Codex 命令流适配器（P4 SELF-GATE）
+
+> 触发：`agate/scripts/*.py` 改动（SELF-GATE）。本审查为**独立上下文**，与并行的 C8 `review`（审实现正确性）分工——本报告只审**语义对齐**：协议文档契约 vs 脚本实现一致性、改动的文档传播、锚点表覆盖、ADR 一致性。
+> 关键背景：文档分批是 P2 dispatch_plan 明确的 `static-batch` 两批——`adapter-core`（P4，代码+测试）/ `protocol-docs`（P7，`platform-notes.md` Codex 章 + `SETUP.md` Codex 小节，P1 §9 P7 不可裁）。「代码已加 `CodexAdapter`、`platform-notes.md` Codex 章仍为待补充」是**排期内**，不判 MISALIGNED。零改动（`agate-cmdstream-detect.py` / `CommandRecord` dataclass / 既有三适配器）是 P0-brief 核心约束 2 + P1 §5 的硬约束。
+
+## 审查结论汇总
+
+| # | 审查项 | 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** |
+| A2 | 脚本→文档对齐 | **NEEDS_HUMAN_REVIEW**（文档同步已排期 P7；非遗漏、非 MISALIGNED）|
+
+--- agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033-r2.md ---
+---
+review_date: 2026-09-09
+task_id: TAG0033
+round: 2 (protocol-docs batch)
+reviewer: protocol-alignment-review (agent≠main)
+status: approved
+change_summary: TAG0033 P4 protocol-docs 批（文档面，第 2 批）——`platform-notes.md` Codex 章「待补充」→ 完整章（能力矩阵 / model 阵容 / spawn_agent schema [自述] / 命令流适配 / 验证记录表）+ Hermes/OpenClaw 拆节 + 既有「Codex 兼容性」注记加时效指针；`SETUP.md` 新增「步骤 2-Codex」小节；`CODE-MAP.md` line 33「三平台」→「四平台 / Codex rollout JSONL」；`docs/research/cross-platform-dispatch-mechanics.md` L169/L286「缺 CodexAdapter」逐处回写「已补（TAG0033, 2026-09）」；`codex-session.jsonl` 1 行（P5 V4 verifier fixture 收敛，非本批产出）。
+files_changed: [agate/platform-notes.md, agate/SETUP.md, agate-workspace/agents/CODE-MAP.md, docs/research/cross-platform-dispatch-mechanics.md, agate/tests/fixtures/cmdstream/codex-session.jsonl, agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P4-implementation.md, agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P4-progress.md]
+---
+
+# 协议-脚本对齐审查 — TAG0033 Codex 平台文档批（P4 SELF-GATE，第 2 轮）
+
+> 触发：`agate/*.md`（`platform-notes.md` / `SETUP.md`）改动（SELF-GATE）。本轮为**独立上下文**第 2 轮，
+> 审 `protocol-docs` 批（`adapter-core` 批代码已 commit 在 `835c9b9`，本轮为其后未提交的文档改动）。
+> 第 1 轮（`agate-alignment-review-2026-09-09-TAG0033.md`）SELF-GATE 对齐轴 PASS + 2 项
+> NEEDS_HUMAN_REVIEW（NHR-1 = `platform-notes.md`/`SETUP.md` Codex 章待补；NHR-2 = research doc
+> L169/L286 过时）——本轮核心是**确认 NHR-1 / NHR-2 已闭合** + 对新文档做 A1-A7 + 事实准确性核查。
+
+## 审查结论汇总
+
+
+--- agate-workspace/reviews/agate-alignment-review-2026-09-09-TAG0033-r3.md ---
+---
+task_id: TAG0033
+date: 2026-09-09
+round: 3 (F1 fix after P5→P4 retreat)
+reviewer: protocol-alignment-review (agent≠main)
+review_date: 2026-09-09
+change_summary: "CodexAdapter pending 判据 F1 修复（DEBT0035）——新增 _codex_is_finished(payload,item) helper + `pending = not _codex_is_finished(...)` + fixture 真机 status=failed 形态 + 测试 + platform-notes.md 1 bullet + P1/P2 BASELINE_CHANGE"
+files_changed:
+  - agate/scripts/agate-cmdstream-adapters.py
+  - agate/tests/fixtures/cmdstream/codex-session.jsonl
+  - agate/tests/unit/test_agate_cmdstream_adapters.py
+  - agate/tests/unit/test_agate_cmdstream_detect.py
+  - agate/platform-notes.md
+  - agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P1-requirements.md
+  - agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P2-design.md
+  - agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P4-implementation.md
+  - agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P4-progress.md
+  - agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/gate-events.jsonl
+---
+
+
+
+EXIT_CODE: 0

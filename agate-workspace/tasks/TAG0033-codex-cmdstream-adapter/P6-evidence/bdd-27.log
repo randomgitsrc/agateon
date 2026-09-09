@@ -1,0 +1,29 @@
+=== BDD-27: pytest -v ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0033
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+agate/tests/unit/test_codex_platform_docs.py::test_bdd_27_setup_md_codex_section PASSED [100%]
+
+============================== 1 passed in 0.02s ===============================
+175:### 步骤 2-Codex：codex-cli（Codex）接入
+177:Codex 无「宿主 orchestrator 注册」步骤（out-of-scope）——它作为 agate 的**被派发执行环境**接入，只需装 CLI + 登录 + 配好自动化环境的绕过 flag。已实机验证：codex-cli **0.153.4** + **ChatGPT 登录**账号（能力矩阵与时效注记见 `platform-notes.md`「Codex」章）。
+182:npm i -g @openai/codex        # 官方分发；或按 openai/codex 仓库 README 的其它官方方式
+186:**2. 登录**（`codex login`）：
+189:codex login                  # 浏览器走 ChatGPT 登录；或设 OPENAI_API_KEY 环境变量用 API key
+192:- **ChatGPT 登录账号**：`codex exec -m` 默认 `gpt-5.6-terra`；`-m gpt-5` / `-m gpt-5-codex` 会被 API 400 拒（`"not supported when using Codex with a ChatGPT account"`）。
+193:- **API key 账号**：可用 model 阵容不同（`gpt-5` / `o3` 等可能可用）——agate 本会话未在该环境核实，接入后自己跑 `codex exec --json -m <model> <<< "hi"` 确认。
+200:  --dangerously-bypass-approvals-and-sandbox \
+201:  --skip-git-repo-check \
+205:- `--dangerously-bypass-approvals-and-sandbox`：跳过全部确认 + 无沙箱执行。**仅用于外层已隔离的自动化环境**（CI / 专用 worktree）——它真能拆掉工作区边界。中间档见 `platform-notes.md`「Codex」能力矩阵（`-s <mode>` + `--approve-for-me`；`--full-auto` / `-a` 已从 `codex exec` 移除）。
+206:- `--skip-git-repo-check`：`codex exec` 默认拒绝在非 git 仓库运行，自动化环境按需加。
+207:- `--json`：结构化 JSONL 事件流。**Codex 退出码不可靠**（认证失败 / model 不可用都可能 `exit 0`），须解析 `--json` 的 `turn.failed` / `item.type=="error"` 判成败。
+213:timeout 120s codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <<< 'print ok'
+216:会话记录落 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`——agate 的 `CodexAdapter`（命令流卡死检测，RM-AG0055）读此路径。
+
+EXIT_CODE: 0

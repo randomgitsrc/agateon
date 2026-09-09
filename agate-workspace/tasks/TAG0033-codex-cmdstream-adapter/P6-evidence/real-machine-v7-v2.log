@@ -1,0 +1,21 @@
+### V7 — 嵌套 spawn_agent 深度复核 (P6 redo)
+
+attempt 1 (thread 01a0845b-5bf3): 子代理自报 'Unable to spawn grandchild: collaboration tool unavailable' — rollout delta 2 (父+子, 无孙). 模型行为噪声, 非平台限制.
+
+attempt 2 (thread 01a0845c-5982): 成功 — rollout delta 3 (父+子+孙):
+  child   rollout-2026-09-09T12-10-49-01a0845c-7e4d : session_meta thread_source=subagent, thread_spawn.depth=1, agent_path=/root/p6redo2_child
+  grand   rollout-2026-09-09T12-10-54-01a0845c-919c : session_meta thread_source=subagent, thread_spawn.depth=2, agent_path=/root/p6redo2_child/p6redo2_grand
+  parent 报 'Child replied: done'
+
+结论: 嵌套 spawn_agent 生效, source.subagent.thread_spawn.depth 随层级递增 (子=1, 孙=2);
+  每层独立 rollout-*.jsonl 落同一扁平 YYYY/MM/DD/ 目录 -> CodexAdapter.list_sessions 的 os.walk 天然全枚举;
+  与 .archived/p6-pre-retreat-20260909/real-machine-p6.md 首轮 V7 结论一致 (首轮亦 depth 1->2).
+
+### V2 — spawn_agent 参数 schema 键并集复核 (P6 redo)
+
+本轮 spawn_agent function_call.arguments 键 (thread 01a0845b-5bf3 的 spawn_agent 调用):
+  ['fork_turns', 'message', 'model', 'reasoning_effort', 'task_name']
+= archived 首轮跨 9 次真实调用键并集 {task_name, message, model, reasoning_effort, fork_turns}, 无新键 (无 background/timeout/permission).
+结论: 与首轮一致, [自述] 标注保持不动.
+
+EXIT_CODE: 0

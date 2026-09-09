@@ -1,0 +1,23 @@
+=== BDD-25: pytest -v ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0033
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+agate/tests/unit/test_codex_platform_docs.py::test_bdd_25_codex_chapter_cross_reference_no_contradiction PASSED [100%]
+
+============================== 1 passed in 0.03s ===============================
+72:### 子代理派发（`spawn_agent`）与既有「Codex 兼容性」注记的时效
+74:- backing feature flag：`multi_agent` = **stable / effective true**（实测 `codex features list`，0.153.4）——`spawn_agent` 无需任何 `--enable` 即可用。命名有变更史：`collaboration_modes` / `multi_agent_mode` 已 `removed`，`multi_agent_v2` stable 但 false（子会话 `session_meta` 却见 `multi_agent_version: "v2"` 字样——内部版本仍在演进）。**目标版本上 `codex features list` 复核一次**。
+75:- `spawn_agent` 子会话是**独立的 `rollout-*.jsonl` 文件**（非父文件内嵌事件），与父文件同目录；子文件 `session_meta` 含 `parent_thread_id` / `thread_source=="subagent"` / `source.subagent.thread_spawn.depth`。**单层 `spawn_agent` 已实测可用**（P5 V3）；**嵌套深度（`spawn_agent` 内再 `spawn_agent`）未测**（归 P6 V7）。
+76:- **与本文件下方「Hardening-roadmap 跨平台适配」节「Codex 兼容性」注记的交叉引用 + 时效**：那条 `Codex subagent max_depth=1` /「Codex 单层任务工具无法再派发」注记**写于 subagent workflows 默认启用之前**——按当前实测，`multi_agent` flag 已 stable/true、单层派发已实测可用；既有 `max_depth=1` 结论待 V7 嵌套深度实测后复核。既有注记那几行事实内容不变（本章只做时效指针，不删既有行），全文档以本小节为该维度的时效口径，**不存在**「一处说无法再派发、另一处说已支持多层」的未标时效对立陈述。
+98:| `multi_agent` feature flag | stable / true（V5 PASS）| P5 |
+100:| `spawn_agent` 嵌套深度 + `spawn_agent` schema 穷尽 | 归 P6（V7 / V2）| P6 |
+131:**Codex 兼容性**：Codex subagent max_depth=1 与 P2.1 强制派发独立 subagent（risk=high）的兼容性：
+136:> ↑ 上述 `max_depth=1` /「无法再派发」记于 subagent workflows 默认启用之前；时效更新见上方 `## Codex` 章「子代理派发（`spawn_agent`）」小节（`multi_agent` flag 实测 stable/true、`spawn_agent` 单层已实测可用、嵌套深度未测待复核）。
+
+EXIT_CODE: 0

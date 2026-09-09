@@ -1,7 +1,6 @@
 task_id: TAG0033
-phase: P5
+phase: P6
 status: active
-p5_pass_commit: 6f8422f4f836f7163f3058fb77af765dd3cb822f
 retries:
   P1:
   - round: 1
@@ -20,3 +19,4 @@ retries:
       判据口径 + fixture 补真机 failed 形态 + 测试覆盖。
 judge:
   enabled: true
+p5_pass_commit: 6f8422f4f836f7163f3058fb77af765dd3cb822f

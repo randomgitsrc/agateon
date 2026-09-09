@@ -1,0 +1,19 @@
+### V6 ② NORMAL — rollout: /home/kity/.codex/sessions/2026/09/09/rollout-2026-09-09T12-04-09-01a08456-640d-7921-808b-fa6da4744494.jsonl
+--- read-commands (5 records, all exit 0, varied output_hash) ---
+{"platform": "codex", "session_id": "rollout-2026-09-09T12-04-09-01a08456-640d-7921-808b-fa6da4744494.jsonl", "tool": "exec", "command": "/bin/bash -lc 'echo p6norm-alpha'", "ts_start": 1788926654022, "ts_end": 1788926654023, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "370a86324ee1f35728dd8b8a9f17e5290d51bb10", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T12-04-09-01a08456-640d-7921-808b-fa6da4744494.jsonl", "tool": "exec", "command": "/bin/bash -lc 'date +%s'", "ts_start": 1788926658426, "ts_end": 1788926658426, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "32b74708d057b3a70320c0dec61782dab78e97b4", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T12-04-09-01a08456-640d-7921-808b-fa6da4744494.jsonl", "tool": "exec", "command": "/bin/bash -lc 'sleep 1'", "ts_start": 1788926661633, "ts_end": 1788926662497, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "da39a3ee5e6b4b0d3255bfef95601890afd80709", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T12-04-09-01a08456-640d-7921-808b-fa6da4744494.jsonl", "tool": "exec", "command": "/bin/bash -lc 'ls /etc/hostname'", "ts_start": 1788926665155, "ts_end": 1788926665155, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "3cf1dea14f6f7aa047129409e29ebede627491c2", "truncated": false}
+{"platform": "codex", "session_id": "rollout-2026-09-09T12-04-09-01a08456-640d-7921-808b-fa6da4744494.jsonl", "tool": "exec", "command": "/bin/bash -lc 'echo p6norm-omega-done'", "ts_start": 1788926668347, "ts_end": 1788926668347, "exit": 0, "exit_signal": "exit_code=0", "output_hash": "55f3b17c8e086bc16906e75d7cc1d621843be5e4", "truncated": false}
+
+--- detect --now = last_activity + 30s (1788926699793 ms) ---
+VERDICT: NORMAL
+  · 正常：活动持续推进，无冻结/空转信号
+DETECT_EXIT: 0
+
+--- contrast: detect --now = last_activity + 400s (should FROZEN activity) ---
+VERDICT: FROZEN
+  · 活动冻结（suspect）：最后活动事件距今 401s ≥ 300s → 疑似进程无任何活动，建议人工核查
+DETECT_EXIT: 0
+
+EXIT_CODE: 0

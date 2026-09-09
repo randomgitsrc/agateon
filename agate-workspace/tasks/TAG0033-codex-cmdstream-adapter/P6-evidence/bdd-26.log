@@ -1,0 +1,22 @@
+=== BDD-26: pytest -v ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0033
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+agate/tests/unit/test_codex_platform_docs.py::test_bdd_26_codex_chapter_model_lineup PASSED [100%]
+
+============================== 1 passed in 0.03s ===============================
+45:> 接入步骤见 `SETUP.md`「步骤 2-Codex」。已实机验证（**2026-09**，codex-cli **0.153.4**，**ChatGPT 登录**账号，本机 Linux/WSL2）——新兴平台，机制随版本变化快，落地前须在目标版本上 `codex features list` + `codex exec --help` 复核（比照本文件 DSH 章 / OpenCode 章「新兴平台需持续复核」惯例）。涉及账号类型差异的项（尤其 model 阵容）本机为 ChatGPT 账号，API-key 账号环境本质不可得，标「待有该环境时补（非阻塞）」。
+47:**平台形态**：Rust CLI（`@openai/codex`，`npm i -g`）；非交互入口 `codex exec`；会话记录为 rollout JSONL，落 `~/.codex/sessions/YYYY/MM/DD/rollout-<ISO8601 秒精度>-<uuid>.jsonl`（按 UTC 日期分层，非 cwd 分层）。认证 `codex login`（ChatGPT 或 API key，账号类型影响可用 model）。
+68:- **ChatGPT 登录账号（本机验证环境）**：`codex exec -m` 默认 `gpt-5.6-terra`，实测可用；`-m gpt-5` / `-m gpt-5-codex` **被 API 400 拒**（`"The 'gpt-5' model is not supported when using Codex with a ChatGPT account."`）。model 白名单见 `~/.codex/models_cache.json`。
+69:- **`spawn_agent` 的 `model` 枚举**（`[自述]`——运行中模型报告，非逐字 schema dump）：`gpt-5.6-terra` / `gpt-5.6-luna` / `gpt-5.5` / `gpt-5.4-mini`（比 `codex exec -m` 的可用集更宽）。`reasoning_effort` 枚举 `low|medium|high|xhigh|max|ultra`。
+70:- **API-key 账号 model 阵容**：本会话未核实——本机为 ChatGPT 账号，API-key 账号环境本质不可得。**待有该环境时补（非阻塞）**（`codex exec --json -m gpt-5 <<< "hi"` + `spawn_agent(model=…)` 各枚举跑一遍；`verification_env_budget` 止损轮次 2）。
+101:| API-key 账号 model 阵容 | 待有该环境时补（非阻塞，budget 轮次 2）| 待环境 |
+109:待补充——如有使用经验，欢迎 PR。
+
+EXIT_CODE: 0
