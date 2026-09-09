@@ -19,13 +19,20 @@
 
 "在 agate 协议层落地派发路由设计（RM-AG0060）——新增**项目级**配置文件
 `agate-workspace/dispatch-routing.yaml`（对齐 `agate-workspace/maintainability.yaml` 先例：项目级、
-全兜底、非协议本体、不受 SELF-GATE），按 phase 声明候选 `{cli, model, effort?}` 路由（或引用命名
-**档位**——见 scope 待确认「配置分层与落点」「档位（tier）抽象」两项）：主 Agent 到某阶段时**查表 → 按序探测「通不通」→
-派发到第一个可用候选 → 候选全不可用则逐级回落（终点恒为同平台同 model 的默认派发）**；`cli` 可为
-`native`（同平台换 model，不脱离原生派发工具）或另一个 CLI（`claude-code`/`codex`/`opencode`，起
-子进程）。协议本体（`agate/rules/` 或 `phases.yaml` 旁）只放**档位词表 + 语义 + 出厂默认**（全阶段
-= `standard` ≡ 现状）；档位→具体 `{cli,model,effort}` 的绑定是**机器/安装级**、随 SETUP 流程 scaffold。
-查表/探测/降级是纯机械步骤、落在 CLI 里（优先扩 `agate-dispatch.py`），主 Agent / 档位 C 只调用。
+全兜底、非协议本体、不受 SELF-GATE），按 `(phase, role)` 声明候选 `{cli, model, effort?}` 路由（或
+引用命名**档位**——见 scope 待确认「配置分层与落点」「档位（tier）抽象」两项）：主 Agent 到某
+阶段派某角色时**查表 → 直接派首选候选 → 若『起不来 / 基础设施失败 / 无可解析产出』则逐级回落到
+下一个候选 → 全落空则默认派发（同平台同 model，恒等于本机制未启用）**——不做派发前的空探测
+（try-and-fall，不是 probe-then-commit）。`cli` 可为 `native`（同厂商换 model，不脱离原生派发工具——
+**弱缓解**：省成本 + 一点 failure-mode 多样性，同训练系谱盲区基本共享）或另一个 CLI
+（`claude-code`/`codex`/`opencode`，起子进程——**强缓解**：真正的异源独立视角，局限 2 想要的那个）。
+协议本体（`agate/rules/` 或 `phases.yaml` 旁）只放**档位词表 + 语义 + 出厂默认**（全 `(phase,role)`
+= `standard` ≡ 现状）；档位→具体 `{cli,model,effort}` 的绑定是**机器/安装级**、随 SETUP 流程 scaffold、
+以本机现状为准（能用就用、不能用不强制，不追求跨机可复现）。查表/回落/降级是纯机械步骤、落在
+CLI 里（优先扩 `agate-dispatch.py`），主 Agent / 档位 C 只调用。**候选回落 ≠ 状态机 retry**：回落只在
+基础设施失败时发生，不占 `retries[Pn]`、不触发 PAUSED、只写 `dispatch_route` 事件；**一旦某候选
+产出了 gate 能评的东西，这条路由即成功——哪怕 gate 判 FAIL，那是正常阶段 retry（在同一候选上
+重跑），绝不换候选**（防「换模型试到出 green」的完整性洞）。
 新增 `dispatch_route` 事件无差别留痕。子进程形式若有 `tmux` 则包一层供人 `attach` 观测（wrapper
 自带退出倒计时）。**gate / 状态机 / `phases.yaml` 全不动**——gate 只认产出文件和 exit code、不认
 『谁生产的』，这条解耦是设计成立的前提。存活/卡死检测复用 RM-AG0055 命令流机制（+ 子进程形式的
@@ -36,40 +43,55 @@
 
 P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial（依赖链，不并行）}`。
 
-- **P1/P2 必须先定掉的设计类待确认**（design-note §7 事项 1-5 + 本次新增两项）
+- **P1/P2 必须先定掉的设计类待确认**（design-note §7 事项 1-5 中「探测缓存 + native 探测方式」一项
+  已因砍掉 probe 作废；其余 + 本次讨论新增项）
   - **配置分层与落点**（design-note §2.1 现把文件放 `rules/` 且写「非协议本体」自相矛盾——`agate/rules/`
     就是协议本体；P1 须重写 §2.1 + 头部「做什么」并在本任务交付该 design-note 修订）。三层：
     ① **协议本体**（`agate/rules/` 或 `phases.yaml` 旁）——档位词表 + 每档语义画像 + 出厂默认
-    phase→档位映射（全 `standard`），改它走 SELF-GATE（改「什么是 premium」本就该评审）；
-    ② **机器/安装级**——档位→有序候选链 `[{cli,model,effort}]` 的具体绑定（「本机 premium =
+    `(phase,role)`→档位映射（全 `standard`），改它走 SELF-GATE（改「什么是 `deep`」本就该评审）；
+    ② **机器/安装级**——档位→有序候选链 `[{cli,model,effort}]` 的具体绑定（「本机 `deep` =
     codex/gpt-5.6-terra 再 claude-code/opus」），依赖「装了哪些 CLI + 哪个账号 + 该账号能用哪些
     model」，落 `~/.config/agate/` 或 `~/.agate` 同级**非版本控制**路径，由 SETUP 流程（比照
     「步骤 2-Codex」的 per-platform onboarding）scaffold 出带注释的初始模板（探测本机已装 CLI +
-    各自默认 model）；③ **项目级**（`agate-workspace/dispatch-routing.yaml`）——phase→档位映射
-    + per-phase 直接值覆盖，只引用档位名故跨机器可移植。**MVP 可合并①③为单文件 + 内联档位定义**
+    各自默认 model）；③ **项目级**（`agate-workspace/dispatch-routing.yaml`）——`(phase,role)`→档位映射
+    + per-`(phase,role)` 直接值覆盖，只引用档位名故跨机器可移植。**MVP 可合并①③为单文件 + 内联档位定义**
     （对齐 `maintainability.yaml`），是否真拆出机器级档位文件由 P2 按「团队/多机可移植性是否真需求」定。
     全兜底：文件缺失/损坏/类型坏 → 出厂默认（= 现状），不报错不静默跳过（复用
     `check-maintainability.py:_load_config` 模式）
-  - **档位（tier）抽象**（用户 2026-09-09：类比 Anthropic `haiku/sonnet/opus`、OpenAI `luna/terra/sol`）：
-    协议定义一组命名档位（提议 `bulk / standard / deep / reasoning`，或 `basic/standard/plus/pro`——
-    名字 P1 定），语义画像写进协议文档（`bulk`=高吞吐低成本产出量大 / `standard`=**恒等于继承主
-    Agent 当前 model 的原生派发、保「不配置=逐字节现状」不变量** / `deep`=高能力复杂判断 /
-    `reasoning`=显式深度推理档）。配置里 phase 可写 `tier: deep`（引用，可移植）**或**
-    `candidates: [{cli,model,effort}]`（直接值，跳过档位间接层，牺牲可移植换明确）——静态校验器
-    两种写法都要认。`effort` 字段自然归档位定义（`reasoning` → `effort: high`）。档位→候选是一条
-    有序跨 CLI 链，逐级回落逻辑不变
+  - **档位（tier）+ effort 两个正交轴**（用户 2026-09-09：类比 Anthropic `haiku/sonnet/opus`、
+    OpenAI `luna/terra/sol`）：
+    - `tier`（能力档，提议 `bulk / standard / deep`——名字 P1 定）：语义画像写进协议文档
+      （`bulk`=高吞吐低成本产出量大 / `standard`=**恒等于继承主 Agent 当前 model 的原生派发、保
+      「不配置=逐字节现状」不变量** / `deep`=高能力复杂判断）。经机器级绑定映射到 `{cli, model}`
+    - `effort`（`low/medium/high` 可选，与 tier 正交——「便宜模型+高 effort」「顶配+低 effort」都合法）：
+      映射到各平台推理档 flag——Codex `-c model_reasoning_effort=` / `spawn_agent.reasoning_effort` ✓；
+      OpenCode `--variant high|max|minimal` ✓（近似）；**Claude Code CLI 无干净 effort 旋钮 → 该平台
+      静默忽略**并在 `platform-notes.md` 写明（沿用模式层/检测器层：协议声明轴、各平台能映射就映射）
+    - 配置里 `(phase,role)` 可写 `tier: deep, effort: high`（引用，可移植）**或**
+      `candidates: [{cli,model,effort}]`（直接值，跳过档位间接层，牺牲可移植换明确）——静态校验器
+      两种写法都要认。档位→候选是一条有序跨 CLI 链，逐级回落逻辑不变
+  - **路由 key 粒度 = `(phase, role)`，role 层可选**：一个 phase 会派多个 subagent（P1 analyst+
+    requirements-review / P4 implementer+protocol-alignment-review+code review）。想让 reviewer 跑异
+    模型（executor↔reviewer 局部独立）就显式配 `P4.review:` 一条；**不强制分开**——只配 phase 级 /
+    只有一个候选 → executor 与 reviewer 都用它。解析顺序：`(phase,role)` → `phase` → 未配 = `standard`
   - `agate-workspace/dispatch-routing.yaml` / 档位文件的确切 schema（已定：无 `fallback` 字段、终点
-    回落恒为默认派发、需 `effort?` 字段；待定：字段名、`{cli: native, model: null}` 是否合法、
-    档位块与 phase 块的分隔形式）+ 静态校验器落点（新增校验器，非 `agate/rules/schema` 下的协议 schema）
+    回落恒为默认派发、`tier` + `effort?` 两轴、`(phase,role)` key 且 role 可选；待定：字段名、
+    `{cli: native, model: null}` 是否合法、档位定义块与 `(phase,role)` 映射块的分隔形式、
+    `tier`/`candidates` 二选一的校验）+ 静态校验器落点（新增校验器，非 `agate/rules/schema` 下的协议 schema）
+  - `dispatch_route` 事件里「为什么回落」的**理由码**枚举——合法值只有 `launch_fail`（起不来）/
+    `infra_error`（auth/网络/429/进程崩溃）/ `no_parseable_output`（跑了但没有 gate 能评的产出）；
+    **不存在 `gate_fail` 值**（机械强制「gate verdict 不触发换候选」的完整性不变量）
   - `dispatch_route` 事件 JSON schema + `check-events.py` 如何识别新事件类型（不能把未知 event 判为非法）
   - 决策 CLI 落点（**优先扩 `agate-dispatch.py`**，不成再新增 `agate-route.py`）；`cli: native` 形式
     "决策层算出目标 model → 启动仍由驱动会话代发平台派发工具"的衔接方式（会话侧读什么文件、怎么
     保证零判断）；与 RM-AG0054 已落地的 `agate dispatch`（渲染 dispatch-context）是串联还是同一步
-  - 探测缓存（同候选一个 task 内只探一次）+ `cli: native` 探测方式（倾向「查平台已知 alias 表 /
-    接受配置、让首次真派发失败时走降级」，不起一次性子代理探测）
-  - 与既有派发机制的交互：① 五模式并行批（模式 2/3）——每个并行 subagent 是否各自独立探测、结果
-    task 内是否共享；② RM-AG0055 自主再派发的子任务——是否走路由表（倾向「不走，继承父的实际
-    cli/model」）；③ 单 Agent 模式（`has_task_tool:false`）——路由为 no-op，显式声明出范围
+  - retry / 回退时的路由：P5→P4 回退后的 P4 retry 等，**重新解析一次 `(phase,role)` 路由**（落哪个
+    候选看当时哪个能用），**不做「上次那个模型失败了所以这次故意升档/换模型」的逻辑**——retry 是
+    状态机行为、路由是机械查表，两者不耦合
+  - 与既有派发机制的交互：① 五模式并行批（模式 2/3）——每个并行 subagent 各自独立解析 `(phase,role)`
+    路由（同 role 的并行分片用同一条路由）；② RM-AG0055 自主再派发的子任务——是否走路由表（倾向
+    「不走，继承父的实际 cli/model」）；③ 单 Agent 模式（`has_task_tool:false`）——路由为 no-op，
+    显式声明出范围
 - **P1/P2 前置真机核实**（design-note §7、research §10/§11；外部评审 B1/B2）
   - OpenCode 旧 bug②（父会话交互式切 model 后子代理跟不跟——本会话只机制推断未直接复现）**直接复现测试**
   - Codex `spawn_agent` 完整 schema **TAG0033 已直接实测**（P6 V7：`spawn_agent` 嵌套 depth 1→2
@@ -85,15 +107,18 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
     对齐 `agate-workspace/maintainability.yaml`）+ 静态校验器（新增，独立于 `agate/rules/schema`）
   - 协议本体侧：档位词表 + 语义画像 + 出厂默认（`agate/rules/` 下新文件或 `phases.yaml` 扩字段，
     **走 SELF-GATE**）；机器级档位绑定文件的 scaffold 接入 SETUP 流程（`agate/SETUP.md` 新小节）
-  - `agate-dispatch.py` 扩展：读表（解析档位引用 → 展开为候选链）→ 按序探测（发极简请求判硬故障，
-    **只判「通不通」、不掺任务内容语义**——落地对探测逻辑做显式约束）→ 选 target → 逐级回落 →
-    写 `dispatch_route` 事件
-  - `dispatch_route` 事件：`gate-events.jsonl` 写入端 + `check-events.py` 校验端（复用既有哈希链）
+  - `agate-dispatch.py` 扩展：读表（按 `(phase,role)` 解析 → 展开 `tier`/`effort` 或直接值为候选链）
+    → 派首选 target → 若 `launch_fail` / `infra_error` / `no_parseable_output` 则逐级回落 → 全落空
+    默认派发 → 写 `dispatch_route` 事件（带理由码）。**无 probe 步骤**（try-and-fall）；**回落条件
+    显式约束为上述三类基础设施信号，收到任何 gate 能评的产出即停止回落**
+  - `dispatch_route` 事件：`gate-events.jsonl` 写入端 + `check-events.py` 校验端（复用既有哈希链）；
+    理由码枚举校验（`gate_fail` 为非法值）；候选回落**不写 `state_transition`、不动 `retries`**
   - `cli: native` 执行：Claude Code（Task 单次调用传 `model`，本会话实测生效）+ OpenCode（命名
     subagent 配置 `agents.<name>.model` 间接路——需定义 dispatch 表 phase→预配命名 agent 的映射与
     预注册机制；本会话实测 v1.18.11 生效，旧 bug ①③ 不存在）
-  - `dispatch-protocol.md` 新增一节：铁律 1 之前的「查表 → 探测 → 定 target → 再派发」步 + 显式
-    写「gate 判定不认谁生产的」解耦声明
+  - `dispatch-protocol.md` 新增一节：铁律 1 之前的「查表 → 派首选 → (基础设施失败) 逐级回落 → 再
+    派发」步 + 显式写「gate 判定不认谁生产的」解耦声明 + 「候选回落 ≠ 状态机 retry」「gate FAIL
+    绝不换候选」两条不变量 + `cli: native` 是弱缓解、自动化天花板是「主 Agent 机械横传 model」的说明
 - **P4b — 跨 CLI 子进程**（design-note §2.4/§2.6，research §1/§2/§4/§6）
   - 子进程 spawn：`claude -p --model X --dangerously-skip-permissions` /
     `opencode run -m provider/model#variant --auto` /
@@ -102,27 +127,41 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
   - 结构化输出解析判成败：Claude Code `--output-format json`（`stop_reason` / `modelUsage`）、
     Codex `--json`（`turn.completed` vs `turn.failed`——**退出码对 Codex 不可靠必须解析事件流**）、
     OpenCode `--format json`（`step_finish.part.reason`）+ 空返回判定
-  - D2 假完成校验集成；`SETUP.md` 各 CLI 自动化环境 flag 小节
+  - D2 假完成校验集成——「跑了但无 gate 能评产出」映射为回落理由码 `no_parseable_output`，
+    「有产出」则交 gate、不回落；`SETUP.md` 各 CLI 自动化环境 flag 小节
+  - **routed-away judge 的 verdict 校验**（P1 先核实是不是真缺口）：P6.5 judge 若路由到 codex/opencode
+    子进程，其 transcript 落 `~/.codex/sessions/` 等非 `~/.claude/` 位置——`check-judge-verdict.py`
+    的 verdict 定位 + 信息隔离黑/白名单扫描（TAG0033 DEBT0038 同款机制）是否认得跨平台产出的
+    verdict。真缺口则纳入本任务补上（P4b 或单列子批）
   - `cli: codex` 子进程的存活检测走 **TAG0033 已合并的 `CodexAdapter`**（`ADAPTERS["codex"]`，v0.70.0）；
     claude-code/opencode 子进程走既有适配器 + 子进程形式的 `wait(pid)` / `kill -0`（research §6.0.2）
   - 评审打回续跑（design-note §2.4a）：同 target 优先平台官方续接（`--resume` / `codex exec resume` /
     `opencode -s` / native 的 `followup_task` / `task_id`），失败或换 target 则全新派发——**续接失败
     无客观信号是已知缺口**，按「续接优先、重起兜底」处理，不假装解决
 - **P4c — tmux 观测层**（design-note §3，本会话 WSL2+tmux3.4 含真人 attach 全链路实测）
+  —— 用户 2026-09-09：能做就做，维持低优先、可整体切除（不通过不影响 P4a/P4b）
   - wrapper：`which tmux` 成功则 `tmux new-session -d -s {agate-task-phase-ts} '{命令} | tee {capture}'`
     （人看 pane、脚本 tail 文件）；失败裸跑
   - session 命名带命名空间；生命周期 = wrapper 自带退出倒计时（N 默认 ~15 可配）→ 自然结束；
     `list-clients` 非空则不强杀、让倒计时收尾；兜底 `N + 余量` 强杀
   - 明确不做：`send-keys` / `capture-pane` 解析给主 Agent / 跨轮复用
   - **目标环境 tmux 版本验证若与任务环境不同则停在「定稿 + 待落地验证」、不阻塞 P8**（外部评审 W2）
-- **测试**：`agate/tests/` 新增 pytest——schema 校验（含档位引用 + 直接值两种写法）/ 档位→候选链
-  展开 / 三层配置解析优先级 + 全兜底（缺失/损坏 → 出厂默认 = 现状）/ 探测（各平台失败形态）/
-  逐级回落 / `dispatch_route` 事件 + check-events / `cli: native` 各平台 / 子进程 spawn + 结构化
-  输出解析 / tmux wrapper 生命周期；BDD 以 P1 定稿为准（计划 ≥20 条）；**回归证明 gate / 状态机 /
-  `phases.yaml` 结构零改动 + 「不配置 = 逐字节现状」**
-- **design-note 修订**（本任务交付物之一，非 out-of-scope）：`design-dispatch-routing.md` §2.1 +
-  头部「做什么」按本 P0-brief 的三层落点 + 档位抽象重写（现文本把配置文件放 `rules/` 且称「非协议
-  本体」自相矛盾）；随 P1/P2 定稿同步，走 docs commit（非 SELF-GATE，但属协议配套设计文档）
+- **测试**：`agate/tests/` 新增 pytest——schema 校验（`tier`/`effort` 两轴、`tier`vs`candidates`
+  二选一、`(phase,role)` key）/ 档位→候选链展开 + `effort` 各平台映射（Claude Code 静默忽略）/
+  `(phase,role)`→`phase`→`standard` 解析顺序 / 三层配置优先级 + 全兜底（缺失/损坏 → 出厂默认 =
+  现状）/ try-and-fall 逐级回落（各基础设施失败形态：起不来 / auth 错 / 429 / 空产出）/
+  **回落非 retry**（回落不动 `retries`、不写 `state_transition`）/ **`gate_fail` 非法理由码被校验器拒** /
+  **gate FAIL 不触发换候选**（关键完整性用例）/ `dispatch_route` 事件 + check-events / `cli: native`
+  各平台 / 子进程 spawn + 结构化输出解析 / tmux wrapper 生命周期；BDD 以 P1 定稿为准（计划 ≥22 条）；
+  **回归证明 gate / 状态机 / `phases.yaml` 结构零改动 + 「不配置 = 逐字节现状」**
+- **design-note 修订**（本任务交付物之一，非 out-of-scope）：`design-dispatch-routing.md` 头部
+  「做什么」+ §2.1/§2.2 按本 P0-brief 讨论定案重写——① 三层落点（配置文件不在 `agate/rules/`）；
+  ② 核心循环去掉「按序探测」改 try-and-fall（查表 → 派首选 → 基础设施失败逐级回落 → 默认派发）；
+  ③ `tier` + `effort` 两正交轴 + `(phase,role)` key；④ `cli: native` 明确标为弱缓解、跨 CLI 为强
+  缓解 + 自动化不对称说明；⑤ 「候选回落 ≠ retry」「gate FAIL 绝不换候选」两条完整性不变量；
+  ⑥ routing 是 per-machine 机会式、不追求跨机可复现。头部「机制现状一句话」同步。随 P1/P2 定稿
+  同步，走 docs commit（非 SELF-GATE，但属协议配套设计文档）；`roadmap.md` RM-AG0060 长描述里的
+  旧 `rules/dispatch-routing.yaml` 措辞一并回写
 
 ### out-of-scope
 
@@ -134,6 +173,10 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
 - 局限 3「主 Agent 自身缺乏外部约束」（design-note §7 事项 10，超出本设计，另行立项）
 - RM-AG0055 命令流机制/阈值本身（复用不改）；RM-AG0054 `agate next`/`agate advance` 本身（同家族
   但不同性质决策）
+- **派发前空探测（probe-then-commit）**——2026-09-09 讨论定案改 try-and-fall，不做 probe / probe 缓存
+- **routing 的跨机器/团队可复现**——明确 per-machine 机会式，只有抽象 `(phase,role)`→档位映射可 commit
+  共享，档位→具体模型的绑定就是「本机实际能跑什么」，别的机器复现不了不是缺陷
+- **retry 时故意换/升档模型**——retry 重新机械查表，不做「上次失败所以这次换更强的」的逻辑
 
 ## known_risks
 
@@ -155,7 +198,16 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
   `spawn_agent` schema 原为 `[自述]`——**TAG0033 P6 已补成直接实测**（`platform-notes.md` Codex 章
   为准）；仅剩 OpenCode bug② 机制推断未直接复现，P1 前置核实须补成直接实测，P1/P2 表述不得把
   `[自述]`/推断混同为『已实测』"
-- "探测成本：无 task 内缓存则 P1-P8 × 每 phase 多候选 = 每任务几十次真 API 调用——P2 必须定探测缓存策略"
+- "**模型购物完整性洞（最高危）**：gate 解耦（`gate 不认谁生产的`）使『换模型试到出 green』成为
+  可能。不变量：候选回落只在 `launch_fail`/`infra_error`/`no_parseable_output` 时发生，**收到任何
+  gate 能评的产出即停止回落**、gate FAIL 走正常阶段 retry（同一候选）不换候选。`dispatch_route`
+  理由码枚举无 `gate_fail` 值、由 `check-events.py` 机械强制；须有专门回归用例（gate FAIL 后
+  `dispatch_route` 事件计数不增）"
+- "`cli: native` 是弱缓解（诚实标注，防过度宣称）：同厂商换 model 盲区基本共享，只有跨 CLI（换厂商）
+  才是局限 2 想要的异源独立视角。且 `cli: native` 原理上做不到『不依赖主 Agent』——天花板是主 Agent
+  读文件机械横传 model。design-note / dispatch-protocol.md 须把弱形/强形、自动化不对称写清"
+- "`effort` 轴在 Claude Code CLI 基本是空的：`claude -p` 无干净推理档旋钮 → 该平台 `effort` 静默
+  忽略。P2 须确认『声明了 effort 但目标平台不支持』不报错、只 `platform-notes.md` 注明"
 - "`cli: native` on OpenCode 的间接路复杂度：要 dispatch 表 phase→预配命名 agent 的映射 + 预注册
   机制，比 Claude Code/Codex 的直接传参多一层——P2 评审须确认这层不失控"
 - "跨 CLI flag 名版本漂移：本会话验证基于 Claude Code 2.1.263 / codex-cli 0.153.4 / opencode 1.18.11
@@ -163,10 +215,11 @@ P2 声明 `dispatch_plan: {mode: static-batch, batches: [P4a, P4b, P4c], serial�
   对最新官方文档复核"
 - "tmux 实测环境代表性（外部评审 W2）：本会话是 WSL2 + tmux 3.4（非容器/CI/物理机）——P4c 目标
   环境须在其自己的 tmux 版本上复跑 research §10 的验证项"
-- "机会式启用（局限 6 张力）：不配置候选 = 行为与现状逐字节一致；配了但 CLI 未装/未认证 = 探测失败
-  自动回落——回归测试须证明『不启用 = 现状』。**档位抽象加了一层间接**（`standard` 语义必须钉死为
-  『继承主 Agent 当前 model 的原生派发』，否则出厂默认全 `standard` ≠ 现状、破坏该不变量）；三层
-  配置的解析优先级与合并语义 P2 须明确写死，避免『机器级绑定与项目级映射冲突时取谁』含糊"
+- "机会式启用（局限 6 张力）：不配置候选 = 行为与现状逐字节一致；配了但 CLI 未装/未认证 = 首次派发
+  即基础设施失败、自动逐级回落——回归测试须证明『不启用 = 现状』。**档位/effort 两轴 + `(phase,role)`
+  key 加了间接层**（`standard` 语义必须钉死为『继承主 Agent 当前 model 的原生派发』，否则出厂默认全
+  `standard` ≠ 现状、破坏该不变量）；三层配置的解析优先级与合并语义 P2 须明确写死，避免『机器级
+  绑定与项目级映射冲突时取谁』含糊"
 - "配置落点是 design-note 现存缺口（用户 2026-09-09 指出）：§2.1 把文件放 `agate/rules/` 又说『非
   协议本体』矛盾。P1 须先定三层落点再据此写 schema——落点没定死就进 P2 会导致 schema / 校验器 /
   SETUP scaffold 三处返工"
