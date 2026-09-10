@@ -1,0 +1,22 @@
+=== BDD-42: routed-away judge verdict platform independence ===
+DATE: 2026-09-09T22:24:12Z
+
+--- grep -nE '\.codex/sessions|\.claude/projects' in the two gate validators (expect 0 hits) ---
+[grep exit 1 ; no lines above = 0 hits = platform-agnostic]
+
+--- broader: any ~/.claude or ~/.codex transcript path refs in check-judge-verdict.py ---
+[none]
+
+--- git log f75e129..HEAD -- these two scripts (expect NO commits in task range) ---
+[empty = zero change in task range]
+
+--- git diff --stat f75e129..HEAD -- these two scripts ---
+[empty = zero byte change]
+
+--- test_bdd_42 standalone ---
+agate/tests/unit/test_tag0034_subprocess.py::test_bdd_42_routed_away_judge_verdict_platform_independent PASSED [100%]
+============================== 1 passed in 0.03s ===============================
+
+=== SUMMARY ===
+两校验器平台 transcript 路径 0 命中；任务范围 f75e129..HEAD 对两脚本零 commit / 零字节改动；test_bdd_42 PASSED。
+EXIT_CODE: 0

@@ -11,7 +11,10 @@ CLI：check-events.py [TASK_DIR]（exit 0 = 审计通过 / exit 1 = 审计不通
   5. ts 单调不减（同格式 UTC ISO8601 微秒字符串字典序可比；违例 → exit 1）
   6. judge 复核轮次 = judge_verdict 事件按 verdict_hash 去重后计数 ≤ 2（同一 verdict
      重跑不增轮，真实复核才 +1；无 hash 旧事件各计 1——轮次预算机械兜底，BDD-8；超出 → exit 1）
-  7. 未知 event 类型不拦截（向后兼容；gate_run/judge_verdict/state_transition 为已知类型）
+  7. 未知 event 类型不拦截（向后兼容；gate_run/judge_verdict/state_transition/dispatch_route 为已知类型）
+  8. dispatch_route 理由码枚举（TAG0034 / RM-AG0060）：event == "dispatch_route" 的行，
+     每个 candidates_tried[i].reason（若存在）必须 ∈ {launch_fail, infra_error, no_parseable_output}；
+     出现 gate_fail 或任何其它值 → exit 1（机械强制「gate 判定不触发换候选」的完整性不变量）
 
 append-only 语义：哈希链 + ts 单调组合判定"仅允许行尾追加"——改写任何历史行 →
 后续行 prev_hash 断裂；删除尾部无法由哈希链检测，由 ts 单调 + judge_verdict 计数部分兜底。
@@ -36,6 +39,10 @@ LEDGER_NAME = "gate-events.jsonl"
 
 # BDD-8：judge 轮次预算机械兜底（轮次 ≤ 2，账本 judge_verdict 事件计数 ≤ 2）
 MAX_JUDGE_VERDICT_EVENTS = 2
+
+# TAG0034 第 8 条：dispatch_route 事件的合法回落理由码枚举（无 gate_fail 值——
+# 机械强制「gate 判定不触发换候选」的完整性不变量，P2-design §3.8）。
+DISPATCH_ROUTE_REASONS = {"launch_fail", "infra_error", "no_parseable_output"}
 
 
 def main():
@@ -108,6 +115,23 @@ def main():
                 judge_verdict_hashes.add(vh)
             else:
                 judge_verdict_legacy += 1
+
+        # 8. dispatch_route 理由码枚举校验（TAG0034 / RM-AG0060）——不动第 1-7 条
+        if ev.get("event") == "dispatch_route":
+            tried = ev.get("candidates_tried")
+            if isinstance(tried, list):
+                for cand in tried:
+                    if not isinstance(cand, dict):
+                        continue
+                    reason = cand.get("reason")
+                    if reason is not None and reason not in DISPATCH_ROUTE_REASONS:
+                        sys.stderr.write(
+                            f"GATE EVENTS: 第 {idx} 行 dispatch_route 事件 candidates_tried "
+                            f"理由码 {reason!r} 非法（合法值仅 "
+                            f"{sorted(DISPATCH_ROUTE_REASONS)}——gate_fail 等值机械拒绝，"
+                            "gate 判定不触发换候选）\n"
+                        )
+                        sys.exit(1)
 
     judge_verdict_count = len(judge_verdict_hashes) + judge_verdict_legacy
     if judge_verdict_count > MAX_JUDGE_VERDICT_EVENTS:

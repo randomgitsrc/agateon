@@ -1,0 +1,29 @@
+# dispatch-tiers.yaml — 派发路由档位词表（协议本体，TAG0034 / RM-AG0060）
+#
+# 本文件是「档位（tier）」抽象的权威源：档位名 + 每档语义画像 + 出厂
+# (phase,role)→tier 映射。改本文件（新增档位 / 改语义画像 / 改 defaults）
+# → 触发 SELF-GATE（改「什么是 deep」本就该评审）。
+#
+# 档位 → 具体 {cli, model, effort} 的绑定**不在这里**——那是机器 / 安装级
+# 现状，落 agate-workspace/dispatch-routing.yaml 的 tier_bindings:（非协议本体、
+# 非 SELF-GATE，随 SETUP 流程按本机现状 scaffold）。
+#
+# 全兜底：本文件缺失 / 损坏 → 内建默认 tiers={bulk,standard,deep} + defaults={}
+# （见 agate/scripts/agate_dispatch_route.py load_factory_defaults）。
+
+schema_version: 1
+
+tiers:
+  bulk:
+    intent: "高吞吐、低成本、产出量大；不要求顶尖智力（典型：P4 implementer）"
+  standard:
+    intent: >-
+      恒等于「继承主 Agent 当前 model 的原生派发」——保「不配置 = 逐字节现状」
+      不变量。standard 不经 tier_bindings 展开、不起子进程、不改 model；决策层
+      遇 standard 直接返回默认派发。
+  deep:
+    intent: "高能力、复杂判断、专业视角（典型：P2 architect / P6.5 judge / P7 consistency-reviewer）"
+
+# 出厂 (phase,role)→tier 映射。空 map ⇒ 隐式全 standard ≡ 现状。
+# key 形态：`Pn`（phase 级）或 `Pn.role`（(phase,role) 级）。
+defaults: {}

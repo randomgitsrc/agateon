@@ -756,6 +756,11 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         "keywords": ["god_file_count", "fuzzy_boundary_count"],
         "callers": ["agate/scripts/check-gate.py"],
     },
+    {
+        "desc": "dispatch-routing schema 静态校验（TAG0034 / RM-AG0060：cli/effort 枚举 + tier/candidates 互斥 + fallback 非法）",
+        "script": "agate/scripts/check-dispatch-routing.py",
+        "keywords": ["VALID_CLI", "VALID_EFFORT", "fallback"],
+    },
 ]
 
 

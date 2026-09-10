@@ -1,0 +1,17 @@
+=== BDD-39/40 regression: zero-change proof ===
+DATE: 2026-09-09T22:24:00Z
+
+--- git diff --stat f75e129..HEAD -- (gate/state-machine core; expect NO output) ---
+[exit 0 / empty output above = zero change]
+
+--- git diff --stat f75e129..HEAD -- agate-dispatch existing dispatch-context render tests ---
+[empty = zero change]
+
+--- grep -c dispatch_route in task gate-events.jsonl (BDD-40: expect 0) ---
+0
+
+--- standalone rerun: regression/test_tag0034_zero_change.py -v ---
+agate/tests/regression/test_tag0034_zero_change.py::test_bdd_39_gate_state_machine_phases_yaml_zero_byte_change PASSED [ 50%]
+agate/tests/regression/test_tag0034_zero_change.py::test_bdd_40_no_config_equals_byte_for_byte_status_quo PASSED [100%]
+============================== 2 passed in 0.03s ===============================
+EXIT_CODE: 0

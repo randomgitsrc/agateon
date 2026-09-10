@@ -161,9 +161,117 @@ def _render_dispatch_context(template, phase, role, task_id, guide, card_content
     return "\n".join(out) + "\n"
 
 
+def _route_main(argv_rest):
+    """agate-dispatch.py route PHASE ROLE [TASK_DIR] —— 派发路由决策子命令（TAG0034）。
+
+    读 dispatch-routing.yaml + dispatch-tiers.yaml → resolve(phase, role) → stdout 输出
+    单行 target 描述 JSON {"cli","model","effort","form","dispatch_context"[,"chain"]}。
+    无 `route` 参数时 main() 的既有渲染路径逐字节不变——本函数是纯新增分支。
+
+    P4b（M5）：form == "chain" 且首候选为子进程形态（claude-code / codex / opencode）
+    时，本函数端到端跑 try_and_fall（逐候选 dispatch_once → 三类基础设施理由码回落 →
+    HAS_OUTPUT 即停、写 dispatch_route 事件、输出实际 final）。首候选为 native 时仍只
+    输出路由计划 JSON（native 由驱动会话代发，与 P4a DESIGN_GAP 一致）。
+    I3：try_and_fall 的 write_event(phase, tried, final) 位置参数回调 ↔
+    write_dispatch_route_event(task_dir, phase, *, tried, final, task_id) kw-only 写入器
+    —— 在本函数内以适配层闭包桥接（两处签名各自不动）。
+    """
+    import json
+
+    if len(argv_rest) < 2:
+        sys.stderr.write("用法: agate-dispatch.py route PHASE ROLE [TASK_DIR]\n")
+        sys.exit(1)
+    phase = argv_rest[0]
+    role = argv_rest[1]
+    task_dir = argv_rest[2] if len(argv_rest) > 2 else os.getcwd()
+
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import agate_dispatch_route as adr
+    except ImportError as exc:
+        sys.stderr.write(f"agate-dispatch.py route: 无法 import agate_dispatch_route: {exc}\n")
+        sys.exit(1)
+
+    agate_root = _resolve_agate_root()
+    project_root = os.getcwd()
+    workspace = os.path.join(project_root, "agate-workspace")
+    try:
+        from agate_common import resolve_workspace
+
+        workspace = resolve_workspace(project_root)[0]
+    except Exception:
+        pass
+
+    routes, tier_bindings = adr.load_config(workspace)
+    _tier_names, factory_defaults = adr.load_factory_defaults(agate_root)
+    current_model = os.environ.get("AGATE_CURRENT_MODEL", "")
+
+    resolved = adr.resolve(
+        phase, role,
+        routes=routes, tier_bindings=tier_bindings,
+        factory_defaults=factory_defaults, current_model=current_model,
+    )
+
+    safe_role = re.sub(r"[^a-zA-Z0-9_-]", "_", role)
+    ctx_path = os.path.join(task_dir, f"{phase}-dispatch-context-{safe_role}.md")
+
+    if resolved["form"] == "default":
+        out = {
+            "cli": "default", "model": resolved["model"], "effort": None,
+            "form": "default", "dispatch_context": ctx_path,
+        }
+    elif resolved["chain"][0].get("cli") == "native":
+        first = resolved["chain"][0]
+        out = {
+            "cli": "native", "model": first.get("model"),
+            "effort": first.get("effort"), "form": "native",
+            "chain": resolved["chain"], "dispatch_context": ctx_path,
+        }
+    else:
+        # 子进程形态首候选 → 端到端 try-and-fall（M5 / I3 桥接）。
+        import functools
+
+        task_id = os.path.basename(os.path.abspath(task_dir))
+        effort_supported = os.environ.get("AGATE_EFFORT_SUPPORTED", "") == "1"
+        expected_output = os.environ.get("AGATE_DISPATCH_EXPECT") or None
+
+        def _write_event(phase_, tried_, final_):
+            adr.write_dispatch_route_event(
+                task_dir, phase_, tried=tried_, final=final_, task_id=task_id,
+            )
+
+        _once = functools.partial(
+            adr.dispatch_once, effort_supported=effort_supported,
+            expected_output=expected_output, task_dir=task_dir,
+        )
+        try:
+            result = adr.try_and_fall(
+                resolved["chain"], dispatch_context_path=ctx_path,
+                dispatch_once=_once, write_event=_write_event, phase=phase,
+            )
+        except adr.DispatchContractError as exc:
+            sys.stderr.write(f"agate-dispatch.py route: 派发契约违例: {exc}\n")
+            sys.exit(1)
+
+        final = result.final
+        form = "default" if final.get("cli") == "default" else "subprocess"
+        out = {
+            "cli": final.get("cli"), "model": final.get("model"),
+            "effort": final.get("effort"), "form": form,
+            "chain": resolved["chain"], "final": final, "tried": result.tried,
+            "dispatch_context": ctx_path,
+        }
+
+    sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
+    sys.exit(0)
+
+
 def main():
     # CLI: agate-dispatch.py PHASE ROLE [TASK_DIR] [--guide FILE]
     args = sys.argv[1:]
+    if args and args[0] == "route":
+        _route_main(args[1:])
+        return
     if len(args) < 2:
         sys.stderr.write("用法: agate-dispatch.py PHASE ROLE [TASK_DIR] [--guide FILE]\n")
         sys.exit(1)

@@ -8,6 +8,42 @@
 
 ---
 
+## [0.71.0] - 2026-09-10
+
+### 新增（TAG0034：派发路由，配置驱动跨 CLI/model 派发 + tmux 观测，RM-AG0060 epic）
+
+- **`agate dispatch route <phase> <role>` 子命令**（扩 `agate-dispatch.py`）——查表 →
+  try-and-fall 逐级回落 → 全落空回落默认派发；配套 `agate_dispatch_route.py` helper
+  模块（`resolve` / `load_config` / `classify_outcome` / `build_dispatch_command` /
+  `try_and_fall` 等 importable 函数）。既有渲染路径（无 `route` 参数）逐字节不变。
+- **协议本体档位词表 `agate/rules/dispatch-tiers.yaml`**（`bulk` / `standard` / `deep`
+  语义画像 + 出厂默认全 `standard`，改它走 SELF-GATE）；`standard` / 无配置 = 恒等于
+  「继承主 Agent 当前 model 的原生派发」（BDD-40 已验「不配置 = 逐字节现状」）。
+- **项目级 `agate-workspace/dispatch-routing.yaml`**（`tier_bindings:` + `routes:`，全兜底，
+  非协议本体、不触发 SELF-GATE，落点对齐 `maintainability.yaml` 先例）+ 静态校验器
+  `agate/scripts/check-dispatch-routing.py`（`cli` / `effort` 枚举 + `tier`×`candidates`
+  互斥 + `fallback` 任意层非法；坏 YAML / 文件缺失 → exit 0）。
+- **`dispatch_route` 事件**（写入 `gate-events.jsonl` 哈希链，复用 `append_event`）+
+  `check-events.py` 第 8 条理由码枚举审计——回落理由码只有 `launch_fail` /
+  `infra_error` / `no_parseable_output` 三值，混入 `gate_fail` 或任何非三值 → `sys.exit(1)`。
+- **`dispatch-protocol.md`「派发编排机制」新增「### 0. 派发路由」子节**：查表 → 派首选 →
+  逐级回落 + 「gate 判定只认产出文件 + exit code，不认谁生产的」生产者无关声明 + 两条
+  完整性不变量（「候选回落 ≠ 状态机 retry」/「gate FAIL 绝不换候选」）+ `cli: native`
+  弱缓解 / 跨 CLI 强缓解 + 单 Agent（`has_task_tool:false`）no-op + 评审打回续跑。
+- **tmux 观测层**（`build_subprocess_launch` / `tmux_cleanup_action` 纯逻辑 helper +
+  `_maybe_tmux_wrap` 接入，feature flag `AGATE_DISPATCH_TMUX` 默认关；WSL2 + tmux 3.4
+  含真人 attach 全链路实测，目标环境按 research §10 复跑后方可开启默认）。
+- **effort 轴**按 `claude --help` 是否含 `--effort` 能力探测映射（Claude Code），不硬编码
+  版本号（BDD-10 行首 `[BASELINE_CHANGE]`）；Codex `-c model_reasoning_effort=` /
+  OpenCode `--variant` 各按平台原生形态传递。
+- **ADR-013「派发路由 / gate 生产者无关性」**（`agate/adr.md`）；`agate/LIMITATIONS.md`
+  局限 2 补「派发路由缓解链」段（`cli: native` 弱缓解 / 跨 CLI 强缓解 / 诚实边界句
+  「仍非根治」，与 TAG0020 给局限 3 补「P6.5 独立 Judge 缓解链」对称）。
+- **DEBT0039 闭合**（`architect.md`「批次设计」节 + `dispatch-protocol.md`「派发编排机制」
+  明确「补协议文档正文 = P4 实现 / 跨文件一致性验证 = P7」的边界措辞）；`agate/SETUP.md`
+  新增机器级档位绑定 scaffold 小节；`agate/platform-notes.md` 补跨 CLI 子进程结构化输出
+  判成败字段小节 + effort 能力探测行。
+
 ## [0.70.0] - 2026-09-09
 
 ### 新增（TAG0033：Codex 命令流适配器 + 平台接入，RM-AG0061 + DEBT0035）

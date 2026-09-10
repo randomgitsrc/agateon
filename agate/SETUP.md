@@ -215,6 +215,44 @@ timeout 120s codex exec --json --skip-git-repo-check --dangerously-bypass-approv
 
 会话记录落 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`——agate 的 `CodexAdapter`（命令流卡死检测，RM-AG0055）读此路径。
 
+### 步骤 2-dispatch-routing：机器级档位绑定 scaffold（可选，TAG0034 / RM-AG0060）
+
+派发路由（`agate dispatch route`）是**机会式启用**：不建 / 不填任何配置 = 派发行为与现状逐字节一致（全 `(phase, role)` 解析为 `standard` 档 = 继承主 Agent 当前 model 的原生派发）。本步只在你想让某些阶段跑异 model / 异 CLI（部分缓解 `LIMITATIONS.md` 局限 2）时才做——比照上方「步骤 2-Codex」的 per-platform onboarding 形态。
+
+**1. 建项目级配置文件**（`agate-workspace/dispatch-routing.yaml`，非协议本体、不触发 SELF-GATE，对齐 `maintainability.yaml`）：仓库随本任务提交了一份带注释的 scaffold，直接编辑即可；缺失 / 损坏 → 全兜底回出厂默认（= 现状），不报错。
+
+**2. 填 `tier_bindings:`（机器级②，按本机现状填）**：`tier`（`bulk` / `deep`；`standard` 不在此定义——它硬编码为「原生派发」）→ 有序跨 CLI 候选链 `[{cli, model, effort?}]`。**以本机实际装了什么、哪个账号能用哪些 model 为准**——能用就用、不能用不强制，不追求跨机可复现（别的机器复现不了不是缺陷）。探测本机现状：
+
+```bash
+command -v claude codex opencode                    # 装了哪些 CLI
+claude --help | grep -- --effort                    # Claude Code 是否有 --effort 旋钮（能力探测，不硬编码版本号）
+cat ~/.codex/models_cache.json 2>/dev/null          # Codex 账号 model 白名单
+opencode models 2>/dev/null | head                  # OpenCode 可用 provider/model
+```
+
+链里的候选逐级回落：首候选「起不来 / 基础设施失败 / 无可解析产出」→ 试下一个；全落空 → 默认派发（恒等于本机制未启用）。**gate 判定只认产出文件 + exit code、不认谁生产的**——gate FAIL 是正常阶段 retry（同一候选），绝不换候选。
+
+**3. 填 `routes:`（项目级③，只引用档位名 → 跨机可移植）**：`(phase, role)`（role 段可选）→ `{tier, effort?}` 引用 **或** `{candidates: [...]}` 直接值。示例：`{P2: {architect: {tier: deep}}, P4: {tier: bulk}}`。
+
+**4. 各 CLI 自动化环境的绕过 flag**（子进程派发时路由脚本自动带上，此处仅供你手动复核 flag 名是否漂移）：
+
+```bash
+# Claude Code：跳过权限确认
+claude -p --output-format json --model <M> --dangerously-skip-permissions '<ctx路径>'
+# Codex：跳过全部确认 + 无沙箱 + 允许非 git 仓库（仅外层已隔离环境）
+codex exec --json -m <M> --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox '<ctx路径>'
+# OpenCode：自动批准工具调用
+opencode run --format json --auto -m <provider/model[#variant]> '<ctx路径>'
+```
+
+**5. 校验 schema**：
+
+```bash
+python3 ~/.agate/scripts/check-dispatch-routing.py agate-workspace/dispatch-routing.yaml   # exit 0 = 合法
+```
+
+> OpenCode `cli: native` 走命名 subagent 间接路——需按 `tier_bindings` 里出现的 OpenCode native 候选预注册命名 agent（约定名 `agate-route-<tier>`，`agents.<name>.model` = 候选 model）。无该命名 agent → 该候选判 `launch_fail` 自动回落、不阻断。默认路径（无 OpenCode native 候选）不碰这层。
+
 ## 步骤 3（可选）：设成默认 agent
 
 > ⚠️ **默认保持非默认（三平台通用原则）**：标准步骤 2 完成后，orchestrator 只是「可手动选择」的角色，

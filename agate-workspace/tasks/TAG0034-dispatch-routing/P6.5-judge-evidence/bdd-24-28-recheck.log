@@ -1,0 +1,85 @@
+=== BDD-24~28 semantic recheck ===
+--- grep GATE_FAIL|gate_fail in agate_dispatch_route.py + check-events.py ---
+agate/scripts/check-events.py:17:     出现 gate_fail 或任何其它值 → exit 1（机械强制「gate 判定不触发换候选」的完整性不变量）
+agate/scripts/check-events.py:43:# TAG0034 第 8 条：dispatch_route 事件的合法回落理由码枚举（无 gate_fail 值——
+agate/scripts/check-events.py:131:                            f"{sorted(DISPATCH_ROUTE_REASONS)}——gate_fail 等值机械拒绝，"
+agate/scripts/agate_dispatch_route.py:77:GATE_FAIL_TRIGGERS_FALLBACK = False
+agate/scripts/agate_dispatch_route.py:80:# （== check-events.py:DISPATCH_ROUTE_REASONS，无 gate_fail 值）。try_and_fall 写事件
+(exit 0)
+
+--- Outcome kind/reason enums in agate_dispatch_route.py ---
+13:  * classify_outcome(cli, *, stdout, exit_code, produced_files, killed_reason=None)
+16:      {"LAUNCH_FAIL", "INFRA_ERROR", "NO_PARSEABLE_OUTPUT", "HAS_OUTPUT"}。
+29:      或未知 → 返回 HAS_OUTPUT 占位（native 由驱动会话代发，路由脚本不 spawn）；
+38:      I1：回落**只**在 kind ∈ {LAUNCH_FAIL, INFRA_ERROR, NO_PARSEABLE_OUTPUT} 白名单
+39:      触发；其它「非 HAS_OUTPUT」kind → raise DispatchContractError（契约违例大声失败）。
+59:完整性不变量（P2-design R1）：回落**只**在 LAUNCH_FAIL / INFRA_ERROR /
+60:NO_PARSEABLE_OUTPUT 三类基础设施信号触发；gate 判定不是 Outcome.kind 的取值、
+77:GATE_FAIL_TRIGGERS_FALLBACK = False
+80:# （== check-events.py:DISPATCH_ROUTE_REASONS，无 gate_fail 值）。try_and_fall 写事件
+82:_VALID_REASONS = ("launch_fail", "infra_error", "no_parseable_output")
+85:_FALLBACK_KINDS = frozenset({"LAUNCH_FAIL", "INFRA_ERROR", "NO_PARSEABLE_OUTPUT"})
+95:# killed_reason 中判为「启动失败」的取值；其余非空 killed_reason 一律 INFRA_ERROR
+113:# 裸顶层 error 事件——**仅对 cli == "codex"** 视为 INFRA_ERROR（Codex MV3：
+116:# NO_PARSEABLE_OUTPUT（§3.7 OpenCode 行），故裸 type:error 不进通用集。
+119:# Claude Code turn 层失败签名（§3.7 Claude Code INFRA_ERROR 行：API error status /
+120:# stop_reason == "error" / is_error == true）。`api_error_status` 需后跟非 null 数字，
+127:# 结构化输出里的成功签名——仅用于避免把「非零退出但明显跑成功」误判为 INFRA_ERROR。
+312:class Outcome:
+318:        self.kind = kind
+319:        self.reason = reason
+322:        return f"Outcome(kind={self.kind!r}, reason={self.reason!r})"
+331:    （如 `401`）→ turn 层 API 错误（§3.7 Claude Code INFRA_ERROR）。`null` 不算。"""
+342:def classify_outcome(cli, *, stdout, exit_code, produced_files, killed_reason=None):
+343:    """P2-design §3.7 判定表 + HAS_OUTPUT「presence 级格式合法」定死（N7）。
+345:    HAS_OUTPUT = 约定产出文件非空（presence 级）；内容完整度 / 质量判断一律交
+347:    NO_PARSEABLE_OUTPUT 分支。
+352:      * 仅 claude-code：`stop_reason == "error"` / `is_error == true` / `api_error_status`
+355:        NO_PARSEABLE_OUTPUT，**不**被「非零退出」通用兜底误升为 INFRA_ERROR。
+360:    # 1. 启动失败 / 挂死被杀（P2-design §3.7 N6：挂死 → INFRA_ERROR）。
+363:            return Outcome("LAUNCH_FAIL", "launch_fail")
+364:        return Outcome("INFRA_ERROR", "infra_error")
+377:        return Outcome("INFRA_ERROR", "infra_error")
+380:    #     无可解析产出（§3.7 OpenCode NO_PARSEABLE_OUTPUT 行）；早于「非零退出」兜底返回。
+382:        return Outcome("NO_PARSEABLE_OUTPUT", "no_parseable_output")
+384:    # 2c. 非零退出且无产出无成功签名 → INFRA_ERROR（退出码弱佐证兜底）。
+391:        return Outcome("INFRA_ERROR", "infra_error")
+395:        return Outcome("HAS_OUTPUT", None)
+398:    return Outcome("NO_PARSEABLE_OUTPUT", "no_parseable_output")
+489:    **不得**塞进 classify_outcome 的 NO_PARSEABLE_OUTPUT 分支。
+717:    - cli ∈ {native, default} 或未知 → 返回 HAS_OUTPUT 占位：native 由驱动会话代发，
+723:      INFRA_ERROR）。
+732:        # native / default / 未知 cli：路由脚本不 spawn，交驱动会话代发（占位 HAS_OUTPUT）。
+733:        return Outcome("HAS_OUTPUT", None)
+739:    stdout, exit_code, killed_reason = runner(argv, timeout_s=timeout_s)
+750:        produced_files=produced_files, killed_reason=killed_reason,
+782:    """逐候选派发 → 三类基础设施信号 continue（记 reason）→ HAS_OUTPUT 即停、写事件、
+785:    无 probe（BDD-19）；回落只在 LAUNCH_FAIL / INFRA_ERROR / NO_PARSEABLE_OUTPUT
+786:    三类基础设施信号（BDD-24：产出质量差归 HAS_OUTPUT、不回落）。
+788:    I1（白名单化）：显式判 kind ∈ _FALLBACK_KINDS 才回落；其它「非 HAS_OUTPUT」kind
+790:    静默当回落信号换候选）。I5：写事件前用 _VALID_REASONS 自校回落候选的 reason。
+795:        kind = getattr(outcome, "kind", None)
+796:        if kind == "HAS_OUTPUT":
+802:        if kind not in _FALLBACK_KINDS:                     # I1：白名单外的非 HAS_OUTPUT
+804:                f"dispatch_once 返回非契约 outcome.kind={kind!r}"
+805:                f"（既非 HAS_OUTPUT 也非三类基础设施信号 {sorted(_FALLBACK_KINDS)}）"
+807:        reason = getattr(outcome, "reason", None)
+808:        if reason not in _VALID_REASONS:                    # I5：写事件前自校 reason
+810:                f"回落 outcome.kind={kind!r} 携带非法 reason={reason!r}"
+811:                f"（合法枚举 {_VALID_REASONS}）"
+848:    return dispatch_kind == "phase_role_dispatch"
+
+--- check-events.py dispatch_route reason enum ---
+14:  7. 未知 event 类型不拦截（向后兼容；gate_run/judge_verdict/state_transition/dispatch_route 为已知类型）
+15:  8. dispatch_route 理由码枚举（TAG0034 / RM-AG0060）：event == "dispatch_route" 的行，
+16:     每个 candidates_tried[i].reason（若存在）必须 ∈ {launch_fail, infra_error, no_parseable_output}；
+43:# TAG0034 第 8 条：dispatch_route 事件的合法回落理由码枚举（无 gate_fail 值——
+45:DISPATCH_ROUTE_REASONS = {"launch_fail", "infra_error", "no_parseable_output"}
+119:        # 8. dispatch_route 理由码枚举校验（TAG0034 / RM-AG0060）——不动第 1-7 条
+120:        if ev.get("event") == "dispatch_route":
+126:                    reason = cand.get("reason")
+127:                    if reason is not None and reason not in DISPATCH_ROUTE_REASONS:
+129:                            f"GATE EVENTS: 第 {idx} 行 dispatch_route 事件 candidates_tried "
+130:                            f"理由码 {reason!r} 非法（合法值仅 "
+131:                            f"{sorted(DISPATCH_ROUTE_REASONS)}——gate_fail 等值机械拒绝，"
+EXIT_CODE: 0

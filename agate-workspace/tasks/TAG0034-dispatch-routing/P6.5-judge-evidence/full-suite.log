@@ -1,0 +1,7 @@
+=== P6.5 judge full-suite rerun (BDD-40 全量回归全绿部分) ===
+CMD: timeout 590 python3 -m pytest agate/tests/ -q -p no:cacheprovider --tb=no  (from worktree root)
+DATE: 2026-09-10T02:36Z
+HEAD: eb924beec992b65a9ace103b6490113cb8ccf22e
+RESULT: 1625 passed, 2 skipped in 155.95s
+(matches P2 §8 expectation 1625 passed / 0 failed / 2 skipped)
+EXIT_CODE: 0

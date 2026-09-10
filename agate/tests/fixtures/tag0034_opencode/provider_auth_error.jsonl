@@ -1,0 +1,1 @@
+{"type":"error","timestamp":1788945347937,"sessionID":"ses_f7a8c4eccffeuSi9RXe72WOBjI","error":{"name":"ProviderAuthError","data":{"providerID":"minimax-cn","message":"Anthropic API key is missing. Pass it using the 'apiKey' parameter or the ANTHROPIC_API_KEY environment variable."}}}

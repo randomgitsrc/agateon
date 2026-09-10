@@ -1,0 +1,45 @@
+# dispatch-routing.yaml — 派发路由（项目级配置，TAG0034 / RM-AG0060）
+#
+# 形态对齐 agate-workspace/maintainability.yaml：项目级、全兜底、**非协议本体、
+# 不触发 SELF-GATE**。文件缺失 / 损坏 / 类型坏 → 回落出厂默认（= 逐字节现状），
+# 不报错、不静默跳过（agate/scripts/agate_dispatch_route.py load_config）。
+#
+# 两个顶层 key：
+#
+#   tier_bindings:  机器 / 安装级——把协议档位（bulk / standard / deep，词表见
+#                   agate/rules/dispatch-tiers.yaml）绑到本机实际能跑的有序跨 CLI
+#                   候选链 [{cli, model, effort?}]。以「本机装了哪些 CLI + 各自默认
+#                   model」为准，能用就用、不能用不强制、不追求跨机可复现。
+#                   由 SETUP 流程按本机现状 scaffold。
+#
+#   routes:         项目级——(phase, role) → 档位引用 {tier, effort?}
+#                   **或** 直接候选链 {candidates: [{cli, model, effort?}]}。
+#                   只引用档位名的写法跨机器可移植；写 candidates 直接值则牺牲
+#                   可移植换明确。tier: 与 candidates: 互斥。
+#
+# 不配置（本文件即当前形态：routes / tier_bindings 均空）= 全 (phase,role) 解析为
+# standard 档 = 继承主 Agent 当前 model 的原生派发 = 逐字节现状。
+
+schema_version: 1
+
+# 示例（本机按现状填；默认全部注释掉 ⇒ 不启用路由）：
+#
+# tier_bindings:
+#   deep:
+#     - {cli: codex, model: gpt-5.6-terra, effort: high}
+#     - {cli: claude-code, model: opus}
+#   bulk:
+#     - {cli: native, model: claude-haiku-4-5}
+#     - {cli: opencode, model: deepseek/deepseek-v4-flash}
+#
+# routes:
+#   P2:
+#     architect: {tier: deep}
+#   P4: {tier: bulk}
+#   P6.5:
+#     judge:
+#       candidates:
+#         - {cli: codex, model: null}
+
+tier_bindings: {}
+routes: {}
