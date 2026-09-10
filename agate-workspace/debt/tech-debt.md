@@ -1258,13 +1258,15 @@ closed_at: 2026-09-09
 id: DEBT0036
 category: technical
 title: "platform-notes.md Codex 章「spawn_agent 嵌套深度未测 / max_depth=1 待 V7 复核」措辞滞后——P6 V7 已两次实测 depth=2 可用"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P6-evidence/real-machine-p6.md
     note: "P6 V7 重做 attempt 2 实测 source.subagent.thread_spawn.depth == 2 的孙会话（agent_path == /root/p6redo2_child/p6redo2_grand）；.archived 首轮 V7 亦得 depth 1→2——两次独立证实"
   - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/P7-consistency.md
     note: "P7 §5 / §6-A：deviation_count: 1（WARNING 级）——platform-notes.md 子代理派发小节 + 行 136 时效指针仍写「未测 / 待 V7 复核」，与实测事实滞后"
+  - ref: "chore/debt0036-and-doc-tidy"
+    note: "closure（TAG0033 直接后续，非 task 流）：platform-notes.md 3 处措辞（子代理派发小节 + 真机验证清单表行 + Hardening-roadmap 节时效指针）收敛为「P6 V7 已两次独立实测 depth=2 可用、max_depth=1 结论已推翻」，保留 max_depth=1 事实行 + multi_agent flag 交叉引用；test_codex_platform_docs.py::test_bdd_25（及全 8 用例）绿；check-protocol-consistency.py --strict-errors-only 0 ERROR"
 impact: "权威源（platform-notes.md，平台适配权威源）携带指向已实测事实的「未测」指针，误导读者；不影响 CodexAdapter 契约或 BDD-25（现「待复核」时效指针本身合规，test_bdd_25 现绿）"
 recommendation: "把「未测」收敛为「已实测 depth=2 可用（P6 V7，2026-09，两次独立证实）」，保留 max_depth=1 事实行 + 交叉引用结构；回跑 test_bdd_25 + check-protocol-consistency.py --strict-errors-only 确认 BDD-25 不破、0 ERROR"
 closure_criteria:
@@ -1273,7 +1275,8 @@ closure_criteria:
   - "check-protocol-consistency.py --strict-errors-only 0 ERROR"
 source: retrospective
 created_at: 2026-09-09
-task_id: null
+task_id: TAG0033
+closed_at: 2026-09-10
 ```
 
 ## DEBT0037
