@@ -1,4 +1,12 @@
 ---
+phase: P3
+task_id: TAG0034
+type: test-cases
+parent: P2-design.md
+trace_id: TAG0034-P3-20260909
+status: draft
+created: 2026-09-09
+agent: test-designer
 test_code_dir: agate/tests/
 ---
 ## test_code_dir
