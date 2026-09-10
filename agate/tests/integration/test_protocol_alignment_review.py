@@ -61,7 +61,9 @@ def test_sg_5_selfgate_has_checklist(agate_root):
     assert selfgate_file.is_file()
     text = selfgate_file.read_text(encoding="utf-8")
     assert "protocol-alignment-review" in text
-    assert "CHECK 1-9" in text
+    # 检查清单引用 check-protocol-consistency 的结构 CHECK 集（不写死上界——CHECK 数会增长）
+    assert "check-protocol-consistency.py" in text
+    assert "CHECK" in text
     assert "HUMAN_CONFIRMED" in text
 
 
