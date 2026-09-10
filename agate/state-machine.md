@@ -326,7 +326,7 @@ P8 是**「发布准备」**，不是「发布」。P8 gate 通过后进入 READ
 > **机械化（RM-AG0054，v0.66.0）**：下面步骤 5-7（跑 gate → 按转移规则算下一状态 → 写回
 > `.state.yaml` + git add）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
 > 消费 `phases.yaml` 的 `next`/`retreat`/`gate_pass_exit`，不做临场判断；gate exit 1 且表有
-> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退。`agate advance` 是其同族入口。P6/P6.5 的条件式
+> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。P6/P6.5 的条件式
 > 推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。**手工执行下面
 > 全流程是 fallback**（工具不可用时）；本节的手工规格是 `agate next` 实现所依据的权威语义。
 

@@ -16,8 +16,8 @@
    "bytes": 15035
   },
   "agate/state-machine.md": {
-   "sha256": "4631f2abb4c7a3797205dd2ea0b9bfed0af8fa0e5186f1e1c9b8d6f277bb05f9",
-   "bytes": 52019
+   "sha256": "7ea082b9527c9d99c666c4d6aba7a2644573b9011446ba19df552aa0ef6677ff",
+   "bytes": 52028
   },
   "agate/tests/unit/test_tag0027_b2_agate_dispatch.py": {
    "sha256": "a92d547bb303b48ad97869d9c49ff47bfd32afa86db4f60254fed5bfc1395202",

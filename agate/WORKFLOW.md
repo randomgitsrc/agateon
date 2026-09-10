@@ -157,8 +157,9 @@ roadmap 是项目级任务规划层（单文件 `{AGATE_WORKSPACE}/roadmap/roadm
 | Codex | ✅ | ✅ | 完整 P0-P8 |
 | Claude Project 会话 | ❌ | ❌（网络受限）| 仅 P0-P2 设计规划 |
 
-> DSH / Codex 无 orchestrator 软链注册步骤（DSH 用 preset，Codex 作派发目标），接入见 `SETUP.md`
-> 步骤 2-DSH / 2-Codex。平台能力的权威源是 `platform-notes.md`。
+> DSH / Codex 无 `.claude/agents/` 等价的 orchestrator 软链注册步骤（DSH 用 preset；Codex 经 CLI
+> 登录 + 自动化 flag，仍跑完整 P0-P8、有原生 `spawn_agent` 派发），接入见 `SETUP.md` 步骤 2-DSH /
+> 2-Codex。平台能力的权威源是 `platform-notes.md`。
 
 **Claude Project 会话的定位：**
 - 适合：P0-P2（设计决策、需求基线、方案评审）、代码审查

@@ -53,8 +53,8 @@ permission:
 | `P{N}-gate-diagnosis.md` | gate 失败后 |
 | `PAUSED-resolution.md` | PAUSED 后 |
 
-> 状态推进：普通 phase 的「跑 gate → 判定 → 写 `.state.yaml` phase → commit」这一步由 `agate next` /
-> `agate advance` 查表机械完成（不做临场判断），详见 `state-machine.md`；手工推进为 fallback。
+> 状态推进：普通 phase 的「跑 gate → 判定 → 前进写 `.state.yaml` phase → commit」这一步由 `agate next`
+> 查表机械完成（不做临场判断；多阶回退走 `agate-retreat-to.py`），详见 `state-machine.md`；手工推进为 fallback。
 
 ---
 

@@ -73,7 +73,7 @@ The orchestrator does exactly four things: read state, dispatch subagents, run g
 | Codex | ✅ | Full P0-P8 |
 | Claude Project sessions | ❌ | Design phases (P0-P2) only |
 
-DSH and Codex have no orchestrator-symlink registration step (DSH uses a preset, Codex is a dispatch target); their one-time setup is in [`agate/SETUP.md`](agate/SETUP.md) steps 2-DSH / 2-Codex. See [`agate/platform-notes.md`](agate/platform-notes.md) — the authoritative source for per-platform capability — for full adaptation notes, including native Windows (Git for Windows) support.
+DSH and Codex have no `.claude/agents/`-equivalent orchestrator-symlink registration step (DSH uses a preset; Codex is set up via CLI login + automation flags — it still runs full P0-P8 with native `spawn_agent` dispatch); their one-time setup is in [`agate/SETUP.md`](agate/SETUP.md) steps 2-DSH / 2-Codex. See [`agate/platform-notes.md`](agate/platform-notes.md) — the authoritative source for per-platform capability — for full adaptation notes, including native Windows (Git for Windows) support.
 
 ## Documentation
 

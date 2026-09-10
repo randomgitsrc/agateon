@@ -73,7 +73,7 @@ gate 检查（测试运行器 exit code、类型检查器、git log、BDD 运行
 | Codex | ✅ | 完整 P0-P8 |
 | Claude Project 会话 | ❌ | 仅设计阶段（P0-P2） |
 
-DSH 与 Codex 没有 orchestrator 软链注册步骤（DSH 用 preset，Codex 作派发目标），一次性接入见 [`agate/SETUP.md`](agate/SETUP.md) 步骤 2-DSH / 2-Codex。各平台能力的权威源是 [`agate/platform-notes.md`](agate/platform-notes.md)——完整适配说明（含原生 Windows / Git for Windows）见此。
+DSH 与 Codex 没有 `.claude/agents/` 等价的 orchestrator 软链注册步骤（DSH 用 preset；Codex 经 CLI 登录 + 自动化 flag 接入，仍跑完整 P0-P8、有原生 `spawn_agent` 派发），一次性接入见 [`agate/SETUP.md`](agate/SETUP.md) 步骤 2-DSH / 2-Codex。各平台能力的权威源是 [`agate/platform-notes.md`](agate/platform-notes.md)——完整适配说明（含原生 Windows / Git for Windows）见此。
 
 ## 文档
 
