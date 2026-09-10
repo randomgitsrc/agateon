@@ -1298,6 +1298,8 @@ evidence:
     note: "_advance 前的 gate 判定消费 check-gate.py P4 exit 码；exit 1 + retreat=null → 不推进"
   - path: agate-workspace/tasks/TAG0034-dispatch-routing/retrospective.md
     note: "TAG0034 复盘再次命中：dispatch_plan static-batch（P4a/P4b/P4c 三批 commit），P4→P5 手动 _advance 一次；复盘「四、改进措施」+「agate 反馈」条 3 对本 DEBT 加权——static-batch 是可静态识别的信号（.state.yaml dispatch_plan.mode == static-batch），推进侧可据此开豁免路径"
+  - ref: "RM-AG0062"
+    note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
 impact: "多提交阶段任务 / 有回退的任务，主 Agent 必须手动改 .state.yaml phase + append_event state_transition 绕过——绕过路径未走 gate 校验，且违反「不用手动替代脚本」的编排纪律；后续同形态任务复发（TAG0033 + TAG0034 连续两个 static-batch 任务均命中）"
 recommendation: "P4 完整度判据从「当前暂存区有代码 diff」放宽为「本 phase 的任一 commit 引入过代码 diff」（git log --oneline <phase 起点>..HEAD 扫非 md/yaml），或显式识别「回退后再推进」（.state.yaml retries[P4] 非空 + 已存在 wf(...-P4): commit）。落点 check-gate.py _gate_p4 + agate-next.py。同类扫描：其它 phase 的 check-gate 完整度判据是否共用同一「看暂存区」假设"
 closure_criteria:
@@ -1327,6 +1329,8 @@ evidence:
     note: "_check_whitelist：白名单不含角色定义文件路径，与「每个 dispatch-context『输入文件』节都列角色文件」的通用惯例冲突；P6-evidence/ 目录白名单不认目录下裸文件名（如 real-machine-p6.md）"
   - ref: agate/dispatch-protocol.md
     note: "「Judge 信息隔离」节未写明 P6.5 dispatch-context 是「不列角色文件」的唯一例外"
+  - ref: "RM-AG0062"
+    note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
 impact: "P6.5 dispatch-context 按通用惯例列角色文件 / 引用阶段卡片 / 用 P6-evidence 裸文件名，均触发信息隔离拦截 → judge 已产出正确 verdict 仍需返工重写 dispatch-context；每个走 P6.5 的任务都可能踩"
 recommendation: "① 黑名单 p6-acceptance.md 匹配加 agate/phase-cards/ 路径豁免；② 白名单显式允许角色定义文件路径，或在派发模板 / P6 卡片写明「P6.5 dispatch-context『输入文件』节不列角色文件（派发机制注入）」；③ P6-evidence/ 目录白名单认「目录下裸文件名」。落点 check-judge-verdict.py（_check_blacklist / _check_whitelist）+ dispatch-protocol.md「Judge 信息隔离」节 + P6 卡片"
 closure_criteria:
@@ -1387,6 +1391,8 @@ evidence:
     note: "账本审计器不校验「跑测前后账本零新增」——测试副作用无 gate 兜底"
   - path: agate-workspace/tasks/TAG0030-acceptance-blindspot/P1-requirements.md
     note: "RM-AG0057 测试副作用 / 环境还原 gate 已存在，但覆盖的是创建型 E2E 清理钩子，未覆盖 append-only 账本这类写入污染"
+  - ref: "RM-AG0062"
+    note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
 impact: "跑一次全量 pytest 就可能改动 3 个历史任务的 committed 账本（重复 judge_verdict 事件 + hash 链错位）；污染需人工发现并 git checkout 复原，漏掉则错误账本被提交、破坏 hash 链可审计性；CI 若在脏工作树跑亦可能误判"
 recommendation: "① test-designer.md / implementer.md 补硬规则：任何直接或间接调用 agate_common.append_event / 写 gate-events.jsonl 的测试必须把 task_dir 指向 tmp_path，禁止指向仓库内真实或 fixture 账本；② CI 加兜底步 `git diff --exit-code agate-workspace/tasks/*/gate-events.jsonl`（pytest 之后），非零即 fail；③ 可选：agate_common.append_event 在检测到目标路径位于 git 跟踪的 fixture 目录且非 tmp 时 warn"
 closure_criteria:
@@ -1414,6 +1420,8 @@ evidence:
     note: "字段白名单未覆盖 P3-test-cases.md 的 agent"
   - ref: agate/scripts/check-p6-provenance.py
     note: "约 573 行 sys.exit(2) when warning_found——对 P3-test-cases.md 缺 agent 字段判 WARNING 并 exit 2，阻断 P6→P7"
+  - ref: "RM-AG0062"
+    note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
 impact: "结构化字段写入工具与 provenance 检查器对「阶段产出必备 frontmatter 字段」认知不一致 → 主 Agent 需绕过工具手写 frontmatter（违反 RM-AG0048「同源铁律 / 消灭手写 frontmatter」初衷），且手写易漏字段再次触发 exit 2"
 recommendation: "① 把 P3-test-cases.md 的 agent 加入 agate-md-field-set 支持字段；或 ② check-p6-provenance.py 对 P3-test-cases.md 的 agent 缺失降级为 WARNING 不 exit 2（P3 是 test-designer 唯一产出，agent 恒定）；根治向：两者共读同一份「阶段产出必备 frontmatter 字段」权威表（rules/ 下），消除字段集漂移"
 closure_criteria:
