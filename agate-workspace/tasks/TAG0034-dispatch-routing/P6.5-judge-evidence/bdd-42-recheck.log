@@ -1,0 +1,10 @@
+=== BDD-42: routed-away judge verdict platform independence ===
+--- grep platform transcript paths in check-judge-verdict.py + check-p6-provenance.py (expect 0) ---
+(grep exit 1 ; 无行=0命中=平台无关=PASS)
+
+--- git log f75e129..HEAD for the two validators (expect NO commits) ---
+(无行=任务范围零改动=PASS)
+
+--- git diff --stat f75e129..HEAD for the two validators ---
+(无行=零字节改动)
+EXIT_CODE: 0

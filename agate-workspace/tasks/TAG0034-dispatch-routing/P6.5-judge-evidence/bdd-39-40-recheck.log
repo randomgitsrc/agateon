@@ -1,0 +1,8 @@
+=== BDD-39: gate/state-machine/phases.yaml zero-change ===
+(无行=四者逐字节不变=PASS)
+--- also: agate-dispatch existing render tests zero-change ---
+(无行=零改动)
+
+=== BDD-40: dispatch_route event count in task gate-events.jsonl (expect 0) ===
+0
+EXIT_CODE: 0

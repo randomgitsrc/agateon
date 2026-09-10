@@ -1,0 +1,126 @@
+============ BDD-41 / BDD-49: dispatch-protocol.md ============
+--- '### 0. 派发路由' 子节存在性 + 铁律1 相对位置 ---
+17:### 铁律 1：派发 subagent，动词是"派发"不是"执行"
+506:### 0. 派发路由（查表 → 派首选 → 逐级回落 → 再派发）
+514:**此步在铁律 1 启动 subagent 之前插入。** 主 Agent 到阶段 `Pn` 派角色 `R` 时，
+594:### 1. 工作量评估（五维评级）
+1264:> 平台无关的派发语义见铁律 1 与「标准派发流程」。
+
+--- BDD-41 关键串: 'gate' + '产出文件' + 'exit code' + '不认' + 谁生产 ---
+529:**gate 判定只认产出文件 + exit code，不认谁生产的。** 这条解耦是设计成立的前提——
+
+--- BDD-41 关键串: '候选回落 ≠ 状态机 retry' / 'gate FAIL 绝不换候选' ---
+535:1. **候选回落 ≠ 状态机 retry**：候选回落只在 `launch_fail` / `infra_error` /
+538:2. **gate FAIL 绝不换候选**：一旦某候选产出了 gate 能评的东西，这条路由即成功——
+
+--- BDD-49: author 文档内容 = P4 / 跨文件一致性验证 = P7 ---
+
+--- BDD-49: 「派发编排机制」节标题仍存在 ---
+3:> 职责边界：派发操作层——可执行门槛判定命令、派发编排机制（工作量评估/并行规则/回退处理）、特殊事件恢复（详见职责声明表，P2-design.md §0）
+122:   d. 调整策略后重派：拆分任务（见「派发编排机制」）/ 补输入导航（见「输入导航原则」）/ 换 subagent 类型（frontend ↔ general）
+136:3. 从任务本身分析（输入是否过多、产出文件数是否超过 3——见「派发编排机制」）
+218:      # 若一句话无法概括，考虑拆分为多个任务——见「派发编排机制」
+502:## 派发编排机制
+1080:  的「五模式编排」（见「派发编排机制」节：单发/静态拆批/并行/先理解后拆/串行链）**并存互补，
+
+--- BDD-45: 单 Agent 模式路由不适用 ---
+--- BDD-49 broader: P4 / P7 / author / 一致性 in dispatch-protocol.md ---
+588:**author 文档内容 vs 跨文件一致性验证的阶段边界**：`dispatch_plan` 批次表里，
+589:「补 / 改协议文档正文」（新增章节、修订既有措辞、补 per-platform 说明）是 **P4 author
+591:措辞与引用是否对齐、有无矛盾），P7 **不** author、不改写文档正文。architect 设计批次表
+592:时不得把「补文档正文」批标成 P7。
+655:| P2 | 模式 1（单发）+ `dispatch_plan:` 产出 | **非 P2 自身拆分**——P2 评估并声明后续阶段的编排方案（模式 + 批次表 + parallel_limit） |
+873:| P6→P7 | BDD 验收通过 ⚠️ self-authored（降级缓解：provenance 审计 + R1a 截图实质检查，根治待 Phase 3） | `scripts/check-gate.py P6` → exit 2（FAIL=0/NC=0/证据非空已验）+ `scripts/check-p6-evidence.py` UI 截图 > 1KB（R1a 客观证据 barrier）+ `scripts/check-p6-provenance.py` → exit 0（证据-结论对应 + dispatch-context 审计 + BDD 总数对照由审计 3 自动执行，P1 `#### BDD-NN` 标题数与 P6 `grep -cE '^\s*- (PASS|FAIL)'` 结果数不符时 exit 1 硬阻 + UI vision YAML 审计 [R1b hook 化]）（UI 条件须截图 + vision-analyst YAML 引用 + `summary.blocker_count → =0`）。**截图质量标准**：操作类 BDD 截图必须互不相同（md5 去重，hook 强制），查询类 BDD 可不截图但须有断言记录文件（response.json / assert.log 等，hook 强制）。任何 BDD 标 FAIL → gate 不通过 → 回 P4 |
+940:3. 本节与 `.state.yaml` 的 `env_state` 字段（`debug_backend` / `test_entry_slug` / `env_verified_at`）是引用关系：字段语法与一致性验证步骤的权威定义在 state-machine.md「主 Agent 的单步执行（一轮）」的环境一致性验证步骤，本节**不重复定义**字段语法
+
+--- BDD-45 broader: 单 Agent / has_task_tool / no-op in dispatch-protocol.md ---
+166:## 执行模式：支持 subagent 派发 vs 单 Agent
+168:agate 的标准模式假设主 Agent 所在平台支持派发 subagent。若运行环境不支持派发（`executor_env.has_task_tool: false`，如 Claude Project 会话），整个派发机制降级为**单 Agent 顺序执行模式**：
+169:> 实现注记：`task` 工具 / `has_task_tool` 是平台派发能力的具体实现命名——Claude Project 等
+170:> 无 task 工具的环境即走单 Agent 模式；本节属平台适配说明，平台无关的执行模式语义 = "能派发
+171:> subagent 的标准模式" vs "不能派发时的单 Agent 降级模式"，与具体平台工具名无关。
+173:| 标准模式（has_task_tool: true）| 单 Agent 模式（has_task_tool: false）|
+180:**单 Agent 模式的附加要求：**
+184:- 强烈建议：P0-P2 在单 Agent 完成后，将结果 push 到 main，再切换到支持 subagent 派发的平台执行 P3-P8
+191:- `has_task_tool: false`（环境不支持 subagent）
+224:     has_task_tool: true       # false = 单 Agent 模式
+236:   - executor_env：platform/has_task_tool/has_local_runtime/network 四项都要填实际值，不是占位符
+565:**单 Agent 模式（`executor_env.has_task_tool: false`，如 Claude Project 会话）**：无派发
+566:动作 → **路由为 no-op**，本节不适用（显式出范围）。
+============ BDD-46 / 52 / 53: design-dispatch-routing.md ============
+--- head + §2.1 + §2.2 section markers ---
+1:# 派发路由设计（agate 协议增强提案）
+17:## 1. 为什么要做
+38:## 2. 机制一：配置路由
+40:### 2.1 配置结构（三层落点，2026-09-09 定案）
+52:# agate-workspace/dispatch-routing.yaml （形态示意）
+71:### 2.2 查表 → 派首选 → 逐级回落 → 再派发（try-and-fall，无 probe）
+86:### 2.3 `cli: native`——同平台换 model
+100:### 2.4 `cli:` 另一个 CLI——起子进程
+109:### 2.4a 评审打回后的续跑（子进程 + native 两种形式都适用）
+122:### 2.5 DSH：暂不纳入 CLI 派发路径
+131:### 2.6 自动化边界：决策全机械化，执行按形式分层
+147:## 3. 机制二：tmux 观测（仅 CLI 子进程形式）
+173:## 4. 留痕
+193:## 5. 影响面
+205:## 6. 风险与止损
+218:## 7. 待确认事项
+245:## 8. 怎么填 `candidates` 表（非规范）
+
+--- BDD-46: 不再含 agate/rules/dispatch-routing.yaml (期望 0 命中 rules/dispatch-routing.yaml) ---
+195:- 新增 `rules/dispatch-routing.yaml`（配置文件，非协议本体，不受 SELF-GATE）。
+220:1. `rules/dispatch-routing.yaml` 的确切 schema（本文候选结构为示意；已定：无 `fallback` 字段，终点回落恒为默认派发）。**候选项需加可选推理档字段**——research §3 已确认 OpenCode / Codex 都有独立推理档维度，与 model 正交。`{cli, model}` 不够，需 `{cli, model, effort?}`（字段名待定）。
+(exit 0 ; 无行=0命中=PASS)
+
+--- BDD-46: try-and-fall / 查表 / 逐级回落 (核心循环) ---
+3:> **做什么**：新增**项目级** `agate-workspace/dispatch-routing.yaml`（`routes:` + `tier_bindings:`，非协议本体、不受 SELF-GATE、全兜底）+ 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`（`bulk`/`standard`/`deep` 语义画像 + 出厂默认）——按 `(phase, role)` 声明候选 `{cli, model, effort?}` 路由（或引用命名**档位** `tier`；`tier` 与 `effort` 是两个**正交轴**）。到某阶段派某角色时**查表 → 直接派首选候选（第一个动作即派真实 dispatch-context，无 probe）→ 若『起不来 / 基础设施失败 / 无可解析产出』三类之一则逐级回落到下一候选 → 全落空则默认派发（同平台同 model，恒等于本机制未启用）**——**try-and-fall，不是 probe-then-commit**。`cli` 可为 `native`（同厂商换 model，不脱离原生派发工具——**弱缓解**）或另一个 CLI（`claude-code`/`codex`/`opencode`，起子进程——**强缓解**）。查表 / 回落 / 降级是纯机械步骤，落在 CLI 里做、不依赖主 Agent 临场判断（§2.6）。新增 `dispatch_route` 事件无差别留痕。子进程形式下若有 `tmux`，包一层供人类 `attach` 观测。
+5:> **本任务定案（2026-09-09 重写，纳入 §2.1 / §2.2 / 头部）**：① **三层落点**——配置文件**不在** `agate/rules/`（① 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`；②③ 项目级 `agate-workspace/dispatch-routing.yaml`）；② 核心循环去「按序探测 probe」改 **try-and-fall**；③ `tier` + `effort` 两**正交轴** + `(phase,role)` key（role 可选）；④ `cli: native` = **弱缓解**（同训练系谱盲区基本共享，且做不到「不依赖主 Agent」——自动化天花板是主 Agent 机械横传 model），跨 CLI 起子进程 = **强缓解**（真正异源独立视角、可端到端自动化）——**自动化不对称**；effort 轴现三平台均可用（Claude Code `--effort` 按能力探测，本机 2.1.266 [实测] 有 / 引入版本未核实）；⑤ 两条**完整性不变量**——「**候选回落 ≠ 状态机 retry**」（回落只在基础设施失败发生，不占 `retries[Pn]`、不写 `state_transition`、不触发 PAUSED，只写 `dispatch_route`）与「**gate FAIL 绝不换候选**」（收到任何 gate 能评产出即停止回落；gate FAIL → 同一候选正常阶段 retry；`dispatch_route` 理由码枚举无 `gate_fail` 值、`check-events.py` 机械拒绝）；⑥ **routing 是 per-machine 机会式、不追求跨机可复现**（只有抽象 `(phase,role)`→档位映射可 commit 共享）。
+30:**决策机械化、不依赖主 Agent**：查表 → 探测 → 选 target → 逐级回落，全程无自由裁量，是纯脚本可完成的步骤。这承接 RM-AG0054"推进决策从 orchestrator 临场判断改为查表推进"的方向——路由决策同样应落在 CLI（本设计新提议的 `agate dispatch` 家族，非 RM-AG0054 已定义的既有命令，见 §5）里，主 Agent（或档位 C /loop）只调用、不参与判断（§2.6）。
+71:### 2.2 查表 → 派首选 → 逐级回落 → 再派发（try-and-fall，无 probe）
+77:3. **try-and-fall**（不是 probe-then-commit）：**第一个动作就是把真实 dispatch-context 派给首选候选**——没有 "hi" 预探测。逐候选派发：
+135:- **路由决策层（查表 → 探测 → 选 target → 逐级回落 → 写 `dispatch_route` 事件）**：100% 机械，无自由裁量，应实现为 CLI（**优先扩展 `agate-dispatch.py`**，不成再新增 `agate-route.py`——§7 事项 3；归入 RM-AG0054 的 `agate next`/`agate advance`/`agate dispatch` 推进侧 CLI 家族）。主 Agent 或档位 C /loop 只调用，不参与判断。这一层**完全可自动化**。
+196:- **路由决策 CLI 化**：优先扩展 `agate-dispatch.py`（不成再新增 `agate-route.py`，见 §7 事项 3），把"查表 → 探测 → 选 target → 逐级回落 → 写 `dispatch_route` 事件"实现为脚本步骤。**派发决策命令是本设计新提议，不是 RM-AG0054 已定义的既有命令**——RM-AG0054 定义的是 `agate next`/`agate advance`（状态机推进决策，"该不该进入下一 phase"），本设计要落地的是派发决策（"这一步该派给哪个 CLI/model"），两者性质不同，只是都遵循"决策查表化、落在 CLI 里做"这个同一方向，归入同一 CLI 家族统一维护。子进程形式下由该脚本端到端接管 spawn/tmux/采集/校验（§2.6）。档位 C /loop 全自动路径下内联执行这条链。
+212:| 逐级回落链过于顺滑，"候选全灭"被悄悄吸收、成为"回避报告问题"的新出口 | §4 无差别留痕——不阻止回落，但每次回落（含回落到默认派发）都留痕、可事后追溯 |
+
+--- BDD-46: 不再含「按序探测」(期望 0) ---
+5:> **本任务定案（2026-09-09 重写，纳入 §2.1 / §2.2 / 头部）**：① **三层落点**——配置文件**不在** `agate/rules/`（① 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`；②③ 项目级 `agate-workspace/dispatch-routing.yaml`）；② 核心循环去「按序探测 probe」改 **try-and-fall**；③ `tier` + `effort` 两**正交轴** + `(phase,role)` key（role 可选）；④ `cli: native` = **弱缓解**（同训练系谱盲区基本共享，且做不到「不依赖主 Agent」——自动化天花板是主 Agent 机械横传 model），跨 CLI 起子进程 = **强缓解**（真正异源独立视角、可端到端自动化）——**自动化不对称**；effort 轴现三平台均可用（Claude Code `--effort` 按能力探测，本机 2.1.266 [实测] 有 / 引入版本未核实）；⑤ 两条**完整性不变量**——「**候选回落 ≠ 状态机 retry**」（回落只在基础设施失败发生，不占 `retries[Pn]`、不写 `state_transition`、不触发 PAUSED，只写 `dispatch_route`）与「**gate FAIL 绝不换候选**」（收到任何 gate 能评产出即停止回落；gate FAIL → 同一候选正常阶段 retry；`dispatch_route` 理由码枚举无 `gate_fail` 值、`check-events.py` 机械拒绝）；⑥ **routing 是 per-machine 机会式、不追求跨机可复现**（只有抽象 `(phase,role)`→档位映射可 commit 共享）。
+(exit 0 ; 无行=0命中=PASS)
+
+--- BDD-52: tier + effort 两正交轴 + (phase,role) key + 弱/强缓解 ---
+3:> **做什么**：新增**项目级** `agate-workspace/dispatch-routing.yaml`（`routes:` + `tier_bindings:`，非协议本体、不受 SELF-GATE、全兜底）+ 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`（`bulk`/`standard`/`deep` 语义画像 + 出厂默认）——按 `(phase, role)` 声明候选 `{cli, model, effort?}` 路由（或引用命名**档位** `tier`；`tier` 与 `effort` 是两个**正交轴**）。到某阶段派某角色时**查表 → 直接派首选候选（第一个动作即派真实 dispatch-context，无 probe）→ 若『起不来 / 基础设施失败 / 无可解析产出』三类之一则逐级回落到下一候选 → 全落空则默认派发（同平台同 model，恒等于本机制未启用）**——**try-and-fall，不是 probe-then-commit**。`cli` 可为 `native`（同厂商换 model，不脱离原生派发工具——**弱缓解**）或另一个 CLI（`claude-code`/`codex`/`opencode`，起子进程——**强缓解**）。查表 / 回落 / 降级是纯机械步骤，落在 CLI 里做、不依赖主 Agent 临场判断（§2.6）。新增 `dispatch_route` 事件无差别留痕。子进程形式下若有 `tmux`，包一层供人类 `attach` 观测。
+5:> **本任务定案（2026-09-09 重写，纳入 §2.1 / §2.2 / 头部）**：① **三层落点**——配置文件**不在** `agate/rules/`（① 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`；②③ 项目级 `agate-workspace/dispatch-routing.yaml`）；② 核心循环去「按序探测 probe」改 **try-and-fall**；③ `tier` + `effort` 两**正交轴** + `(phase,role)` key（role 可选）；④ `cli: native` = **弱缓解**（同训练系谱盲区基本共享，且做不到「不依赖主 Agent」——自动化天花板是主 Agent 机械横传 model），跨 CLI 起子进程 = **强缓解**（真正异源独立视角、可端到端自动化）——**自动化不对称**；effort 轴现三平台均可用（Claude Code `--effort` 按能力探测，本机 2.1.266 [实测] 有 / 引入版本未核实）；⑤ 两条**完整性不变量**——「**候选回落 ≠ 状态机 retry**」（回落只在基础设施失败发生，不占 `retries[Pn]`、不写 `state_transition`、不触发 PAUSED，只写 `dispatch_route`）与「**gate FAIL 绝不换候选**」（收到任何 gate 能评产出即停止回落；gate FAIL → 同一候选正常阶段 retry；`dispatch_route` 理由码枚举无 `gate_fail` 值、`check-events.py` 机械拒绝）；⑥ **routing 是 per-machine 机会式、不追求跨机可复现**（只有抽象 `(phase,role)`→档位映射可 commit 共享）。
+46:| ① 协议本体 | `agate/rules/dispatch-tiers.yaml` | **触发**（改"什么是 `deep`"本就该评审）| 档位（tier）词表 `bulk` / `standard` / `deep` + 每档语义画像 + 出厂 `(phase,role)`→tier 映射（全 `standard`，MVP 空 map ⇒ 隐式全 standard）|
+47:| ②③ 项目级 | `agate-workspace/dispatch-routing.yaml` | **不触发**（非协议本体，同 `maintainability.yaml`）| `tier_bindings:`（机器 / 安装级——tier→有序跨 CLI 候选链 `[{cli, model, effort?}]`，本机现状为准，SETUP scaffold）+ `routes:`（`(phase,role)`→ `{tier, effort?}` 引用 **或** `{candidates: [...]}` 直接值）|
+58:  P2:  {architect: {tier: deep}}          # (phase,role) key，role 段可选
+64:- **路由 key = `(phase, role)`**，role 段可选：`(phase,role)` → `phase` → `standard` 解析顺序。想让 reviewer 跑异模型就显式配 `P4.review:`。
+68:- **routing 是 per-machine 机会式、不追求跨机可复现**：只有抽象 `(phase,role)`→档位映射可 commit 共享；档位→具体 model 的绑定就是"本机实际能跑什么"，别的机器复现不了不是缺陷。
+75:1. **查表**：`resolve((phase, role))` —— 按优先级序（项目级直接值 `candidates:` > 项目级档位映射 `tier:` > 机器级绑定 `tier_bindings:` 展开 > 出厂默认 → `standard`）解析出「默认派发」或「有序跨 CLI 候选链 `[{cli, model, effort?}, ...]`」。`(phase,role)` 命中优先于 `phase` 级。
+
+--- BDD-53: 两条完整性不变量 + per-machine ---
+5:> **本任务定案（2026-09-09 重写，纳入 §2.1 / §2.2 / 头部）**：① **三层落点**——配置文件**不在** `agate/rules/`（① 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`；②③ 项目级 `agate-workspace/dispatch-routing.yaml`）；② 核心循环去「按序探测 probe」改 **try-and-fall**；③ `tier` + `effort` 两**正交轴** + `(phase,role)` key（role 可选）；④ `cli: native` = **弱缓解**（同训练系谱盲区基本共享，且做不到「不依赖主 Agent」——自动化天花板是主 Agent 机械横传 model），跨 CLI 起子进程 = **强缓解**（真正异源独立视角、可端到端自动化）——**自动化不对称**；effort 轴现三平台均可用（Claude Code `--effort` 按能力探测，本机 2.1.266 [实测] 有 / 引入版本未核实）；⑤ 两条**完整性不变量**——「**候选回落 ≠ 状态机 retry**」（回落只在基础设施失败发生，不占 `retries[Pn]`、不写 `state_transition`、不触发 PAUSED，只写 `dispatch_route`）与「**gate FAIL 绝不换候选**」（收到任何 gate 能评产出即停止回落；gate FAIL → 同一候选正常阶段 retry；`dispatch_route` 理由码枚举无 `gate_fail` 值、`check-events.py` 机械拒绝）；⑥ **routing 是 per-machine 机会式、不追求跨机可复现**（只有抽象 `(phase,role)`→档位映射可 commit 共享）。
+9:> **机会式启用，零强制基础设施**：不配置候选 = 行为与现状逐字节一致；配了但该 CLI 未装 / 未认证 / 无 `tmux` = 探测失败自动回落。多带一个 CLI/model 或 tmux 就用，否则退回原机制，不新增任何必须先搭好的东西——所以与局限 6"零基础设施"无实质冲突（§6）。
+34:**边界**：不解决局限 3（主 Agent 单点故障）。与局限 6"零基础设施"**无实质冲突**——本机制是机会式的（头部已述）：不配 = 现状，配了但 CLI 没装/没认证 = 自动回落，没有"必须先搭好才能用"的东西。用户想用异 CLI 得自己先把那个 CLI 装好认证好，这是他自己的选择、不是协议强加的门槛。
+68:- **routing 是 per-machine 机会式、不追求跨机可复现**：只有抽象 `(phase,role)`→档位映射可 commit 共享；档位→具体 model 的绑定就是"本机实际能跑什么"，别的机器复现不了不是缺陷。
+209:| 用户想用异 CLI，得自己先装好、认证好那个 CLI | 这是**机会式**能力，不是强制基础设施——不配 = 现状；配了但没装 / 没认证 = 探测失败自动回落。没有"必须先搭好才能用协议"的东西，与局限 6 无实质冲突（见头部「机会式启用」）|
+
+--- BDD-45 design-note: 单 Agent 模式路由不适用 ---
+============ BDD-47: roadmap.md RM-AG0060 ============
+68:| RM-AG0060 | 派发路由（配置驱动的跨 CLI/model 派发 + tmux 观测）epic——设计三件套：`docs/design-notes/design-dispatch-routing.md`（终版设计）、`docs/research/cross-platform-dispatch-mechanics.md`（三平台 CLI 调用/model 指定/子代理派发/返回识别/续接 客观机制调查，含 A1-A19 实测记录 + §10 落地前复核清单 + §11 未尽项状态）、`docs/reviews/review-dispatch-routing-external-20260908.md` 与 `-round2-` 两轮外部独立评审（FAIL→PASS，核心是"证据强度传递失真"已修）。动机=给角色隔离补模型维度、部分缓解 `LIMITATIONS.md` 局限 2（同源模型系统性盲区，现状 ADR-006 无解），顺带成本/档位/专业度匹配；不解决局限 3。两机制：① 新增项目级 `agate-workspace/dispatch-routing.yaml`（`routes:` + `tier_bindings:`，非协议本体、不受 SELF-GATE）+ 协议本体档位词表 `agate/rules/dispatch-tiers.yaml`（bulk/standard/deep 语义画像 + 出厂默认，改它走 SELF-GATE），按 `(phase,role)` 查表（tier + effort 两正交轴，或 candidates 直接值二选一）→ try-and-fall（无 probe：第一个动作即把真实 dispatch-context 派给首选候选→只在 launch_fail/infra_error/no_parseable_output 三类基础设施信号时逐级回落，收到任何 gate 能评产出即停）→ 全落空回落默认派发（终点恒为同平台同 model、不可配、等价未启用），cli 可为 native（同平台换 model：Claude Code Task 传 model、Codex spawn_agent 传 model+reasoning_effort、OpenCode 走命名 subagent 配置 agents.name.model——三平台"按次生效"均端到端实测）或另一个 CLI（起子进程，各有 -m + 权限绕过 flag，三平台均实测跑通 + Codex 沙箱对照）；新增 dispatch_route 事件与 gate_run 等同构、无差别留痕（呼应局限 3 "fallback 链太顺滑成回避出口"）；决策机械化落 CLI（优先扩 agate-dispatch.py，承接 RM-AG0054 查表推进方向，命令为新增非既有），子进程形式可端到端自动化。② CLI 子进程形式的 tmux 观测层（wrapper 自带退出倒计时改善 attach 端体验；WSL2+tmux3.4 全链路含真人 attach 实测，目标环境需复跑）。存活/卡死检测直接复用 RM-AG0055 命令流机制（Claude Code/OpenCode 适配器现成，缺一个 CodexAdapter 约一个文件）+ 子进程形式另有 wait(pid)/kill-0 更强信号；不自造超时（固定紧超时误杀长任务=违规处理）。架构沿用 RM-AG0046 模式层/检测器层分离。epic（Codex 接入已拆到 RM-AG0061 单独立）。剩下三块：a 配置路由核心 + native(Claude Code/OpenCode) / b 跨 CLI 子进程(spawn + --json 解析 + D2) / c tmux 观测层(可后置/可选、不通过可整体移除不影响 a/b)。**Codex 拆走后 a/b/c 重新评级掉到 medium 附近，可一个 task 内分 P4a/P4b/P4c 串行子批交付**（参照 RM-AG0058/0057 epic + 一个 task），也可再拆多个 TAG——P2 立项定。软点：b 的 `cli: codex` 子进程部分依赖 RM-AG0061（存活检测靠 CodexAdapter），可先发 claude-code/opencode 子进程；c 的 tmux 目标环境验证若任务环境与目标不同则停在"定稿 + 待落地验证"不阻塞 P8。建议排期 RM-AG0061 与 a 并行 → b → c。立项前待办见 design-note §7：确切 schema（tier + effort 两轴 / (phase,role) key）、dispatch_route 事件 + check-events 衔接、决策 CLI 落点、与五模式·自主再派发·单 Agent 模式(has_task_tool:false)的交互、OpenCode 旧 bug② + Codex spawn_agent 完整 schema 补直接实测、Codex API-key 账号 model 阵容自查、tmux 目标环境复跑。与 RM-AG0059（任务管理命令化，backlog）有 CLI 家族(agate-dispatch/推进侧 CLI)重叠，排期注意 | scheduled | 用户需求（2026-09-08 会话：跨 CLI+model 派发 + tmux 观测）+ 跨 CLI 派发路由 v1→v5 与 角色-模型映射 v1→v2 两讨论线合并 + 两轮外部独立评审（FAIL→PASS）| TAG0034 | 2026-09-08 | 2026-09-08 |
+69:| RM-AG0061 | Codex 命令流适配器 + 平台接入（RM-AG0055 §3.4.4 预留的"未来接 Codex/Cursor 只写一个适配器、检测引擎零改动"扩展点的落地 + RM-AG0060 派发路由 epic 的 b 块前置）。设计沿用 RM-AG0055 §3.4.4 适配器契约（`probe`/`list_sessions`/`read_commands` → `CommandRecord` IR），无需独立 design-note；机制事实见 `docs/research/cross-platform-dispatch-mechanics.md`（§1.2/§2/§3/§4.2/§5/§6/§7/§8/§9 + 附录 A4-A8/A12/A17-A19 的 Codex 实测记录）。交付：① `CodexAdapter` 加入 `agate/scripts/agate-cmdstream-adapters.py` 注册表——把 Codex 会话记录（`~/.codex/sessions/` 下 rollout JSONL + `spawn_agent` 子会话）解析为 `CommandRecord` IR；已知坑（2026-09-08 调查）——Codex 无数字 exit code（同 Claude Code/DSH 靠 `is_error`/文本前缀）、`spawn_agent` 子会话疑似 delegationDepth 式独立文件、`codex exec --json` 事件流（thread.started/item.completed/turn.started/turn.completed/turn.failed）可作实时源；检测引擎/阈值/其它适配器零改动。② `agate/platform-notes.md` Codex 章从"待补充"补完整——能力矩阵：非交互 `codex exec`、`-m/--model` 与 `-c model_reasoning_effort` 推理档、权限绕过 `--dangerously-bypass-approvals-and-sandbox` 与中间档 `-s`/`--approve-for-me`（`--full-auto`/`-a` 已弃）、`spawn_agent` 原生子派发按次可传 model+reasoning_effort、`--json` 结构化输出、`resume`；退出码不可靠须解析 `--json`；model 阵容随账号类型变（ChatGPT 账号 `codex exec -m` 只默认 model、`spawn_agent` 的 model 枚举 4 个；API-key 账号未核实）；`multi_agent` feature flag 撑 `spawn_agent`、命名有变更史。③ `agate/SETUP.md` Codex 小节：`npm i -g @openai/codex` + `codex login` + 自动化环境 flag。④ Codex fixture 单测（真实 session 片段解析）+ 真机验证清单（比照 RM-AG0055 三平台数据源验证严格度：`spawn_agent` 完整 schema 直接实测、API-key 账号 model 阵容、`spawn_agent` 嵌套深度、`~/.codex/sessions/` 格式确认）。触发 SELF-GATE（动 `agate/` 下脚本 + platform-notes + SETUP）。验收锚 = Codex 上派一个真实子代理 + `agate-cmdstream-detect.py` 能对 Codex 会话正确判"活着/卡住/空转"三态 | done | RM-AG0055 §3.4.4 预留扩展点 + RM-AG0060 b 块前置 + 2026-09-08 会话对 Codex CLI 的机制调查（已装 codex-cli 0.153.4、ChatGPT 登录、`codex exec`/`spawn_agent`/`--json` 端到端跑通）| TAG0033 | 2026-09-08 | 2026-09-09 |
+--- RM-AG0060 行内容 (含旧措辞检查) ---
+(RM-AG0060 行无 rules/dispatch-routing.yaml / 按序探测 = PASS)
+
+--- 全文件 rules/dispatch-routing.yaml / 按序探测 命中 ---
+(0 命中)
+
+============ BDD-48: architect.md 批次设计节 ============
+209:## 批次设计（强制节，TAG0014）
+225:> **补协议文档正文 = P4，不是 P7**（DEBT0039）：`dispatch_plan` 批次表的「执行阶段」标注里，补写 / 修订协议文档正文（`platform-notes.md` / `SETUP.md` / `dispatch-protocol.md` / phase-cards 等的新增章节、措辞修订、per-platform 说明）属 **P4 实现工作**——随对应批次在 P4 提交、批次执行阶段标 **P4**。**P7 一致性检查只做跨文件一致性验证**（各文档、脚本、schema 之间的措辞 / 字段 / 引用是否对齐、有无矛盾），**不 author 文档内容**、不新增或改写正文。architect 设计批次表时不得把「补文档正文」批标成 P7。先例：TAG0030（doc-assertion 审计测试 P3 写红、正文 P4 补绿）、TAG0033 复盘（protocol-docs 批被 architect 误标 P7、主 Agent 比照 TAG0030 拉回 P4，避免带 by-design 红推进）。
+227:**批次设计前置检查项**（拆批之前先过，缺任一项先补齐再拆）：
+
+============ BDD-10 platform-notes.md effort 部分 ============
+27:| 推理档（effort，与 model 正交）| ⚠ 按能力探测 | `claude` CLI 的 `--effort <low\|medium\|high>` flag——**2.1.266 [实测] 有** / **2.1.263 [实测] 无** / **引入版本未核实**。派发路由（TAG0034）按 `claude --help` 是否含 `--effort` 做**能力探测**分流：含则映射 `--effort <e>`、不含（旧版本）则省略该 flag、不报错。**不硬编码版本号**。`--effort bogus` 实测仅 Warning 不失败 |
+110:> 派发路由（`agate dispatch route`）以子进程形式派 `claude-code` / `codex` / `opencode` 时，用各平台结构化输出流判「这次派发成功 / 基础设施失败 / 无可解析产出」三态（`agate_dispatch_route.classify_outcome`）。素材 = 本机真机样本（2026-09-09，Claude Code 2.1.266 / codex-cli 0.153.4 / opencode 1.18.11），夹具在 `agate/tests/fixtures/tag0034_{claude_code,codex,opencode}/`。**判据只到 presence 级**——产出文件非空 + frontmatter 可解析 + 必需锚点在即算「有产出」，内容完整度 / 质量一律交 gate（走同候选 retry，不换候选）。
+EXIT_CODE: 0
+EXIT_CODE: 0
+FINAL EXIT_CODE: 0
