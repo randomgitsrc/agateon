@@ -149,6 +149,16 @@ def main():
     reason = info["reason"] or "（无原因）"
     root = str(Path(info["root"]).resolve()) if info["root"] else "（无可用 AGATE_ROOT）"
 
+    # CHANGELOG 在仓库根，不在 agate/ 协议本体下（legacy 单软链 ~/.agate → <clone>/agate，
+    # CHANGELOG 是 <clone>/CHANGELOG.md；版本布局整仓形态下 <vdir>/CHANGELOG.md）。探测两处。
+    changelog_hint = "~/.agate/../CHANGELOG.md（仓库根）"
+    if info["root"]:
+        rp = Path(info["root"]).resolve()
+        for cand in (rp.parent / "CHANGELOG.md", rp / "CHANGELOG.md"):
+            if cand.is_file():
+                changelog_hint = str(cand)
+                break
+
     lines = [
         "=== agate 当前状态 ===",
         "",
@@ -167,7 +177,7 @@ def main():
         "",
         "1. 第一行：上面这一段（确认协议版本 + 防护机制就位）",
         "2. 读 ~/.agate/AGENTS.md（协议本体入口指引）",
-        "3. 读 ~/.agate/CHANGELOG.md（了解自上次会话以来发生了什么）",
+        f"3. 读 {changelog_hint}（了解自上次会话以来发生了什么）",
         "4. 按 orchestrator-template.md mapping 表读当前阶段卡片，按需查阅 Fallback reference 节",
         "",
     ]

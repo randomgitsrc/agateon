@@ -1,6 +1,6 @@
 # 独立 Judge 机制设计（agate 协议增强提案）
 
-> 状态：设计提案（对应研究报告中 P0-1 补短板项）
+> 状态：**已落地（TAG0020，v0.59.0，RM-AG0032 P6.5 独立 Judge）**
 > 目标：对抗 `LIMITATIONS.md` 局限 3——"自写 gate 的作者与评判者同为一人，造假成本低"。参照竞品 [oh-my-agent](https://github.com/first-fluke/oh-my-agent) 的独立 judge + append-only 事件账本模式，融入 agate 现有双层角色体系。
 
 ---

@@ -21,8 +21,9 @@
 
 ## 与既有 P5 回归判定机制的边界
 
-`agate/LIMITATIONS.md`（局限 3「降级缓解」节）描述的 P5 机械化回归判定机制
-（`pre-task-baseline.md` + `known-failures.md`）解决的是"任务前后两次测试快照
+`agate/phase-cards/P5-verification.md` 描述的 P5 机械化回归判定机制
+（`pre-task-baseline.md` + `known-failures.md`；`LIMITATIONS.md` 局限 3 亦提及为一条缓解）
+解决的是"任务前后两次测试快照
 diff，只拦截新增失败"这一不同维度的问题——不区分失败是否环境敏感，只判定是否为
 本任务新引入。本清单是正交的分类账本：登记"哪些测试已知对环境敏感、敏感在什么
 维度"，两者不合并、不互相替代。

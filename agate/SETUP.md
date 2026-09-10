@@ -174,7 +174,7 @@ python3 ~/.agate/scripts/install-hook.py
 
 ### 步骤 2-Codex：codex-cli（Codex）接入
 
-Codex 无「宿主 orchestrator 注册」步骤（out-of-scope）——它作为 agate 的**被派发执行环境**接入，只需装 CLI + 登录 + 配好自动化环境的绕过 flag。已实机验证：codex-cli **0.153.4** + **ChatGPT 登录**账号（能力矩阵与时效注记见 `platform-notes.md`「Codex」章）。
+Codex 支持完整 P0-P8（有原生 `spawn_agent` 子代理派发，见 `platform-notes.md`「Codex」章），但**没有 `.claude/agents/` 等价的 orchestrator 软链注册步骤**（同 DSH——DSH 用 preset）。接入只需装 CLI + 登录 + 配好自动化环境的绕过 flag。已实机验证：codex-cli **0.153.4** + **ChatGPT 登录**账号（能力矩阵与时效注记见 `platform-notes.md`「Codex」章）。
 
 **1. 安装**：
 

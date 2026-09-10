@@ -1,6 +1,6 @@
 # 维护性反模式 gate 设计（从 Cursor thermo-nuclear review 提炼）
 
-> 状态：设计草案 ｜ 日期：2026-08-23 ｜ 来源：用户提供 Cursor `thermo-nuclear-code-quality-review` skill 后的 gate 化分析
+> 状态：**已落地（TAG0026，v0.65.0，RM-AG0046）** ｜ 原设计草案日期：2026-08-23 ｜ 来源：用户提供 Cursor `thermo-nuclear-code-quality-review` skill 后的 gate 化分析
 > 定位：与 `design-independent-judge.md` / `design-agateon-portal.md` 同级的机制设计草案，**非当前立项**。
 > 一句话：**把"代码质量审查"从 LLM 主观品味，提炼成"模式层语义 + 检测器层实现"的可判定 gate。**
 

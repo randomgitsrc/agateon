@@ -34,6 +34,10 @@ agent: verifier
 - {AGATE_WORKSPACE}/tasks/{Txxx}/P4-implementation/（实现）
 - dispatch-prompt 中指定的输入文件是必读的，按 prompt 给出的路径读取
 
+> **P6 验收产出会被下游独立 judge（P6.5）复核**：judge 以 fresh context 只读 `P6-evidence/` 里的
+> 证据与 git log 逐条重验全部 BDD，**不读** P6-acceptance.md 与你的任何自述。所以 `P6-evidence/` 的
+> 证据文件必须**自足**——每条 PASS 引用的证据独立可核、路径存在、与结论对应。
+
 ### 输出
 - {AGATE_WORKSPACE}/tasks/{Txxx}/P5-test-results/unit.md — 单元/回归结果（含 failed 计数）
 - {AGATE_WORKSPACE}/tasks/{Txxx}/P5-test-results/e2e.md — 若 ui_affected：Playwright/E2E 实跑结果 + 截图路径

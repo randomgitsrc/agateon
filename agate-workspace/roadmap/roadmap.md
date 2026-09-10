@@ -498,7 +498,7 @@
   4. **Pre-commit 检查清单两份**：WORKFLOW.md L303-334 + state-machine.md L215-218
   5. **重试上限两份**：state-machine.md L367-382 + dispatch-protocol.md L996-1033
   6. **职责定位混乱**：WORKFLOW 标题说"主流程，详细见其他文件"，实际塞了 gate 命令/Pre-commit 清单/平台适配等实现细节；dispatch-protocol 塞了派发编排机制（TAG0014 新增，该在别处）
-- **根因**：无"每份文档唯一职责"的定义 + 无"新内容写哪个文件"的归属约定。这是 LIMITATIONS 局限 5（协议文档自身一致性）的具体表现——consistency 只查引用存在性，不查"同一规则多处维护"的重复。
+- **根因**：无"每份文档唯一职责"的定义 + 无"新内容写哪个文件"的归属约定。这是 LIMITATIONS 局限 3 子项「协议文档语义一致性无 in-flow gate」（原独立列为局限 5）的具体表现——consistency 只查引用存在性，不查"同一规则多处维护"的重复。
 - **建议修复方向**：
   1. **定义每份文档唯一职责**：WORKFLOW=主流程概要（阶段总览只留概要，gate 细节指向 dispatch-protocol）；dispatch-protocol=派发；state-machine=状态机；platform-notes=平台唯一权威；role-system=角色；git-integration=git
   2. **消除交叉重复**：平台适配收敛到 platform-notes（其他处指向）；阶段门槛收敛到 dispatch-protocol（WORKFLOW 只留概要）；派发 prompt 收敛到模板（dispatch-protocol 指向）；Pre-commit 清单收敛到一处（WORKFLOW 或 scripts/README）

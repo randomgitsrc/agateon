@@ -323,6 +323,13 @@ P8 是**「发布准备」**，不是「发布」。P8 gate 通过后进入 READ
 
 主 Agent 不跑 while 循环，而是执行"单步函数"，每次调用推进一个阶段：
 
+> **机械化（RM-AG0054，v0.66.0）**：下面步骤 5-7（跑 gate → 按转移规则算下一状态 → 写回
+> `.state.yaml` + git add）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
+> 消费 `phases.yaml` 的 `next`/`retreat`/`gate_pass_exit`，不做临场判断；gate exit 1 且表有
+> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。P6/P6.5 的条件式
+> 推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。**手工执行下面
+> 全流程是 fallback**（工具不可用时）；本节的手工规格是 `agate next` 实现所依据的权威语义。
+
 ```
 function 执行一步(task_id):
     1. 读 .state.yaml 或 active-tasks.md → 得到 (当前阶段, 重试记录)
@@ -390,9 +397,21 @@ function 执行一步(task_id):
     8. 返回：下一状态是什么
 ```
 
-"一步"就是一次完整的派发 + 跑命令验证 + 状态更新。gate 判定由主 Agent 亲笔完成，不信任 subagent 产出的文件字段。
+"一步"就是一次完整的派发 + 跑命令验证 + 状态更新。gate 判定由主 Agent 亲笔完成（或经 `agate next`
+查表机械完成），不信任 subagent 产出的文件字段。
 
-谁来反复调用？三种方式（见 loop-orchestration.md）：人工逐步、半自动、全自动 /loop。
+谁来反复调用？三种方式（见 loop-orchestration.md）：人工逐步、半自动、全自动 /loop。档位 C 的每步
+即调用一次 `agate next`。
+
+**ceremony（thin/standard/full）对本节的影响**：ceremony 是 P1 声明的仪式深度档位（见
+`WORKFLOW.md` / `phase-cards/P1-requirements.md`），只影响 P2/P4 是否派 LLM 评审、以及 thin 档是否
+跳过部分评审轮；**不改状态机转移边、不改 retry 上限、不薄化 P5/P6**（thin 档 `phases` 必须含 P5 与
+P6，由 `check-routing.py` / `check-pruning.py` 双闸兜底）。转移表与本节流程对所有 ceremony 档位一致。
+
+**受控自主再派发（RM-AG0055，v0.67.0）与本节的关系**：执行角色 subagent 在其阶段内可自主再派发
+子任务（judge 例外——judge 不下放）；这不产生新的状态机转移边，仍属同一 phase，retry 计数不受影响。
+其存活/卡死可观测性由命令流日志机制（`agate-cmdstream-*.py`）从平台会话记录外部提供——「证据 +
+触发核查、不自动判死」，详见 `docs/design-notes/260903-design-subagent-liveness-and-self-dispatch/`。
 
 ---
 

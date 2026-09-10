@@ -1,6 +1,6 @@
 # 协议结构化层设计（RM-AG0022：phases.yaml / dispatch.yaml / roles.yaml）
 
-> 状态：设计提案（对应 roadmap RM-AG0022，backlog）
+> 状态：**已落地（TAG0021，v0.60.0，RM-AG0022）**
 > 目标：把 agent 消费的协议规则从 8000+ 行自由文本 markdown 抽成**机器可读的结构化定义**，解决"agent 读 8000+ 行 md 理解规则"的摩擦，并让 gate 判定从"grep 文本"升级为"校验结构化数据"。
 
 ---

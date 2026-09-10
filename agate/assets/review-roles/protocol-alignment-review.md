@@ -9,7 +9,7 @@ agent: review
 
 **定位**：agate 改自己时的语义 gate。独立上下文审查协议文档和脚本的语义一致性。
 
-**触发条件**：`agate/scripts/*.sh`、`agate/scripts/*.py`、`agate/*.md`、`agate/**/*.md`、`SELF-GATE.md` 有改动时，主 Agent 在 commit 前派发本角色。
+**触发条件**：`agate/scripts/*.sh`、`agate/scripts/*.py`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml`（数据面权威源）、`SELF-GATE.md` 有改动时，主 Agent 在 commit 前派发本角色。
 
 ## 审查清单
 

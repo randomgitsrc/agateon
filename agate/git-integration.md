@@ -1,12 +1,12 @@
 # Git 集成：状态落盘的持久化
 
-> agate，定义"状态文件何时入 git"——这是状态落盘真正生效的保证
+> Agateon 定义"状态文件何时入 git"——这是状态落盘真正生效的保证
 
 ---
 
 ## 为什么这是必要机制，不是可选项
 
-v4 强调"状态落盘 + 抗中断恢复"。但有个隐含前提：**这些落盘的文件什么时候提交到 git？**
+Agateon 的核心是"状态落盘 + 抗中断恢复"。但有个隐含前提：**这些落盘的文件什么时候提交到 git？**
 
 如果不提交：
 - 状态文件只在本地，会话崩溃 / 环境重置后**全部丢失**——抗中断设计失效
@@ -36,10 +36,10 @@ subagent 在独立上下文里只负责产出文件，**不碰 git**。commit �
 
 ```
 P2 门槛通过（status==approved）→ 主 Agent commit
-  message: "wf(T002-P2): 方案设计通过 — schema_version 表 + 顺序迁移脚本"
+  message: "wf(TAG0001-P2): 方案设计通过 — schema_version 表 + 顺序迁移脚本"
 
 P5 门槛通过（failed==0）→ 主 Agent commit
-  message: "wf(T002-P5): 验证通过 — 23 测试全绿，P1 问题 5/5 解决"
+  message: "wf(TAG0001-P5): 验证通过 — 23 测试全绿，P1 问题 5/5 解决"
 ```
 
 commit message 格式：`wf({task_id}-{phase}): {一句话进度}`，可追溯。
@@ -50,8 +50,8 @@ commit message 格式：`wf({task_id}-{phase}): {一句话进度}`，可追溯�
 
 | commit 内容 | 前缀 | 例子 |
 |---|---|---|
-| 某个阶段门槛刚通过，记录"进度到哪了" | `wf({task_id}-{phase}):` | `wf(T011-P2): 方案设计通过` |
-| 任务全部完成（P8 之后）或某阶段产出的代码本身，描述"做了什么功能/修了什么问题" | `feat({task_id}):` / `fix({task_id}):` | `feat(T011): 用户管理 API+CLI` |
+| 某个阶段门槛刚通过，记录"进度到哪了" | `wf({task_id}-{phase}):` | `wf(TAG0001-P2): 方案设计通过` |
+| 任务全部完成（P8 之后）或某阶段产出的代码本身，描述"做了什么功能/修了什么问题" | `feat({task_id}):` / `fix({task_id}):` | `feat(TAG0001): 用户管理 API+CLI` |
 | 和具体任务无关的变更（依赖升级、格式化、临时脚本）| 标准 Conventional Commits，不带 task_id | `chore: 升级 pytest` |
 
 **实测验证**（实际项目历史 commit 抽样核实）：阶段记录类 commit 基本都正确使用了 `wf()`；功能描述类 commit（即使在同一任务里）自然倒向了 `feat(Txxx):`，这恰好印证了上面的判定标准——**两种前缀本来就对应两种不同的 commit 意图，不是"漏用"，是约定一直隐含存在，只是之前没有写清楚**。本节的修订是把这个隐含约定显式化，不是改变实际行为。
@@ -157,35 +157,42 @@ git 集成让状态落盘真正闭环：
 
 ---
 
-## Hardening-roadmap 集成（自 v0.4 引入，持续生效）
+## commit 会触发 pre-commit 检查（自 v0.4 起，持续生效）
 
-git 集成自 v0.4 hardening-roadmap 起承担了新的角色：**阶段 commit 会触发 9 项 pre-commit 检查**（详见 WORKFLOW.md「Pre-commit 检查总览」）。这不是新规则——而是把已有的状态机 gate 检查自动化到了 commit 入口：
+git 集成除了"把状态落到版本库"，还承担一层角色：**阶段 commit 会触发一组 pre-commit 检查**——把
+已有的状态机 gate 自动化到 commit 入口（即使主 Agent 忘了跑，hook 也会跑；即使造假，CI backstop
+会重跑）。
 
-| 触发点 | 检查内容 | 拦截行为 |
-|--------|---------|---------|
-| 暂存 `.state.yaml` 变更时 | 格式合法性（P2.15）| 格式错 → 拦截 commit |
-| phase 变更或阶段产出文件变更时 | gate 通过性（P1.1）| gate 失败 → 拦截 commit |
-| P6/P7 阶段 commit 时 | 证据目录非空 + BDD 行数 ≥ 1（P1.7）| 缺证据 → 拦截 commit |
-| gate 通过后 | 三道客观行为审计（P2.1/P2.10）| 客观审计失败 → exit 1 拦截；agent 字段等协作规范问题 → exit 2 WARNING |
-| gate 通过后 | 状态转移合法性 + 重试上限（P2.3-P2.5）| 非法转移 → 拦截 commit |
-| gate 通过后 | 裁剪条件一致性（P2.7-P2.9）| 裁剪与执行不一致 → 拦截 commit |
-| gate 通过后 | SCOPE+ 已增补并标记（P2.11）（行首声明格式）| 未标 `[SCOPE_RESOLVED]` → 拦截 commit |
-| 任何 commit | 异常模式提醒（P2.12）| 检测到 gate 重试超限（P3/P5/P6/P7/P8 ≥2、P1/P2/P4 ≥3）/ SCOPE+ / override → 提醒写复盘（不阻塞）|
-| 任何 commit | CHANGELOG `[Unreleased]` 含 task_id（P1.6）| 缺记录 → 警告（不阻塞）|
+**检查清单是活的，不在本文件维护副本**——完整、当前的 pre-commit 检查集（脚本名 / 触发条件 /
+拦截行为）见 `WORKFLOW.md`「Pre-commit 检查总览」表（唯一事实源）。要点：`.state.yaml` 格式关 →
+gate 通过关 → 状态转移·重试上限·裁剪·SCOPE+·provenance 审计等合规关，任一 `exit 1` 中止 commit，
+`exit 2` 是警告不阻塞。
 
-**`--cached` vs `HEAD~1`**：pre-commit hook 运行时 commit 尚未创建，所有 `git diff` 必须用 `--cached`（暂存区 vs HEAD），不能用 `HEAD~1`（上一个 commit）。P4/P7/P8 的源文件数检查、version bump 检查、CHANGELOG 检查均遵循此规则。主 Agent 手动验证（commit 后）可用 `HEAD~1`，但 hook 场景下 `--cached` 是唯一正确选择。
+**`--cached` vs `HEAD~1`**：pre-commit hook 运行时 commit 尚未创建，所有 `git diff` 必须用
+`--cached`（暂存区 vs HEAD），不能用 `HEAD~1`。主 Agent 手动验证（commit 后）可用 `HEAD~1`，但
+hook 场景下 `--cached` 是唯一正确选择。
 
-**commit message 建议**：虽然是 wf()/feat()/fix() 前缀规则，但 hardening 后建议在 message body 里提"阶段"：
+**commit 里一并暂存的东西**：阶段产出文件 + `.state.yaml`（phase = 本 commit 产出阶段）+
+`active-tasks.md` 自己那一行 + **`gate-events.jsonl` 事件账本**（`gate_run` / `state_transition` /
+`judge_verdict` / `dispatch_route` 追加行，pre-commit hook 会追加、随本 commit 一起入库；哈希链由
+`check-events.py` 审计）。
 
-```
-wf(T042): P2 review approved
-- architect: 完整设计含 gate_commands
-- 风险: high，由独立 plan-eng-review 评审通过
-```
+**SELF-GATE trailer（改 Agateon 协议本体 / 脚本时）**：暂存区含 `agate/*.md` / `agate/scripts/*` /
+`agate/**/*.md` / `agate/rules/*.yaml` 等 self-gate 触发文件时，commit message 须含
+`self-gate-review: <审查文件路径>` 或 `self-gate-skip: <理由>`——`commit-msg` hook 检查（缺失 WARNING，
+不硬拦截）。触发面与流程见 `SELF-GATE.md`。
 
-**禁止 `--no-verify` 绕过 hook**：CI backstop 会重跑 `check-gate.py` + `check-p6-provenance.py` + git blame 单 author WARNING，绕过 hook 的"恶意 commit"会被抓到并在日志暴露。详见 LIMITATIONS.md 局限 3。
+**发布 PR 必须普通 merge（`--no-ff`），禁止 squash**：CHECK 7（version badge ↔ git tag）与 G-5 发布
+验证都用 `git describe --tags --abbrev=0` 取最新 tag；squash 生成 SHA 不同的新提交，tag 与 main
+分叉、describe 回退旧版。若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin
+vN.N.0 --force`。
 
-**P6 单 author WARNING**：当 P6-acceptance.md git blame 显示只有一个 author（通常是主 Agent 自写而不是独立 verifier），CI 会发 WARNING——这是 provenance 客观审计之外的最后一层可观测性兜底。
+**禁止 `--no-verify` 绕过 hook**：CI backstop 会重跑 `check-gate.py` + `check-p6-provenance.py` +
+`check-events.py` + git blame 单 author WARNING，绕过 hook 的 commit 会被抓到并在日志暴露。详见
+`LIMITATIONS.md` 局限 3。
+
+**P6 单 author WARNING**：当 `P6-acceptance.md` git blame 显示只有一个 author（通常是主 Agent 自写
+而非独立 verifier），CI 会发 WARNING——provenance 客观审计之外的最后一层可观测性兜底。
 
 ---
 

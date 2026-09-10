@@ -231,7 +231,7 @@ v4 层级约定：主 Agent（L0）→ 执行/评审 subagent（L1），不依�
 
 ## Hardening-roadmap 集成（自 v0.4 引入，持续生效）
 
-档位 C（"主 Agent 自动跑完 P1-P8"）自 v0.4 hardening-roadmap 起承担新的硬约束：**每次阶段 commit 都要先过 pre-commit hook**。这是 /loop 推进时必须严格遵守的客观边界。
+档位 C（"主 Agent 自动跑完 P1-P8"）自 v0.4 起承担一条硬约束：**每次阶段 commit 都要先过 pre-commit hook**。这是 /loop 推进时必须严格遵守的客观边界。
 
 **自动推进时的 gate 处理流程**（TAG0027 §3.7：推进判定统一走 `agate next`）：
 

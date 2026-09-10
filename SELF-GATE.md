@@ -1,7 +1,8 @@
 # agate 自身变更的 gate（self-gate）
 
 > agate 改自己的协议文档或脚本时，必须走本流程。
-> 和项目侧 agate 流程对等：项目用 check-gate.py + P2 评审；agate 自身用 CHECK 9 + LLM 语义审查。
+> 和项目侧 agate 流程对等：项目用 check-gate.py + P2 评审；agate 自身用 `check-protocol-consistency.py`
+> 的结构 CHECK 全集（不写死上界，当前 CHECK 1-15，其中 CHECK 9 是协议-脚本结构对齐）+ LLM 语义审查。
 
 ## 强制力边界
 
@@ -16,11 +17,12 @@
   - `agate/scripts/*.py`
 - `agate/*.md`（协议文档：WORKFLOW.md / state-machine.md / dispatch-protocol.md 等）
 - `agate/**/*.md`（角色文件、模板文件等子目录）
+- `agate/rules/*.yaml`（数据面权威源：phases.yaml / dispatch.yaml / roles.yaml / dispatch-tiers.yaml；CHECK 15 专扫）
 - `SELF-GATE.md`（本文件自身的改动也走 self-gate）
 
 ## 检查清单
 
-1. **跑 check-protocol-consistency.py** — 确认 CHECK 1-9 无 ERROR
+1. **跑 check-protocol-consistency.py** — 确认结构 CHECK 全集（当前 1-15）无 ERROR
 2. **派发 protocol-alignment-review subagent** — 语义对齐审查（派发模板见下文，角色定义见 `agate/assets/review-roles/protocol-alignment-review.md`）
 3. **读审查报告** — MISALIGNED 必须修复，NEEDS_HUMAN_REVIEW 需附 `[HUMAN_CONFIRMED: ...]` 标记
 4. **跑全量 pytest** — 确认无退化（`python3 -m pytest agate/tests/`）
