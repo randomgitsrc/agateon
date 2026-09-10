@@ -36,7 +36,8 @@ except (ImportError, SystemExit):
 
 
 _SELF_GATE_RE = re.compile(
-    r"^(agate/scripts/.*\.(sh|py)|agate/[^/]+\.md|agate/.+/.*\.md|SELF-GATE\.md|README\.md|AGENTS\.md)$"
+    r"^(agate/scripts/.*\.(sh|py)|agate/[^/]+\.md|agate/.+/.*\.md"
+    r"|agate/rules/[^/]+\.ya?ml|SELF-GATE\.md|README\.md|AGENTS\.md)$"
 )
 _SKIP_RE = re.compile(r"^self-gate-skip:\s*\S+", re.MULTILINE)
 _REVIEW_RE = re.compile(r"^self-gate-review:\s*\S+", re.MULTILINE)
@@ -74,7 +75,7 @@ def main():
         return
 
     sys.stderr.write(
-        "GATE SELF-GATE: 暂存区含 self-gate 触发文件（agate/scripts/*.sh / agate/scripts/*.py / agate/*.md / SELF-GATE.md / README.md / AGENTS.md），\n")
+        "GATE SELF-GATE: 暂存区含 self-gate 触发文件（agate/scripts/*.sh / agate/scripts/*.py / agate/**/*.md / agate/rules/*.yaml / SELF-GATE.md / README.md / AGENTS.md），\n")
     sys.stderr.write("  但 commit message 未含 self-gate-review: 路径。\n")
     sys.stderr.write("  请先派发 protocol-alignment-review subagent，审查报告路径写入 commit message：\n")
     sys.stderr.write("    self-gate-review: docs/reviews/agate-alignment-review-{date}.md\n")
