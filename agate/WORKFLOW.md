@@ -235,8 +235,12 @@ agate 的派发机制有固定开销——每次派发约需写 25 行派发 pro
 
 ### 可裁剪的阶段
 
-- **核心阶段（不可跳）**：P1 需求基线、P2 方案设计、P4 实现、P5 技术验证、P6 验收
+- **核心阶段（不可跳）**：P1 需求基线、P2 方案设计、P4 实现、P5 技术验证、P6 验收、P6.5 独立 Judge 复核
 - **可选阶段（按需加）**：P7 一致性（多文件改动时）
+- **ceremony 档位（thin / standard / full）**：P1 frontmatter 声明的仪式深度，缺省 standard（fail-closed）。
+  `thin` 薄化 P2/P4 的 LLM 评审（须连同 `coupling_checklist` 流式 + 跳过风险 + `phases` 含 P5/P6 四要素
+  声明，缺一回退 standard）；`full` 强制 P7 不可裁。**ceremony 不改状态机转移、不改 retry 上限、不薄化
+  P5/P6**。完整 checklist 见 `phase-cards/P1-requirements.md`「ceremony fail-closed 声明 checklist」节
 - **P2 不可裁剪**：方案设计是必经阶段。design_trivial / follows_existing_pattern 可简化 P2（1 个候选方案），不可省略。
   design_trivial 适用于纯 typo/文案/配置值修改；follows_existing_pattern 适用于照搬已有模式
 - **P3 TDD 测试先行默认保留**：P3 不是「需要 TDD 时才加」，默认保留，有明确理由才跳过。
@@ -274,7 +278,7 @@ Given 不仅是"数据准备"，也是"系统处于某种状态"——这个状�
 **裁剪的最终拍板权在主 Agent，不是 P1 analyst。**
 P1 analyst 可以建议裁剪，但主 Agent 必须结合 P0-brief.md 里声明的已知风险做独立判断，不能直接接受 P1 的裁剪建议。
 
-### 风险矩阵（P2.13）
+### 风险矩阵
 
 任务分类应该是"复杂度 × 风险"的矩阵，不是只看复杂度。**先用上方改动性质判断确定流程类型，再用本矩阵确定裁剪程度：**
 
@@ -284,7 +288,7 @@ P1 analyst 可以建议裁剪，但主 Agent 必须结合 P0-brief.md 里声明�
 | 小改动 | 裁剪 agate：P1 + P3 + P4 + P5 | 完整 agate（至少到 P6）|
 | 中改动 | 完整 P1-P8 | 完整 P1-P8 + P6 不可裁剪 |
 
-"直接做"的最低要求（P2.14）：commit message 必须声明改了什么 + 改动性质（声明性/行为逻辑/机制交叉）+ 为什么安全。
+"直接做"的最低要求：commit message 必须声明改了什么 + 改动性质（声明性/行为逻辑/机制交叉）+ 为什么安全。
 
 ### 测试/调试环境隔离原则（项目级责任）
 
@@ -336,9 +340,11 @@ P5 gate 要求「测试环境隔离正常（无 [PROD_TOUCHED]）」，是流程
 
 ---
 
-## Pre-commit 检查总览（hardening-roadmap Phase 1-2 已落地）
+## Pre-commit 检查总览
 
-每次 `git commit` 触发 pre-commit hook，按以下顺序自动运行（任何 `exit 1` 中止 commit，`exit 2` 警告不阻塞）：
+每次 `git commit` 触发 pre-commit hook，按以下顺序自动运行（任何 `exit 1` 中止 commit，`exit 2` 警告不阻塞）。
+**本表是「pre-commit 检查集」的唯一事实源**——其它文档只指针引用、不复制清单。表中 `P1.x`/`P2.x` 括号
+标签是历史锚号（沿革自早期硬工具化路线图），当前以脚本名 + 机制说明为准：
 
 | # | 检查脚本 | 触发条件 | 阶段/机制 | 行为 |
 |---|---------|---------|-----------|------|
@@ -487,11 +493,18 @@ P1 不可能预见所有隐含需求。P2 设计、P4 实现时，subagent 常�
 
 ### 方式 B：半自动（推荐）
 
-主 Agent 连续派发，每过一个门槛自动推进，只在门槛失败或重试超限时停下来问人。详见 `loop-orchestration.md`。
+主 Agent 连续派发，每过一个门槛自动推进（推进这一步用 `agate next` 查表机械完成，见 `state-machine.md`
+「主 Agent 的单步执行」），只在门槛失败或重试超限时停下来问人。详见 `loop-orchestration.md`。
 
 ### 方式 C：全自动 /loop（增强）
 
-主 Agent 自动跑完 P1-P8，全程不需人工介入，只在最终发布前汇报。仅在方式 B 稳定后启用。详见 `loop-orchestration.md`。
+主 Agent 自动跑完 P1-P8，全程不需人工介入，只在最终发布前汇报。仅在方式 B 稳定后启用。每步即调用一次
+`agate next`。详见 `loop-orchestration.md`。
+
+> **相关可选机制**（正文各归其权威源）：subagent 存活/卡死可观测性 = 命令流日志机制（RM-AG0055，
+> `docs/design-notes/260903-design-subagent-liveness-and-self-dispatch/`）；跨 CLI/model 派发路由 =
+> `agate-workspace/dispatch-routing.yaml` + `agate dispatch route`（RM-AG0060，`dispatch-protocol.md`
+> 「派发路由」节；不配置 = 逐字节现状）。
 
 ---
 
