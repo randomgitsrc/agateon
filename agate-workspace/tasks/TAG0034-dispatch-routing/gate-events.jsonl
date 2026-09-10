@@ -25,3 +25,7 @@
 {"event":"state_transition","from":"P6","phase":"P7","prev_hash":"9df6ad4dc0149b928f2a7153cbdb5ff28d2c301ad095293b99d26c2663ebc12a","to":"P7","ts":"2026-09-10T02:58:48.441566Z"}
 {"criteria_passed":53,"criteria_total":53,"event":"judge_verdict","partial":false,"phase":"P6.5","prev_hash":"dfea50eeb31130cbc3f853ca1670263bdc5a2c0fdf5644a8c8bfc8811a4e6a3a","ts":"2026-09-10T02:58:48.639965Z","verdict":"passed","verdict_hash":"c5e8a8455429f26e88136aaa731d5f9afd441e85695d9b048ce6a151a28a8e51"}
 {"event":"state_transition","from":"P7","phase":"P8","prev_hash":"8b314688270c641ab1caffc9b81391b71c38ebb9c03d898eb9c7b7c5826162ec","to":"P8","ts":"2026-09-10T02:59:01.522314Z"}
+{"cmd":"check-gate.py P8","event":"gate_run","exit":2,"phase":"P8","prev_hash":"215231cfaab7560ffee1cc2ecb0665fd80dfe356382e7243676b67fbbb3c6530","runner":"pre-commit","ts":"2026-09-10T03:27:43.880722Z"}
+{"event":"state_transition","from":"P7","phase":"P8","prev_hash":"275a6160c5580f9958a31eabf9b40282edc04ef927232795b48a482a57009bc7","to":"P8","ts":"2026-09-10T03:27:43.880919Z"}
+{"criteria_passed":53,"criteria_total":53,"event":"judge_verdict","partial":false,"phase":"P6.5","prev_hash":"440c46120bf042e7157473d6c47f6a558c363f5d820d77f9659277f8d451e775","ts":"2026-09-10T03:27:44.282400Z","verdict":"passed","verdict_hash":"c5e8a8455429f26e88136aaa731d5f9afd441e85695d9b048ce6a151a28a8e51"}
+{"event":"state_transition","from":"P8","phase":"READY","prev_hash":"69b55fee6a3054795032e6ef225b1765eab6c3359187e08fda5af687ec7a3938","to":"READY","ts":"2026-09-10T03:37:54.198576Z"}
