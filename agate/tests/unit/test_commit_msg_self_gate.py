@@ -136,3 +136,38 @@ def test_bdd_9_agate_md_trigger_not_regressed(
     result = _run_csg(run_cli, bash, agate_scripts, agate_root, commit_msg, repo)
     assert result.returncode == 0
     assert "self-gate" in result.output
+
+
+def test_bdd_10_rules_yaml_triggers_self_gate_warning(
+    git_repo, agate_scripts, agate_root, run_cli, bash, tmp_path
+):
+    """agate/rules/*.yaml（数据面权威源）改动应触发 self-gate 提示——与 SELF-GATE.md
+    的触发条件、protocol-alignment-review.md 触发面、CHECK 15 数据面扫描对齐。"""
+    repo = git_repo.path
+    (repo / "agate" / "rules").mkdir(parents=True)
+    (repo / "agate" / "rules" / "phases.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+    git_repo.stage("agate/rules/phases.yaml")
+
+    commit_msg = tmp_path / "commit-msg"
+    commit_msg.write_text("feat: test\n", encoding="utf-8")
+    result = _run_csg(run_cli, bash, agate_scripts, agate_root, commit_msg, repo)
+    assert result.returncode == 0
+    assert "self-gate" in result.output
+
+
+def test_bdd_10b_rules_yaml_review_trailer_passes(
+    git_repo, agate_scripts, agate_root, run_cli, bash, tmp_path
+):
+    """rules/*.yaml 触发时，commit message 含 self-gate-review: 则静默通过。"""
+    repo = git_repo.path
+    (repo / "agate" / "rules").mkdir(parents=True)
+    (repo / "agate" / "rules" / "dispatch-tiers.yaml").write_text("tiers: {}\n", encoding="utf-8")
+    git_repo.stage("agate/rules/dispatch-tiers.yaml")
+
+    commit_msg = tmp_path / "commit-msg"
+    commit_msg.write_text(
+        "feat: test\nself-gate-review: docs/reviews/x.md\n", encoding="utf-8"
+    )
+    result = _run_csg(run_cli, bash, agate_scripts, agate_root, commit_msg, repo)
+    assert result.returncode == 0
+    assert result.output == ""
