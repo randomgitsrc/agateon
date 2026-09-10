@@ -133,6 +133,29 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 > 升级到新版本前，检查你的项目是否触及以下变更点。
 
+### v0.71.0 — 派发路由（配置驱动跨 CLI/model 派发 + tmux 观测，TAG0034：RM-AG0060 epic）
+
+> **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 /
+> 3 个 hook 薄壳（本任务改动清单无 `.sh` 改动），无需重跑 `install-hook.py`（软链布局
+> `git pull` 即生效；Windows 复制模式重跑 SETUP.md 步骤 2 的 `cp`）。
+
+1. **新增 `agate dispatch route` 子命令 + `agate_dispatch_route.py` helper + `dispatch_route`
+   事件 + `agate/rules/dispatch-tiers.yaml` 档位词表 + 项目级
+   `agate-workspace/dispatch-routing.yaml` ——不配置 = 逐字节现状**：派发路由是**机会式
+   启用**能力。不新建 `agate-workspace/dispatch-routing.yaml`、`dispatch-tiers.yaml` 出厂
+   全 `standard` 时，主 Agent 派发行为与本版本前完全一致（BDD-39/40 字节基线 + 无配置回归
+   已验）。`agate-dispatch.py` 既有渲染路径（无 `route` 参数）逐字节不变。
+2. **`check-events.py` 第 8 条 `dispatch_route` 理由码枚举审计——对既有账本零影响**：既有任务
+   `gate-events.jsonl` 无 `dispatch_route` 行时该分支不进入，第 1-7 条审计不受影响。
+3. **tmux 观测层默认关**：feature flag `AGATE_DISPATCH_TMUX` 出厂关闭；目标部署环境需按
+   `docs/research/cross-platform-dispatch-mechanics.md` §10 在自己的 tmux 版本上复跑验证后
+   方可开启。
+4. **`dispatch-protocol.md`「派发编排机制」新增「### 0. 派发路由」子节 + ADR-013 +
+   LIMITATIONS.md 局限 2 缓解链段 + `architect.md` / `SETUP.md` / `platform-notes.md`
+   小节——纯文档新增 / 补充**：不改动既有阶段卡片、gate 脚本判定逻辑、状态机。
+5. **升级动作**：`git pull` 即完成；无迁移动作。（CHECK 13：CHANGELOG 最新版 ↔ UPGRADING §3
+   章节一致。）
+
 ### v0.70.0 — Codex 命令流适配器 + 平台接入（TAG0033：RM-AG0061 + DEBT0035）
 
 > **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 /

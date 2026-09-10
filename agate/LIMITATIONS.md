@@ -18,6 +18,8 @@ P3 test-designer 和 P4 implementer 是两个不同的 subagent，目的是制�
 
 **现状**：无解。详细讨论见 `docs/design-notes/main-agent-oversight.md`——其中讨论的"LLM 裁判员"方案被否决，正是因为这同一个根因（同源模型的系统性盲区共享）。→ ADR-006（双层角色的认知隔离上限：同源模型隔离是认知层非真正独立）
 
+**派发路由缓解链（TAG0034 / RM-AG0060 已落地）**：局限 2 的根因是「P3/P4/P6.5 等角色虽是不同 subagent、但通常同一底层模型 → 系统性盲区共享」。派发路由机制在**机制层**给「角色隔离」补上 model / 厂商维度：项目级 `agate-workspace/dispatch-routing.yaml` 按 `(phase, role)` 声明有序跨 CLI 候选链，主 Agent 到阶段派角色时机械查表 → try-and-fall（无 probe，只在 `launch_fail` / `infra_error` / `no_parseable_output` 三类基础设施信号逐级回落）→ 全落空回落默认派发（等价未启用）。两种缓解强度：`cli: native`（同厂商换 model，不脱离原生派发工具）是**弱缓解** —— 同训练系谱盲区基本共享，只省成本 + 一点 failure-mode 多样性，且自动化天花板是「主 Agent 读文件机械横传 model」；`cli:` 另一个 CLI（`claude-code` / `codex` / `opencode`，起子进程）是**强缓解** —— 真正的异源独立视角、可端到端自动化。`dispatch_route` 事件与 `gate_run` 等同构、无差别留痕（哈希链账本 `check-events.py` 审计），两条完整性不变量机械强制（「候选回落 ≠ 状态机 retry」/「gate FAIL 绝不换候选」，理由码枚举无 `gate_fail` 值）防「换模型试到出 green」的完整性洞。**仍非根治** —— 主 Agent 自身的选型判断、以及「机械横传 model」这一步本身，仍缺乏外部约束，与局限 3「主 Agent 判断力是单点故障」同构；且是否真配跨 CLI 候选、配哪些，由使用者按本机现状决定、后果自负（per-machine 机会式，不追求跨机可复现）。
+
 ## 局限 3：主 Agent 的判断力是单点故障
 
 agate 的所有质量保证最终都收敛到"主 Agent 的判断力"这一个点：裁剪哪些阶段、gate 算不算过、SCOPE+ 影响范围多大，全部由主 Agent 最终拍板。协议设计里"主 Agent 永远是最终裁判"，没有任何机制检验主 Agent 自己的判断是否可靠。

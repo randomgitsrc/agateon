@@ -423,3 +423,51 @@ ADR-009 落地的版本管理布局（`~/.agate` = `repo/` + `vX.Y.Z/` + `latest
 - `agate-install.py` 新增 `_sync_root_scripts`（单源 copytree）+ `latest` 显式别名 + `_ensure_repo` 已有 repo 分支 `git fetch --tags --force --prune`（fail-open，令重跑发现上游更高 tag）；`install.sh` 新增 `--versions` bootstrap 分支（POSIX shell）。
 - `agate/UPGRADING.md`「版本管理生命周期」节为该两项语义的单一权威口径；`agate/scripts/README.md` / `agate/AGENTS.md` / `agate/platform-notes.md` 做框架 + 指针，不复制完整对照表。
 - 本 ADR 扩展 ADR-009（版本管理根 + resolve-entry 固定入口），不替代；ADR-009 的四层解析优先级与 legacy 兜底红线继续有效。
+
+---
+
+## ADR-013: 派发路由 / gate 生产者无关性（gate 不认谁生产的）
+
+### 状态
+
+已接受（2026-09-09，TAG0034 / RM-AG0060）
+
+### 语境
+
+TAG0034 引入配置驱动的跨 CLI / model 派发（派发路由）：同一阶段的产出可能由
+主 Agent 当前平台的原生派发工具生产，也可能由另一个 CLI（claude-code / codex /
+opencode）的子进程、或同厂商换 model 的 native 调用生产。这套机制能成立的前提，
+是 gate 判定不因「谁生产了这份产出」而改变。
+
+### 决策
+
+**gate 只认产出文件 + exit code，不认谁生产的。** `check-gate.py` /
+`check-judge-verdict.py` / `check-p6-provenance.py` 及一切 gate 脚本对跨 CLI / 跨
+model 派发的产出**零特殊处理** —— 产出文件落 TASK_DIR（铁律 2/3 不变）、
+gate_commands 的 exit code 客观可判，谁跑出来的都一样评。**未来不得为跨 CLI 派发
+定制 gate**（不得新增「若产自 codex 则……」式分支）。
+
+派发路由自身的留痕（`dispatch_route` 事件）与 gate 判定解耦：回落理由码枚举只有
+`launch_fail` / `infra_error` / `no_parseable_output` 三值，无 `gate_fail`；
+`check-events.py` 第 8 条机械拒绝任何非三值理由码。gate FAIL → 同一候选正常阶段
+retry，绝不触发换候选。
+
+### 理由
+
+- **与 ADR-002（可判定性）一致**：gate 门槛机器可判定、不依赖主观声明 —— 跨 CLI
+  产出与本地产出走同一 exit-code 判定面，是同一原则的直接延伸。
+- **与 ADR-006（同源盲区）互补**：ADR-006 记录「同源模型隔离是认知层非真正独立」
+  这一上限；派发路由给角色隔离补 model / 厂商维度是其部分缓解（见 LIMITATIONS.md
+  局限 2），而「gate 生产者无关」正是这一缓解能安全落地的结构前提。
+- **防完整性洞**：若 gate 因生产者而异，「换个模型 / CLI 试到 gate 放行」就成了
+  绕过质量门槛的出口。生产者无关 + 回落理由码无 `gate_fail` 两条一起，把这个洞
+  机械封死。
+- **散文承载不够稳**：该红线目前只写在 `dispatch-protocol.md`「派发编排机制」新节
+  的散文里，容易在后续编辑中被稀释；沉淀为 ADR 使其显式、可被 CHECK / 评审引用。
+
+### 后果
+
+- 跨 CLI 派发的产出若质量差 / 不完整，走的是「同候选正常阶段 retry」，不是「换
+  候选」——retry 预算、`state_transition`、PAUSED 语义全部不变。
+- 新增 gate 脚本时，若其判定逻辑试图区分产出来源，应视为违反本 ADR。
+- 关联：RM-AG0060（派发路由 epic）、ADR-002、ADR-006、LIMITATIONS.md 局限 2。

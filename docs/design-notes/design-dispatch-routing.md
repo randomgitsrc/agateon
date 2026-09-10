@@ -192,9 +192,9 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 
 ## 5. 影响面
 
-- 新增 `rules/dispatch-routing.yaml`（配置文件，非协议本体，不受 SELF-GATE）。
-- **路由决策 CLI 化**：优先扩展 `agate-dispatch.py`（不成再新增 `agate-route.py`，见 §7 事项 3），把"查表 → 探测 → 选 target → 逐级回落 → 写 `dispatch_route` 事件"实现为脚本步骤。**派发决策命令是本设计新提议，不是 RM-AG0054 已定义的既有命令**——RM-AG0054 定义的是 `agate next`/`agate advance`（状态机推进决策，"该不该进入下一 phase"），本设计要落地的是派发决策（"这一步该派给哪个 CLI/model"），两者性质不同，只是都遵循"决策查表化、落在 CLI 里做"这个同一方向，归入同一 CLI 家族统一维护。子进程形式下由该脚本端到端接管 spawn/tmux/采集/校验（§2.6）。档位 C /loop 全自动路径下内联执行这条链。
-- `dispatch-protocol.md` 新增一节：铁律 1 之前的"查表 → 探测 → 定 target → 再派发"这一步；并显式写明"gate 判定不认谁生产的"这条解耦关系，防止未来有人误以为需要为跨 CLI 派发单独定制 gate。
+- 新增**项目级** `agate-workspace/dispatch-routing.yaml`（配置文件，非协议本体，不受 SELF-GATE）；档位词表在协议本体 `agate/rules/dispatch-tiers.yaml`（改它走 SELF-GATE）。
+- **路由决策 CLI 化**：优先扩展 `agate-dispatch.py`（不成再新增 `agate-route.py`，见 §7 事项 3），把"查表 → 派首选 → 逐级回落 → 写 `dispatch_route` 事件"（try-and-fall，无 probe，与 §2.2 一致）实现为脚本步骤。**派发决策命令是本设计新提议，不是 RM-AG0054 已定义的既有命令**——RM-AG0054 定义的是 `agate next`/`agate advance`（状态机推进决策，"该不该进入下一 phase"），本设计要落地的是派发决策（"这一步该派给哪个 CLI/model"），两者性质不同，只是都遵循"决策查表化、落在 CLI 里做"这个同一方向，归入同一 CLI 家族统一维护。子进程形式下由该脚本端到端接管 spawn/tmux/采集/校验（§2.6）。档位 C /loop 全自动路径下内联执行这条链。
+- `dispatch-protocol.md` 新增一节：铁律 1 之前的"查表 → 派首选 → 逐级回落 → 再派发"（try-and-fall，无 probe，与 §2.2 一致）这一步；并显式写明"gate 判定不认谁生产的"这条解耦关系，防止未来有人误以为需要为跨 CLI 派发单独定制 gate。
 - 新增 `dispatch_route` 事件：`gate-events.jsonl` 写入端 + `check-events.py` 校验端同步支持（复用既有哈希链完整性校验，不新增校验机制）。
 - `platform-notes.md`：Codex 章节从"待补充"补为完整设计 + 实机验证记录。
 - 各 CLI 的最高权限 flag 写进各自 `SETUP.md` 的"自动化环境"小节。
@@ -217,10 +217,10 @@ DSH 的正式派发路径（`subagent`/`subagent_fork`/`workflow`）继续按现
 
 ## 7. 待确认事项
 
-1. `rules/dispatch-routing.yaml` 的确切 schema（本文候选结构为示意；已定：无 `fallback` 字段，终点回落恒为默认派发）。**候选项需加可选推理档字段**——research §3 已确认 OpenCode / Codex 都有独立推理档维度，与 model 正交。`{cli, model}` 不够，需 `{cli, model, effort?}`（字段名待定）。
+1. `agate-workspace/dispatch-routing.yaml` 的确切 schema（本文候选结构为示意；已定：无 `fallback` 字段，终点回落恒为默认派发）。**候选项需加可选推理档字段**——research §3 已确认 OpenCode / Codex 都有独立推理档维度，与 model 正交。`{cli, model}` 不够，需 `{cli, model, effort?}`（字段名待定）。
 2. `dispatch_route` 事件的 JSON schema 细节 + `check-events.py` 校验端如何识别新事件类型（不能把未知 event 判为非法）。
 3. **路由决策 CLI 的落点**（全文统一为：**优先扩展 `agate-dispatch.py`**，不成再新增 `agate-route.py`）：`cli: native` 形式下"决策层算出目标 model、启动仍由驱动会话代发平台派发工具"这一步的具体衔接方式（会话侧读什么文件、怎么保证零判断）；与 RM-AG0054 已落地的 `agate dispatch`（渲染 dispatch-context）是串联还是同一步。
-4. **探测成本与 `cli: native` 探测方式**：① task 内探测缓存（同候选一个 task 内只探一次，否则 P1–P8 × 每 phase 多候选 = 每任务几十次真 API 调用）；② `cli: native` 怎么探测"该 model 平台认不认"——起一次性子代理探测代价不小，倾向"查平台已知 alias 表 / 接受配置、让首次真派发失败时走降级"，落地定。
+4. ~~**探测成本与 `cli: native` 探测方式**~~（**2026-09-09 定案已作废**：核心循环改 try-and-fall、无 probe，故无"探测缓存"需求；`cli: native` 直接派首选、首次真派发失败再走三类基础设施信号逐级回落）：① ~~task 内探测缓存~~；② ~~`cli: native` 怎么探测"该 model 平台认不认"~~。
 5. **与既有派发机制的交互**（本文未展开，立项设计要覆盖）：① 五模式并行批（模式 2/3）——每个并行 subagent 是否各自独立探测同一候选链、探测结果 task 内是否共享；② RM-AG0055 自主再派发的子任务——是否走路由表（倾向"不走，继承父的实际 cli/model"）；③ 单 Agent 模式（`has_task_tool:false`，如 Claude Project）——无派发动作，路由为 no-op，应显式声明出范围。
 6. **RM 编号：已申领 RM-AG0060**（`agate-workspace/roadmap/roadmap.md`，status backlog，epic）。排期——检查是否与近期涉及 `dispatch-protocol.md` / 推进侧 CLI 的任务冲突（尤其 **RM-AG0059 任务管理命令化** 有 CLI 家族重叠，backlog）。**epic 拆分**：
    - **a 配置路由核心 + `cli: native`**（Claude Code/OpenCode）——U1–U5/U10，可单独交付。

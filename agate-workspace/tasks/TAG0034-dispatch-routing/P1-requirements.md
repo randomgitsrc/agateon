@@ -21,6 +21,9 @@ suggest_resolved:
   - "三层配置优先级序：项目级直接值 > 项目级档位映射 > 机器级绑定 > 协议出厂默认（已采纳 by 主 Agent 2026-09-09）"
   - "决策落点扩 agate-dispatch.py 新增子命令，不新增 agate-route.py（已采纳 by 主 Agent 2026-09-09）"
   - "routing schema 静态校验器新增为独立脚本 check-dispatch-routing.py，不入 agate/rules/schema（已采纳 by 主 Agent 2026-09-09）"
+scope_resolved:
+  - "DEBT0039 并入 TAG0034（用户批准 2026-09-09）：architect.md 批次设计节 + dispatch-protocol.md 派发编排机制节 P4/P7 边界措辞已落地，BDD-48/49/50 P6 PASS，DEBT0039 置 closed"
+  - "A5.3/A7.4 doc-sync（P4a alignment review，用户批准 2026-09-09）：LIMITATIONS.md 局限 2 派发路由缓解链段 + adr.md ADR-013 已在 P8 落地"
 capability_requirements:
   - need: three-cli-installed-authenticated
     why: P1 前置真机核实（OpenCode bug② 直接复现）+ P4a/P4b cli:native 与子进程 spawn 的真机验证 + P5/P6 端到端验收都要真派三平台

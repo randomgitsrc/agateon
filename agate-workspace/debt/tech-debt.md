@@ -1340,7 +1340,7 @@ task_id: null
 id: DEBT0039
 category: protocol
 title: "dispatch_plan 批次「执行阶段」标注易把「补协议文档正文」误标到 P7——architect 把 protocol-docs 批标 P7、主 Agent 判定后拉回 P4"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md
@@ -1349,6 +1349,10 @@ evidence:
     note: "「批次设计」节未写明「补协议文档正文 = P4 实现工作」的边界"
   - ref: agate/dispatch-protocol.md
     note: "「派发编排机制」未区分「author 文档内容（P4）」vs「跨文件一致性验证（P7）」"
+  - path: agate-workspace/tasks/TAG0034-dispatch-routing/P6-acceptance.md
+    note: "closure：DEBT0039 并入 TAG0034（用户批准 2026-09-09）。P4a 落地 architect.md「批次设计」节含「补协议文档正文 = P4 实现工作、批次执行阶段标 P4」显式边界 + dispatch-protocol.md「派发编排机制」区分 author 内容（P4）vs 跨文件一致性验证（P7）（附 TAG0030 / TAG0033 先例）；三条 closure_criteria = BDD-48 / BDD-49 / BDD-50，P6 逐条 PASS"
+  - path: agate-workspace/tasks/TAG0034-dispatch-routing/P7-consistency.md
+    note: "closure：P7 consistency `check-protocol-consistency.py --strict-errors-only` 0 ERROR（第三条 closure_criteria）；P7 approved / deviation_critical_count 0"
 impact: "架构师把「补协议文档正文」误标 P7 → 若主 Agent 未纠正，P5/P6 会带着 by-design 红（文档正文未补）推进，或 P7 阶段做了本属 P4 的实现工作、越权 author 内容"
 recommendation: "在 architect 角色文件「批次设计」节 + dispatch-protocol.md「派发编排机制」写明：补协议文档正文（platform-notes / SETUP / phase-cards 等）= P4 实现工作，批次执行阶段标 P4；P7 只做跨文件一致性验证、不 author 文档内容。可附 TAG0030 / TAG0033 两处先例"
 closure_criteria:
@@ -1357,5 +1361,6 @@ closure_criteria:
   - "consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-09
-task_id: null
+task_id: TAG0034
+closed_at: 2026-09-10
 ```

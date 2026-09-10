@@ -9,7 +9,7 @@
 > **Agateon**（原名 agate）——本项目已改名，下方徽标与安装命令已指向新仓库。
 > 一种编排协议，用构建系统验证编译器的方式验证 AI Agent。
 
-[![version](https://img.shields.io/badge/version-v0.70.0-blue)](https://github.com/randomgitsrc/agateon)
+[![version](https://img.shields.io/badge/version-v0.71.0-blue)](https://github.com/randomgitsrc/agateon)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [English](README.md) | [中文](README.zh-CN.md)

@@ -16,18 +16,27 @@ files_changed:
   - agate/SETUP.md (P4b M9「### 步骤 2-dispatch-routing：机器级档位绑定 scaffold」小节)
   - agate/tests/unit/test_tag0034_p4b.py (P4b 新，18 例 / 56 asserts —— 首轮 15 + A1 fix 补 3：api_error→infra_error / unknown_error→no_parseable_output / codex 裸 type:error→infra_error 不回归)
   - agate-workspace/dispatch-routing.yaml (P4a 新，非协议本体)
-  - docs/design-notes/design-dispatch-routing.md (P4a M12，走 docs commit)
-  - agate-workspace/roadmap/roadmap.md (P4a M12，走 docs commit)
-review_scope: TAG0034 P4a + P4b + P4c 批 agate/** 改动（SELF-GATE 语义 gate，agent≠main）；P4a 三轮（首审 misaligned → 复审 aligned）、P4b 增量两轮（首轮 A1 misaligned → A1 fix 复审 aligned）、P4c 增量一轮（aligned，本文件「# P4c 批复审」节）
+  - docs/design-notes/design-dispatch-routing.md (P4a M12，走 docs commit；P8 §5/§7 老串定点清理 —— rules/dispatch-routing.yaml → agate-workspace/dispatch-routing.yaml、「按序探测」→ try-and-fall、§7 事项 4 作废标注，P7 [DEVIATION] 收尾)
+  - agate-workspace/roadmap/roadmap.md (P4a M12，走 docs commit；P8 RM-AG0060 状态列 scheduled → done + 更新日期 2026-09-10，P8 gate RM-AG0043 硬校验)
+  - agate/LIMITATIONS.md (P8：局限 2「现状：无解」段后追加「派发路由缓解链（TAG0034 / RM-AG0060 已落地）」段 —— cli:native 弱缓解 / 跨 CLI 强缓解 / dispatch_route 留痕 + 两条完整性不变量 + 诚实边界句「仍非根治……与局限 3 同构……per-machine 机会式」，形态对齐局限 3「P6.5 独立 Judge 缓解链」)
+  - agate/adr.md (P8：ADR-012 后追加 ADR-013「派发路由 / gate 生产者无关性（gate 不认谁生产的）」—— 逐字采用本报告附录草案，状态/语境/决策「未来不得为跨 CLI 派发定制 gate」/理由（关联 ADR-002 / ADR-006）/后果)
+  - CHANGELOG.md (P8：顶部插入 ## [0.71.0] - 2026-09-10 段 —— minor bump，TAG0034 派发路由内容清单)
+  - agate/UPGRADING.md (P8：§3 追加 ### v0.71.0 章节 —— 无破坏性变更 / 零迁移动作，CHECK 13 CHANGELOG↔UPGRADING 章节对应所必需)
+  - README.md / README.zh-CN.md (P8：version badge v0.70.0 → v0.71.0)
+  - agate-workspace/debt/tech-debt.md (P8：DEBT0039 status open → closed + task_id null → TAG0034 + closed_at + 2 条 closure evidence（P6-acceptance BDD-48/49/50 + P7-consistency 0 ERROR）)
+  - agate-workspace/tasks/TAG0034-dispatch-routing/P1-requirements.md (P8：frontmatter 新增 scope_resolved: 两项 —— DEBT0039 并入 + A5.3/A7.4 doc-sync，check-scope-resolved.py 读取)
+review_scope: TAG0034 P4a + P4b + P4c + P8 批 agate/** 改动（SELF-GATE 语义 gate，agent≠main）；P4a 三轮（首审 misaligned → 复审 aligned）、P4b 增量两轮（首轮 A1 misaligned → A1 fix 复审 aligned）、P4c 增量一轮（aligned）、P8 收尾一轮（aligned，本文件「# P8 批复审」节）
 prod_isolation: "[PROD_NOT_TOUCHED]"
 conclusion: aligned
-review_rounds: 5
-pytest_full_run: "P4c 轮（2026-09-10）：1625 passed / 0 failed / 2 skipped（164.01s，exit 0）—— tag0034 全绿：test_bdd_37 + test_bdd_38（tmux 观测层）转绿，P4a 起一路带的批次边界 red 至此清零。check-protocol-consistency --strict-errors-only exit 0（CHECK 1~15 PASS，329 WARNING / 0 ERROR）。"
+review_rounds: 6
+pytest_full_run: "P8 轮（2026-09-10）：5 failed / 1620 passed / 2 skipped（155.17s）—— 5 failed **全部同一根因 = CHECK 7 pre-tag**（README badge v0.71.0 已 bump / `git tag v0.71.0` 未创建 → `check-protocol-consistency.py --strict-errors-only` 唯一 ERROR = CHECK 7 → 5 个断言「consistency exit 0 / 0 ERROR / CHECK 7 PASS」的测试红：test_bdd_50 / test_con_1 / test_con_6 / test_env_adapt_docs::test_bdd_25 / test_tag0027_b1::test_bdd_5）。1620+5=1625 = P4c 基线；主 Agent `git tag v0.71.0` 后 CHECK 7 归零 → 5 项全绿 → 1625 passed / 0 failed / 2 skipped。DEBT0013 时序、TAG0033 P8 同款，非 P8 引入回归。CHECK 7 之外无别的 ERROR、上述 5 项之外无别的 fail。"
+p4c_pytest_full_run: "P4c 轮（2026-09-10）：1625 passed / 0 failed / 2 skipped（164.01s，exit 0）—— tag0034 全绿；check-protocol-consistency --strict-errors-only exit 0（CHECK 1~15 PASS，329 WARNING / 0 ERROR）。"
 round1_conclusion: "P4a 首审：misaligned（A3/A4/A6 同一根因 = CHECK 9 锚点表缺 check-dispatch-routing.py；A5.3/A7.4 NEEDS_HUMAN_REVIEW）"
 round2_conclusion: "P4a 复审：aligned（A3/A4/A6 修复已落地复核确认；A5.3/A7.4 用户 2026-09-09 已 HUMAN_CONFIRMED，两条 doc-sync 落 P8 收尾，不阻断 P4a commit）"
 round3_conclusion: "P4b 增量首轮：misaligned（A1 —— platform-notes.md M10 判定表两处 reason-code 归类与 classify_outcome 实际行为不一致：OpenCode UnknownError / Claude Code stop_reason==\"error\"·api_error_status；低严重度，路由行为一致、仅账本 reason 标签差，须修脚本或修文档二选一。A2/A3/A4/A5/A6/A7 delta 全 ALIGNED）"
 round4_conclusion: "P4b 增量复审（A1 fix）：aligned（implementer 按 option (a) 改 classify_outcome —— 基础设施信号按 cli 细分：通用集去裸 '\"type\":\"error\"'；_BARE_TOP_ERROR_SIGNALS 仅 codex；_INFRA_SIGNALS_CLAUDE_ONLY + _claude_api_error 仅 claude-code；分支 2b opencode 裸 error 无具名 → NO_PARSEABLE_OUTPUT。补 3 条断言消除 dead fixture。逐格核实 M10 表 vs 代码一致；R1 三值 reason / I2 边界 / P4a 函数 + 第 8 条 + 哈希链未破；全量 pytest 1611 passed / 2 failed（P4c by-design）零回归。P4a+P4b 合并 = aligned）"
 round5_conclusion: "P4c 增量：aligned（tmux 观测层 —— build_subprocess_launch / tmux_cleanup_action 纯逻辑 helper + _maybe_tmux_wrap 接入 feature flag AGATE_DISPATCH_TMUX 默认关。A1 tmux 小段 vs helper 逐条一致 + 与 design-note §3 一致；A5 CHECK 14 PASS（tmux 子命令不在护栏 1 禁词清单）+ 6 冻结脚本 + classify_outcome/resolve/try_and_fall 零改动；A4 全量 pytest 1625 passed / 0 failed / 2 skipped，tag0034 全绿。feature flag 默认关对应 [DESIGN_GAP_REVIEWED: 已确认]，原则 6 记 A2/A7 ALIGNED + [KNOWN_DEVIATION]。无 MISALIGNED / NEEDS_HUMAN_REVIEW。P4a+P4b+P4c 三批合并 = aligned；A5.3/A7.4 + tmux 目标环境复跑为 P8 交付项、不阻断 P4 commit）"
+round6_conclusion: "P8 收尾：aligned（A5.3 LIMITATIONS.md 局限 2「派发路由缓解链」段 + A7.4 adr.md ADR-013「gate 生产者无关性」逐字采用本报告附录草案 + design-note §5/§7 老串清理 + CHANGELOG [0.71.0] + UPGRADING §3 v0.71.0 + README badge v0.71.0 + roadmap RM-AG0060 done + tech-debt DEBT0039 closed + P1 scope_resolved 两项。A1/A2：ADR-013 决策措辞 vs agate_dispatch_route.py GATE_FAIL_TRIGGERS_FALLBACK=False + check-events.py DISPATCH_ROUTE_REASONS 无 gate_fail + dispatch-protocol.md「### 0. 派发路由」子节 逐条语义一致、ADR 不比它们宽/窄；LIMITATIONS 局限 2 新段弱/强缓解 + 两条完整性不变量与新节一致。A4：全量 pytest 5 failed / 1620 passed / 2 skipped —— 5 failed 全部同一根因 = CHECK 7 pre-tag（badge bumped / tag pending），CHECK 7 之外无别的 ERROR、这 5 项之外无别的 fail，主 Agent git tag v0.71.0 后归零（1625 passed / 0），DEBT0013 时序 / TAG0033 P8 同款，不判 misaligned。回归：git diff HEAD -- phases.yaml/check-gate.py/check-state-transition.py/state-machine.md/dispatch-protocol.md/agate_dispatch_route.py/check-events.py/tests 无输出。P8 delta 全 ALIGNED。P4a+P4b+P4c+P8 四批合并 = aligned)"
 ---
 
 # 协议-脚本对齐审查 — TAG0034 P4a 批
@@ -848,3 +857,225 @@ tmux 包裹 feature flag `AGATE_DISPATCH_TMUX` **默认关**、目标环境代�
 - `git diff HEAD --stat`（HEAD = `99a4c19` P4b commit）→ `agate/dispatch-protocol.md`（+16）+ `agate/scripts/agate_dispatch_route.py`（+201/-4）+ `agate-workspace/tasks/TAG0034-dispatch-routing/P4-progress.md`（任务追踪）—— 6 冻结脚本 + `check-events.py` + `check-dispatch-routing.py` + `dispatch-tiers.yaml` + `agate-cmdstream-*.py` + `agate-dispatch.py` **均不在 diff 内**。
 - `git diff HEAD -- agate/scripts/agate_dispatch_route.py` +/- 行核 → `classify_outcome` / `resolve` / `try_and_fall` / `load_config` / `build_dispatch_command` / `dispatch_once` / `presence_parse_ok` 函数体逐字节未动（仅新增 tmux helper + `_default_subprocess_run` tmux 分支 + stderr 透传 + `except OSError` 收敛）。
 - `grep -n "send-keys\|capture-pane\|pipe-pane" agate/scripts/agate_dispatch_route.py` → 零命中（「明确不做」项未落地代码，与协议一致）。
+
+---
+---
+
+# P8 批复审（2026-09-10）
+
+> **范围**：TAG0034 P8 收尾批的 `agate/**` + 发布面 doc 改动增量。P4a / P4b / P4c 的 A1-A7 结论见上文；本节只增量审 **P8 delta**。
+> **审查对象**：`git diff HEAD`（HEAD = `8ad7834` P7 commit）—— `agate/LIMITATIONS.md`（局限 2「派发路由缓解链」段，A5.3）、`agate/adr.md`（ADR-013「派发路由 / gate 生产者无关性」，A7.4）、`docs/design-notes/design-dispatch-routing.md`（§5/§7 老串定点清理，P7 `[DEVIATION]` 收尾）、`CHANGELOG.md`（`## [0.71.0]` 段）、`agate/UPGRADING.md`（§3 `### v0.71.0`）、`README.md` + `README.zh-CN.md`（badge v0.71.0）、`agate-workspace/roadmap/roadmap.md`（RM-AG0060 `done`）、`agate-workspace/debt/tech-debt.md`（DEBT0039 `closed`）、`agate-workspace/tasks/TAG0034-dispatch-routing/P1-requirements.md`（frontmatter `scope_resolved:` 两项）。
+> **对齐基准**：本报告附录（A5.3 / A7.4 的 P8 交付草案，逐字采用）+ `P8-release.md`（`bump_type: minor` / `debt_check: reviewed`）+ `dispatch-protocol.md`「### 0. 派发路由」子节 + `agate_dispatch_route.py` / `check-events.py`（ADR-013 沉淀的脚本行为）。
+> **A5.3 / A7.4 HUMAN_CONFIRMED**：用户 2026-09-09 裁决「两条 doc-sync 都补、落 P8 收尾批」（见上文 A5 / A7 的 `[HUMAN_CONFIRMED]`），本节复核其落地忠实度。
+
+`[PROD_NOT_TOUCHED]` —— 仅 worktree 内读取 + 写本报告；未触碰主 checkout 与 `~/.agate`。
+
+## P8 delta 审查结论汇总
+
+| # | 审查项 | P8 delta 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** —— ADR-013 决策措辞与 `agate_dispatch_route.py` `GATE_FAIL_TRIGGERS_FALLBACK=False` + `check-events.py` `DISPATCH_ROUTE_REASONS`（无 `gate_fail`）+ `dispatch-protocol.md`「### 0. 派发路由」子节逐条语义一致，ADR 不比它们宽 / 窄；`LIMITATIONS.md` 局限 2 新段的弱 / 强缓解 + 两条完整性不变量与新节一致 |
+| A2 | 脚本→文档对齐 | **ALIGNED** —— CHANGELOG [0.71.0] / UPGRADING §3 / roadmap done / tech-debt DEBT0039 closed / P1 `scope_resolved` 均对应实际脚本行为与 P4a-c 已落地内容，无「文档写了脚本没有」的反向裸露；`scope_resolved` 是合法 frontmatter 字段（`agate-frontmatter-check.py:37` 白名单 + `check-scope-resolved.py` 读取） |
+| A3 | 一致性连锁 + 反向传播 | **ALIGNED** —— A3a 无新 event 类型；A3b：ADR-013 → `adr.md` 无 TOC / 索引需同步；CHANGELOG `## [0.71.0]` → UPGRADING §3 `### v0.71.0` 已补且 **CHECK 13 PASS**；design-note §5/§7 清理后与 §2.1/§2.2 一致（无新矛盾） |
+| A4 | 测试覆盖 | **ALIGNED**（`[KNOWN_DEVIATION]`：pre-tag 时序）—— 全量 pytest **5 failed / 1620 passed / 2 skipped**，**5 failed 全部同一根因 = CHECK 7 pre-tag**（README badge v0.71.0 已 bump / `git tag v0.71.0` 未创建）；`check-protocol-consistency.py --strict-errors-only` 唯一 ERROR = CHECK 7，CHECK 1-6 / 8-15 全 PASS；`1620 + 5 = 1625` = P4c 基线，主 Agent `git tag v0.71.0` 后 5 项归绿 → 1625 passed / 0 failed；DEBT0013 时序、TAG0033 P8 同款，**不判 misaligned** |
+| A5 | 下游影响 + 文档传播 | **ALIGNED** —— CHANGELOG [0.71.0] 覆盖全部对外可见变更（子命令 / helper / 词表 / 项目级配置 / 校验器 / 事件 / 第 8 条 / 新节 / tmux / effort / ADR-013 / LIMITATIONS / DEBT0039 / SETUP / platform-notes）；roadmap RM-AG0060 `done` 触发 RM-AG0043（P8 gate `_check_roadmap_done` 满足）无其他连锁；P4a-c 轮「CHANGELOG 待 P8」至此闭合 |
+| A6 | 锚点表覆盖 | **ALIGNED** —— P8 未新增 `check-*.py`，CHECK 9 锚点表无需再动 |
+| A7 | 设计原则一致性 | **ALIGNED** —— ADR-013 与既有 ADR（ADR-002 可判定性 / ADR-006 同源盲区 / ADR-010 证据复用）无冲突、方向一致（ADR-013 显式引「与 ADR-002 一致」+「与 ADR-006 互补」）；A7.4 的补 ADR 建议至此落地闭合 |
+
+**P8 delta 结论：aligned**（无 MISALIGNED、无 NEEDS_HUMAN_REVIEW；CHECK 7 / 5 项 test 红 = 已知 pre-tag 时序，主 Agent `git tag v0.71.0` 后归零）
+
+**P4a + P4b + P4c + P8 四批合并总结论：aligned**
+
+---
+
+## P8 逐项审查
+
+### A1（P8 delta）：文档→脚本对齐 — ALIGNED
+
+**ADR-013「决策」措辞 vs 脚本 + 协议正文 —— 逐条对齐，ADR 不更宽 / 不更窄**
+
+| ADR-013「决策」句 | 脚本 / 协议正文 | 判定 |
+|---|---|---|
+| 「gate 只认产出文件 + exit code，不认谁生产的」；`check-gate.py` / `check-judge-verdict.py` / `check-p6-provenance.py` 及一切 gate 脚本对跨 CLI / 跨 model 派发的产出**零特殊处理** | 三校验器 P4a-P8 全程零改动（`git diff HEAD` 不含）；P1 §3 第 6 组独立核实「纯 TASK_DIR 文件解析、平台无关」；`dispatch-protocol.md`「### 0. 派发路由」子节「`check-gate.py` / `check-judge-verdict.py` / `check-p6-provenance.py` 对跨 CLI 派发的产出零特殊处理」逐字 | ALIGNED |
+| 「**未来不得为跨 CLI 派发定制 gate**（不得新增「若产自 codex 则……」式分支）」 | `dispatch-protocol.md` 子节「未来不得为跨 CLI 派发定制 gate」逐字；ADR-013「后果」段「新增 gate 脚本时，若其判定逻辑试图区分产出来源，应视为违反本 ADR」—— 与子节同强度，无扩张 | ALIGNED |
+| 「回落理由码枚举只有 `launch_fail` / `infra_error` / `no_parseable_output` 三值，无 `gate_fail`」 | `agate_dispatch_route.py:_VALID_REASONS = ("launch_fail", "infra_error", "no_parseable_output")` + `GATE_FAIL_TRIGGERS_FALLBACK = False`；`check-events.py:DISPATCH_ROUTE_REASONS = {"launch_fail","infra_error","no_parseable_output"}`；两处**无 `gate_fail`**（`grep gate_fail` 仅注释否定表述）| ALIGNED |
+| 「`check-events.py` 第 8 条机械拒绝任何非三值理由码」 | `check-events.py` 第 8 条 `if reason is not None and reason not in DISPATCH_ROUTE_REASONS: sys.exit(1)` | ALIGNED |
+| 「gate FAIL → 同一候选正常阶段 retry，绝不触发换候选」 | `agate_dispatch_route.py:try_and_fall` I1 白名单（`kind == "HAS_OUTPUT"` → 停回落 return；非 `_FALLBACK_KINDS` → `DispatchContractError`）；`dispatch-protocol.md` 子节「gate FAIL 绝不换候选……那是正常阶段 retry（在同一候选上重跑）」逐字 | ALIGNED |
+
+ADR-013「语境」「理由」「后果」三节均为对上述决策的说明性铺陈（关联 ADR-002 / ADR-006 / RM-AG0060），**未引入任何新约束或放宽**。ADR 是 `dispatch-protocol.md` 子节散文 + 脚本行为的**沉淀**，粒度层面精确一致。**ALIGNED**。
+
+**`LIMITATIONS.md` 局限 2 新段 vs `dispatch-protocol.md`「### 0. 派发路由」子节 —— 一致**
+
+| 局限 2 新段表述 | dispatch-protocol.md 子节对应 | 判定 |
+|---|---|---|
+| 「`cli: native`（同厂商换 model，不脱离原生派发工具）是**弱缓解** —— 同训练系谱盲区基本共享，只省成本 + 一点 failure-mode 多样性，且自动化天花板是「主 Agent 读文件机械横传 model」」 | 子节「`cli: native`（同厂商换 model，不脱离原生派发工具）是**弱缓解**——同训练系谱盲区基本共享，只省成本 + 一点 failure-mode 多样性；且原理上做不到「不依赖主 Agent」，自动化天花板是**主 Agent 读文件机械横传 model**」 | ALIGNED（逐字级一致） |
+| 「`cli:` 另一个 CLI（`claude-code` / `codex` / `opencode`，起子进程）是**强缓解** —— 真正的异源独立视角、可端到端自动化」 | 子节「`cli:` 另一个 CLI（`claude-code` / `codex` / `opencode`，起子进程）是**强缓解**——真正的异源独立视角，可端到端自动化」 | ALIGNED |
+| 「两条完整性不变量机械强制（「候选回落 ≠ 状态机 retry」/「gate FAIL 绝不换候选」，理由码枚举无 `gate_fail` 值）防「换模型试到出 green」的完整性洞」 | 子节「**两条完整性不变量（机械强制，防「换模型试到出 green」的完整性洞）**：1. 候选回落 ≠ 状态机 retry……2. gate FAIL 绝不换候选……`dispatch_route` 理由码枚举里**没有 `gate_fail` 值**」 | ALIGNED |
+| 「**仍非根治** —— 主 Agent 自身的选型判断、以及「机械横传 model」这一步本身，仍缺乏外部约束，与局限 3「主 Agent 判断力是单点故障」同构」 | 与局限 3 现状段一致的诚实叙述口径；design-note §2.2 / §2.4a「本设计不假装解决」同调 | ALIGNED（诚实边界句保留，未夸大缓解效力） |
+| 「per-machine 机会式、不追求跨机可复现」 | 子节 + design-note §2.1 「routing 是 per-machine 机会式、不追求跨机可复现」 | ALIGNED |
+
+形态对齐局限 3 的「P6.5 独立 Judge 缓解链」段（追加在局限 2「现状：无解……→ ADR-006」之后、局限 3 之前）。**ALIGNED**。
+
+**design-note §5/§7 老串清理 vs §2.1/§2.2 —— 一致、无新矛盾**
+
+- §5「新增**项目级** `agate-workspace/dispatch-routing.yaml`……档位词表在协议本体 `agate/rules/dispatch-tiers.yaml`」+「查表 → 派首选 → 逐级回落 → 写 `dispatch_route` 事件（try-and-fall，无 probe，**与 §2.2 一致**）」—— 与 §2.1 三层落点表 + §2.2 标题「查表 → 派首选 → 逐级回落 → 再派发（try-and-fall，无 probe）」逐条对应。
+- §7 事项 1：`rules/dispatch-routing.yaml` → `agate-workspace/dispatch-routing.yaml`；事项 4「探测缓存 / native 探测方式」标注「**2026-09-09 定案已作废**：核心循环改 try-and-fall、无 probe」（`~~删除线~~`）—— 与 §2.2「try-and-fall，不是 probe-then-commit」一致。
+- `grep 'rules/dispatch-routing\.yaml' design-dispatch-routing.md` → **零命中**（老串已清）。P7 `[DEVIATION]`（docs-only 残留旧路径串 + 「探测」叙事，非 CRITICAL）至此收尾。
+
+**结论：ALIGNED**。
+
+---
+
+### A2（P8 delta）：脚本→文档对齐 — ALIGNED
+
+| P8 文档新增内容 | 对应脚本行为 / 已落地内容 | 判定 |
+|---|---|---|
+| CHANGELOG [0.71.0]「`agate dispatch route` 子命令 + `agate_dispatch_route.py` helper（`resolve` / `load_config` / `classify_outcome` / `build_dispatch_command` / `try_and_fall` 等）……既有渲染路径逐字节不变」 | `agate-dispatch.py` `_route_main` + `agate_dispatch_route.py` 全部函数（P4a-c 已落地并单测覆盖）；BDD-39 字节基线绿 | ALIGNED |
+| CHANGELOG [0.71.0]「`dispatch_route` 事件……`check-events.py` 第 8 条……混入 `gate_fail` 或任何非三值 → `sys.exit(1)`」 | `check-events.py` 第 8 条实际逻辑（P4a 落地）| ALIGNED |
+| CHANGELOG [0.71.0]「tmux 观测层……feature flag `AGATE_DISPATCH_TMUX` 默认关；……目标环境按 research §10 复跑后方可开启默认」 | `_maybe_tmux_wrap` 默认关（P4c）+ P4c `[DESIGN_GAP_REVIEWED]` | ALIGNED |
+| UPGRADING §3 v0.71.0「无破坏性变更，零迁移动作……不改 `.state.yaml` schema / 既有任务文件格式 / 3 个 hook 薄壳」 | P8 diff 无 `.sh` 改动、无 schema 改动、无 hook 改动；`bump_type: minor`（`P8-release.md`）| ALIGNED |
+| roadmap RM-AG0060 `scheduled` → `done` + 更新日期 `2026-09-10` | RM-AG0043（P8 gate `check-gate.py._check_roadmap_done`）硬要求；「关联任务」列已是 `TAG0034` | ALIGNED |
+| tech-debt DEBT0039 `open` → `closed` + `task_id: null` → `TAG0034` + `closed_at: 2026-09-10` + 2 条 closure evidence | `check-debt.py` schema 校验；closure_criteria 三条 = BDD-48（architect.md 边界）/ BDD-49（dispatch-protocol.md 边界）/ BDD-50（consistency 0 ERROR）—— P4a 落地、P6 逐条 PASS | ALIGNED |
+| P1-requirements.md frontmatter `scope_resolved:` 两项（DEBT0039 并入 / A5.3·A7.4 doc-sync）| `check-scope-resolved.py:_scope_resolved_frontmatter` 读取；`scope_resolved` 在 `agate-frontmatter-check.py:37` 白名单 + P1-requirements.md schema `migrated_keys` 内（`P8-release.md` §3 核 `check-frontmatter.py` exit 0）| ALIGNED |
+
+无「文档写了脚本没有」的反向裸露。**ALIGNED**。
+
+---
+
+### A3（P8 delta）：一致性连锁 + 反向传播 — ALIGNED
+
+**A3a（连锁）**：P8 未新增 event 类型 / 枚举 / gate 脚本。`check-events.py` 零改动（`git diff HEAD` 不含）。**ALIGNED**。
+
+**A3b（反向传播）**：
+
+| 应被影响文件 | 影响到了没 | 判定 |
+|---|---|---|
+| `agate/adr.md` 目录 / 索引 —— 新增 ADR-013 | 不需改 —— `adr.md` **无 TOC / ADR 索引清单**（`grep '目录\|Table of Contents\|ADR-001.*ADR-012'` 零命中）；ADR-013 `## ADR-013:` heading 直接追加在 ADR-012 之后 | ALIGNED |
+| `agate/UPGRADING.md` §3 —— CHANGELOG 新增 `## [0.71.0]` 段 | 已补 `### v0.71.0` 章节；`check-protocol-consistency.py` **CHECK 13（CHANGELOG↔UPGRADING 章节对应）PASS**（本次实跑核实：`✅ PASS CHECK 13`）；内容比照 TAG0033 P8 v0.70.0 章节形态（无破坏性变更 / 零迁移 / `git pull` 即完成）| ALIGNED |
+| `agate-summary.py` / 版本相关脚本读 CHANGELOG 顶部版本 | 不在 P8 diff；badge / CHANGELOG / UPGRADING 三处版本号已同步为 v0.71.0（`P8-release.md` §3 逐文件核）；`git tag v0.71.0` 由主 Agent 在 P8 commit 后创建（`P8-release.md` 明文）—— CHECK 7 pre-tag 红为此设计使然（见 A4）| ALIGNED（版本三处同步；tag 待主 Agent） |
+| design-note §5/§7 改后与 §2.1/§2.2 | 见 A1「design-note §5/§7 老串清理」—— 逐条对应、无新矛盾 | ALIGNED |
+| roadmap RM-AG0060 `done` → RM-AG0043 之外的连锁 | `_check_roadmap_done`（P8 gate）是唯一硬校验；RM-AG0060 长描述 P4a M12 已回写（`agate-workspace/dispatch-routing.yaml` + `dispatch-tiers.yaml` + try-and-fall + 两轴，无残留旧串，`P8-release.md` §3 核）；无其他连锁 | ALIGNED |
+
+**ALIGNED**。
+
+---
+
+### A4（P8 delta）：测试覆盖 — ALIGNED（`[KNOWN_DEVIATION]`：pre-tag 时序）
+
+**P8 轮全量 pytest 实跑（本次审查执行，2026-09-10）**：
+
+```
+$ python3 -m pytest agate/tests/ -q
+...
+FAILED agate/tests/integration/test_consistency.py::test_con_1_check_1_yaml_parseable
+       - AssertionError: assert 'ERROR (' not in <consistency output>
+FAILED agate/tests/integration/test_consistency.py::test_con_6_check_7_version_badge_sync
+       - AssertionError: assert 'PASS  CHECK 7' in <consistency output>
+FAILED agate/tests/unit/test_env_adapt_docs.py::test_bdd_25_consistency_zero_error
+       - AssertionError: <consistency output has ERROR (1)>
+FAILED agate/tests/unit/test_tag0027_b1_phases_transfer_fields.py::test_bdd_5_consistency_worktree_still_green_regression
+       - AssertionError: 协议一致性回归被破坏
+FAILED agate/tests/unit/test_tag0034_docs.py::test_bdd_50_consistency_zero_error_after_task_changes
+       - assert 1 == 0
+5 failed, 1620 passed, 2 skipped in 155.17s
+```
+
+**計數：passed 1620 / failed 5 / skipped 2**。`1620 + 5 = 1625` = **P4c 基线**（1625 passed / 0 failed / 2 skipped）—— 即 P8 把恰好 5 个「断言 consistency 绿」的测试从 pass 翻成 fail。
+
+**5 failed 全部同一根因 = CHECK 7 pre-tag**（逐条核实）：
+
+| 失败测试 | 断言 | 失败原因 |
+|---|---|---|
+| `test_con_1_check_1_yaml_parseable` | `"ERROR (" not in <consistency 全量输出>` | CHECK 7 注入 `ERROR (1):` 块（CHECK 1 本身 `✅ PASS`）|
+| `test_con_6_check_7_version_badge_sync` | `"PASS  CHECK 7" in <输出>` | CHECK 7 = **FAIL**（badge v0.71.0 已 bump / `git tag v0.71.0` 未创建）|
+| `test_env_adapt_docs.py::test_bdd_25_consistency_zero_error` | consistency 0 ERROR | CHECK 7 的 1 ERROR |
+| `test_tag0027_b1::test_bdd_5_consistency_worktree_still_green_regression` | consistency 保持绿 | CHECK 7 的 1 ERROR |
+| `test_tag0034_docs.py::test_bdd_50_consistency_zero_error_after_task_changes` | `check-protocol-consistency.py --strict-errors-only` exit 0（`assert 1 == 0`）| CHECK 7 → exit 1 |
+
+**`check-protocol-consistency.py --strict-errors-only` ERROR 隔离（本次实跑）**：
+
+```
+❌ FAIL  CHECK 7  version badge 与 git tag
+  ERROR (1):
+    ❌ README version badge v0.71.0 != 最新 tag v0.70.0 [README.md]
+```
+
+**唯一 ERROR = CHECK 7**。CHECK 1 / 3 / 4 / 6 / 8 / 9 / 11 / 12 / **13** / 14 / 15 全部 `✅ PASS`（CHECK 2 / 5 / 10 无 FAIL）。**CHECK 7 之外无别的 ERROR、上述 5 项之外无别的 fail**。
+
+**判定**：CHECK 7（`README badge v0.71.0` ≠ `最新 tag v0.70.0`）是 P8 收尾的**已知 pre-tag 时序** —— badge 在 P8 已 bump、`git tag v0.71.0` 由主 Agent 在 P8 commit 后创建（`P8-release.md` 明文）。CHECK 7 校验的是「发布完成态」（DEBT0013 时序），主 Agent `git tag v0.71.0` 后复跑 → CHECK 7 `PASS` → 5 项 test 全绿 → **1625 passed / 0 failed / 2 skipped**、consistency `--strict-errors-only` exit 0。**与 TAG0033 P8 同款处理**，**不因这一条判 misaligned**。
+
+`[KNOWN_DEVIATION: 来源 DEBT0013 已知时序 + TAG0033 P8 先例。P8 badge bump 与 `git tag` 创建之间的中间态使 CHECK 7 报 1 ERROR，连带 5 个断言「consistency 绿」的测试红。非 P8 引入的回归、非新问题（CHECK 7 之外 0 ERROR、这 5 项之外 0 fail）；主 Agent 在 P8 commit 后 `git tag v0.71.0`，复跑即归零（1625 passed / 0 ERROR）。]`
+
+**结论：ALIGNED**（pre-tag 时序，非回归）。
+
+---
+
+### A5（P8 delta）：下游影响 + 文档传播 — ALIGNED
+
+**A5.1 CHANGELOG [0.71.0] 覆盖度 —— 完整**
+
+逐项核对 CHANGELOG [0.71.0] 段 vs 本任务全部对外可见变更：`agate dispatch route` 子命令 ✓ / `agate_dispatch_route.py` helper ✓ / `dispatch-tiers.yaml` 档位词表 ✓ / 项目级 `dispatch-routing.yaml` + `check-dispatch-routing.py` ✓ / `dispatch_route` 事件 + `check-events.py` 第 8 条（含「无 `gate_fail`」）✓ / `dispatch-protocol.md`「### 0. 派发路由」新子节（含「gate 不认谁生产的」+ 两条完整性不变量 + 弱/强缓解 + 单 Agent no-op + 评审打回续跑）✓ / tmux 观测层（feature flag 默认关）✓ / effort 能力探测（BDD-10 `[BASELINE_CHANGE]`）✓ / ADR-013 ✓ / `LIMITATIONS.md` 局限 2 缓解链 ✓ / DEBT0039 闭合 + `architect.md` / `SETUP.md` / `platform-notes.md` 小节 ✓。**无遗漏**。
+
+**A5.2 CHANGELOG 闭合 —— P4a-c 轮「CHANGELOG 待 P8」至此完成**
+
+P4a / P4b / P4c 三轮 A5.2 均判「CHANGELOG 待 P8 统一补，不判 MISALIGNED」。P8 `## [0.71.0] - 2026-09-10` 段落地 —— 该延期项闭合。`check-changelog.py`（P8 gate 触发）对 `[Unreleased]` / task_id 的要求由 P8 gate 阶段核（本节不重复）。
+
+**A5.3 roadmap `done` 连锁**
+
+RM-AG0060 `scheduled` → `done` 触发 `check-gate.py` P8 分支的 `_check_roadmap_done`（RM-AG0043）—— 该 gate 要求「若 roadmap 有关联 RM 条目须已回写 done」，P8 满足。无 RM-AG0043 之外的连锁（roadmap 表其他行未动，`P8-release.md` §3 核长描述无残留旧串）。
+
+**结论：ALIGNED**。
+
+---
+
+### A6（P8 delta）：锚点表覆盖 — ALIGNED
+
+P8 **未新增任何 `check-*.py`**。CHECK 9 `SCRIPT_ALIGNMENT_ANCHORS` 无需再动（P4a 复审轮补的 `check-dispatch-routing.py` 条目仍成立、`test_sg_6` 保持绿 —— `test_sg_6` **不在** P8 的 5 项 pre-tag 红名单内）。**ALIGNED**。
+
+---
+
+### A7（P8 delta）：设计原则一致性 — ALIGNED
+
+**ADR-013 vs 既有 ADR —— 无冲突、方向一致**
+
+- **ADR-002（可判定性——gate 门槛机器可判定）**：ADR-013「理由」段显式「与 ADR-002 一致 —— gate 门槛机器可判定、不依赖主观声明，跨 CLI 产出与本地产出走同一 exit-code 判定面，是同一原则的直接延伸」。回落理由码机械拒绝（`sys.exit(1)`）而非 LLM 判断，符合 ADR-002。**一致**。
+- **ADR-006（双层角色——同源盲区）**：ADR-013「理由」段「与 ADR-006 互补 —— ADR-006 记录『同源模型隔离是认知层非真正独立』这一上限；派发路由给角色隔离补 model / 厂商维度是其部分缓解（见 LIMITATIONS.md 局限 2），而『gate 生产者无关』正是这一缓解能安全落地的结构前提」。**一致（互补，非冲突）**。
+- **ADR-010（受控例外——满足客观可判定条件时允许复用既有验证证据）**：ADR-010 是「客观可判定条件下复用证据」，ADR-013 是「gate 不因生产者而异」—— 两者均以「客观机器可判定」为核心，无冲突。ADR-013 不放宽任何 gate 重跑要求。**一致**。
+- **ADR-005（改动性质决定流程）**：ADR-013 记录的是架构决策（红线级），P8 把它从 `dispatch-protocol.md` 散文沉淀为 ADR —— 正是 ADR-005「机制交叉类改动」的正确归档动作。**一致**。
+
+A7.4（P4a 复审轮提出「建议补新 ADR 记录『派发路由 / gate 生产者无关性』」，用户 2026-09-09 `[HUMAN_CONFIRMED]` 落 P8）—— P8 逐字采用本报告附录草案落地，**该建议闭合**。
+
+**结论：ALIGNED**。
+
+---
+
+## P8 闭环规则
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| ALIGNED | A1 / A2 / A3 / A4（附 `[KNOWN_DEVIATION]`：pre-tag）/ A5 / A6 / A7（P8 delta） | 通过，可 P8 commit。**commit 后主 Agent `git tag v0.71.0`** → CHECK 7 归零 → 5 项 pre-tag 红全绿（1625 passed / 0 failed / 2 skipped、consistency `--strict-errors-only` exit 0），复跑确认。 |
+| （已闭合，非阻断） | A5.3 / A7.4（P4a 复审轮 HUMAN_CONFIRMED 的两条 doc-sync）| P8 已落地：`LIMITATIONS.md` 局限 2「派发路由缓解链」段 + `adr.md` ADR-013。逐字采用本报告附录草案、诚实边界句保留、关联 ADR-002 / 006 / RM-AG0060。**本任务全部 SELF-GATE 对齐项闭合**。 |
+| （P8 / 未来迭代，非阻断） | tmux 观测层目标环境复跑 | `AGATE_DISPATCH_TMUX` 默认关；目标部署环境按 `docs/research/cross-platform-dispatch-mechanics.md` §10 在其自己 tmux 版本复跑后开启默认（`P4-implementation-P4c.md` `[DESIGN_GAP_REVIEWED]` + UPGRADING §3 v0.71.0 第 3 点已登记）。 |
+
+**P8 delta 总结论：aligned**（A1-A7 全 ALIGNED；A4 附 `[KNOWN_DEVIATION]` = CHECK 7 pre-tag 时序，主 Agent `git tag v0.71.0` 后归零，非回归 / 非新问题）。
+
+**P4a + P4b + P4c + P8 四批合并总结论：aligned** —— P4a 三轮终态 aligned（A5.3/A7.4 HUMAN_CONFIRMED）；P4b 两轮终态 aligned（A1 fix `classify_outcome` 按 cli 细分）；P4c 一轮 aligned（tmux 观测层，feature flag 默认关对应已确认 DESIGN_GAP）；P8 一轮 aligned（A5.3/A7.4 doc-sync 落地 + CHANGELOG / UPGRADING / roadmap / tech-debt / P1 收尾）。全量 pytest `5 failed / 1620 passed / 2 skipped` —— 5 failed **全部** = CHECK 7 pre-tag（DEBT0013 时序，`git tag v0.71.0` 后归零至 1625/0/2）；回归护栏（`phases.yaml` / `check-gate.py` / `check-state-transition.py` / `state-machine.md` / `dispatch-protocol.md` / `agate_dispatch_route.py` / `check-events.py` / `agate/tests/` 的 `git diff HEAD` 无输出）成立。**P4 三批 + P8 收尾批可全部 commit**（各带 `self-gate-review:` trailer）。
+
+---
+
+## 附：P8 轮补充实跑（本次审查执行，2026-09-10）
+
+- `python3 -m pytest agate/tests/ -q` → **5 failed / 1620 passed / 2 skipped**（155.17s）；5 failed = `test_con_1_check_1_yaml_parseable` / `test_con_6_check_7_version_badge_sync` / `test_env_adapt_docs.py::test_bdd_25_consistency_zero_error` / `test_tag0027_b1_phases_transfer_fields.py::test_bdd_5_consistency_worktree_still_green_regression` / `test_tag0034_docs.py::test_bdd_50_consistency_zero_error_after_task_changes` —— **全部断言「consistency 绿 / CHECK 7 PASS」，全部因 CHECK 7 pre-tag 红**。`1620 + 5 = 1625` = P4c 基线。
+- `python3 agate/scripts/check-protocol-consistency.py --strict-errors-only 2>&1 | grep -E "ERROR \(|❌"` →
+  ```
+  ❌ FAIL  CHECK 7  version badge 与 git tag
+  ERROR (1):
+    ❌ README version badge v0.71.0 != 最新 tag v0.70.0 [README.md]
+  ```
+  **唯一 ERROR = CHECK 7**。CHECK 1 / 3 / 4 / 6 / 8 / 9 / 11 / 12 / 13 / 14 / 15 全 `✅ PASS`。
+- `python3 agate/scripts/check-events.py agate-workspace/tasks/TAG0034-dispatch-routing` → exit 0（27 行，哈希链完整，ts 单调，judge 轮次×1）。
+- **回归护栏（关键）**：`git diff HEAD -- agate/rules/phases.yaml agate/scripts/check-gate.py agate/scripts/check-state-transition.py agate/state-machine.md agate/dispatch-protocol.md agate/scripts/agate_dispatch_route.py agate/scripts/check-events.py agate/tests/` → **无输出**（P8 未碰 P4 代码 / 已定稿协议子节 / 测试 / 状态机 / gate 脚本）。
+- `git diff HEAD --name-only`（HEAD = `8ad7834` P7 commit）→ `CHANGELOG.md` / `README.md` / `README.zh-CN.md` / `agate/LIMITATIONS.md` / `agate/UPGRADING.md` / `agate/adr.md` / `docs/design-notes/design-dispatch-routing.md` / `agate-workspace/{roadmap/roadmap.md, debt/tech-debt.md, tasks/TAG0034-dispatch-routing/{P1-requirements.md, .state.yaml, gate-events.jsonl}}` —— 全为 doc / 发布面 / 任务元数据。
+- `grep -n "scope_resolved" agate/scripts/agate-frontmatter-check.py` → `37: "suggest_resolved", "scope_resolved", "change_type",`（合法 frontmatter 字段）；`check-scope-resolved.py:44 _scope_resolved_frontmatter` 读取 P1 frontmatter `scope_resolved` list。
+- `grep -c "^## ADR-013" agate/adr.md` → 1；`grep -c "派发路由缓解链" agate/LIMITATIONS.md` → 1；`grep -c "^## \[0.71.0\]" CHANGELOG.md` → 1；`grep -c "### v0.71.0" agate/UPGRADING.md` → 1；`grep -c "version-v0.71.0" README.md README.zh-CN.md` → 各 1。
+- `grep -n 'rules/dispatch-routing\.yaml' docs/design-notes/design-dispatch-routing.md` → 零命中（P7 `[DEVIATION]` 老串已清）。
