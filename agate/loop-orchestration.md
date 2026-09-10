@@ -225,7 +225,7 @@ LOOP:
 **2. ~~评审角色选择的可判定化~~**（已实现：role-system.md domains→评审角色机械映射，C8 规则）
 
 **3. 嵌套深度约定（避免撞 max_depth）**
-v4 层级约定：主 Agent（L0）→ 执行/评审 subagent（L1），不依赖 L2（Codex max_depth 默认 1，禁止深层嵌套）。如果某阶段复杂到 L1 subagent 扛不住，应在 P1/P2 阶段**拆成多个任务**（Txxx-a, Txxx-b），用任务拆分替代 agent 嵌套，而非让 L1 再派 L2。
+层级约定：主 Agent（L0）→ 执行/评审 subagent（L1），**不依赖 L2**——这是刻意的设计选择（任务拆分优先于 agent 嵌套），与平台是否支持深层嵌套无关（Codex `spawn_agent` 嵌套深度的时效见 `platform-notes.md`「子代理派发」小节：P6 V7 已实测 `depth=2` 可用；协议仍不用它）。如果某阶段复杂到 L1 subagent 扛不住，应在 P1/P2 阶段**拆成多个任务**（Txxx-a, Txxx-b），用任务拆分替代 agent 嵌套，而非让 L1 再派 L2。
 
 ---
 
