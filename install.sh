@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# install.sh — agate 协议安装脚本（单软链布局，兼容保留）
-# 默认把仓库克隆到 $HOME/oclab/agate，创建 ~/.agate 软链接
+# install.sh — Agateon 协议安装脚本（单软链布局，兼容保留）
+# 默认把仓库克隆到 $HOME/oclab/agate，创建 ~/.agate 软链接（克隆目录名可经 AGATE_REPO_DIR 覆盖）
 # 可通过环境变量 AGATE_REPO_DIR 自定义安装目录
 #
 # ⚠️ 兼容保留说明（TAG0008）：本脚本保持"单软链"形态，存量用户升级路径不破坏。
 # 需要按项目锁定版本时，改用版本管理工具（TAG0008 起）：
 #   python3 ~/.agate/scripts/agate-install.py            # 装最新版（vX.Y.Z/ 版本目录 + latest/current 指针）
-#   python3 ~/.agate/scripts/agate-install.py v0.48.0    # 装指定版本
+#   python3 ~/.agate/scripts/agate-install.py <vX.Y.Z>   # 装指定版本
 # 版本管理布局下 ~/.agate 变为目录，legacy 软链直接解析为 AGATE_ROOT（向后兼容，见 UPGRADING v0.50.0）。
 
 set -euo pipefail

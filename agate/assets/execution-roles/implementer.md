@@ -30,7 +30,7 @@ agent: implementer
 ## 输入（自己读取）
 - {AGATE_WORKSPACE}/tasks/{Txxx}/P0-brief.md（环境约束、已知风险）
 - P4：{AGATE_WORKSPACE}/tasks/{Txxx}/P2-design.md + P3-test-cases.md + P3-test-code/
-- P8：{AGATE_WORKSPACE}/tasks/{Txxx}/P2-design.md（packages 声明）+ P5-test-results/ + P6-acceptance.md + P7-consistency.md
+- P8：{AGATE_WORKSPACE}/tasks/{Txxx}/P2-design.md（packages 声明）+ P5-test-results/ + P6-acceptance.md + P6.5-judge-verdict.md + P7-consistency.md
 - 项目约定文件（CLAUDE.md 或 AGENTS.md）
 - dispatch-prompt 中指定的输入文件是必读的，按 prompt 给出的路径读取
 
