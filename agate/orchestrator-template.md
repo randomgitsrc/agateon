@@ -49,9 +49,12 @@ permission:
 | 文件 | 何时写 |
 |------|-------|
 | `P0-brief.md` | 任务启动 |
-| `P{N}-dispatch-context-{role}.md` | 每次派发 subagent **之前**（含重试、并行拆分） |
+| `P{N}-dispatch-context-{role}.md` | 每次派发 subagent **之前**（含重试、并行拆分；P6.5 judge 用 `P6.5-dispatch-context-judge.md`） |
 | `P{N}-gate-diagnosis.md` | gate 失败后 |
 | `PAUSED-resolution.md` | PAUSED 后 |
+
+> 状态推进：普通 phase 的「跑 gate → 判定 → 写 `.state.yaml` phase → commit」这一步由 `agate next` /
+> `agate advance` 查表机械完成（不做临场判断），详见 `state-machine.md`；手工推进为 fallback。
 
 ---
 
@@ -88,7 +91,7 @@ permission:
 | P3 | `{agate_root}/phase-cards/P3-tdd.md` |
 | P4 | `{agate_root}/phase-cards/P4-implementation.md` |
 | P5 | `{agate_root}/phase-cards/P5-verification.md` |
-| P6 | `{agate_root}/phase-cards/P6-acceptance.md` |
+| P6 | `{agate_root}/phase-cards/P6-acceptance.md`（含 P6→P6.5 judge 派发：judge 复核在 P6 卡内说明，`.state.yaml` phase 保持 P6 直至 P7） |
 | P7 | `{agate_root}/phase-cards/P7-consistency.md` |
 | P8 | `{agate_root}/phase-cards/P8-release.md` |
 

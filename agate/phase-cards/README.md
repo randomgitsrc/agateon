@@ -13,6 +13,7 @@
 | P4 | [P4-implementation.md](P4-implementation.md) | 代码实现：files_to_read 导航 / 评审派发 |
 | P5 | [P5-verification.md](P5-verification.md) | 技术验证：gate_commands 执行 / E2E |
 | P6 | [P6-acceptance.md](P6-acceptance.md) | 验收：BDD 对照 / vision-helper 绑定 |
+| P6.5 | （无独立卡片，见 P6 卡「judge 复核」节）| 独立 Judge 复核：fresh context 逐条重验全部 BDD；`.state.yaml` phase 保持 P6 直至 P7 |
 | P7 | [P7-consistency.md](P7-consistency.md) | 一致性：DESIGN_GAP / SCOPE+ 闭环 |
 | P8 | [P8-release.md](P8-release.md) | 发布：bump / CHANGELOG / 收尾清理 |
 
@@ -35,8 +36,12 @@
 | `role-system.md` | 双层角色体系（完整版） |
 | `loop-orchestration.md` | /loop 自动编排 |
 | `git-integration.md` | Git commit 规范 / push 策略 |
-| `platform-notes.md` | 各平台适配说明 |
+| `platform-notes.md` | 各平台适配说明（平台能力权威源） |
 | `LIMITATIONS.md` | 已知局限 |
+| `SETUP.md` | 首次接入（平台注册 + 装 hook）|
+| `CONTEXT.md` | 术语表 / 统一语言 |
+| `adr.md` | 架构决策记录（A7 审查锚点）|
+| `UPGRADING.md` | 存量项目升级 / 破坏性变更 |
 
 ## 使用方式
 

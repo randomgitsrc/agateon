@@ -63,8 +63,12 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 
 ### 3.3 状态与自我治理
 
-- 状态三层落盘：每任务 `.state.yaml`（权威）+ `active-tasks.md` 看板 + `roadmap.md` 规划层
+- 状态三层落盘：每任务 `.state.yaml`（权威）+ `active-tasks.md` 看板 + `roadmap.md` 规划层；
+  另有 append-only `gate-events.jsonl` 事件账本（P6.5 judge 轮次 / state_transition 哈希链）
 - 每阶段门槛过 = 一个 `wf(Txxx-Pn):` commit；派发三铁律（只传路径 / 只回摘要 / task 工具派发）
+- 状态推进机械化：`agate next` / `agate advance` 查 `phases.yaml` 表推进，不做临场判断（RM-AG0054）
+- 跨 CLI/model 派发路由（可选，RM-AG0060）：`agate-workspace/dispatch-routing.yaml` 按 `(phase,role)`
+  查表 → try-and-fall；未配置 = 逐字节现状
 - 自我改造（dogfooding）走 worktree 隔离双工作区，见 `docs/guides/worktree-dogfooding-guide.md`
 - 改协议本体走 SELF-GATE（`check-protocol-consistency.py` 0 ERROR + protocol-alignment-review 语义审查）
 
@@ -100,6 +104,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 | ruff 静态检查 | `ruff check agate/` | CI 锁 `ruff==0.16.4`，与本地 `~/.venvs/agate-dev` 对齐 |
 | 装 / 查协议版本 | `python3 ~/.agate/scripts/agate-install.py` / `agate-resolve.py` | `~/.agate` 版本管理根 |
 | 装 git hooks | `python3 ~/.agate/scripts/install-hook.py` | 3 个 hook 薄壳指向 `resolve-entry.py` |
+| 推进状态机一步 | `python3 ~/.agate/scripts/agate-next.py [TASK_DIR]` | 查表推进（消费 `phases.yaml`）；`agate-advance.py` 同族 |
 | 站点构建 | `cd site && npm run build` | site 唯一硬校验 |
 | 发博客 | 照 `site/guides/publish-checklist.md` 打勾 | 硬 gate = 独立评审 PASS |
 | 代码 → PR | `/home/kity/bin/git-to-pr` | 非交互 shell 不读 bashrc，用绝对路径 |

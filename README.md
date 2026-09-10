@@ -16,7 +16,7 @@
 
 ## What is Agateon?
 
-Agateon is a documentation-and-script orchestration protocol for software engineering tasks. There is no runtime, no daemon, and no build step — just a set of Markdown protocol files plus gate-check scripts that any coding agent can read and run. A single orchestrator agent never writes code itself. Instead it dispatches dedicated subagents through eight phases (P1 requirements → P2 design → P3 test-first → P4 implementation → P5 verification → P6 acceptance → P7 consistency → P8 release), and after every phase it runs an objective gate check before the state machine may advance. State is persisted to version-controlled Markdown, so progress survives crashes and remains auditable by humans.
+Agateon is a documentation-and-script orchestration protocol for software engineering tasks. There is no runtime, no daemon, and no build step — just a set of Markdown protocol files plus gate-check scripts that any coding agent can read and run. A single orchestrator agent never writes code itself. Instead it dispatches dedicated subagents through eight phases (P1 requirements → P2 design → P3 test-first → P4 implementation → P5 verification → P6 acceptance → P7 consistency → P8 release), plus a mandatory independent-judge checkpoint (P6.5) between P6 and P7 that re-verifies every acceptance criterion in a fresh context. After every phase it runs an objective gate check before the state machine may advance. State is persisted to version-controlled Markdown (plus an append-only `gate-events.jsonl` ledger), so progress survives crashes and remains auditable by humans.
 
 ## Why Agateon?
 
@@ -52,13 +52,13 @@ Orchestrator
   │ dispatches
   ▼
 P0 brief → P1 analyst → P2 architect → P3 test-designer → P4 implementer
-         → P5 verifier → P6 verifier → P7 consistency-reviewer → P8 release
+         → P5 verifier → P6 verifier → P6.5 judge → P7 consistency-reviewer → P8 release
   │ after every phase
   ▼
 gate check (test runner exit code, typechecker, git log, BDD runs)
   │ pass
   ▼
-state persisted (active-tasks.md / .state.yaml) → next phase
+state persisted (active-tasks.md / .state.yaml / gate-events.jsonl) → next phase
 ```
 
 The orchestrator does exactly four things: read state, dispatch subagents, run gates, and update state. It never writes phase artifacts itself. A phase may only advance when its gate passes; a failed gate bounces the phase back (within a retry limit) before the state machine moves on. Phase definitions and pruning rules are in [`agate/WORKFLOW.md`](agate/WORKFLOW.md).
@@ -70,9 +70,10 @@ The orchestrator does exactly four things: read state, dispatch subagents, run g
 | OpenCode | ✅ | Full P0-P8 |
 | Claude Code | ✅ | Full P0-P8 |
 | DSH | ✅ | Full P0-P8 |
+| Codex | ✅ | Full P0-P8 |
 | Claude Project sessions | ❌ | Design phases (P0-P2) only |
 
-See [`agate/platform-notes.md`](agate/platform-notes.md) for platform-specific adaptations, including native Windows (Git for Windows) support.
+DSH and Codex have no orchestrator-symlink registration step (DSH uses a preset, Codex is a dispatch target); their one-time setup is in [`agate/SETUP.md`](agate/SETUP.md) steps 2-DSH / 2-Codex. See [`agate/platform-notes.md`](agate/platform-notes.md) — the authoritative source for per-platform capability — for full adaptation notes, including native Windows (Git for Windows) support.
 
 ## Documentation
 
@@ -80,7 +81,7 @@ See [`agate/platform-notes.md`](agate/platform-notes.md) for platform-specific a
 |-----------------|------|
 | Integrate Agateon into a project for the first time | [`agate/SETUP.md`](agate/SETUP.md) |
 | Understand the P0-P8 phase workflow and pruning rules | [`agate/WORKFLOW.md`](agate/WORKFLOW.md) |
-| Look up cross-phase rules (retry caps / state transitions / C8 review mapping) | `agate/rules/`（phases.yaml / dispatch.yaml / roles.yaml + schema/，与既有规则 md 并列） |
+| Look up cross-phase rules (retry caps / state transitions / C8 review mapping) | [`agate/rules/`](agate/rules/) — `phases.yaml` / `dispatch.yaml` / `roles.yaml` / `dispatch-tiers.yaml` + `schema/`, alongside `state-transitions.md` / `review-mapping.md` |
 | Read the protocol body entry point (for agents and deep users) | [`agate/AGENTS.md`](agate/AGENTS.md) |
 | Adapt Agateon to your platform (OpenCode / Claude Code / Windows) | [`agate/platform-notes.md`](agate/platform-notes.md) |
 | Understand known structural limitations | [`agate/LIMITATIONS.md`](agate/LIMITATIONS.md) |
@@ -103,9 +104,9 @@ Gates fall into two trust classes, based on who produces the judged artifact:
 | External output gate | P3, P4, P5 | External tool output (test runner exit code, typechecker, git log) | High — the orchestrator cannot fake external output |
 | Self-authored file gate | P1, P2, P6, P7 | Files written by the orchestrator itself | Mitigated — author and judge are the same actor |
 
-Self-authored gates are mitigated, never cured, by evidence-existence checks, objective provenance audits, and BDD count cross-checks — raising the cost of fabrication and leaving an audit trail. See [Limitation 3 in `agate/LIMITATIONS.md`](agate/LIMITATIONS.md).
+Self-authored gates are mitigated, never cured, by evidence-existence checks, objective provenance audits, and BDD count cross-checks — raising the cost of fabrication and leaving an audit trail. The mandatory P6.5 independent-judge checkpoint adds a further layer over P6: a fresh-context judge re-verifies every acceptance criterion from the evidence and git log alone, under an append-only event ledger. See [Limitation 3 in `agate/LIMITATIONS.md`](agate/LIMITATIONS.md).
 
-Adoption is progressive. Pruning is decided in P1, not automatic: the analyst classifies the task on a complexity × risk matrix, writes a reason for every skipped phase, and the orchestrator confirms the plan. Small single-point changes run a pruned flow (P1 + P3 + P4 + P5) — P3 test-first is kept by default and skipped only with an explicit justification (config-only changes, or a ≤3-line change already covered by a regression test), while P7 consistency is dropped for low/medium-risk changes but mandatory for high-risk (security/data/permission) ones. Medium changes run the full P1-P8; high-risk tasks keep acceptance and consistency mandatory and warrant a final human review. P6 acceptance is never pruned.
+Adoption is progressive. Pruning is decided in P1, not automatic: the analyst classifies the task on a complexity × risk matrix, declares a ceremony tier (thin / standard / full, fail-closed to standard), writes a reason for every skipped phase, and the orchestrator confirms the plan. Small single-point changes run a pruned flow (P1 + P3 + P4 + P5) — P3 test-first is kept by default and skipped only with an explicit justification (config-only changes, or a ≤3-line change already covered by a regression test), while P7 consistency is dropped for low/medium-risk changes but mandatory for high-risk (security/data/permission) ones. Medium changes run the full P1-P8; high-risk tasks keep acceptance and consistency mandatory and warrant a final human review. P6 acceptance and the P6.5 judge are never pruned.
 
 ## Known limitations
 
