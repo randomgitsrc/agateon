@@ -129,7 +129,7 @@
 
 ## Hardening-roadmap 跨平台适配（自 v0.4 引入，持续生效）
 
-hardening-roadmap 设计的核心 gate 机制（pre-commit hook + CI backstop）是 **git 协议级**的，自 v0.4 起所有平台统一可用。但配套能力有平台差异：
+核心 gate 机制（pre-commit hook + CI backstop）是 **git 协议级**的，自 v0.4 起所有平台统一可用。但配套能力有平台差异：
 
 | 机制 | OpenCode | Claude Code | Codex | 说明 |
 |------|---------|-------------|-------|------|

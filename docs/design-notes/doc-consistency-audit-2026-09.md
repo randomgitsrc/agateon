@@ -338,10 +338,15 @@ CI backstop 机制自 v0.4 起统一可用」。
 
 ### 8-6. 不处理（明确记录）
 
-- `check-protocol-consistency.py --strict-errors-only` 的 ~329 WARNING（`docs/archived/reviews/...` /
+- `check-protocol-consistency.py --strict-errors-only` 的一批 WARNING（`docs/archived/reviews/...` /
   `scripts/check-gate.sh` 等无法解析引用）—— 全在**叙事 / 历史快照文件**里（`docs/reviews/agate-alignment-
-  review-2026-08-*.md`、`CHANGELOG.md` 历史条目等）。按 `doc-freshness-guide` §3「快照保留不动、改反而
-  失真」，**不修**。这也是 CHECK 2 对叙事文件只发 WARNING 不发 ERROR 的原因。
+  review-2026-08-*.md`、`CHANGELOG.md` 历史条目、`agate-workspace/tasks/TAGxxxx/` 归档产出等）。按
+  `doc-freshness-guide` §3「快照保留不动、改反而失真」，**不修**。这也是 CHECK 2 对叙事文件只发
+  WARNING 不发 ERROR 的原因。
+- **批 E 执行后 WARNING 会 +约 30**：`hardening-roadmap.md` / 16 个 `*.progress.md` / 2 个 superpowers
+  specs 被移走 / 删除后，`agate-workspace/tasks/TAG0013·0015·0025/` 等**已归档任务产出**里对旧路径的
+  引用变为"引用文件不存在"。这些是 frozen 快照，**不回改**（0 ERROR 不变，`--strict-errors-only` 仍
+  通过）。
 - `docs/agents/knowledge-index.md` —— 自述「试点」，部分条目 2026-08-12、引 `T001` 旧编号。是**活的
   实验文档**、非死文件。低优先：确认试点是否仍在用；若弃用则存档，若在用则清旧编号。本批不强制。
 
@@ -349,6 +354,17 @@ CI backstop 机制自 v0.4 起统一可用」。
 
 批 E。删除（8-1）+ superpowers 存档（8-3）+ 状态刷新（8-4）+ 归位（8-5）无跨文档依赖，可先做；
 `hardening-roadmap.md` 存档（8-2）与批 B/C 的引用软化同批。
+
+---
+
+## 执行状态
+
+**批 A-E 已于 2026-09-10 在分支 `docs/protocol-doc-refresh` 执行**（5 个 `docs(protocol):` commit，
+提交前 consistency 0 ERROR / structure S-1~S-6 OK / unit 全绿）。分支收尾统一走 SELF-GATE
+（`check-protocol-consistency.py` + 独立评审 + protocol-alignment-review）后合并 main。
+本文档随之转为历史快照。
+
+`hardening-roadmap.md` 已移至 `archived/docs-2026-08/plans/hardening-roadmap.md`。
 
 ---
 

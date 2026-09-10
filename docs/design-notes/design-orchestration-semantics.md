@@ -1,6 +1,6 @@
 # 编排语义统一设计（自动化在协议内，平台只做执行环境）
 
-> 状态：设计讨论 v3（待立项，候选 RM-AG0054）
+> 状态：**已落地（TAG0027，v0.66.0，RM-AG0054：`agate next`/`agate advance` 推进侧 CLI）**
 > 评审链：v1 经独立评审 FAIL（2 BLOCKER + 4 WARNING + 4 NIT，见 `docs/reviews/review-design-orchestration-semantics-2026-09-01.md`）→ v2 逐条修复 → 2026-09-02 经 Claude 独立评审（见 `docs/reviews/review-orchestration-semantics-v2-independent-20260902.md`）指出"PASS 标签无复审证据"（B1'）+ 护栏范围遗漏 WORKFLOW.md（W1'）+ 护栏机械化仍是未来时（W2'）+ 平台语义表排版（N1'）+ README 登记待核验（N2'）→ **本版 v3 修复上述全部发现并采纳其 4 条补充想法**（exit 2 可复核子状态 / CLI 为档位 C 可观测层 / S-1-S-2 纳入转移表 / 结构性判据替代文件名单）→ v3 经落盘复审 PASS（`review-orchestration-semantics-v3-20260902.md`，审查对象 v3a、4 个 NIT 修复闭环为 v3b，见该文件 4.5 节）→ 2026-09-02 第三轮 Claude 元评审（`review-orchestration-semantics-v3-claude-meta-20260902.md`）指出"复审指控失实"，经时间线核验（复审落盘 12:55 先于修复 12:59）该指控不成立，但其可追溯性建议已采纳（版本/时点标注 + 修复闭环确认）。
 > 问题：Agateon 目前以 orchestrator agent 角色驱动运转，流程正确性押在模型的持续正确上；同时三平台（OpenCode / Claude Code / DSH）能力差异正在扩大。本笔记回答两个问题：① 编排能否程序化、程序化到什么程度；② 如何让三平台不走向"三条路线"。
 > 相关文档：`agate/WORKFLOW.md`、`agate/orchestrator-template.md`、`agate/dispatch-protocol.md`、`agate/state-machine.md`、`agate/loop-orchestration.md`、`agate/rules/phases.yaml`、`agate/rules/state-transitions.md`、`docs/design-notes/dsh-integration.md`、`docs/design-notes/design-independent-judge.md`、`agate/platform-notes.md`、`agate/SETUP.md`。

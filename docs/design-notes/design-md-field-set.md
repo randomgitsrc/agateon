@@ -1,6 +1,6 @@
 # agate-md-field-set 结构化写入工具设计（RM-AG0048：字段写入通道）
 
-> 状态：设计提案（对应 roadmap RM-AG0048，backlog；2026-08-25 用户拍板 Q1/Q2/D1，一期/二期边界已修正）
+> 状态：**RM-AG0048 一期已落地（TAG0024，v0.63.0，`agate-md-field-set`）；二期 backlog** ｜ 2026-08-25 用户拍板 Q1/Q2/D1
 > 目标：给 subagent 提供"写入即校验"的结构化 set 工具，把协议字段填写从"手写 frontmatter"升级为"CLI 写入"——key 从 schema 白名单限定、value 写入时即校验、格式由工具保证，从机制上消灭"协议摩擦"类失败（P1-gate-diagnosis 实证），并作为防造假纵深的一环。
 > 一句话：get 已有全套（agate-md-field-get.py / agate-state-get.py），set 完全缺失——本设计补齐"写"这一面，且用与 gate 同源（同一 schema + 同一校验值域）的方式实现，确保"官方 CLI 写出的东西天然过 gate"。
 
