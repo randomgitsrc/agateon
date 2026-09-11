@@ -4,6 +4,10 @@
 # 不触发 SELF-GATE**。文件缺失 / 损坏 / 类型坏 → 回落出厂默认（= 逐字节现状），
 # 不报错、不静默跳过（agate/scripts/agate_dispatch_route.py load_config）。
 #
+# 本文件应保留在项目中（即使无自定义配置）：空配置 = 显式声明「走默认派发」，
+# 新机器 / 新项目据此按本机现状填充。机器差异（装了哪些 CLI、账号能用哪些 model）
+# 属于本机事实，按需提交即可、不必追求跨机可复现。
+#
 # 两个顶层 key：
 #
 #   tier_bindings:  机器 / 安装级——把协议档位（bulk / standard / deep，词表见
@@ -17,6 +21,15 @@
 #                   只引用档位名的写法跨机器可移植；写 candidates 直接值则牺牲
 #                   可移植换明确。tier: 与 candidates: 互斥。
 #
+# 候选/字段语义：
+#   - cli ∈ {native, claude-code, codex, opencode}；effort ∈ {low, medium, high}。
+#   - model: null = 该 CLI 当前默认 model；cli: native + model: null = 继承主 Agent
+#     当前 model 的原生派发（路由脚本不 spawn，由驱动会话代发）。
+#   - 候选链顺序 = 回落顺序：仅当首候选「起不来 / 基础设施失败 / 无可解析产出」
+#     （LAUNCH_FAIL / INFRA_ERROR / NO_PARSEABLE_OUTPUT）才落下一候选；
+#     **gate FAIL 绝不换候选**（gate 判据只认产出文件 + exit code、不认谁生产的）。
+#   - 全文件禁用 fallback: 字段（schema 无此字段，终点回落恒为默认派发）。
+#
 # 不配置（本文件即当前形态：routes / tier_bindings 均空）= 全 (phase,role) 解析为
 # standard 档 = 继承主 Agent 当前 model 的原生派发 = 逐字节现状。
 
@@ -27,19 +40,31 @@ schema_version: 1
 # tier_bindings:
 #   deep:
 #     - {cli: codex, model: gpt-5.6-terra, effort: high}
-#     - {cli: claude-code, model: opus}
+#     - {cli: claude-code, model: null}            # null = 该 CLI 当前默认
 #   bulk:
-#     - {cli: native, model: claude-haiku-4-5}
+#     - {cli: native, model: null}                 # 原生派发：继承主 Agent model
 #     - {cli: opencode, model: deepseek/deepseek-v4-flash}
 #
 # routes:
 #   P2:
-#     architect: {tier: deep}
-#   P4: {tier: bulk}
+#     architect: {tier: deep}                      # 档位引用：跨机可移植
+#     plan-eng-review: {tier: deep, effort: high}  # effort 可与 tier 并列（正交轴）
+#   P4: {tier: bulk}                               # phase 级整档
 #   P6.5:
 #     judge:
-#       candidates:
-#         - {cli: codex, model: null}
+#       candidates:                                # 直接链：牺牲可移植换明确
+#         - {cli: codex, model: gpt-5.6-terra, effort: high}
+#         - {cli: native, model: null}             # 末位落回原生派发
+#   P8: {tier: standard}                           # 显式 standard = 逐字节现状
+#
+# 注意：
+#   - routes 值必须是非空 mapping——`P8:` 后只跟注释会被解析为 null → 校验 ERROR
+#     （写 `P8: {tier: standard}` 或直接不写该 phase）。
+#   - 在 tier_bindings 里显式声明 standard 会触发 WARNING（standard 恒等于默认
+#     派发、绑定不生效），不是错误——留着是「自我提醒」，删掉更干净。
+#   - OpenCode cli: native 走命名 subagent 间接路：需预注册命名 agent
+#     （约定名 agate-route-<tier>，agents.<name>.model = 候选 model）；无该命名
+#     agent → 该候选判 launch_fail 自动回落、不阻断。
 
 tier_bindings: {}
 routes: {}

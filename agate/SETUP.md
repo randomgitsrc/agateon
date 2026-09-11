@@ -215,11 +215,11 @@ timeout 120s codex exec --json --skip-git-repo-check --dangerously-bypass-approv
 
 会话记录落 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`——agate 的 `CodexAdapter`（命令流卡死检测，RM-AG0055）读此路径。
 
-### 步骤 2-dispatch-routing：机器级档位绑定 scaffold（可选，TAG0034 / RM-AG0060）
+### 步骤 2-dispatch-routing：机器级档位绑定 scaffold（TAG0034 / RM-AG0060）
 
-派发路由（`agate dispatch route`）是**机会式启用**：不建 / 不填任何配置 = 派发行为与现状逐字节一致（全 `(phase, role)` 解析为 `standard` 档 = 继承主 Agent 当前 model 的原生派发）。本步只在你想让某些阶段跑异 model / 异 CLI（部分缓解 `LIMITATIONS.md` 局限 2）时才做——比照上方「步骤 2-Codex」的 per-platform onboarding 形态。
+派发路由（`agate dispatch route`）是**机会式启用**：不填任何自定义配置 = 派发行为与现状逐字节一致（全 `(phase, role)` 解析为 `standard` 档 = 继承主 Agent 当前 model 的原生派发）。**配置文件本身应保留**（即使全空）：空配置 = 显式声明「走默认派发」，后续按本机现状填充即可。本步只在你想让某些阶段跑异 model / 异 CLI（部分缓解 `LIMITATIONS.md` 局限 2）时才需要**填内容**——比照上方「步骤 2-Codex」的 per-platform onboarding 形态。
 
-**1. 建项目级配置文件**（`agate-workspace/dispatch-routing.yaml`，非协议本体、不触发 SELF-GATE，对齐 `maintainability.yaml`）：仓库随本任务提交了一份带注释的 scaffold，直接编辑即可；缺失 / 损坏 → 全兜底回出厂默认（= 现状），不报错。
+**1. 建项目级配置文件**（`agate-workspace/dispatch-routing.yaml`，非协议本体、不触发 SELF-GATE，对齐 `maintainability.yaml`）：从仓库复制带注释的 scaffold（`agate-workspace/dispatch-routing.yaml`）到目标项目同名路径——若项目由 Agateon 仓库克隆 / 骨架生成，该文件已随 `agate-workspace/` 自带；缺失时手动复制一份即可。缺失 / 损坏 → 全兜底回出厂默认（= 现状），不报错。
 
 **2. 填 `tier_bindings:`（机器级②，按本机现状填）**：`tier`（`bulk` / `deep`；`standard` 不在此定义——它硬编码为「原生派发」）→ 有序跨 CLI 候选链 `[{cli, model, effort?}]`。**以本机实际装了什么、哪个账号能用哪些 model 为准**——能用就用、不能用不强制，不追求跨机可复现（别的机器复现不了不是缺陷）。探测本机现状：
 
