@@ -16,6 +16,9 @@ export default withMermaid(
     cleanUrls: true,
     srcExclude: ['guides/**'],
     head: [
+      ['link', { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }],
+      ['link', { rel: 'icon', href: '/favicon.ico', sizes: '32x32' }],
+      ['link', { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }],
       // 浏览器语言自动跳转：首次访问且系统语言为中文 → 自动进 /zh/（只跳一次，
       // 之后用户用导航里的语言切换器自主选择，互不干扰）。
       [

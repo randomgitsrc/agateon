@@ -5,6 +5,9 @@ hero:
   name: Agateon
   text: Agents on the gate.
   tagline: 把软件任务交给编排好的 agents，每一阶段用机器可校验的 gate 把关——交回来的是验证过的成果，而不是一份“应该能行”的自述。
+  image:
+    src: /hero-terminal.svg
+    alt: 终端里跑着 agate next——三道 gate 通过，exit 0，状态机前进。
   actions:
     - theme: brand
       text: 快速开始
@@ -66,7 +69,11 @@ curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh
 
 ## 用 Agateon 构建的 Agateon
 
+<div class="callout-band">
+
 这个仓库就是自己的第一个用户：[`agate-workspace/tasks/`](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks) 里的每一个任务——共 26 个，包括修复自己失败的那些，比如[独立裁判](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks/TAG0020-independent-judge)——都是用 Agateon 跑自己产出的。你将要依赖的那些 gate，正是构建这个站点的同一批 gate。
+
+</div>
 
 ## 博客最新动态
 
@@ -74,15 +81,18 @@ curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh
 import { data as posts } from '../.vitepress/zh-blog.data.ts'
 import { withBase } from 'vitepress'
 
-// 最新 3 篇（中文文章清单自动生成，见 .vitepress/posts.ts）
-const latestPosts = posts.slice(0, 3)
+// 最新一篇精选卡（中文文章清单自动生成，见 .vitepress/posts.ts）
+const latest = posts[0]
 </script>
 
-<ul class="latest-posts">
-  <li v-for="post in latestPosts" :key="post.url">
-    <a :href="withBase(post.url)">{{ post.title }}</a>
-    <span class="post-date">{{ post.date }}</span>
-  </li>
-</ul>
+<a class="home-featured" :href="withBase(latest.url)">
+  <img v-if="latest.cover" :src="withBase(latest.cover)" alt="" />
+  <div class="hf-body">
+    <p class="hf-kicker">最新 · {{ latest.date }} · 约 {{ latest.readingMinutes }} 分钟</p>
+    <p class="hf-title">{{ latest.title }}</p>
+    <p class="hf-desc">{{ latest.description }}</p>
+    <span class="hf-more">阅读全文 →</span>
+  </div>
+</a>
 
 [阅读全部文章 →](/zh/blog/)

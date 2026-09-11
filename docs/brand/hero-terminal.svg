@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="360" viewBox="0 0 560 360" font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace">
+  <!-- 终端窗体：暗卡，明暗两种站点背景下均成立 -->
+  <rect x="8" y="8" width="544" height="344" rx="14" fill="#101714" stroke="#243b31" stroke-width="2"/>
+  <!-- 标题栏 -->
+  <line x1="8" y1="52" x2="552" y2="52" stroke="#243b31" stroke-width="2"/>
+  <circle cx="36" cy="30" r="7" fill="#D85A30"/>
+  <circle cx="60" cy="30" r="7" fill="#E8B84B"/>
+  <circle cx="84" cy="30" r="7" fill="#1D9E75"/>
+  <text x="280" y="36" font-size="14" fill="#7da391" text-anchor="middle">agate next</text>
+
+  <!-- 会话内容 -->
+  <text x="36" y="96" font-size="15.5" fill="#e8f2ed">$ agate next</text>
+  <text x="36" y="128" font-size="14.5" fill="#8fb3a3">P4 · implementer — dispatch complete</text>
+
+  <text x="36" y="164" font-size="14.5" fill="#35c493">✓ tests — all green</text>
+  <text x="36" y="192" font-size="14.5" fill="#35c493">✓ diff — matches the brief</text>
+  <text x="36" y="220" font-size="14.5" fill="#35c493">✓ judge — approved, fresh context</text>
+
+  <text x="36" y="258" font-size="14.5" fill="#e8f2ed">exit 0 — advancing to P5</text>
+
+  <text x="36" y="316" font-size="15.5" fill="#e8f2ed">$ <tspan fill="#35c493">▍</tspan></text>
+</svg>
