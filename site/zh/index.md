@@ -71,7 +71,7 @@ curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh
 
 <div class="callout-band">
 
-这个仓库就是自己的第一个用户：[`agate-workspace/tasks/`](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks) 里的每一个任务——共 26 个，包括修复自己失败的那些，比如[独立裁判](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks/TAG0020-independent-judge)——都是用 Agateon 跑自己产出的。你将要依赖的那些 gate，正是构建这个站点的同一批 gate。
+这个仓库就是自己的第一个用户：[`agate-workspace/tasks/`](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks) 里的每一个任务——包括修复自己失败的那些，比如[独立裁判](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks/TAG0020-independent-judge)——都是用 Agateon 跑自己产出的。清单本身就是证据，随任务增长。你将要依赖的那些 gate，正是构建这个站点的同一批 gate。
 
 </div>
 

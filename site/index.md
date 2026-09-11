@@ -71,7 +71,7 @@ No runtime, no daemon. The protocol is a set of Markdown cards plus gate scripts
 
 <div class="callout-band">
 
-This repository is its own first customer: every task in [`agate-workspace/tasks/`](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks) — 26 of them, including the fixes for its own failures, like the [independent&nbsp;judge](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks/TAG0020-independent-judge) — was produced by running Agateon on itself. The gates you'd rely on are the same gates that built this site.
+This repository is its own first customer: every task in [`agate-workspace/tasks/`](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks) — including the fixes for its own failures, like the [independent&nbsp;judge](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks/TAG0020-independent-judge) — was produced by running Agateon on itself. The list is the evidence; it grows with every task. The gates you'd rely on are the same gates that built this site.
 
 </div>
 
