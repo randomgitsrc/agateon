@@ -5,6 +5,9 @@ hero:
   name: Agateon
   text: Agents on the gate.
   tagline: Run your software task through orchestrated agents and machine-checked gates — you get a verified result out, not a story about how it should work.
+  image:
+    src: /hero-terminal.svg
+    alt: A terminal running agate next — three gates pass, exit 0, the state machine advances.
   actions:
     - theme: brand
       text: Get started
@@ -66,7 +69,11 @@ No runtime, no daemon. The protocol is a set of Markdown cards plus gate scripts
 
 ## Built with Agateon
 
+<div class="callout-band">
+
 This repository is its own first customer: every task in [`agate-workspace/tasks/`](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks) — 26 of them, including the fixes for its own failures, like the [independent&nbsp;judge](https://github.com/randomgitsrc/agateon/tree/main/agate-workspace/tasks/TAG0020-independent-judge) — was produced by running Agateon on itself. The gates you'd rely on are the same gates that built this site.
+
+</div>
 
 ## Latest from the blog
 
@@ -74,15 +81,18 @@ This repository is its own first customer: every task in [`agate-workspace/tasks
 import { data as posts } from './.vitepress/blog.data.ts'
 import { withBase } from 'vitepress'
 
-// 最新 3 篇（文章清单自动生成，见 .vitepress/posts.ts）
-const latestPosts = posts.slice(0, 3)
+// 最新一篇精选卡（文章清单自动生成，见 .vitepress/posts.ts）
+const latest = posts[0]
 </script>
 
-<ul class="latest-posts">
-  <li v-for="post in latestPosts" :key="post.url">
-    <a :href="withBase(post.url)">{{ post.title }}</a>
-    <span class="post-date">{{ post.date }}</span>
-  </li>
-</ul>
+<a class="home-featured" :href="withBase(latest.url)">
+  <img v-if="latest.cover" :src="withBase(latest.cover)" alt="" />
+  <div class="hf-body">
+    <p class="hf-kicker">Latest · {{ latest.date }} · {{ latest.readingMinutes }} min read</p>
+    <p class="hf-title">{{ latest.title }}</p>
+    <p class="hf-desc">{{ latest.description }}</p>
+    <span class="hf-more">Read the post →</span>
+  </div>
+</a>
 
 [Read all posts →](/blog/)

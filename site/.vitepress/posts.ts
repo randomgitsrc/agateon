@@ -12,6 +12,9 @@ export interface Post {
   title: string
   url: string
   date: string // YYYY-MM-DD
+  description?: string
+  cover?: string // 封面图 web 路径（存在 images/cover.svg 时）
+  readingMinutes?: number
 }
 
 // 构建永远从 site/ 目录发起（本地与 CI 均如此，见 deploy-pages.yml 的 working-directory: site）。
@@ -45,11 +48,43 @@ function walkPosts(dir: string, baseRoot: string, prefix: string, acc: Post[]): 
     if (entry.isDirectory()) {
       walkPosts(full, baseRoot, prefix, acc)
     } else if (entry.isFile() && entry.name.endsWith('.md') && !entry.name.startsWith('index')) {
-      const fm = parseFrontmatter(readFileSync(full, 'utf8'))
+      const src = readFileSync(full, 'utf8')
+      const fm = parseFrontmatter(src)
       if (!fm.date) continue // 无 date 的不是文章页
       // 相对路径以语言级 blog 根为基准，保留日期目录（YYYYMMDD/post-XX-slug）
       const rel = path.relative(baseRoot, full).replace(/\\/g, '/').replace(/\.md$/, '')
-      acc.push({ title: fm.title || rel, url: `${prefix}/${rel}`, date: fm.date })
+      // 封面：列表页/首页精选卡统一走 public/covers/（构建前 sync-covers.mjs
+      // 同步，命名 <日期>-<文章目录>.svg / zh-<日期>-<文章目录>.svg）——
+      // 正文内引用的 SVG 会被 Vite 内联/改名，post 路径下拿不到稳定 URL。
+      let cover: string | undefined
+      try {
+        readFileSync(path.join(dir, 'images/cover.svg'))
+        const dashed = rel.replace(/\//g, '-')
+        cover = prefix.startsWith('/zh')
+          ? `/covers/zh-${dashed}.svg`
+          : `/covers/${dashed}.svg`
+      } catch {
+        /* 无封面就不带 */
+      }
+      // 阅读时长：EN 按词数 /  ~220 wpm，zh 按字数 ~ 400 cpm（frontmatter 之后算）
+      const body = src.replace(/^[\s\S]*?\n---\r?\n/, '')
+      const zhChars = (body.match(/[\u4e00-\u9fff]/g) || []).length
+      const words = body
+        .replace(/```[\s\S]*?```/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean).length
+      const minutes = Math.max(
+        1,
+        Math.round(zhChars > words ? zhChars / 400 : words / 220),
+      )
+      acc.push({
+        title: fm.title || rel,
+        url: `${prefix}/${rel}`,
+        date: fm.date,
+        description: fm.description || undefined,
+        cover,
+        readingMinutes: minutes,
+      })
     }
   }
 }

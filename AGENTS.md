@@ -12,7 +12,7 @@
 - `<仓库根>/`：开发资料（README / CHANGELOG / docs/ / archived/）+ 本文件。**主 checkout 禁止改动**（worktree 开发时它是协议本体 + hook 的 AGATE_ROOT）
 - `agate/`：协议本体，`~/.agate` 软链指向这里。改它触发 SELF-GATE（见下）
 - `agate-workspace/`：任务数据（tasks/、roadmap/、debt/、reviews/ 等）。roadmap 回写 `done` 是 P8 gate 硬校验（RM-AG0043）
-- `site/`：产品 Web 层（VitePress 站点源码：首页/博客）。属于产品对外内容，**在协议 gate 治理之外**——改它不触发 SELF-GATE，detect-docs-only 视其改动为 docs-only（跳过全量 pytest/shellcheck）。唯一硬校验 = `npm run build` 通过。品牌唯一权威源在 `docs/brand/`，`site/public/` 是构建快照（`npm run sync:brand` 生成，不入库）。**接博客任务先读**：文档索引 `site/guides/README.md`，机械流程见 `site/guides/CONTRIBUTING.md`，质量标准见 `site/guides/BLOG-STANDARDS.md`（发布前必须过独立评审）
+- `site/`：产品 Web 层（VitePress 站点源码：首页/博客）。属于产品对外内容，**在协议 gate 治理之外**——改它不触发 SELF-GATE，detect-docs-only 视其改动为 docs-only（跳过全量 pytest/shellcheck）。唯一硬校验 = `npm run build` 通过。品牌唯一权威源在 `docs/brand/`，`site/public/` 是构建快照（`npm run sync:brand` + `sync-covers.mjs` 生成，不入库；博客封面同步到 `public/covers/` 供列表页引用）。**接博客任务先读**：文档索引 `site/guides/README.md`，机械流程见 `site/guides/CONTRIBUTING.md`，质量标准见 `site/guides/BLOG-STANDARDS.md`（发布前必须过独立评审）
 
 ## 改脚本的工作流
 

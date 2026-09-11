@@ -36,6 +36,11 @@
   background: #121212;
 }
 
+/* 富 footer（theme 组件）接替默认两行 footer */
+.VPFooter {
+  display: none;
+}
+
 .VPHome .VPHero {
   position: relative;
   background: linear-gradient(180deg, rgba(29, 158, 117, 0.10) 0%, rgba(29, 158, 117, 0) 62%);
@@ -45,40 +50,30 @@
   background: linear-gradient(180deg, rgba(53, 196, 147, 0.12) 0%, rgba(53, 196, 147, 0) 62%);
 }
 
-/* hero 右上角：gate 线稿装饰（平衡标题左重的留白，呼应 slogan） */
-.VPHome .VPHero::after {
-  content: "";
-  position: absolute;
-  top: 60px;
-  right: 7%;
-  width: 190px;
-  height: 116px;
-  opacity: 0.16;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120'%3E%3Crect x='20' y='20' width='14' height='84' rx='4' fill='none' stroke='%231D9E75' stroke-width='6'/%3E%3Crect x='166' y='20' width='14' height='84' rx='4' fill='none' stroke='%231D9E75' stroke-width='6'/%3E%3Crect x='20' y='20' width='160' height='14' rx='4' fill='none' stroke='%231D9E75' stroke-width='6'/%3E%3Cpath d='M60 68 L90 96 L146 44' stroke='%231D9E75' stroke-width='12' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
-  pointer-events: none;
-}
-
-.dark .VPHome .VPHero::after {
-  opacity: 0.22;
-}
-
-@media (max-width: 700px) {
-  .VPHome .VPHero::after { display: none; }
-}
-
-/* Slogan 大字：teal→深teal→青蓝渐变，末端加深保对比度 */
-.VPHome .VPHero .text {
-  background: linear-gradient(120deg, #1d9e75 0%, #0e8a72 50%, #0f7a5f 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Slogan 大字：衬线（与博客封面同族），墨色为主、teal 由按钮与终端卡承担 */
+html[lang='en-US'] .VPHome .VPHero .text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--agateon-ink);
 }
 
 .dark .VPHome .VPHero .text {
-  background: linear-gradient(120deg, #35c493 0%, #1d9e75 50%, #157a59 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--vp-c-text-1);
+}
+
+html[lang='zh-CN'] .VPHome .VPHero .text {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* hero 终端卡：微浮起 + 柔影，贴合"真在跑"的质感 */
+.VPHome .VPHero .image {
+  filter: drop-shadow(0 18px 36px rgba(13, 26, 21, 0.22));
+}
+
+.dark .VPHome .VPHero .image {
+  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.5));
 }
 
 /* tagline：宽度受限、字色柔和，别抢 slogan */
@@ -142,6 +137,24 @@
   letter-spacing: -0.01em;
 }
 
+/* ---- Built with Agateon：强调带（纸面反色 tint） ---- */
+.callout-band {
+  border: 1px solid var(--vp-c-brand-soft);
+  background: var(--vp-c-brand-soft);
+  border-radius: 14px;
+  padding: 22px 26px;
+  margin: 8px 0 12px;
+}
+
+.callout-band p {
+  margin: 0;
+}
+
+/* 首页最后区块与 footer 的衔接：不再留大段空洞 */
+.VPHome .VPContent {
+  padding-bottom: 28px;
+}
+
 /* ---- 博客最新动态列表 ---- */
 .latest-posts {
   list-style: none;
@@ -166,4 +179,89 @@
   color: var(--vp-c-text-3);
   font-size: 0.85em;
   white-space: nowrap;
+}
+
+/* 首页精选最新一篇（带封面） */
+.home-featured {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 14px;
+  overflow: hidden;
+  text-decoration: none;
+  background: var(--vp-c-bg);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+  margin: 14px 0 10px;
+}
+
+.home-featured:hover {
+  border-color: var(--vp-c-brand-2);
+  transform: translateY(-3px);
+}
+
+.home-featured img {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  align-self: center;
+  border-right: 1px solid var(--vp-c-divider);
+}
+
+.hf-body {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.hf-kicker {
+  font-family: var(--vp-font-family-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  color: var(--vp-c-text-3);
+  margin: 0;
+}
+
+.hf-title {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--vp-c-text-1);
+}
+
+html[lang='en-US'] .hf-title {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.hf-desc {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hf-more {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+@media (max-width: 700px) {
+  .home-featured {
+    grid-template-columns: 1fr;
+  }
+  .home-featured img {
+    max-height: 170px;
+  }
 }

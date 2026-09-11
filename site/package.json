@@ -8,8 +8,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "node scripts/sync-brand.mjs && vitepress dev",
-    "build": "node scripts/sync-brand.mjs && vitepress build",
+    "dev": "node scripts/sync-brand.mjs && node scripts/sync-covers.mjs && vitepress dev",
+    "build": "node scripts/sync-brand.mjs && node scripts/sync-covers.mjs && vitepress build",
     "preview": "vitepress preview",
     "sync:brand": "node scripts/sync-brand.mjs"
   },

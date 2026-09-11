@@ -1,0 +1,478 @@
+/* =====================================================================
+   blog.css — 博客列表页 / 文章页 / 全站 footer / 注入组件的样式。
+   设计语言与博客封面品牌统一：Georgia 衬线大标题（en）、编辑部 kicker、
+   等宽数据（日期/时长）、paper 底 + teal 主色 + coral 极少点缀。
+   ===================================================================== */
+
+/* ---------- 通用：衬线大标题（仅 en；zh 保持无衬线粗体保证渲染质量） ---------- */
+html[lang='en-US'] .vp-doc h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 40px;
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  border-top: none;
+  margin-top: 4px;
+  margin-bottom: 22px;
+  padding-top: 0;
+}
+
+html[lang='zh-CN'] .vp-doc h1 {
+  font-size: 38px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border-top: none;
+  margin-top: 4px;
+  margin-bottom: 22px;
+  padding-top: 0;
+}
+
+.vp-doc h2 {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-top: 44px;
+  padding-top: 28px;
+}
+
+.vp-doc p {
+  line-height: 1.78;
+}
+
+.vp-doc img {
+  border-radius: 12px;
+  border: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc blockquote {
+  border-left: 3px solid var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  border-radius: 0 8px 8px 0;
+  padding: 2px 18px;
+  color: var(--vp-c-text-2);
+}
+
+/* ---------- ArticleMeta（doc-top 注入） ---------- */
+.article-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 13.5px;
+  color: var(--vp-c-text-3);
+}
+
+.article-meta .am-sep {
+  color: var(--vp-c-divider);
+}
+
+.article-meta .am-tags {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: 4px;
+  flex-wrap: wrap;
+}
+
+.article-meta .am-tag {
+  font-family: var(--vp-font-family-mono);
+  font-size: 11.5px;
+  padding: 2px 10px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  color: var(--vp-c-text-3);
+  white-space: nowrap;
+}
+
+/* ---------- PostNav（doc-footer-before 注入） ---------- */
+.post-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 44px;
+}
+
+@media (max-width: 700px) {
+  .post-nav {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  text-decoration: none;
+  background: var(--vp-c-bg);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.pn-card:hover {
+  border-color: var(--vp-c-brand-2);
+  transform: translateY(-2px);
+}
+
+.pn-next {
+  text-align: right;
+}
+
+.pn-spacer {
+  visibility: hidden;
+}
+
+.pn-label {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+.pn-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  line-height: 1.45;
+}
+
+.pn-date {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+}
+
+/* ---------- SiteFooter（layout-bottom 注入） ---------- */
+.site-footer {
+  background: #151a17;
+  color: rgba(237, 245, 241, 0.82);
+  margin-top: 0;
+}
+
+.dark .site-footer {
+  background: #0e120f;
+}
+
+.sf-inner {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 32px;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 44px 24px 32px;
+}
+
+@media (max-width: 800px) {
+  .sf-inner {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sf-brand {
+    grid-column: 1 / -1;
+  }
+}
+
+.sf-brand .sf-name {
+  font-size: 19px;
+  font-weight: 700;
+  color: #f2f7f4;
+  margin: 12px 0 8px;
+}
+
+.sf-brand img {
+  display: block;
+}
+
+.sf-brand .sf-tag {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: rgba(237, 245, 241, 0.6);
+  margin: 0 0 10px;
+  max-width: 300px;
+}
+
+.sf-brand .sf-mit {
+  font-family: var(--vp-font-family-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  color: rgba(237, 245, 241, 0.42);
+  margin: 0;
+}
+
+.sf-head {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: rgba(237, 245, 241, 0.45);
+  margin: 4px 0 14px;
+}
+
+.sf-col a {
+  display: block;
+  font-size: 14px;
+  color: rgba(237, 245, 241, 0.78);
+  text-decoration: none;
+  padding: 5px 0;
+  transition: color 0.15s ease;
+}
+
+.sf-col a:hover {
+  color: #35c493;
+}
+
+.sf-bottom {
+  border-top: 1px solid rgba(237, 245, 241, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 24px 22px;
+  font-size: 12.5px;
+  color: rgba(237, 245, 241, 0.5);
+}
+
+.sf-bottom a {
+  color: rgba(237, 245, 241, 0.7);
+  text-decoration: none;
+}
+
+.sf-bottom a:hover {
+  color: #35c493;
+}
+
+.sf-dot {
+  opacity: 0.4;
+}
+
+/* ---------- Blog 列表页 ---------- */
+.blog-home {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 24px 72px;
+}
+
+.kicker {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--vp-c-brand-1);
+  margin: 0 0 14px;
+}
+
+.blog-header h1 {
+  font-size: 42px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin: 0 0 14px;
+  border-top: none;
+  padding-top: 0;
+}
+
+html[lang='en-US'] .blog-header h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.blog-sub {
+  font-size: 16.5px;
+  color: var(--vp-c-text-2);
+  margin: 0 0 36px;
+  max-width: 560px;
+  line-height: 1.7;
+}
+
+/* 精选最新一篇 */
+.featured-post {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 16px;
+  overflow: hidden;
+  text-decoration: none;
+  background: var(--vp-c-bg);
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  margin-bottom: 48px;
+}
+
+.featured-post:hover {
+  border-color: var(--vp-c-brand-2);
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px -18px rgba(29, 158, 117, 0.4);
+}
+
+/* 封面按原始 1200:630 比例整幅展示（避免竖向拉伸裁出残词） */
+.featured-post img {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  align-self: center;
+  border-right: 1px solid var(--vp-c-divider);
+}
+
+.fp-body {
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.fp-kicker {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--vp-c-text-3);
+  margin: 0;
+}
+
+.fp-body h2 {
+  font-size: 27px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--vp-c-text-1);
+  border-top: none;
+  padding-top: 0;
+}
+
+html[lang='en-US'] .fp-body h2 {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.fp-desc {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--vp-c-text-2);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fp-read {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+  font-size: 14.5px;
+  margin-top: 4px;
+}
+
+@media (max-width: 700px) {
+  .featured-post {
+    grid-template-columns: 1fr;
+  }
+  .featured-post img {
+    max-height: 210px;
+  }
+  .blog-header h1 {
+    font-size: 34px;
+  }
+}
+
+/* 年份分组行式列表 */
+.year-group {
+  margin-bottom: 36px;
+}
+
+.year-mark {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--vp-c-text-3);
+  margin: 0 0 8px;
+}
+
+.year-mark::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--vp-c-divider);
+}
+
+.post-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-rows a {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 15px 4px;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--vp-c-divider);
+  transition: background 0.15s ease;
+}
+
+.post-rows a:hover {
+  background: var(--vp-c-brand-soft);
+}
+
+.pr-date {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  color: var(--vp-c-text-3);
+  white-space: nowrap;
+  min-width: 52px;
+}
+
+.pr-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pr-title {
+  font-size: 17px;
+  font-weight: 620;
+  color: var(--vp-c-text-1);
+  line-height: 1.4;
+}
+
+.post-rows a:hover .pr-title {
+  color: var(--vp-c-brand-1);
+}
+
+.pr-desc {
+  font-size: 13.5px;
+  color: var(--vp-c-text-2);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pr-min {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .pr-desc,
+  .pr-min {
+    display: none;
+  }
+  .pr-date {
+    min-width: 44px;
+  }
+}
