@@ -1464,6 +1464,9 @@ def main():
     if old_phase:
         old_num = re.search(r"[0-9]+", old_phase)
         new_num = re.search(r"[0-9]+", phase)
+        if old_num is None or new_num is None:
+            sys.stderr.write(f"GATE {phase}: 无法解析阶段序号（old_phase={old_phase!r}）\n")
+            sys.exit(1)
         if old_num and new_num and int(old_num.group(0)) > int(new_num.group(0)):
             sys.stderr.write(
                 f"GATE {phase}: 检测到回退抵达（上一阶段 {old_phase} → {phase}），本次 commit 视为回退声明，暂不做完成度校验\n"
