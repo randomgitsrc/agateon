@@ -12,7 +12,17 @@
 >
 > **相关**：`agate/dispatch-protocol.md`（派发编排机制 / 五模式）、`agate/rules/dispatch.yaml`（`dispatch_plan` 机器字段）、`agate/scripts/check-p6-provenance.py`（七道 provenance 审计）、`agate/phase-cards/P4-implementation.md`（批级产出）、`docs/design-notes/design-dispatch-routing.md`（`resolve` 与 tier 轴）。
 >
-> **沿革**：由 `agateon-dag-orchestration-analysis` v5（分析§4.9 / 分析§11）导出——该分析实证了 MVWU 四不变量在既有实践中**已有机械锚点**，本文将其形式化。
+> **沿革**：由 `design-orchestration-evolution-analysis.md` 导出——该分析实证了 MVWU 四不变量在既有实践中**已有机械锚点**，本文将其形式化。
+>
+> **⚠ 本文的证据基础与假设（v2.1 新增，请引用时区分）**：
+>
+> | 类别 | 内容 | 强度 |
+> |------|------|------|
+> | **已实证（可复现）** | ① 批级 commit 已携带测试证据（26 条 / 分母 47，命令见附录）② 批自带测试与证据文件（`TAG0034` P4c）③ `check-p6-provenance.py` 七道审计存在且成熟 ④ `dispatch_plan` 校验器不拒绝未知键（`check-gate.py:767` 隐式批数上限 3）⑤ **I1 可归属率 13%**（16 个多批任务中 2 个为逐批 commit） | **强** |
+> | **设计主张（未验证）** | 四不变量的定义、字段预算（≤5）、三阶段实施次序、阶段 1「零内核改动」的判定 | **中**（推理成立，未落地验证） |
+> | **待试点证明（假设）** | ① `1 batch = 1 MVWU`（§2.1）② `tests_filter` 在多数批上稳定可执行（§7.4 Q1）③ MVWU 能降低长间隔（**注：该假设依赖的时长归因未确定**，见分析报告 §3.2） | **弱** |
+>
+> **特别声明**：本文**不依赖**任何时长归因。分析报告 §3 （时长去向）经两次更正后仍未确定，本文的所有论证均基于**协议文本 + commit 结构 + 文件实体**，可直接核验。
 
 ---
 
@@ -41,7 +51,7 @@
 
 ### 1.3 为什么这比 DAG 更值得先做
 
-- **DAG 的收益被三重天花板压缩**（真依赖 / 全量验证不可切片 / judge 全局屏障），实测关键路径弹性 ≈0（分析§4.5–4.8）
+- **DAG 的收益被三重天花板压缩**（真依赖 / 全量验证不可切片 / judge 全局屏障），实测关键路径弹性 ≈0（分析报告 §4.5–4.8）
 - 而「没有可流水的验证单元」正是天花板的根因——**MVWU 是解开它的钥匙**，且其锚点已存在（§3.5）
 - 代价对比：MVWU **阶段 1 为零协议内核改动**（阶段 2 的批级 gate 才触及内核，见 §6 的「协议内核」边界定义）；DAG 则是协议内核重写（状态 schema + gate + hook + 审计链 + 破坏性变更迁移）
 
@@ -549,5 +559,5 @@ else:                                  do not implement DAG
 | `dispatch_plan` schema 契约 | `agate/scripts/check-gate.py:743` `_gate_p2_dispatch_plan`——校验 `mode` ∈ 5 模式 / `parallel_limit` ≥1 整数 / `batches` 为列表 / 批数 ≤ limit / 每批含 `id` 且 `complexity` ∈ {low,medium,high}；**不拒绝未知键**（故 `tests_filter` 为安全增量，无需改该校验器）；另注意 **`parallel_limit` 缺省时隐式上限 = 3**（`limit = parallel_limit if ... else 3`，`check-gate.py:767`） |
 | gate 不认生产者 | `agate/dispatch-protocol.md`（派发编排机制） |
 | 遥测不自动判死 | `agate/dispatch-protocol.md:1048`（RM-AG0055） |
-| 关键路径弹性 ≈0 | `agateon-dag-orchestration-analysis` 分析§4.8 |
+| 关键路径弹性 ≈0 | `design-orchestration-evolution-analysis.md` §4.8 |
 | 三重天花板 | 同上 分析§4.4–4.6 |
