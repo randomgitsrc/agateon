@@ -211,6 +211,30 @@ P5_COUNT = os.path.join(SCRIPT_DIR, "agate-gate-p5-count.py")
 _STAGED_EXCLUDE_RE = re.compile(r"(^|/)P[0-8]-.*\.md$|(^|/)\.state\.yaml$")
 
 
+def _gate_p4_has_prior_code_commit(task_id):
+    """扫描本任务 P4 阶段历史 commit（commit message 含 'wf(<task_id>-P4' 标签）是否
+    已引入过非 md/yaml 代码 diff。覆盖 BDD-8（跨 commit 交付）与 BDD-9（回退后修复）——
+    两者共同前提都是"此前存在过一个带代码变更的 P4 commit"，无需分别处理。"""
+    if not task_id:
+        return False
+    tag = f"wf({task_id}-P4)"
+    rc, log_out = _git(["log", "--grep=" + tag, "--fixed-strings", "--format=%H"])
+    if rc != 0 or not log_out.strip():
+        return False
+    for raw_hash in log_out.splitlines():
+        commit_hash = raw_hash.strip()
+        if not commit_hash:
+            continue
+        rc, files_out = _git(["diff-tree", "--no-commit-id", "--name-only", "-r", commit_hash])
+        if rc != 0:
+            continue
+        for raw_line in files_out.splitlines():
+            line = raw_line.rstrip("\r")
+            if not _STAGED_EXCLUDE_RE.search(line):
+                return True
+    return False
+
+
 def _git(args):
     """git 子进程（优先 agate_common.run_git，缺库时本地 subprocess 兜底）。"""
     if run_git is not None:
@@ -960,7 +984,10 @@ def gate_p4(task_dir):
             has_code_file = True
             break
     if not has_code_file:
-        return 1
+        task_id = _load_state_yaml(task_dir).get("task_id", "")
+        if not _gate_p4_has_prior_code_commit(task_id):
+            return 1
+        # 历史已有代码 commit → 放行，继续走后续判据（维护性反模式等）
 
     # ── RM-AG0046（TAG0026）：维护性反模式三重门槛（检测器 agate/scripts/check-maintainability.py）──
     # 返回约定兼容：本步骤只产生 return 1（门槛 a/b 失败）或继续向下，不新增 return 2；
