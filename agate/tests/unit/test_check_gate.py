@@ -196,11 +196,11 @@ def test_g4_7_review_agent_main_exit_1(
     assert "agent=main" in result.output
 
 
-def test_other_unknown_phase_exit_2(task_dir, agate_scripts, python_exe, run_cli):
+def test_other_unknown_phase_exit_1(task_dir, agate_scripts, python_exe, run_cli):
     td = task_dir()
 
     result = _run_gate(agate_scripts, python_exe, run_cli, "P9", str(td))
-    assert result.returncode == 2
+    assert result.returncode == 1  # 原为 2，TAG0035 BDD-1 fail-closed 修复后改为 1
     assert "未知阶段" in result.output
 
 

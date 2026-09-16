@@ -1486,7 +1486,7 @@ def main():
     func = handlers.get(phase)
     if func is None:
         sys.stderr.write(f"未知阶段: {phase}\n")
-        sys.exit(2)
+        sys.exit(1)
     sys.exit(func(task_dir))
 
 
