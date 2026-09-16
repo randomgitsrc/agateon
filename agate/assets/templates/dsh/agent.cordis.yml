@@ -2,7 +2,7 @@
 #
 # 对应 Agateon 在 Claude Code / OpenCode 的接入方式（ln -sf orchestrator-template.md
 # 到平台 agent 目录，mode: primary）。本文件是同一份身份的 DSH 封装：
-#   persona.text   = 薄身份（你是谁 + 会话开始步骤 + DSH 工具映射）
+#   persona.prefix = 薄身份（你是谁 + 会话开始步骤 + DSH 工具映射；DSH ≥rc.8 起必填 prefix）
 #   agent-instructions = 读项目 AGENTS.md/CLAUDE.md（同官方模板的「项目必读」）
 #   工具行         = orchestrator 需要的最小工具面（bash 跑 gate / fs 读状态 / subagent 派发）
 # 真正的行为规范在 {agate_root}/orchestrator-template.md —— persona 指向它，
@@ -20,7 +20,9 @@
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: >-
+    # DSH ≥rc.8 起 persona 的必填 key 由 text 改为 prefix（旧 text 在新版会报
+    # "$.prefix missing required value" 导致 preset 挂载失败，见 DSH 40792330c0）
+    prefix: >-
       你是当前项目的 Agateon 编排 Agent（orchestrator），负责 P0-P8 全流程管理、派发 subagent 执行。
       你的职责严格限定为四件事：读状态、派发 subagent、跑 gate 脚本（exit code 判定）、更新状态。
       你永远不亲自写阶段产出物（需求/设计/测试/代码/验收）。

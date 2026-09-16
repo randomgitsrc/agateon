@@ -112,16 +112,18 @@ def test_dsh_tool_fs_search_has_required_config(agate_root):
 def test_dsh_persona_is_thin_identity(agate_root):
     """BDD-3：persona 薄身份——指向 orchestrator-template.md 而非内嵌模板正文。
 
-    两判据（P2-review 建议 1，核心约束 CI 护栏）：
-      正判据：persona.text 含 {agate_root}/orchestrator-template.md 路径引用（行为规范指向模板）；
+    三判据（P2-review 建议 1，核心约束 CI 护栏）：
+       schema 判据：persona.config 必含 `prefix`（DSH ≥rc.8 起 persona 的必填 key；
+        缺失 → preset 挂载失败 → DSH fail-closed 拒绝创建会话）。
+      正判据：persona.prefix 含 {agate_root}/orchestrator-template.md 路径引用（行为规范指向模板）；
       负判据：不含模板首行标题「# Orchestrator（agate 编排 Agent）」（不复制模板全文 verbatim）。
     """
     rows = _load_rows(agate_root)
     persona = next((r for r in rows if r.get("id") == "persona"), None)
     assert persona is not None, "agent.cordis.yml 缺 persona 行"
     config = persona.get("config") or {}
-    text = config.get("text") or ""
-    assert text, "persona 行缺 config.text"
+    text = config.get("prefix") or ""
+    assert text, "persona 行缺 config.prefix（DSH ≥rc.8 必填）"
     assert "{agate_root}/orchestrator-template.md" in text, (
         "persona 必须引用 {agate_root}/orchestrator-template.md（身份薄、协议厚）"
     )
