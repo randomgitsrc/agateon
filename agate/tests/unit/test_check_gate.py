@@ -196,11 +196,11 @@ def test_g4_7_review_agent_main_exit_1(
     assert "agent=main" in result.output
 
 
-def test_other_unknown_phase_exit_2(task_dir, agate_scripts, python_exe, run_cli):
+def test_other_unknown_phase_exit_1(task_dir, agate_scripts, python_exe, run_cli):
     td = task_dir()
 
     result = _run_gate(agate_scripts, python_exe, run_cli, "P9", str(td))
-    assert result.returncode == 2
+    assert result.returncode == 1  # 原为 2，TAG0035 BDD-1 fail-closed 修复后改为 1
     assert "未知阶段" in result.output
 
 
@@ -3577,4 +3577,225 @@ def test_tag0031_bdd_15_six_debts_registry_closed(agate_root):
 
     assert not not_closed, (
         f"以下 DEBT 条目 status 仍非 closed（登记闭合动作尚未执行）：{not_closed}"
+    )
+
+
+# ============================================================
+# TAG0035（gate 健壮性批，子批 A/B/C）：BDD-1/2/3/4/7/8/9/10
+# 覆盖 check-gate.py 未知阶段 fail-closed（子批A）、回退检测非数字阶段名 fail-closed
+# （子批B，check-gate.py 部分）、gate_p4 完整度判据放宽（子批C，DEBT0037）。
+# 见 P2-design.md §3.1/§3.2-1/§3.3，P1-requirements.md 对应 BDD 原文。
+# 命名沿用既有 test_tag0031_bdd_N 先例（跨任务共用 test_bdd_N 前缀会撞名，本文件同一
+# 模块内函数名须全局唯一），本批统一加 tag0035 前缀。
+# ============================================================
+
+
+def test_tag0035_bdd_1_unknown_phase_fail_closed_exit_1(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """BDD-1：未知阶段名（不在 handlers 字典中）fail-closed，exit 1（不再是 2，
+    与 P0/P1/P2/P3/P5/P6/P8 的"通过"退出码不再撞车），stderr 含阶段名文本。"""
+    td = task_dir()
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P99", str(td))
+    assert result.returncode == 1, (
+        f"未知阶段应 exit 1（fail-closed），实际 exit={result.returncode}, "
+        f"output={result.output!r}"
+    )
+    assert "P99" in result.output
+
+
+def test_tag0035_bdd_2_ci_backstop_exit_code_comparison_unaffected(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """BDD-2：ci-gate-backstop.py 的『记录值==重跑值』比对逻辑本身不因未知阶段退出码
+    语义变化（2→1）而报错或行为异常——.gate-result.json 记录新语义下的 exit_code=1，
+    CI 重跑（真实 check-gate.py 未知阶段）一致时应正确判定 PASS（backstop exit 0）。
+
+    不需要真实 git 仓库：main() 在 phase 未知（P99）时，check-gate.py 不会访问
+    task_dir 下任何文件（BDD-1 分支在 handlers.get 之后立即 exit，早于一切文件 I/O），
+    ci-gate-backstop.py 自身除 timestamp 校验外也不依赖 git（timestamp 字段留空即跳过）。
+    """
+    import json
+
+    repo = tmp_path
+    (repo / ".state.yaml").write_text(
+        "task_id: T001\nphase: P99\nstatus: active\nretries: {}\n", encoding="utf-8"
+    )
+    (repo / ".gate-result.json").write_text(
+        json.dumps({"phase": "P99", "exit_code": 1}), encoding="utf-8"
+    )
+
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "ci-gate-backstop.py"),
+        cwd=str(repo),
+        env={"GITHUB_ACTIONS": "true"},
+    )
+    assert result.returncode == 0, (
+        "未知阶段新语义（check-gate.py exit=1）下，.gate-result.json 记录值=1 应与 "
+        f"CI 重跑值一致并判定 PASS；实际 backstop exit={result.returncode}, "
+        f"output={result.output!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "phase", ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P6.5", "P7", "P8"]
+)
+def test_tag0035_bdd_3_known_phase_not_routed_to_unknown_path(
+    phase, task_dir, agate_scripts, python_exe, run_cli
+):
+    """BDD-3：10 个已知阶段名中任一个，正常执行 gate 检查时不应被路由到未知阶段的
+    fail-closed 分支（回归不变性——子批 A 的修复只应影响真正未知的阶段名，不改变
+    已知阶段既有的 0/1/2 判定语义）。"""
+    td = task_dir()
+    result = _run_gate(agate_scripts, python_exe, run_cli, phase, str(td))
+    assert "未知阶段" not in result.output, (
+        f"phase={phase} 是已知阶段，不应被判定为未知阶段。output={result.output!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("phase", "old_phase"),
+    [
+        pytest.param("P1", "p-alpha", id="old_phase_non_numeric"),
+        pytest.param("p-alpha", "P3", id="phase_non_numeric"),
+    ],
+)
+def test_tag0035_bdd_4_retreat_detection_non_numeric_phase_fail_closed(
+    phase, old_phase, tmp_path, agate_scripts, python_exe, run_cli
+):
+    """BDD-4：回退抵达检测的 old_phase/phase 任一为非数字阶段名时，不得静默短路直接
+    放行（当前 `if old_num and new_num` 短路会吞掉 None 的情况），须 fail-closed：
+    stderr 显式提示"无法解析阶段序号"，exit 1。"""
+    td = tmp_path / "bdd4"
+    td.mkdir()
+
+    result = _run_gate(
+        agate_scripts, python_exe, run_cli, phase, str(td), old_phase=old_phase
+    )
+    assert result.returncode == 1, (
+        f"phase={phase!r} old_phase={old_phase!r}：无法解析阶段序号场景应 exit 1。"
+        f"实际 exit={result.returncode}, output={result.output!r}"
+    )
+    assert "无法解析" in result.output, (
+        f"phase={phase!r} old_phase={old_phase!r}：stderr 应含'无法解析'提示。"
+        f"实际 output={result.output!r}"
+    )
+
+
+def test_tag0035_bdd_7_check_gate_numeric_retreat_detection_not_regressed(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """BDD-7（check-gate.py 部分）：标准数字阶段名的回退抵达检测行为不受 BDD-4
+    修复影响——回退（old_phase 数字更大）仍 exit 2；正向推进且暂存区无代码文件仍
+    exit 1（既有判据不因新增的"无法解析"分支而改变数字场景下的既有结果）。"""
+    td = tmp_path / "bdd7_gate"
+    td.mkdir()
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P1", str(td), old_phase="P2")
+    assert result.returncode == 2
+    assert "回退抵达" in result.output
+
+    result2 = _run_gate(agate_scripts, python_exe, run_cli, "P1", str(td), old_phase="P0")
+    assert result2.returncode == 1
+
+
+def _tag0035_write_p4_task(task_dir_path, phase_val="P4", retries_yaml="retries: {}\n"):
+    """写最小合规 P4 task_dir（.state.yaml + P4-review.md approved）供 BDD-8/9/10 用。
+    不写 P2-skeleton.md / CODE-MAP.md，避免触发骨架 WARNING 分支干扰断言。"""
+    task_dir_path.mkdir(parents=True, exist_ok=True)
+    (task_dir_path / ".state.yaml").write_text(
+        f"task_id: T001\nphase: {phase_val}\nstatus: active\n{retries_yaml}",
+        encoding="utf-8",
+    )
+    (task_dir_path / "P4-review.md").write_text(
+        "---\nstatus: approved\nagent: reviewer-subagent\n---\nreviewed.\n",
+        encoding="utf-8",
+    )
+
+
+def test_tag0035_bdd_8_gate_p4_history_scan_prior_code_commit_allows_pure_md(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """BDD-8（DEBT0037）：一个 P4 阶段跨多个 commit 交付，其中较早的 commit 已引入过
+    非 md/yaml 代码 diff（commit message 含 `wf(T001-P4)` 标签），当前待检查 commit
+    暂存区只含 md 文件——_gate_p4 不应仅凭"当前暂存区无代码文件"就判定 return 1。"""
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+
+    task = repo / "task"
+    _tag0035_write_p4_task(task)
+    (task / "app.py").write_text("def hello():\n    pass\n", encoding="utf-8")
+    git_repo.commit(
+        "wf(T001-P4): initial code delivery",
+        files=["task/.state.yaml", "task/P4-review.md", "task/app.py"],
+    )
+
+    # 第二个 P4 commit：跨 commit 交付，暂存区只含 md 文件
+    (task / "P4-notes.md").write_text("additional notes\n", encoding="utf-8")
+    git_repo.stage("task/P4-notes.md")
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P4", "task", cwd=str(repo))
+    assert result.returncode == 0, (
+        "BDD-8：本 phase 历史 commit 已存在 wf(T001-P4) 代码 diff，第二次纯 md commit "
+        f"不应再被 has_code_file 判据误判 return 1。实际 exit={result.returncode}, "
+        f"output={result.output!r}"
+    )
+
+
+def test_tag0035_bdd_9_gate_p4_retreat_fix_commit_with_retries_allows_pure_md(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """BDD-9（DEBT0037）：.state.yaml 的 retries[P4] 非空（发生过 P5→P4 回退）且此前
+    已存在 `wf(T001-P4)` 代码 commit，本次回退修复 commit 暂存区只含 md/yaml——
+    _gate_p4 应识别"回退后再推进"场景，不因该次修复 commit 无代码文件而 return 1。"""
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+
+    task = repo / "task"
+    _tag0035_write_p4_task(task)
+    (task / "impl.py").write_text("VALUE = 1\n", encoding="utf-8")
+    git_repo.commit(
+        "wf(T001-P4): first attempt with code",
+        files=["task/.state.yaml", "task/P4-review.md", "task/impl.py"],
+    )
+
+    # 模拟 P5→P4 回退：retries[P4] 非空 + 本次修复 commit 暂存区只含 md
+    (task / ".state.yaml").write_text(
+        "task_id: T001\nphase: P4\nstatus: active\nretries:\n  P4:\n  - at: '2026-09-16'\n",
+        encoding="utf-8",
+    )
+    (task / "P4-fix-notes.md").write_text("回退后修复说明\n", encoding="utf-8")
+    git_repo.stage("task/.state.yaml")
+    git_repo.stage("task/P4-fix-notes.md")
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P4", "task", cwd=str(repo))
+    assert result.returncode == 0, (
+        "BDD-9：retries[P4] 非空（回退后再推进）且历史已有 wf(T001-P4) 代码 commit，"
+        f"回退修复 commit 暂存区只含 md/yaml 不应被误判 return 1。实际 "
+        f"exit={result.returncode}, output={result.output!r}"
+    )
+
+
+def test_tag0035_bdd_10_gate_p4_pure_doc_no_history_still_blocks(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """BDD-10（红灯边界）：纯文档 commit，该 phase 此前既无代码 diff 历史、也不属于
+    "回退后修复"场景——_gate_p4 仍应 return 1（放宽只在 BDD-8/9 声明的两种场景生效，
+    其余场景维持原判据不放松，对应 known_risks"判据放宽不能削弱拦截力"）。"""
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+
+    task = repo / "task"
+    _tag0035_write_p4_task(task)
+    git_repo.stage("task/.state.yaml")
+    git_repo.stage("task/P4-review.md")
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P4", "task", cwd=str(repo))
+    assert result.returncode == 1, (
+        "BDD-10：纯文档、无代码历史、非回退场景，仍应 return 1（放宽不应削弱此拦截）。"
+        f"实际 exit={result.returncode}, output={result.output!r}"
     )

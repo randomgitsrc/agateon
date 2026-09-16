@@ -824,3 +824,68 @@ def test_load_current_state_yaml_invalid_utf8_no_crash(agate_scripts, tmp_path):
     result = mod._load_current_state_yaml(str(bad_file))
     assert isinstance(result, dict)
     assert result.get("task_id") == "T001"
+
+
+# ============================================================
+# TAG0035（gate 健壮性批，子批 B，check-state-transition.py 部分）：BDD-5/7
+# 覆盖 phase_num() 对非数字阶段名不再静默 return 0（P2-design.md §3.2-2）。
+# ============================================================
+
+
+def _tag0035_setup_transition(git_repo, old_phase_val, new_phase_val):
+    """构造"已提交 old_phase_val → 暂存 new_phase_val"的 .state.yaml 转移场景。"""
+    repo = git_repo.path
+    _write_state(repo / ".state.yaml", old_phase_val)
+    git_repo.commit("init")
+
+    _write_state(repo / ".state.yaml", new_phase_val)
+    git_repo.stage(".state.yaml")
+    return repo
+
+
+@pytest.mark.parametrize(
+    ("old_phase_val", "new_phase_val"),
+    [
+        pytest.param("P3", "p-alpha", id="new_phase_non_numeric"),
+        pytest.param("p-alpha", "P1", id="old_phase_non_numeric"),
+    ],
+)
+def test_tag0035_bdd_5_phase_num_non_numeric_fail_closed(
+    old_phase_val, new_phase_val, git_repo, agate_scripts, python_exe, run_cli
+):
+    """BDD-5：.state.yaml 转移判定输入（old_phase 或 new_phase）的阶段名文本不含数字时，
+    `phase_num()` 不应再静默 `return 0`（会被误判为"退回到最初阶段"从而放行/漏检），
+    而应使 main() 在 stderr 显式提示"无法解析阶段序号"并以非零退出码终止。
+
+    当前 bug 行为（P3 设计时点）：phase_num() 对非数字文本 return 0，old_num/new_num
+    至少一个变成 0 后，check1（diff>=2 回退）/check4（stale outputs）两处判据均要求
+    `old_num > 0 and new_num > 0` 才生效，0 会使这些判据被短路跳过，最终 main() 走到
+    末尾 `sys.exit(0)`——即"静默放行"，本用例断言的正是这一点应变为非零退出 + 提示。
+    """
+    repo = _tag0035_setup_transition(git_repo, old_phase_val, new_phase_val)
+
+    result = _run_state(agate_scripts, python_exe, run_cli, repo, ".state.yaml")
+    assert result.returncode != 0, (
+        f"old_phase={old_phase_val!r} new_phase={new_phase_val!r}：无法解析阶段序号"
+        f"场景应以非零退出码终止。实际 exit={result.returncode}, output={result.output!r}"
+    )
+    assert "无法解析" in result.output, (
+        f"old_phase={old_phase_val!r} new_phase={new_phase_val!r}：stderr 应含"
+        f"'无法解析'提示。实际 output={result.output!r}"
+    )
+
+
+def test_tag0035_bdd_7_state_transition_numeric_phase_not_regressed(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """BDD-7（check-state-transition.py 部分）：标准数字阶段名转移判定不受 phase_num()
+    返回值语义变化（0→None）影响——P3→P1 回退跳变>=2（既有判据）仍应 exit 1。"""
+    repo = git_repo.path
+    _write_state(repo / ".state.yaml", "P3")
+    git_repo.commit("init")
+
+    _write_state(repo / ".state.yaml", "P1")
+    git_repo.stage(".state.yaml")
+
+    result = _run_state(agate_scripts, python_exe, run_cli, repo, ".state.yaml")
+    assert result.returncode == 1

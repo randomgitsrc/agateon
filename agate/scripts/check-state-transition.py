@@ -210,9 +210,10 @@ def _scan_bdd3_keyword_phases(task_dir):
 
 
 def phase_num(text):
-    """提取首个数字序列；无匹配回退 0（同 sh grep -oE '[0-9]+' || echo "0"）。"""
+    """提取首个数字序列；无法解析回退 None（TAG0035 BDD-5：0 不再是"无法解析"的哨兵值，
+    调用方需显式判空处理，"无前序阶段"的合法空串场景由调用方 main() 特判为 0，不进入本函数）。"""
     m = re.search(r"[0-9]+", text)
-    return int(m.group(0)) if m else 0
+    return int(m.group(0)) if m else None
 
 
 def _find_stale(old_phase, task_dir):
@@ -245,8 +246,20 @@ def main():
     if new_phase in ("", "PAUSED", "READY", "DONE"):
         sys.exit(0)
 
-    old_num = phase_num(old_phase)
+    # old_phase 为空字符串（get_old_phase 的 git-show 失败回退）或控制态
+    # PAUSED/READY/DONE（与上面 new_phase 特判同一组字面量，PAUSED 恢复场景的
+    # 合法前序态）时，视为"无数字前序阶段"的合法 0，不进入 phase_num() 解析、
+    # 不触发下面的判空报错（DESIGN_GAP：dispatch-context 给出的判空条件原文只
+    # 特判了空字符串，未覆盖 old_phase=PAUSED 场景；PAUSED→Pn 恢复是既有回归用例
+    # test_st_15/test_st_19 覆盖的既有行为，若不补此特判会在这两个已有测试上产生
+    # 新回归——按 old_num>0 判据的既有语义，控制态本就等价于"无前序数字阶段"）。
+    old_num = 0 if (not old_phase or old_phase in ("PAUSED", "READY", "DONE")) else phase_num(old_phase)
     new_num = phase_num(new_phase)
+    if new_num is None or (old_phase and old_phase not in ("PAUSED", "READY", "DONE") and old_num is None):
+        sys.stderr.write(
+            f"GATE STATE: 无法解析阶段序号（old_phase={old_phase!r}, new_phase={new_phase!r}）\n"
+        )
+        sys.exit(1)
 
     # 检查 1：回退跳变 >= 2（T019 教训）
     # 协议规定"不依赖 commit message 格式"（state-machine.md L371-373）

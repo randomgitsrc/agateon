@@ -401,7 +401,7 @@ P6.5 judge 派发以 **fresh context** 独立复核（防"评审者与作者同�
 
 **文件名**：`P6.5-dispatch-context-judge.md`（沿用 `P{N}-dispatch-context-{role}.md` 命名；2p dispatch-context glob 按 phase 匹配不覆盖 `P6.5-*`，卡片 hash 校验不强制——内容合规由 check-judge-verdict 白名单扫描承担）。
 
-**白名单输入**（『输入文件』『上游关联』两节只允许）：`P1-requirements.md` / `P2-design.md`（仅验收相关节）/ `P6-evidence/` 目录 / `.state.yaml` / `gate-events.jsonl` / judge 自身产出 `P6.5-judge-verdict.md`；另授 git log 查询权（非路径）。
+**白名单输入**（『输入文件』『上游关联』两节只允许）：`P1-requirements.md` / `P2-design.md`（仅验收相关节）/ `P6-evidence/` 目录 / `.state.yaml` / `gate-events.jsonl` / judge 自身产出 `P6.5-judge-verdict.md`；另授 git log 查询权（非路径）。角色定义文件路径（`execution-roles/`、`review-roles/` 目录前缀）不受此白名单限制，任意角色文件路径均视为合法引用。
 
 **黑名单禁注入**（两节禁含，大小写不敏感；与 check-judge-verdict.py 实现同源）：
 - `P6-acceptance.md`（verifier 自述，防锚定）

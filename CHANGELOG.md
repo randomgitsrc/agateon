@@ -12,6 +12,30 @@
 
 （暂无——下个版本的变更在此累积。）
 
+## [0.71.1] - 2026-09-16
+
+### 修复（TAG0035：gate 健壮性批，RM-AG0062）
+
+- **`check-gate.py` 未知阶段 fail-closed**：`handlers.get(phase) is None` 分支退出码从
+  `sys.exit(2)`（与 P8 等已知阶段"通过"码相同）改为 `sys.exit(1)`——新增阶段若忘记注册 gate
+  函数不再被 `ci-gate-backstop.py` 误判为"一致通过"，而是响亮失败。
+- **三处非数字阶段名静默失效修复**（`check-gate.py` 回退抵达检测 / `check-state-transition.py`
+  `phase_num()` / `pre-commit-gate.py` 一致性 WARNING）：非数字阶段名（如自定义阶段名）此前会
+  被 `re.search(r"[0-9]+", ...)` 无匹配静默短路或映射为 `0`，现改为显式报错（`sys.exit(1)`）
+  或输出 WARNING 提示；标准 P0-P8 数字阶段名行为不变。
+- **`_gate_p4` 完整度判据放宽（DEBT0037）**：判据从"当前暂存区含非 md/yaml 代码文件"放宽为
+  "本 phase 任一历史 commit（`wf(<task_id>-P4)` 标签）曾引入过代码 diff"——修复"一个 P4 阶段
+  跨多个 commit 交付"与"P5→P4 回退后修复 commit"两个场景被误判 `exit 1`、`agate-next.py` 拒绝
+  推进、需主 Agent 手动 `_advance` 的问题；纯文档且无代码历史的场景仍正确拦截。
+- **`check-judge-verdict.py` 信息隔离黑/白名单 3 处假阳性修复（DEBT0038）**：黑名单
+  `p6-acceptance.md` 等 basename 子串命中协议阶段卡片路径引用（如
+  `agate/phase-cards/P6-acceptance.md`）时新增路径豁免；白名单补齐角色定义文件路径
+  （`execution-roles/`、`review-roles/` 目录前缀）；`P6-evidence/` 目录下真实存在的裸文件名
+  引用不再被误报"白名单外"。真实自述场景（无路径前缀直接引用任务自己的 `P6-acceptance.md`）
+  仍正确拦截。
+
+来源：TAG0035（RM-AG0062，DEBT0037/DEBT0038 归并修复批）。
+
 ## [0.71.0] - 2026-09-10
 
 ### 新增（TAG0034：派发路由，配置驱动跨 CLI/model 派发 + tmux 观测，RM-AG0060 epic）

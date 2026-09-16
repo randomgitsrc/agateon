@@ -1,0 +1,20 @@
+- git diff 全文已读：check-gate.py(未知阶段exit2→1 + gate_p4放宽跨commit判据 + _gate_p4_has_prior_code_commit) / check-judge-verdict.py(黑名单phase-cards豁免 + 白名单execution-roles/review-roles豁免 + P6-evidence裸文件名动态白名单) / check-state-transition.py(phase_num无匹配返回None+PAUSED/READY/DONE特判0) / pre-commit-gate.py(新增_P_OUTPUT_ANY_RE宽松探测两处WARNING不影响exit code) / dispatch-protocol.md(白名单豁免措辞) / P6-acceptance.md(卡片同步措辞) / test_check_gate.py(exit2改为exit1断言)
+- P4-implementation.md(子批A): sys.exit(2)→(1) 未知阶段；改动1行；test_check_gate.py改名+断言值同步
+- P4-implementation-B.md(子批B): check-gate.py main()回退分支old_num/new_num判空exit1；check-state-transition.py phase_num返回None+PAUSED/READY/DONE特判0 [DESIGN_GAP已记录：判空条件原文只覆盖空字符串，未覆盖PAUSED/READY/DONE，implementer扩展避免test_st_15/test_st_19回归]；pre-commit-gate.py新增_P_OUTPUT_ANY_RE宽松探测两处WARNING
+- P4-implementation-C.md(子批C): 新增_gate_p4_has_prior_code_commit扫描wf(<task_id>-P4)历史commit是否含代码diff，放行gate_p4；ruff PLW2901修复commit_hash→raw_hash
+- P4-implementation-D.md(子批D): check-judge-verdict.py黑名单phase-cards/豁免+白名单execution-roles/review-roles/豁免+P6-evidence裸文件名动态白名单；文档同步dispatch-protocol.md+P6-acceptance.md；不采纳可选加固_PROTOCOL_SPEC_DIR_RE接入_is_whitelisted（有理由记录，供P5/P6核实）；已知无关失败：ruff PLW2901（子批C问题，D里发现已让C修）+ TAG0034零字节基线过期（待主Agent处理）
+- P1-requirements.md: 14条BDD全读，含同类扫描（子批A/C/D均已扫描无遗漏点），子批B/C/D均有DESIGN余地留给P2
+- P2-design.md: 逐函数改动表完整，候选方案2个已权衡，gate_commands含P3/P5/P5_regression/P5_integration/P5_consistency/P5_shellcheck/P5_count_tests分离key，files_to_read含check-judge-verdict.py:55-214,399-509 + dispatch-protocol.md:398-430 + P6-acceptance.md:20-30,178-215
+- test files grep: 14条BDD(1-14)在4个测试文件中均有对应test函数，命名tag0035_bdd_N规范
+- pytest实跑：unit 1507 passed, 2 skipped（0 failed）；regression 30 passed 1 failed（test_bdd_39零字节基线，已知预期，见objective_info）；integration 96 passed 0 failed
+- state-machine.md/WORKFLOW.md/dispatch-protocol.md grep：均未描述'未知阶段 exit 2'这一具体语义，只描述各已知阶段各自的exit 2/0通过码含义，故子批A的2→1改动不涉及任何需要同步的锚点表/文档表述——A6无遗漏
+- agate/rules/phases.yaml gate_pass_exit注释：exit2=P0-P3/P5/P6/P8通过码，exit0=P4/P7/P6.5通过码，均针对已知phase，不依赖未知阶段分支，无需同步
+- agate/rules/dispatch.yaml：只引用check-gate.py按phase调用，无硬编码具体退出码数值依赖
+- implementer.md/architect.md/verifier.md grep：均未提及check-gate.py未知阶段退出码或check-judge-verdict黑白名单细节，无需同步
+- CHANGELOG.md grep TAG0035：无命中，未记录（P1已声明P8阶段处理，本次不要求现在改，A5如实指出）
+- check-protocol-consistency.py CHECK9锚点表(SCRIPT_ALIGNMENT_ANCHORS)：check-state-transition.py锚点关键词['diff','phase_num']仍存在；check-judge-verdict.py锚点关键词['criteria_total','judge']仍存在；均未因本次改动被移除，--strict-errors-only实跑 exit=0 0 ERROR
+- adr.md：ADR-002（可判定性，0=通过1=不通过2=需人工判断）是本次子批A fail-closed改动的既有权威依据——未知阶段原exit2与ADR-002'2=需人工判断'语义本就不符（也未被人工审查，是被静默放过），改为exit1(不通过)反而更贴合ADR-002原文；ADR-013（gate生产者无关）与本次judge白名单路径改动不冲突（角色路径豁免是'谁可以被引用'不是'谁生产的'）；未发现现有ADR专门记录'未知/异常输入fail-closed'这一具体子原则，A7判ALIGNED，可建议但非必须补充
+- pytest全量实跑（本次审查独立复核，非仅信implementer自报）：unit 1507 passed 2 skipped 0 failed；regression 30 passed 1 failed(test_bdd_39零字节基线，objective_info已声明为预期后续处理项非本次判定范围)；integration 96 passed 0 failed
+- check-gate.py/check-state-transition.py/check-judge-verdict.py实际代码逐行核对：均与P2-design.md §3.1-3.4伪代码/设计表完全一致，无偏离
+- test_check_gate.py BDD-8/9/10测试体、test_check_judge_verdict.py BDD-11/12/13/14测试体逐一读毕：测试断言精确对应BDD原文，BDD-11白盒直连_check_blacklist（明确说明不测整体exit code，理由充分记录），BDD-14红灯边界含'混入合规角色路径引用'防干扰设计
+- 唯一测试覆盖minor gap：_gate_p4_has_prior_code_commit的右括号边界防误配设计（防wf(TAG0035-P40)误配）无专门测试，但P1/P2已明确注明当前phases.yaml阶段名封闭枚举下不可实际触发，纯防御性，不构成BDD要求范围内的覆盖缺口
