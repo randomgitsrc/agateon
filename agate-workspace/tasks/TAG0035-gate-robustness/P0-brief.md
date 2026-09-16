@@ -88,7 +88,7 @@
 - **多提交阶段任务的自指风险（范围收窄，独立评审修正）**：`_gate_p4` 仅在 `git diff --cached --name-only` **无任何非 md/yaml 文件**时 `return 1`（`check-gate.py:951-961`）。本批 3 个子批（A/B/D）各含 `.py` 改动，**每个 commit 都不会命中**；**只有纯 md/yaml 的 commit 才会命中**（如仅改文档/协议 md 的子批）。**缓解**：拆批时确保每个 commit 含至少一个代码文件；P2 明确拆批与提交策略。
 - **`phases.yaml` schema 变更的破坏性**：`additionalProperties: false`，加 `order`/`predecessors` 必须改 schema；存量任务（以命令计数）+ 下游项目需兼容（**默认值 = 现状行为**，不得改变既有阶段判定）。
 - **失败模式**：判据放宽（DEBT0037）若过宽会削弱 gate 拦截力——需明确"放宽后仍能拦住什么"的边界，并在 P3 设计对应红灯用例。
-- **子批 D 的字段集统一（DEBT0041）可能牵出隐含依赖**——`agate-md-field-set` 与 `check-p6-provenance.py` 的字段集当前各自演进，统一时需全量比对（参照 AGENTS.md 规则 0：新增规则前先全量扫描存量）。
+- ~~子批 D 的字段集统一（DEBT0041）可能牵出隐含依赖~~ —— **已随范围收窄移除**（见上文「范围修正」：DEBT0041 已移出本批，与 TAG0036 `tests_filter` 同字段族，独立评审判定不宜与 gate 健壮性合并）。此条保留删除线仅作历史留痕，不构成本批风险。
 
 ## env_constraints
 

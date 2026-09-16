@@ -1,0 +1,14 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0035
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 352 items / 349 deselected / 3 selected
+
+agate/tests/unit/test_check_gate.py::test_tag0035_bdd_8_gate_p4_history_scan_prior_code_commit_allows_pure_md PASSED [ 33%]
+agate/tests/unit/test_check_gate.py::test_tag0035_bdd_9_gate_p4_retreat_fix_commit_with_retries_allows_pure_md PASSED [ 66%]
+agate/tests/unit/test_check_gate.py::test_tag0035_bdd_10_gate_p4_pure_doc_no_history_still_blocks PASSED [100%]
+
+====================== 3 passed, 349 deselected in 0.50s =======================

@@ -66,6 +66,8 @@ _BLACKLIST_MD = {
 }
 _BLACKLIST_DC_RE = re.compile(r"p[456]-dispatch-context-[^\s]*\.md")
 _BLACKLIST_DIR_RE = re.compile(r"p5-test-results/")
+# TAG0035 BDD-11：协议规格文档路径引用豁免（`phase-cards/` 路径段），见 _check_blacklist
+_PROTOCOL_SPEC_DIR_RE = re.compile(r"(?:^|/)phase-cards/")
 
 # BDD-4：白名单（任务产出路径；P6-evidence/ 为目录前缀匹配）
 _WHITELIST_MD = {
@@ -164,12 +166,19 @@ def _two_sections(lines):
 
 
 def _check_blacklist(section_lines):
-    """BDD-4①：两节黑名单串扫描（大小写不敏感 + 归一化）。命中 → 返回命中描述。"""
+    """BDD-4①/BDD-11：两节黑名单串扫描（大小写不敏感 + 归一化）。
+    basename 命中时先取紧邻其前的最长路径 token，含 phase-cards/ 路径段则视为
+    协议规格文档引用，豁免；裸 basename（无此前缀）仍判命中，保留对真实
+    自述场景（BDD-14）的拦截。"""
     low = "\n".join(section_lines).lower()
     hits = []
     for exact in _BLACKLIST_MD:
-        if exact in low:
+        for m in re.finditer(r"[\w./\-]*" + re.escape(exact), low):
+            token = m.group(0)
+            if _PROTOCOL_SPEC_DIR_RE.search(token):
+                continue
             hits.append(exact)
+            break
     for m in _BLACKLIST_DC_RE.finditer(low):
         hits.append(m.group(0))
     for m in _BLACKLIST_DIR_RE.finditer(low):
@@ -177,25 +186,49 @@ def _check_blacklist(section_lines):
     return hits
 
 
-def _is_whitelisted(tok):
+# TAG0035 BDD-12：角色定义文件路径（execution-roles/ / review-roles/ 目录前缀）豁免
+_ROLE_DIR_RE = re.compile(r"(?:^|/)(?:execution-roles|review-roles)/")
+
+
+def _p6_evidence_basenames(task_dir):
+    """task_dir/P6-evidence/ 目录下真实存在的文件 basename 集合（小写），
+    目录不存在返回空集。供裸文件名白名单判定使用（BDD-13：判定与是否
+    显式带 P6-evidence/ 前缀无关，只看该文件是否真实存在于该目录）。"""
+    evidence_dir = os.path.join(task_dir, "P6-evidence")
+    if not os.path.isdir(evidence_dir):
+        return frozenset()
+    try:
+        return frozenset(
+            name.lower() for name in os.listdir(evidence_dir)
+            if os.path.isfile(os.path.join(evidence_dir, name))
+        )
+    except OSError:
+        return frozenset()
+
+
+def _is_whitelisted(tok, evidence_basenames=frozenset()):
     """白名单判定（I-1 修复：basename/相对路径归一，防绝对路径误报）。
 
     - 完整 token 含 `p6-evidence/` 前缀 → 白名单（目录授权前缀，保留在完整 token 上比对）
-    - 其余按 basename 比对（绝对/相对路径统一归一；仓库路径书写惯例两可）
+    - 完整 token 含角色定义文件目录前缀（BDD-12）→ 白名单
+    - 其余按 basename 比对（绝对/相对路径统一归一；仓库路径书写惯例两可），
+      basename 命中静态白名单或调用方传入的 evidence_basenames（BDD-13）均视为白名单
     """
     if "p6-evidence/" in tok:
         return True
+    if _ROLE_DIR_RE.search(tok):
+        return True
     base = tok.split("/")[-1]
-    return base in _WHITELIST_MD
+    return base in _WHITELIST_MD or base in evidence_basenames
 
 
-def _check_whitelist_outside(section_lines):
+def _check_whitelist_outside(section_lines, evidence_basenames=frozenset()):
     """BDD-4②：两节白名单外任务产出路径引用扫描（basename 归一，I-1）。越界 → 返回越界路径列表。"""
     low = "\n".join(section_lines).lower()
     outside = []
     for tok in re.findall(r"[\w./\-]+\.(?:md|yaml)", low):
         stripped = tok.strip()
-        if _is_whitelisted(stripped):
+        if _is_whitelisted(stripped, evidence_basenames):
             continue
         outside.append(stripped)
     for tok in re.findall(r"[\w./\-]+/", low):
@@ -498,7 +531,7 @@ def main():
     if black_hits:
         sys.stderr.write(f"GATE JUDGE-VERDICT: dispatch-context 两节含黑名单路径引用: {', '.join(black_hits)}\n")
         sys.exit(1)
-    outside = _check_whitelist_outside(section_lines)
+    outside = _check_whitelist_outside(section_lines, _p6_evidence_basenames(task_dir))
     if outside:
         sys.stderr.write(f"GATE JUDGE-VERDICT: dispatch-context 两节含白名单外任务路径引用: {', '.join(outside)}\n")
         sys.exit(1)

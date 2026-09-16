@@ -80,6 +80,11 @@ _PHASE_OUTPUT_DIR = {"P5": "P5-test-results"}
 _NON_MD_YAML_RE = re.compile(r"\.(md|yaml)$|^\.state|gate-events\.jsonl$")
 _P_OUTPUT_RE = re.compile(r"P[0-8]-.*\.md$")
 _P_NUM_RE = re.compile(r"P[0-8]")
+# 宽松探测正则（TAG0035 BDD-6）：不限定数字阶段号（P[0-8]），用于在窄口径
+# _P_OUTPUT_RE 过滤之外并行探测"看起来是阶段产出但阶段名非标准数字"的文件
+# （如 p-alpha-notes.md）。只用于差集 WARNING 提示，不参与既有一致性判定分支，
+# 不改变 _P_OUTPUT_RE/_P_NUM_RE/_phase_num 本身的匹配范围（BDD-7 回归要求）。
+_P_OUTPUT_ANY_RE = re.compile(r"(?:^|/)[Pp][^/]*-.*\.md$")
 _STATE_YAML_SUFFIX = ".state.yaml"
 
 
@@ -298,6 +303,18 @@ def main():
                 sys.stderr.write(
                     f"GATE WARNING: 暂存了 {out_phase} 产出但 phase={phase}（{task_id}）——请确认是否需要更新 phase\n"
                 )
+
+        # 2f.1 宽松探测差集扫描（TAG0035 BDD-6）：命中 _P_OUTPUT_ANY_RE 但未命中
+        # 窄口径 _P_OUTPUT_RE 的文件（非标准数字阶段名产出），不参与上面的一致性
+        # 判定，只做提示，不影响 exit code。
+        staged_any_outputs = [
+            f for f in _staged_name_only()
+            if f.startswith(prefix) and _P_OUTPUT_ANY_RE.search(f) and not _P_OUTPUT_RE.search(f)
+        ]
+        for any_out_file in staged_any_outputs:
+            sys.stderr.write(
+                f"GATE WARNING: 无法识别该产出文件的阶段号，一致性检查未覆盖: {any_out_file}\n"
+            )
 
         # 2g. 跳过非 gate 阶段
         if phase in ("PAUSED", "READY", "DONE"):
@@ -584,6 +601,18 @@ def main():
                 continue
             sys.stderr.write(
                 f"GATE WARNING: 暂存了 {out_phase} 产出但 phase={task_phase}（{os.path.basename(task_dir_rel)}）——请确认是否需要更新 phase\n")
+
+    # 3.1 宽松探测差集扫描（TAG0035 BDD-6，与 2f.1 同一机制，覆盖全局 staged_all
+    # 候选列表）：命中 _P_OUTPUT_ANY_RE 但未命中窄口径 _P_OUTPUT_RE 的文件，
+    # 不参与上面的一致性判定，只做提示，不影响 exit code。
+    staged_any_all = [
+        f for f in staged_all
+        if _P_OUTPUT_ANY_RE.search(f) and not _P_OUTPUT_RE.search(f)
+    ]
+    for any_staged_file in staged_any_all:
+        sys.stderr.write(
+            f"GATE WARNING: 无法识别该产出文件的阶段号，一致性检查未覆盖: {any_staged_file}\n"
+        )
 
     sys.exit(0)
 

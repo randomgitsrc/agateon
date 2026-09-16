@@ -1285,7 +1285,7 @@ closed_at: 2026-09-10
 id: DEBT0037
 category: protocol
 title: "check-gate.py P4 完整度判据（暂存区有非 md/yaml 文件）在多提交阶段 / 回退后推进场景不完备——agate-next.py 因此拒绝推进，主 Agent 需手动 _advance"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md
@@ -1300,6 +1300,14 @@ evidence:
     note: "TAG0034 复盘再次命中：dispatch_plan static-batch（P4a/P4b/P4c 三批 commit），P4→P5 手动 _advance 一次；复盘「四、改进措施」+「agate 反馈」条 3 对本 DEBT 加权——static-batch 是可静态识别的信号（.state.yaml dispatch_plan.mode == static-batch），推进侧可据此开豁免路径"
   - ref: "RM-AG0062"
     note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
+  - path: agate-workspace/tasks/TAG0035-gate-robustness/P4-implementation-C.md
+    note: "closure：新增 _gate_p4_has_prior_code_commit(task_id)，扫描本任务 P4 阶段历史 commit
+      （wf(<task_id>-P4) 标签）是否已引入过非 md/yaml 代码 diff，覆盖跨 commit 交付与回退后修复
+      两个场景。BDD-8/BDD-9 在 P6-acceptance.md 验证通过（P6-evidence/bdd-batch-c.log），BDD-10
+      红灯边界（纯文档/无历史/非回退场景仍 return 1）同批验证未被削弱拦截力。closure_criteria
+      第 2 条（agate-next.py 正常推进）为设计推导 + 退出码契约验证（P2-design.md §1.2 已用 grep
+      核实 agate-next.py 消费 check-gate.py 退出码的逻辑本身是纯粹的 exit 0 即推进判断、不特判
+      具体数值、未被本批修改），非直接端到端 CLI 集成测试实证——如实说明，不构成阻断关闭理由。"
 impact: "多提交阶段任务 / 有回退的任务，主 Agent 必须手动改 .state.yaml phase + append_event state_transition 绕过——绕过路径未走 gate 校验，且违反「不用手动替代脚本」的编排纪律；后续同形态任务复发（TAG0033 + TAG0034 连续两个 static-batch 任务均命中）"
 recommendation: "P4 完整度判据从「当前暂存区有代码 diff」放宽为「本 phase 的任一 commit 引入过代码 diff」（git log --oneline <phase 起点>..HEAD 扫非 md/yaml），或显式识别「回退后再推进」（.state.yaml retries[P4] 非空 + 已存在 wf(...-P4): commit）。落点 check-gate.py _gate_p4 + agate-next.py。同类扫描：其它 phase 的 check-gate 完整度判据是否共用同一「看暂存区」假设"
 closure_criteria:
@@ -1309,7 +1317,8 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-09
-task_id: null
+task_id: TAG0035-gate-robustness
+closed_at: 2026-09-16
 ```
 
 ## DEBT0038
@@ -1318,7 +1327,7 @@ task_id: null
 id: DEBT0038
 category: protocol
 title: "check-judge-verdict.py 信息隔离黑/白名单扫描误判 P6.5 dispatch-context——阶段卡片引用 / 角色文件路径 / P6-evidence 裸文件名三处假阳性"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate-workspace/tasks/TAG0033-codex-cmdstream-adapter/retrospective.md
@@ -1331,6 +1340,14 @@ evidence:
     note: "「Judge 信息隔离」节未写明 P6.5 dispatch-context 是「不列角色文件」的唯一例外"
   - ref: "RM-AG0062"
     note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
+  - path: agate-workspace/tasks/TAG0035-gate-robustness/P4-implementation-D.md
+    note: "closure：① _check_blacklist 改为路径 token 化判定，命中 phase-cards/ 路径段豁免（BDD-11，
+      覆盖 p6-acceptance.md + 同类扫描新增的 p4-implementation.md 两个同构实例）；② _is_whitelisted
+      新增 execution-roles/、review-roles/ 目录前缀豁免（BDD-12）；③ 新增 _p6_evidence_basenames
+      读取 P6-evidence/ 目录真实文件核对裸文件名（BDD-13）。dispatch-protocol.md「Judge 信息隔离」
+      节 + agate/phase-cards/P6-acceptance.md 均已补充角色文件路径豁免说明。BDD-14 红灯边界（真实
+      自述场景仍正确拦截）同批验证未被放宽连带削弱。P6-acceptance.md 全部 4 条 BDD 均 PASS
+      （P6-evidence/bdd-batch-d.log），P6.5 judge 独立复核 status: passed。"
 impact: "P6.5 dispatch-context 按通用惯例列角色文件 / 引用阶段卡片 / 用 P6-evidence 裸文件名，均触发信息隔离拦截 → judge 已产出正确 verdict 仍需返工重写 dispatch-context；每个走 P6.5 的任务都可能踩"
 recommendation: "① 黑名单 p6-acceptance.md 匹配加 agate/phase-cards/ 路径豁免；② 白名单显式允许角色定义文件路径，或在派发模板 / P6 卡片写明「P6.5 dispatch-context『输入文件』节不列角色文件（派发机制注入）」；③ P6-evidence/ 目录白名单认「目录下裸文件名」。落点 check-judge-verdict.py（_check_blacklist / _check_whitelist）+ dispatch-protocol.md「Judge 信息隔离」节 + P6 卡片"
 closure_criteria:
@@ -1340,7 +1357,8 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-09
-task_id: null
+task_id: TAG0035-gate-robustness
+closed_at: 2026-09-16
 ```
 
 ## DEBT0039

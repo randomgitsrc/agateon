@@ -1537,3 +1537,94 @@ def test_it10_routing_2j1_thin_missing_element_blocks(
     result = _git_commit(run_cli, agate_root, repo, "-m", "T001 P2 thin missing checklist")
     assert result.returncode != 0
     assert "GATE ROUTING" in result.output
+
+
+# ============================================================
+# TAG0035（gate 健壮性批，子批 B，pre-commit-gate.py 部分）：BDD-6/7
+# 覆盖非常规（非 P[0-8]- 前缀）阶段名产出文件被暂存时，phase-产出一致性 WARNING
+# 不再完全无痕跳过（P2-design.md §3.2-3；根因在 `_P_OUTPUT_RE` 上游过滤层，
+# 本批新增 `_P_OUTPUT_ANY_RE` 差集扫描，不改既有窄口径分支）。
+# task_id 用 "TXX0001"（而非全文件通用的 "T001"）：本簇用例需要在真实（非
+# --no-verify）hook commit 中重新暂存 .state.yaml 以触发 2f 一致性检查，
+# check-state-yaml.py 的 task_id 正则 `^T[A-Z]{2}\d+$` 不接受 "T001"
+# （已用 `timeout 20 python3 agate/scripts/check-state-yaml.py` 实测确认），
+# 沿用本文件 test_it2/test_it3 等既有先例的 "TXX0001"。
+# ============================================================
+
+
+def test_tag0035_bdd_6_pre_commit_nonstandard_phase_output_warns(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """BDD-6：任务采用非常规（非 P[0-8]- 前缀）阶段名产出的文件被暂存时，
+    pre-commit-gate.py 的 phase-产出一致性检查（WARNING，不拦截 commit）不应在数字
+    假设的过滤逻辑下把该文件完全过滤掉、连一条提示都不产生——至少应在 stderr 产生
+    可观测提示（如"无法识别该产出文件的阶段号，一致性检查未覆盖"）。
+
+    Given：task phase 全程保持 P3（不触发 2c 状态转移检查），本次 commit 额外暂存了
+    一个自定义阶段名产出文件 `p-alpha-notes.md`（非 P[0-8]- 前缀，现有 `_P_OUTPUT_RE`
+    完全过滤不掉它进入候选集合）。同时"触碰"（重新暂存但不改变 phase 文本）
+    .state.yaml 以让本次 commit 落入 2f 检查的任务候选范围。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_state_yaml(task_dir, "TXX0001", "P3")
+    _write_p1_requirements(task_dir)
+    # P3-test-cases.md 存在（gate_p3 完整度判据只要求文件存在）——避免本用例断言被
+    # 无关的 P3 完整度阻断掩盖（本用例只关心 2f 一致性 WARNING 是否产出，不关心
+    # commit 最终是否被阻断）。
+    (task_dir / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
+    git_repo.stage("agate-workspace/tasks/T001/")
+    _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T001 P3 setup")
+
+    # 非常规阶段名产出文件（自定义阶段名 p-alpha，非 P[0-8]- 前缀）
+    (task_dir / "p-alpha-notes.md").write_text("custom phase output\n", encoding="utf-8")
+    # 触碰 .state.yaml（phase 文本本身不变，只追加一个无关字段）——让其在本次 commit
+    # 中"被暂存"以进入 2f 检查范围，同时不触发 2c 状态转移检查（无 "+...phase:" 行）
+    (task_dir / ".state.yaml").write_text(
+        "task_id: TXX0001\nphase: P3\nstatus: active\nretries: {}\nnote: touch\n",
+        encoding="utf-8",
+    )
+    git_repo.stage("agate-workspace/tasks/T001/p-alpha-notes.md")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _git_commit(
+        run_cli, agate_root, repo, "-m", "T001 non-standard phase output staged"
+    )
+
+    # 注意：不能用裸文件名 "p-alpha-notes.md" 作为判据——git commit 自身的
+    # "create mode ... p-alpha-notes.md" 摘要行天然包含该文件名，会与"一致性检查
+    # 是否产出提示"这一断言目标混淆（曾用手工复现验证过这一假阳性陷阱）。只断言
+    # GATE 一致性检查特有的提示短语。
+    assert "无法识别" in result.output or "一致性检查未覆盖" in result.output, (
+        "非常规阶段名产出文件被暂存时，phase-产出一致性检查应至少产生一条可观测的 "
+        f"GATE 提示（不允许 0 输出悄然跳过）。实际 output={result.output!r}"
+    )
+
+
+def test_tag0035_bdd_7_pre_commit_standard_phase_output_no_extra_warning(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """BDD-7（pre-commit-gate.py 部分）：标准数字阶段名（P[0-8]-*.md）产出文件被暂存
+    时，新增的宽松探测差集扫描不应对已被既有 `_P_OUTPUT_RE` 覆盖的标准文件重复触发
+    额外 WARNING（差集 = 宽松命中 - 窄口径命中，标准文件已被窄口径覆盖，差集为空）。"""
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_state_yaml(task_dir, "TXX0001", "P3")
+    _write_p1_requirements(task_dir)
+    git_repo.stage("agate-workspace/tasks/T001/")
+    _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T001 P3 setup")
+
+    (task_dir / "P3-test-cases.md").write_text("## cases\n", encoding="utf-8")
+    git_repo.stage("agate-workspace/tasks/T001/P3-test-cases.md")
+    result = _git_commit(run_cli, agate_root, repo, "-m", "T001 standard P3 output")
+
+    assert result.returncode == 0
+    assert "无法识别" not in result.output
+    assert "一致性检查未覆盖" not in result.output
