@@ -133,6 +133,30 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 > 升级到新版本前，检查你的项目是否触及以下变更点。
 
+### v0.71.1 — gate 健壮性批（TAG0035：DEBT0037/0038 修复 + RM-AG0062）
+
+> **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 /
+> 3 个 hook 薄壳（本任务改动清单无 `.sh` 改动），无需重跑 `install-hook.py`（软链布局
+> `git pull` 即生效；Windows 复制模式重跑 SETUP.md 步骤 2 的 `cp`）。
+
+1. **未知阶段 fail-closed——对合规调用零影响**：`check-gate.py` 收到"未注册 gate 函数"的
+   阶段名时退出码从 `2`（误与已知阶段"通过"码相同）改为 `1`（fail-closed）。标准 P0-P8 十个
+   已知阶段的判定路径完全不变，只影响此前会被静默误判为"通过"的未知/拼写错误阶段名场景。
+2. **三处非数字阶段名判据修复——对合规调用零影响**：`check-gate.py` 回退检测 /
+   `check-state-transition.py` `phase_num()` / `pre-commit-gate.py` 一致性 WARNING 三处，此前
+   遇到非数字阶段名会静默短路或映射为 `0`，现改为显式报错或 WARNING 提示。标准数字阶段名
+   （P0-P8）的解析与判定结果逐字节不变（回归测试 BDD-7 已验证）。
+3. **`_gate_p4` 完整度判据放宽（DEBT0037）——只放宽真实存在代码交付证据的场景**：判据从
+   "当前暂存区快照"放宽为"本 phase 历史 commit 曾真实引入过代码 diff"，修复多提交 P4 阶段 /
+   P5→P4 回退后修复 commit 被误拦截、需主 Agent 手动 `_advance` 的问题。纯文档且无代码历史的
+   场景仍按原判据拦截（`return 1`），拦截力未削弱。
+4. **judge 信息隔离黑/白名单 3 处假阳性修复（DEBT0038）——只消除误判，不放宽真实自述场景**：
+   `check-judge-verdict.py` 修正协议阶段卡片路径引用误判入黑名单、角色定义文件路径误判为
+   白名单外、`P6-evidence/` 目录裸文件名误报三处问题；`dispatch-protocol.md`/
+   `agate/phase-cards/P6-acceptance.md` 同步补充说明。真实自述违规场景（无路径前缀直接引用
+   任务自己的产出文件）仍正确拦截（回归红灯用例锁定）。
+5. **升级动作**：`git pull` 即完成；无迁移动作。
+
 ### v0.71.0 — 派发路由（配置驱动跨 CLI/model 派发 + tmux 观测，TAG0034：RM-AG0060 epic）
 
 > **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 /
