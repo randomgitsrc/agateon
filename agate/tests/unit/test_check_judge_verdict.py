@@ -10,6 +10,7 @@
 #   平台临时目录字面量与软链接语义零假设，解释器一律走 python_exe fixture 探测。
 
 import hashlib
+import importlib.util
 import json
 import re
 
@@ -563,3 +564,126 @@ def test_bdd_6_desc_parens_not_misparsed_exit_0(task_dir, agate_scripts, python_
 
     result = _run_judge(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0
+
+
+# ============================================================
+# TAG0035（gate 健壮性批，子批 D，DEBT0038）：BDD-11/12/13/14
+# 覆盖 check-judge-verdict.py 信息隔离黑白名单路径 token 化豁免机制。
+# 见 P2-design.md §3.4、P1-requirements.md 子批 D 原文。
+# 命名沿用既有 test_tag0031_bdd_N 跨任务前缀先例（本文件大量复用裸 test_bdd_N 名，
+# 撞名风险高，本批统一加 tag0035 前缀）。
+# ============================================================
+
+
+def _load_check_judge_verdict_direct(agate_scripts):
+    """importlib 直接加载 check-judge-verdict.py 为独立模块对象（同源手法：
+    test_check_gate.py 的 `_load_check_gate_direct` 既有先例），供 BDD-11 白盒直连
+    `_check_blacklist` 使用。"""
+    spec = importlib.util.spec_from_file_location(
+        "check_judge_verdict_direct", str(agate_scripts / "check-judge-verdict.py")
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize(
+    ("basename", "phase_card_path"),
+    [
+        ("p6-acceptance.md", "agate/phase-cards/P6-acceptance.md"),
+        ("p4-implementation.md", "agate/phase-cards/P4-implementation.md"),
+    ],
+)
+def test_tag0035_bdd_11_blacklist_exempts_phase_card_path_reference(
+    basename, phase_card_path, agate_scripts
+):
+    """BDD-11：`_check_blacklist` 不应仅凭 basename 子串命中就判黑名单命中——协议
+    阶段卡片路径引用（`phase-cards/` 前缀）须豁免，覆盖两个同类扫描确认的同构实例
+    （P6-acceptance.md / P4-implementation.md）。
+
+    白盒直连 `_check_blacklist`（而非跑全流程 CLI 断言整体 exit code）：整体 exit
+    code 还受 `_check_whitelist_outside`（BDD-12/13 才会改动，BDD-11 未覆盖的独立
+    检查点——该函数把任意非白名单 basename 的 .md 路径都判"白名单外"，含
+    phase-cards/ 路径）影响，若断言整体 exit==0 会把两个独立检查点的行为混在一起，
+    掩盖 `_check_blacklist` 自身豁免是否生效这一 BDD-11 的真实断言目标（dispatch-
+    context 约束 4："测试断言的是修复后行为，不是实现细节"——此处"修复后行为"应
+    锚定在 `_check_blacklist` 这一 BDD-11 明确点名的函数上）。
+    """
+    mod = _load_check_judge_verdict_direct(agate_scripts)
+    section_lines = ["- P1-requirements.md", f"- {phase_card_path}"]
+
+    hits = mod._check_blacklist(section_lines)
+    assert basename not in hits, (
+        f"{phase_card_path} 是协议规格文档路径引用，_check_blacklist 不应命中 "
+        f"basename {basename!r}。实际 hits={hits!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "role_path",
+    [
+        "agate/assets/execution-roles/analyst.md",
+        "agate/assets/review-roles/plan-eng-review.md",
+    ],
+)
+def test_tag0035_bdd_12_whitelist_role_definition_file_path(
+    role_path, task_dir, agate_scripts, python_exe, run_cli
+):
+    """BDD-12：白名单应补齐角色定义文件路径（`execution-roles/` / `review-roles/`
+    目录前缀），`_check_whitelist_outside` 不应把角色文件路径判为"白名单外任务产出
+    路径引用"。黑盒全流程断言（无 BDD-11 那类跨检查点交互风险——role_path 不匹配
+    任何黑名单模式）。"""
+    td = task_dir()
+    _write_judge_fixture(td, context_kwargs={"inputs": ["P1-requirements.md", role_path]})
+
+    result = _run_judge(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0, (
+        f"{role_path} 是角色定义文件路径，不应判为白名单外。实际 "
+        f"exit={result.returncode}, output={result.output!r}"
+    )
+
+
+def test_tag0035_bdd_13_p6_evidence_bare_filename_recognized(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """BDD-13：`P6-evidence/` 目录下真实存在的文件，即便引用形式是裸文件名（不含
+    `P6-evidence/` 前缀），也不应判为白名单外——判定应结合任务目录实际文件列表核对
+    （而非扩大裸文件名正则匹配范围）。"""
+    td = task_dir()
+    _write_judge_fixture(
+        td, context_kwargs={"inputs": ["P1-requirements.md", "extra-notes.md"]}
+    )
+    _write_evidence(td, "extra-notes.md", "供 BDD-13 用的证据说明\n")
+
+    result = _run_judge(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0, (
+        "extra-notes.md 是 P6-evidence/ 目录下真实存在的文件，裸文件名引用不应判"
+        f"白名单外。实际 exit={result.returncode}, output={result.output!r}"
+    )
+
+
+def test_tag0035_bdd_14_self_referential_p6_acceptance_still_blocked(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """BDD-14（防御性红灯）：真实自述场景（裸引用任务自己的 P6-acceptance.md，无
+    路径前缀）在 BDD-11/12/13 加固后仍应判黑名单命中并 exit 1，不得被三处路径豁免/
+    补齐/裸文件名识别连带放宽（对应 known_risks"DEBT0038 白名单放宽可能削弱 judge
+    信息隔离"的止损）。混入一个合规的角色路径引用（BDD-12 场景）确认二者互不干扰。"""
+    td = task_dir()
+    _write_judge_fixture(
+        td,
+        context_kwargs={
+            "inputs": [
+                "P1-requirements.md",
+                "agate/assets/execution-roles/analyst.md",
+                "P6-acceptance.md",
+            ]
+        },
+    )
+
+    result = _run_judge(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 1, (
+        "裸文件名直接引用任务自己的 P6-acceptance.md 仍应判黑名单命中并 exit 1"
+        f"（不得被 BDD-11/12/13 豁免连带放宽）。实际 exit={result.returncode}, "
+        f"output={result.output!r}"
+    )
