@@ -29,7 +29,7 @@
 
 **② `P4-evidence/{batch}.log` 证据落点（新目录约定）**
 
-- **注意**：`P4-evidence/` **目前不存在**——现存的是 `P6-evidence/`（42 个）、`P5-test-results/`（34 个）、`P6.5-judge-evidence/`（1 个）。本任务**新建**该目录，沿用既有 `P{phase}-{kind}/` 命名模式。
+- **注意**：`P4-evidence/` **目前不存在**——现存的是 `P6-evidence/`（37 个）、`P5-test-results/`（34 个）、`P6.5-judge-evidence/`（1 个）。本任务**新建**该目录，沿用既有 `P{phase}-{kind}/` 命名模式。
 - **最小内容**：
   ```
   command: pytest tests/auth/test_token.py      # 实际执行的 tests_filter

@@ -24,7 +24,7 @@
       sys.exit(2)      # ← exit 2 = P0/P1/P2/P3/P5/P6/P8 的「通过」码
   ```
   **实测证据**：`python3 agate/scripts/check-gate.py P99 <task_dir>` → `exit=2`（与真实阶段 P8 相同）；`check-gate.py:1486-1489`。
-- **后果链（实测）**：未知阶段 → `exit 2` → `pre-commit-gate.py:354` 记录 `write_gate_result(exit=2)` → `ci-gate-backstop.py:205-208` 比对「记录值 == CI 重跑值」（两者都是 2）→ **PASS**。**CI 验证的是一致性，不是正确性**——两边错得一样就都通过。
+- **后果链（实测）**：未知阶段 → `exit 2` → `pre-commit-gate.py:354` 记录 `write_gate_result(exit=2)` → `ci-gate-backstop.py:209-211` 比对「记录值 == CI 重跑值」（`if recorded_exit != ci_exit`；205-208 是 phase 比对）（两者都是 2）→ **PASS**。**CI 验证的是一致性，不是正确性**——两边错得一样就都通过。
 - **修复方向**：① 未知阶段改为 **exit 1**（fail-closed）② 新增 regression 测试（构造未知 phase → 断言 exit 1 且 stderr 含阶段名）。
 - **参照**：agateon 其他处的 fail-closed 取向（DSH preset 挂载失败拒绝建会话）。
 
