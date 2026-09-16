@@ -23,3 +23,11 @@ agent: verifier
 - check-p6-evidence.py → exit 0
 - check-p6-provenance.py → exit 0（EXIT_CODE 尾行缺失警告为非阻塞提示）
 - P6 验收完成
+
+## P6.5 judge 复核后补证（BDD-3/BDD-7 证据缺口）
+
+- judge 判定 needs-revision：BDD-3/BDD-7 仅有 `-k tag0035_bdd_N` 过滤子集证据，不构成 P1 原文要求的"三分片全量测试全绿"证据
+- 补跑三条不带 -k 过滤的全量命令：unit 1507 passed 2 skipped / regression 31 passed / integration 96 passed，三者 exit 均为 0，合计 1634 passed 2 skipped 0 failed，与 P5 基线一致
+- 新证据文件 P6-evidence/bdd-3-7-full-suite.log 已产出并被 BDD-3/BDD-7 两条 PASS 行引用（与原 bdd-batch-a/b.log 共同引用）
+- check-p6-format.py --fix / check-p6-evidence.py / check-p6-provenance.py 均 exit 0，grep BDD 行数仍为 14
+- frontmatter pass=14/fail=0 未改动（本次仅补证据，无 BDD 结论变化）

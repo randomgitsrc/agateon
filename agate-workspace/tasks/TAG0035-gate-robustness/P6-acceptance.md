@@ -23,14 +23,14 @@ ui_affected: false
 
 - PASS BDD-1: `check-gate.py` 收到未知阶段 `P99` 时退出码为 1（不再是 2），stderr 含阶段名文本"未知阶段: P99"；手工 CLI 复现 `python3 agate/scripts/check-gate.py P99 <task_dir>` 输出 `exit=1` (bdd-1-manual-cli.log, bdd-batch-a.log)
 - PASS BDD-2: 新增 regression 测试 `test_tag0035_bdd_2_ci_backstop_exit_code_comparison_unaffected` 锁定未知阶段行为——断言 `check-gate.py` 对未知阶段恒 exit=1 且 stderr 含阶段名，同时断言 `ci-gate-backstop.py` 的"记录值==重跑值"比对逻辑本身不因退出码语义变化（2→1）而报错或异常，实跑 PASSED (bdd-batch-a.log)
-- PASS BDD-3: 10 个已知阶段名（P0/P1/P2/P3/P4/P5/P6/P6.5/P7/P8）参数化用例 `test_tag0035_bdd_3_known_phase_not_routed_to_unknown_path` 全部 PASSED，已知阶段未被路由到"未知阶段"分支，行为与修复前一致 (bdd-batch-a.log)
+- PASS BDD-3: 10 个已知阶段名（P0/P1/P2/P3/P4/P5/P6/P6.5/P7/P8）参数化用例 `test_tag0035_bdd_3_known_phase_not_routed_to_unknown_path` 全部 PASSED，已知阶段未被路由到"未知阶段"分支，行为与修复前一致；P1 原文验证命令要求的三分片全量测试（`agate/tests/unit/` + `regression/` + `integration/`，不加 `-k` 过滤）已独立重跑确认全绿（1507+31+96=1634 passed, 2 skipped, 0 failed，与 P5 基线一致） (bdd-batch-a.log, bdd-3-7-full-suite.log)
 
 ### 子批 B：非数字阶段名三处静默失效（最小案）
 
 - PASS BDD-4: `test_tag0035_bdd_4_retreat_detection_non_numeric_phase_fail_closed` 两个参数化子场景（`old_phase_non_numeric` / `phase_non_numeric`）均 PASSED——`check-gate.py` 回退抵达检测对非数字阶段名（如 `p-alpha`）不再静默短路为"未发生回退"，而是 stderr 显式提示"无法解析"并 exit=1 (bdd-batch-b.log)
 - PASS BDD-5: `test_tag0035_bdd_5_phase_num_non_numeric_fail_closed` 两个参数化子场景（`new_phase_non_numeric` / `old_phase_non_numeric`）均 PASSED——`check-state-transition.py` 的 `phase_num()` 对非数字阶段名不再静默 `return 0`，而是 stderr 提示"无法解析"且脚本以非零退出码终止 (bdd-batch-b.log)
 - PASS BDD-6: `test_tag0035_bdd_6_pre_commit_nonstandard_phase_output_warns` PASSED——`pre-commit-gate.py` 对非常规（非 `P[0-8]-` 前缀）阶段名产出文件的一致性检查不再 0 输出地悄然跳过，stderr 产生可观测提示 (bdd-batch-b.log)
-- PASS BDD-7: 三个子测试均 PASSED——`test_tag0035_bdd_7_check_gate_numeric_retreat_detection_not_regressed`（check-gate.py 回退检测对标准数字阶段名行为不回归）、`test_tag0035_bdd_7_state_transition_numeric_phase_not_regressed`（check-state-transition.py phase_num 对数字阶段名行为不回归）、`test_tag0035_bdd_7_pre_commit_standard_phase_output_no_extra_warning`（pre-commit-gate.py 对标准阶段名产出无额外 WARNING），三处判据修复对 P0-P8 标准数字阶段名行为完全一致 (bdd-batch-b.log)
+- PASS BDD-7: 三个子测试均 PASSED——`test_tag0035_bdd_7_check_gate_numeric_retreat_detection_not_regressed`（check-gate.py 回退检测对标准数字阶段名行为不回归）、`test_tag0035_bdd_7_state_transition_numeric_phase_not_regressed`（check-state-transition.py phase_num 对数字阶段名行为不回归）、`test_tag0035_bdd_7_pre_commit_standard_phase_output_no_extra_warning`（pre-commit-gate.py 对标准阶段名产出无额外 WARNING），三处判据修复对 P0-P8 标准数字阶段名行为完全一致；P1 原文验证命令要求的三分片全量测试（`agate/tests/unit/` + `regression/` + `integration/`，不加 `-k` 过滤）已独立重跑确认全绿（1507+31+96=1634 passed, 2 skipped, 0 failed，与 P5 基线一致） (bdd-batch-b.log, bdd-3-7-full-suite.log)
 
 ### 子批 C：DEBT0037（_gate_p4 完整度判据）
 
@@ -54,6 +54,6 @@ ui_affected: false
 **Summary**: 14/14 PASS, 0 FAIL
 
 - 全部 14 条 BDD 逐条实跑 PASS，0 FAIL
-- 证据组织：4 个批次日志文件（bdd-batch-a/b/c/d.log，每个含具体测试函数名 + PASSED 字样可辨识对应到每条 BDD）+ 1 个 BDD-1 独立手工 CLI 验证日志（bdd-1-manual-cli.log）
+- 证据组织：4 个批次日志文件（bdd-batch-a/b/c/d.log，每个含具体测试函数名 + PASSED 字样可辨识对应到每条 BDD）+ 1 个 BDD-1 独立手工 CLI 验证日志（bdd-1-manual-cli.log）+ 1 个 BDD-3/BDD-7 三分片全量测试独立重跑日志（bdd-3-7-full-suite.log，不加 `-k` 过滤，1634 passed, 2 skipped, 0 failed）
 - 未改动任何源代码，暂存区只含 `P6-evidence/` 下证据文件 + `P6-acceptance.md` 本身
 - 与 P5-test-results/unit.md 记录的全量测试（1634 passed, 0 failed）一致，本阶段逐条 BDD 级独立验证未发现与 P4/P5 结论不符之处
