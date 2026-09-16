@@ -24,7 +24,7 @@
       sys.exit(2)      # ← exit 2 = P0/P1/P2/P3/P5/P6/P8 的「通过」码
   ```
   **实测证据**：`python3 agate/scripts/check-gate.py P99 <task_dir>` → `exit=2`（与真实阶段 P8 相同）；`check-gate.py:1486-1489`。
-- **后果链（实测）**：未知阶段 → `exit 2` → `pre-commit-gate.py:354` 记录 `write_gate_result(exit=2)` → `ci-gate-backstop.py:205-208` 比对「记录值 == CI 重跑值」（两者都是 2）→ **PASS**。**CI 验证的是一致性，不是正确性**——两边错得一样就都通过。
+- **后果链（实测）**：未知阶段 → `exit 2` → `pre-commit-gate.py:354` 记录 `write_gate_result(exit=2)` → `ci-gate-backstop.py:209-211` 比对「记录值 == CI 重跑值」（`if recorded_exit != ci_exit`；205-208 是 phase 比对）（两者都是 2）→ **PASS**。**CI 验证的是一致性，不是正确性**——两边错得一样就都通过。
 - **修复方向**：① 未知阶段改为 **exit 1**（fail-closed）② 新增 regression 测试（构造未知 phase → 断言 exit 1 且 stderr 含阶段名）。
 - **参照**：agateon 其他处的 fail-closed 取向（DSH preset 挂载失败拒绝建会话）。
 
@@ -34,9 +34,12 @@
   | 位置 | 形态 | 失效方式 |
   |------|------|---------|
   | `check-gate.py:1465-1466` | `re.search(r"[0-9]+", ...)` | 回退抵达检测恒不触发（`if old_num and new_num` 短路） |
-  | `check-state-transition.py:212-214` | `phase_num()` 无匹配 `return 0` | 非数字阶段名全部映射为 0 → 转移判定错乱 |
-  | `pre-commit-gate.py:82,192-194` | `_P_NUM_RE = re.compile(r"P[0-8]")`（**不同模式**，大小写敏感） | 无匹配返回 `None` → 调用点 `if not out_phase: continue` 静默跳过 |
-- **修复方向**：建立**显式阶段序**（`phases.yaml` 加 `order:`/`predecessors:`，需先解 `additionalProperties: false`）→ 三处改为查表；或最小方案：非数字阶段名在回退检测中**显式报错**而非静默短路。
+  | `check-state-transition.py:212-215`（`return ... if m else 0` 在 215） | `phase_num()` 无匹配 `return 0` | 非数字阶段名全部映射为 0 → 转移判定错乱 |
+  | `pre-commit-gate.py:82,192-195`（`return m.group(0) if m else None` 在 195；静默跳过在调用点 577 `if not out_phase: continue`） | `_P_NUM_RE = re.compile(r"P[0-8]")`（**不同模式**，大小写敏感） | 无匹配返回 `None` → 调用点 `if not out_phase: continue` 静默跳过 |
+- **修复方向（两案，P2 定案）**：
+  - **最小案**：非数字阶段名在回退检测中**显式报错**（而非静默短路）——纯判据修复，**不碰 `phases.yaml` 语义**，与本批 out-of-scope 无冲突
+  - **完整案**：建立**显式阶段序**（`phases.yaml` 加 `order:`/`predecessors:`，需先解 `additionalProperties: false`）→ 三处改为查表
+  - ⚠ **范围澄清（独立评审）**：完整案实质是**阶段语义声明式化**，而本批 out-of-scope 写「不做 phase 语义重构」——**两者冲突**。**建议本批采用最小案**（纯判据修复）；完整案作为**独立议题**（见分析报告 §5.4 的落地路径，含 schema 改动 + 存量兼容）。
 - **与子批 A 的关系**：同属"非 P0-P8 阶段名会静默坏掉"，**建议一并修**。
 
 **子批 C：DEBT0037（check-gate.py P4 完整度判据）**
@@ -45,13 +48,22 @@
 - **修复方向**：判据放宽为「本 phase 任一 commit 引入过代码 diff」（`git log` 扫 phase 起点..HEAD 的非 md/yaml），或显式识别「回退后再推进」（`.state.yaml` `retries[P4]` 非空 + 已有 `wf(TAGxxxx-P4)` commit）。
 - **同类核查**：其它 phase 完整度判据是否共用「看暂存区」假设。
 
-**子批 D：DEBT0038 + DEBT0040 + DEBT0041（同簇校验器缺陷）**
+**子批 D：DEBT0038（judge 信息隔离黑白名单假阳性）**
 
-| DEBT | 问题 | 修复方向 |
-|------|------|---------|
-| **DEBT0038**（medium/protocol） | `check-judge-verdict.py` 信息隔离黑/白名单扫描 **3 处假阳性**：① 黑名单 `p6-acceptance.md` 子串命中 `agate/phase-cards/P6-acceptance.md`（阶段规格卡片，非 verifier 自述）——缺路径豁免 ② 白名单不含角色定义文件路径（与"每个 dispatch-context 列角色文件"通用惯例冲突，P6.5 是唯一例外但派发模板 / P6 卡未写明）③ `P6-evidence/` 目录白名单不认目录下裸文件名 | `check-judge-verdict.py` 的 `_check_blacklist`/`_check_whitelist` + `dispatch-protocol.md`「Judge 信息隔离」节 + P6 卡 |
-| **DEBT0040**（medium/protocol） | append-only 事件账本 `gate-events.jsonl` 写入测试**无 tmp 隔离强制**——单测真实调用 `agate_common.append_event` 写进仓库内 committed 账本（TAG0034 P6.5 judge 跑全量 pytest 污染 TAG0030/0032/0033 账本，需 `git checkout` 复原）；`check-events.py` 不校验「跑测前后账本零新增」 | `test-designer.md`/`implementer.md` 补硬规则（`append_event` 目标必须 `tmp_path`）+ CI 加 `git diff --exit-code agate-workspace/tasks/*/gate-events.jsonl` 兜底步 + 可选 `append_event` 检测 git 跟踪目标 → warn |
-| **DEBT0041**（medium/protocol） | `agate-md-field-set` 支持字段集与 `check-p6-provenance.py` 必备 frontmatter 字段集**不同源**——`P3-test-cases.md` 的 `agent` 字段落在缝里，P6→P7 被 exit 2 挡住 | 定权威源 + 共享常量或一方读另一方 |
+> ⚠ **范围修正（独立评审 MUST-FIX，2026-09-16）**：原 D 含 DEBT0038 + DEBT0040 + DEBT0041 三条。评审指出：
+> ① **DEBT0040（账本测试隔离）含 CI workflow 改动**（`.github/workflows` 加 `git diff --exit-code` 兜底步）——按仓库 `AGENTS.md` 规则 5，**改 CI 配置需用户明确许可**，不应静默包含在本批内
+> ② **DEBT0041（字段集同源）与"gate 健壮性"仅名义相关**——它改的是 `agate-md-field-set` 与 `check-p6-provenance.py` 的**字段集定义**，属"数据契约一致性"而非 gate 判据健壮性
+> ③ 且 **DEBT0041 与 TAG0036 的 `tests_filter` 读同一字段族**（`agate-md-field-get.py` 的 `JSON_FIELDS`）→ 两批文件面**并非完全不重叠**，P0 不宜断言
+>
+> **故：DEBT0038 保留在本批（它与 gate 判据同簇——都是"check 脚本的判据误判"）；DEBT0040/DEBT0041 移出**，建议各自独立立项或并入他批。
+
+**DEBT0038（medium/protocol）：`check-judge-verdict.py` 信息隔离黑/白名单扫描 3 处假阳性**
+
+| # | 问题 | 修复方向 |
+|---|------|---------|
+| ① | 黑名单 `p6-acceptance.md` 子串命中 `agate/phase-cards/P6-acceptance.md`（阶段规格卡片，非 verifier 自述）——缺路径豁免 | `check-judge-verdict.py` 的 `_check_blacklist` |
+| ② | 白名单不含角色定义文件路径（与"每个 dispatch-context 列角色文件"通用惯例冲突，P6.5 是唯一例外但派发模板 / P6 卡未写明） | `_check_whitelist` + `dispatch-protocol.md`「Judge 信息隔离」节 + P6 卡 |
+| ③ | `P6-evidence/` 目录白名单不认目录下裸文件名 | `_check_whitelist` |
 
 ### out-of-scope
 
@@ -69,14 +81,12 @@
 | 3 | `phases.yaml`：`order`/`predecessors` 声明（如采用显式阶段序方案） | ✅ |
 | 4 | `_gate_p4` 判据放宽（DEBT0037） | ✅ |
 | 5 | `check-judge-verdict.py` 黑白名单 3 处修正（DEBT0038） | ✅ |
-| 6 | 事件账本测试隔离规则 + CI 兜底（DEBT0040） | ✅ |
-| 7 | 字段集权威源统一（DEBT0041） | ✅ |
-| 8 | regression 测试若干 | — |
+| 6 | regression 测试若干 | — |
 
 ## known_risks
 
-- **多提交阶段任务的自指风险**：本批含 4 个子批，若拆批提交，**自身就会命中 DEBT0037**（`_gate_p4` 看暂存区的假设）。**缓解**：子批 A/C 先修判据，后续子批再享受；或子批按 P4 单 commit 交付。**P2 需明确拆批与提交策略**。
-- **`phases.yaml` schema 变更的破坏性**：`additionalProperties: false`，加 `order`/`predecessors` 必须改 schema；存量 34 任务 + 下游项目需兼容（**默认值 = 现状行为**，不得改变既有阶段判定）。
+- **多提交阶段任务的自指风险（范围收窄，独立评审修正）**：`_gate_p4` 仅在 `git diff --cached --name-only` **无任何非 md/yaml 文件**时 `return 1`（`check-gate.py:951-961`）。本批 3 个子批（A/B/D）各含 `.py` 改动，**每个 commit 都不会命中**；**只有纯 md/yaml 的 commit 才会命中**（如仅改文档/协议 md 的子批）。**缓解**：拆批时确保每个 commit 含至少一个代码文件；P2 明确拆批与提交策略。
+- **`phases.yaml` schema 变更的破坏性**：`additionalProperties: false`，加 `order`/`predecessors` 必须改 schema；存量任务（以命令计数）+ 下游项目需兼容（**默认值 = 现状行为**，不得改变既有阶段判定）。
 - **失败模式**：判据放宽（DEBT0037）若过宽会削弱 gate 拦截力——需明确"放宽后仍能拦住什么"的边界，并在 P3 设计对应红灯用例。
 - **子批 D 的字段集统一（DEBT0041）可能牵出隐含依赖**——`agate-md-field-set` 与 `check-p6-provenance.py` 的字段集当前各自演进，统一时需全量比对（参照 AGENTS.md 规则 0：新增规则前先全量扫描存量）。
 
@@ -92,3 +102,4 @@
 - 稳定版工具：`~/.agate/scripts/`（勿动）
 - 相关证据：`docs/design-notes/design-orchestration-evolution-analysis.md` §5.3 + 附录 B；`agate-workspace/debt/tech-debt.md` 的 DEBT0037/0038/0040/0041
 - 先例参照：`TAG0023-mechanism-checks`（机制校验补强批）/ `TAG0031-debt-cleanup`（DEBT 存量修复批）
+- **worktree**：`.worktrees/agate-TAG0035`（分支 `feat/TAG0035-gate-robustness`），构建流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0035.md` 按模板全 9 节填写
