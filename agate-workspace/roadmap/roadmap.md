@@ -70,6 +70,7 @@
 | RM-AG0062 | gate 健壮性批（原「复盘机制补强批」；DEBT0037/0038/0040/0041 归并——TAG0030/0033/0034 复盘登记，2026-09-10 会话逐条评估：均需 SELF-GATE + 设计决策、非 chore，同簇 gate/check-script/test-infra 健壮性）。① DEBT0037（medium，protocol）check-gate.py _gate_p4 完整度判据「暂存区含非 md/yaml 代码文件」在「一个 phase 跨多个 commit」与「P5→P4 回退后修复 commit」两场景 exit 1，agate-next.py 据此拒绝推进→主 Agent 手动 _advance（TAG0033 P4→P5 两次实证）。方向：判据放宽为「本 phase 任一 commit 引入过代码 diff」（git log 扫 phase 起点..HEAD 非 md/yaml），或显式识别「回退后再推进」（.state.yaml retries[P4] 非空 + 已有 wf-P4 commit）；同类核查其它 phase 完整度判据是否共用「看暂存区」假设。② DEBT0038（medium，protocol）check-judge-verdict.py 信息隔离黑/白名单扫描 3 处假阳性：黑名单 p6-acceptance.md 子串命中 agate/phase-cards/P6-acceptance.md（阶段规格卡片非 verifier 自述）缺路径豁免；白名单不含角色定义文件路径（与「每个 dispatch-context 列角色文件」通用惯例冲突，P6.5 是唯一例外但派发模板/P6 卡未写明）；P6-evidence/ 目录白名单不认目录下裸文件名。落点 check-judge-verdict.py _check_blacklist/_check_whitelist + dispatch-protocol.md「Judge 信息隔离」节 + P6 卡。③ DEBT0040（medium，protocol）append-only 事件账本 gate-events.jsonl 写入测试无 tmp 隔离强制——单测真实调用 agate_common.append_event 写进仓库内 committed 账本（TAG0034 P6.5 judge 跑全量 pytest 污染 TAG0030/0032/0033 账本，git checkout 复原）；check-events.py 不校验「跑测前后账本零新增」。方向：test-designer.md/implementer.md 补硬规则（append_event 目标必须 tmp_path）+ CI 加 git diff --exit-code agate-workspace/tasks/*/gate-events.jsonl 兜底步 + 可选 append_event 检测 git 跟踪目标时 warn。④ DEBT0041（medium，protocol）agate-md-field-set 支持字段集与 check-p6-provenance.py 必备 frontmatter 字段集不同源——P3-test-cases.md 的 agent 字段落在缝里，P6→P7 被 exit 2 挡住。方向：定权威源 + 共享常量或一方读另一方。参照 TAG0023（RM-AG0042-45 机制校验补强批）/ TAG0031（DEBT 存量修复批）先例——一个 task 内分子批交付，P2 立项定拆法。**⚠ 范围收窄（2026-09-16 独立评审 + P0 立项确认）：TAG0035 实际只交付 ①DEBT0037 ②DEBT0038（子批A未知阶段fail-closed + 子批B三处数字序号假设一并归入①②的健壮性同簇范围）；③DEBT0040（CI workflow改动需用户许可）④DEBT0041（与TAG0036 tests_filter同字段族）已移出本批，仍在 tech-debt.md 保持 open，需另行立项或并入他批，不因本条 done 而视为已解决。** | done | TAG0030/0033/0034 复盘登记的 DEBT0037·0038·0040·0041（2026-09-10 会话评估归并 + **RM-AG0064 2026-09-16 并入**） | **TAG0035** | 2026-09-10 | 2026-09-16 |
 | RM-AG0063 | **MVWU（最小可验证工作单元）协议落地**：把既有 batch 实践升格为协议原语（四不变量 Boundary/Verification/Provenance/Composability + 最小契约 `batches[].tests_filter` + `P4-evidence/{batch}.log` + 字段预算 ≤5）——设计定稿见 `docs/design-notes/design-mvwu-protocol.md`；阶段 1 零协议内核改动（旁路声明 + 证据 + 不阻断 check） | scheduled | 编排模型演进分析（`docs/design-notes/design-orchestration-evolution-analysis.md` v6.2）+ 三轮外部评审；2026-09-16 用户确认入 roadmap | **TAG0036** | 2026-09-16 | 2026-09-16 |
 | RM-AG0064 | **【已并入 RM-AG0062】** gate 对未知阶段 fail-open：`check-gate.py` 的 `handlers.get(phase)` 返回 `None` 时 `exit 2`，而 exit 2 是 P0/P1/P2/P3/P5/P6/P8 的**通过码**——新增阶段若忘记注册 gate 函数会**静默通过**而非报错；应改为 fail-closed（未知阶段 → exit 1）并补回归测试 | cancelled | 编排模型演进分析 §5.3（2026-09-16 实测发现，与 DAG/MVWU 议题无关的独立缺陷） | — | 2026-09-16 | 2026-09-16 |
+| RM-AG0065 | **数据契约一致性批**（DEBT0040 + DEBT0041——TAG0035 独立评审判定与「gate 判据健壮性」不同簇、且 DEBT0040 含 CI 改动需用户许可，遂移出）：① 事件账本 `gate-events.jsonl` 写入测试无 `tmp_path` 隔离强制（单测真实写仓库内 committed 账本，TAG0034 P6.5 judge 跑全量 pytest 污染历史账本）② `agate-md-field-set` 支持字段集与 `check-p6-provenance.py` 必备 frontmatter 字段集**不同源**（`P3-test-cases.md` 的 `agent` 字段落在缝里，P6→P7 被 exit 2 挡住） | backlog | TAG0035 独立评审（2026-09-16 移出项，复盘措施 3 闭环） | — | 2026-09-16 | 2026-09-16 |
 ## 状态标识
 
 | 状态 | 说明 | 何时进入 |
@@ -637,6 +638,26 @@
 - **归属**：独立任务（`check-gate.py` + regression 测试，**触发 SELF-GATE**）。
 - **相关**：同批发现的「三处数字序号假设致非数字阶段名**静默失效**」（`check-gate.py:1465` / `check-state-transition.py:212` / `pre-commit-gate.py:192`）可作为同任务的第二部分，一并修。
 - **⚠ 状态变更（2026-09-16）：已并入 RM-AG0062**——两条同属 gate/check-script **健壮性**（同簇同性质同流程），`check-gate.py` 改动面**直接重叠**（0062 的 DEBT0037 改 `_gate_p4` 判据，本条的 fail-open 改 `handlers` 分发）；且 RM-AG0062 本身即为「归并批」形态（参照 TAG0023/TAG0031 先例），并入零额外开销。**立项为 TAG0035**，本条作为其**子批 A**（fail-open）+ **子批 B**（三处数字序号假设）交付。
+
+---
+
+## RM-AG0065 详情
+
+**数据契约一致性批（2026-09-16，TAG0035 移出项闭环）
+
+- **来源**：TAG0035 的独立评审判定这两条与「gate 判据健壮性」**仅名义相关**，且 DEBT0040 含 **CI workflow 改动**（`.github/workflows/` 加 `git diff --exit-code` 兜底步）——按仓库 `AGENTS.md` 规则 5，**改 CI 配置需用户明确许可**，不应静默包含在 gate 健壮性批内。故移出本批，改由本条承接（复盘改进措施 3 的落地）。
+- **共同点**：都是**数据契约不一致**（测试/字段的定义与实际消费方脱节），区别于 RM-AG0062 的 gate 判据健壮性。
+- **① DEBT0040（medium/protocol）——账本写入测试无 tmp 隔离强制**：
+  - 问题：单测真实调用 `agate_common.append_event` 写进**仓库内 committed 账本**；TAG0034 P6.5 judge 跑全量 pytest 时污染了 TAG0030/0032/0033 的账本（需 `git checkout` 复原）；`check-events.py` 不校验「跑测前后账本零新增」。
+  - 影响：跑一次全量 pytest 就可能改动历史任务的 committed 账本（重复 `judge_verdict` 事件 + hash 链错位）；漏掉则错误账本被提交、**破坏 hash 链可审计性**。
+  - 修复方向：① `test-designer.md` / `implementer.md` 补硬规则（`append_event` 目标必须 `tmp_path`，禁止指向仓库内真实/fixture 账本）② CI 加兜底步 `git diff --exit-code agate-workspace/tasks/*/gate-events.jsonl`（pytest 之后），非零即 fail ③ 可选：`append_event` 检测 git 跟踪目标 → warn。
+  - **⚠ CI 改动需用户许可**（AGENTS.md 规则 5）。
+- **② DEBT0041（medium/protocol）——字段集不同源**：
+  - 问题：`agate-md-field-set` 的支持字段集与 `check-p6-provenance.py` 的必备 frontmatter 字段集**各自演进、不同源**；`P3-test-cases.md` 的 `agent` 字段落在两者之间的缝里 → P6→P7 被 exit 2 挡住。
+  - 修复方向：定权威源 + 共享常量，或一方读另一方。
+  - **注意**：该条目与 **RM-AG0063（MVWU）** 读同一字段族（`agate-md-field-get.py` 的 `JSON_FIELDS`）——立项时须复核两者是否冲突。
+- **归属**：独立任务（预计一个 task 内 2 子批，参照 TAG0035 的归并批形态）。**触发 SELF-GATE**（两个 DEBT 均涉及 `agate/scripts/` 与可能的 CI 配置）。
+- **与 RM-AG0062 的边界**：RM-AG0062 只做 gate **判据**健壮性（子批 A/B/C/D 已交付）；本条做**数据契约**一致性。两者**文件面可能重叠**（都触及 `check-p6-provenance.py` 相关区域），立项时须复核。
 
 ## RM-AG0051 详情
 
