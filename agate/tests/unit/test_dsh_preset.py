@@ -132,6 +132,65 @@ def test_dsh_persona_is_thin_identity(agate_root):
     )
 
 
+# ── DSH 包 required-key 契约（通用 schema 校验）─────────────────────────────
+#
+# 为什么需要（2026-09-16，同类故障第二次发生）：
+#   本文件原有用例只断言 persona **内容**（config.text 含 orchestrator-template.md 引用），
+#   不校验 **key 名是否符合 DSH 包的 schema**。DSH 40792330c0 起 persona 必填 key
+#   由 `text` 改为 `prefix`，模板未跟进 → preset 挂载失败 → DSH fail-closed 拒绝建会话
+#   （$.prefix missing required value；hotfix PR #325）。而原有测试**全绿**——因为
+#   它查的正是那个已经失效的旧 key。
+#   同类先例：tool-fs-search 的 sampleOverCapGlobResults（本文件第 3-7 行注释记录）。
+#
+# 维护方式：DSH 各包的 required key 来自其 src/index.ts 的 `z.object({...})` 中
+#   `.required()`（或裸 `z.<type>()` 无 `.default()`）的字段。DSH 改 schema 时
+#   本清单需同步——不同步则 CI 红（这正是本契约的目的：**让 schema 漂移在 CI 暴露，
+#   而非等用户新开会话时才发现**）。
+#
+# 数据来源（harness 仓库，2026-09-16 核对）：
+#   packages/preset/persona/src/index.ts          → prefix: z.string().required()
+#   packages/fs/tool-fs-search/src/index.ts       → sampleOverCapGlobResults: z.boolean().required()
+#   packages/todo/tool-todo/src/index.ts          → allowParallelInProgress: z.boolean().required()
+#   （tool-web / tool-goal / agent-instructions 的 Config 字段全有 .default()，无 required key）
+DSH_PACKAGE_REQUIRED_KEYS = {
+    "@deepseek-ai/dsh-persona": ("prefix",),
+    "@deepseek-ai/dsh-tool-fs-search": ("sampleOverCapGlobResults",),
+    "@deepseek-ai/dsh-tool-todo": ("allowParallelInProgress",),
+}
+
+
+def test_dsh_package_configs_have_all_required_keys(agate_root):
+    """BDD-18：模板中每个引用 DSH 包的行，其 config 必含该包的 schema required key。
+
+    这是**通用契约**（非单字段断言）：DSH 任意包新增/改名必填 key → 本用例红，
+    避免"文件语法合法 + 内容正确，但 key 不符 schema → 挂载失败且测试全绿"的故障模式。
+    """
+    rows = _load_rows(agate_root)
+    checked = []
+    for row in rows:
+        name = row.get("name")
+        if name not in DSH_PACKAGE_REQUIRED_KEYS:
+            continue
+        config = row.get("config")
+        if config is None:
+            config = {}
+        assert isinstance(config, dict), (
+            f"{row.get('id')} 行（{name}）的 config 须为 mapping，实际 {type(config).__name__}"
+        )
+        for key in DSH_PACKAGE_REQUIRED_KEYS[name]:
+            assert key in config, (
+                f"{row.get('id')} 行（{name}）缺 schema 必填 config key `{key}`——"
+                f"该包 src/index.ts 中 `{key}` 为 required，缺失 → preset 挂载失败 → "
+                f"DSH fail-closed 拒绝创建会话"
+            )
+        checked.append(name)
+    # 防"清单写了但模板没引用该包"导致空跑
+    assert checked, (
+        "模板中未找到任何带 required-key 契约的 DSH 包行——"
+        f"契约清单 {sorted(DSH_PACKAGE_REQUIRED_KEYS)} 疑与模板脱节"
+    )
+
+
 def test_dsh_preset_yml_has_name_and_description(agate_root):
     """BDD-4：preset.yml 需含 GUI 选择器展示用的 name/description（产品级要求，非 schema 强制）。"""
     data = yaml.safe_load(_read(agate_root, *TEMPLATE_DIR, "preset.yml"))

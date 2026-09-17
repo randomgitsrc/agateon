@@ -1317,7 +1317,7 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-09
-task_id: TAG0035-gate-robustness
+task_id: TAG0035
 closed_at: 2026-09-16
 ```
 
@@ -1357,7 +1357,7 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-09
-task_id: TAG0035-gate-robustness
+task_id: TAG0035
 closed_at: 2026-09-16
 ```
 
@@ -1420,7 +1420,7 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-10
-task_id: null
+task_id: null   # 待立项；归属 RM-AG0065（数据契约一致性批，2026-09-16 登记）
 ```
 
 ## DEBT0041
@@ -1448,5 +1448,5 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-10
-task_id: null
+task_id: null   # 待立项；归属 RM-AG0065（数据契约一致性批，2026-09-16 登记）
 ```
