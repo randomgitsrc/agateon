@@ -1251,6 +1251,9 @@ def test_agate_root_self_locate_worktree(git_repo, agate_root, tmp_path, run_cli
         "-c",
         f"unset AGATE_ROOT; cd {shlex.quote(str(repo))} && bash {shlex.quote(str(hook))}",
         cwd=str(repo),
+        # HOME 隔离：resolve_hook_root 会查 ~/.agate 的版本解析链（current/latest 指针），
+        # 不隔离则解析到本机稳定版而非本测试的 workflow_root（TAG0032 版本管理布局引入）
+        env={"HOME": str(tmp_path)},
     )
     assert "WORKTREE_SOURCED" in result.output
 
@@ -1456,7 +1459,11 @@ def test_bdd_10_probe_skips_unexecutable_candidate(
     fake_path = f"{bin1}:{bin2}:{os.environ.get('PATH', '')}"
 
     result = run_cli(
-        bash, str(hook_path), env={"AGATE_ROOT": "", "PATH": fake_path}
+        bash,
+        str(hook_path),
+        # HOME 隔离：同 test_agate_root_self_locate_worktree——防 resolve_hook_root
+        # 解析到本机 ~/.agate 的版本目录而非本测试的 workflow_root
+        env={"AGATE_ROOT": "", "PATH": fake_path, "HOME": str(tmp_path)},
     )
     assert result.returncode == 0, (
         f"探测循环未跳过不可执行的 Python 解释器候选（{hook_filename}）："
@@ -1481,7 +1488,12 @@ def test_bdd_11_agate_python_explicit_override_skips_probe_loop(
     result = run_cli(
         bash,
         str(hook_path),
-        env={"AGATE_ROOT": "", "PATH": fake_path, "AGATE_PYTHON": python_exe},
+        env={
+            "AGATE_ROOT": "",
+            "PATH": fake_path,
+            "AGATE_PYTHON": python_exe,
+            "HOME": str(tmp_path),  # HOME 隔离（同上）
+        },
     )
     assert result.returncode == 0, (
         f"AGATE_PYTHON 显式指定未被薄壳采用，仍走了探测循环并命中不可执行候选"

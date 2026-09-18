@@ -93,8 +93,21 @@ role: analyst
 """
 
 
-def _run_inject(agate_scripts, python_exe, run_cli, *args):
-    return run_cli(python_exe, str(agate_scripts / "agate-inject-card.py"), *args)
+def _run_inject(agate_scripts, python_exe, run_cli, tmp_path, *args):
+    """跑注入工具。
+
+    HOME 隔离（TAG0032 版本管理布局引入）：agate-inject-card.py 经 resolve_agate_root
+    解析 AGATE_ROOT，解析链会查 ~/.agate 的 current/latest 指针。不隔离 HOME 时，本机
+    会解析到稳定版目录（~/.agate/vX.Y.Z/agate）而非本测试所在仓库——导致"改本仓卡片 →
+    断言注入哈希变化"类用例失败（卡片来自稳定版，未变）。隔离后解析链失败 → 回退脚本
+    路径上溯 → 指向本仓，还原测试原意。
+    """
+    return run_cli(
+        python_exe,
+        str(agate_scripts / "agate-inject-card.py"),
+        *args,
+        env={"HOME": str(tmp_path)},
+    )
 
 
 def _between_markers(text):
@@ -127,7 +140,7 @@ def test_icb_1_block_sha256_matches_card(agate_scripts, python_exe, run_cli, tmp
     task_dir.mkdir()
     dc = task_dir / "P1-dispatch-context-analyst.md"
     dc.write_text(_ANALYST_DC, encoding="utf-8")
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert result.returncode == 0
     injected = _between_markers(dc.read_text(encoding="utf-8"))
     expected = run_cli(
@@ -146,7 +159,7 @@ def test_icb_2_other_content_unchanged(agate_scripts, python_exe, run_cli, tmp_p
     dc.write_text(_DESIGNER_DC, encoding="utf-8")
     before_guide = _before_marker(dc.read_text(encoding="utf-8"), _START_MARKER)
     before_info = _after_marker(dc.read_text(encoding="utf-8"), _END_MARKER)
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P3", str(task_dir))
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P3", str(task_dir))
     assert result.returncode == 0
     after_guide = _before_marker(dc.read_text(encoding="utf-8"), _START_MARKER)
     after_info = _after_marker(dc.read_text(encoding="utf-8"), _END_MARKER)
@@ -159,7 +172,7 @@ def test_icb_3_multiple_role_files_all_injected(agate_scripts, python_exe, run_c
     task_dir.mkdir()
     (task_dir / "P1-dispatch-context-analyst.md").write_text(_SIMPLE_DC, encoding="utf-8")
     (task_dir / "P1-dispatch-context-review.md").write_text(_SIMPLE_DC, encoding="utf-8")
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert result.returncode == 0
     assert "P1-dispatch-context-analyst.md" in result.output
     assert "P1-dispatch-context-review.md" in result.output
@@ -172,18 +185,18 @@ def test_icb_3_multiple_role_files_all_injected(agate_scripts, python_exe, run_c
 def test_icb_4_no_dispatch_context_exit_1(agate_scripts, python_exe, run_cli, tmp_path):
     task_dir = tmp_path / "task_empty"
     task_dir.mkdir()
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert result.returncode == 1
     assert "不存在" in result.output
 
 
-def test_icb_5_no_args_exit_1(agate_scripts, python_exe, run_cli):
-    result = _run_inject(agate_scripts, python_exe, run_cli)
+def test_icb_5_no_args_exit_1(agate_scripts, python_exe, run_cli, tmp_path):
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path)
     assert result.returncode == 1
 
 
-def test_icb_6_missing_task_dir_exit_1(agate_scripts, python_exe, run_cli):
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P1")
+def test_icb_6_missing_task_dir_exit_1(agate_scripts, python_exe, run_cli, tmp_path):
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1")
     assert result.returncode == 1
 
 
@@ -192,7 +205,7 @@ def test_icb_7_legacy_format_injectable(agate_scripts, python_exe, run_cli, tmp_
     task_dir.mkdir()
     dc = task_dir / "P1-dispatch-context.md"
     dc.write_text(_SIMPLE_DC, encoding="utf-8")
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert result.returncode == 0
     assert "AGATE_CARD 已注入" in result.output
     assert "旧" not in dc.read_text(encoding="utf-8")
@@ -203,7 +216,7 @@ def test_icb_8_no_placeholder_exit_1(agate_scripts, python_exe, run_cli, tmp_pat
     task_dir.mkdir()
     dc = task_dir / "P1-dispatch-context-analyst.md"
     dc.write_text(_NO_PLACEHOLDER_DC, encoding="utf-8")
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert result.returncode == 1
     assert ("未找到" in result.output) or ("占位符" in result.output)
 
@@ -213,9 +226,9 @@ def test_icb_idempotent_1_unchanged_card_exit_0(agate_scripts, python_exe, run_c
     task_dir.mkdir()
     dc = task_dir / "P1-dispatch-context-analyst.md"
     dc.write_text(_SIMPLE_DC, encoding="utf-8")
-    first = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    first = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert first.returncode == 0
-    second = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    second = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert second.returncode == 0
     assert "AGATE_CARD 已注入" in second.output
 
@@ -227,7 +240,7 @@ def test_icb_idempotent_2_changed_card_updates(
     task_dir.mkdir()
     dc = task_dir / "P3-dispatch-context-test-designer.md"
     dc.write_text(_SIMPLE_DC, encoding="utf-8")
-    first = _run_inject(agate_scripts, python_exe, run_cli, "P3", str(task_dir))
+    first = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P3", str(task_dir))
     assert first.returncode == 0
     first_hash = _sha256_utf8(_between_markers(dc.read_text(encoding="utf-8")))
 
@@ -236,7 +249,7 @@ def test_icb_idempotent_2_changed_card_updates(
     try:
         with open(card_src, "a", encoding="utf-8") as fh:
             fh.write("\n## 临时测试追加内容\n")
-        second = _run_inject(agate_scripts, python_exe, run_cli, "P3", str(task_dir))
+        second = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P3", str(task_dir))
         assert second.returncode == 0
     finally:
         card_src.write_bytes(backup)
@@ -250,5 +263,5 @@ def test_icb_missing_1_no_placeholder_exit_1(agate_scripts, python_exe, run_cli,
     task_dir.mkdir()
     dc = task_dir / "P1-dispatch-context-analyst.md"
     dc.write_text(_MISSING_DC, encoding="utf-8")
-    result = _run_inject(agate_scripts, python_exe, run_cli, "P1", str(task_dir))
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert result.returncode == 1
