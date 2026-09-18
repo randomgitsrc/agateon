@@ -275,7 +275,7 @@ agate 协议里散落在正文的机器读取字段（P1/P2/P6/P7 共约 40+ 个
 ### 决策
 
 - `~/.agate` 升级为**版本管理根目录**：`repo/`（唯一主仓库，首次 clone）+ `vX.Y.Z/`（`git worktree add` 检出 tag）+ `latest`/`current` 纯指针（POSIX 软链 / Windows 文本指针）+ `scripts/`（版本管理工具本体）。
-- hook 从"指向具体版本脚本"改为装**固定解析入口** `resolve-entry.py`：运行时读项目 `.agate-version`（asdf 模式 cwd 向上找，`agate: vX.Y.Z` 精确版本）→ 解析版本目录 → exec 对应版本 gate py。解析优先级：AGATE_ROOT env 最高 → 项目声明 → current → legacy 软链兜底（无版本目录时软链目标本身 = AGATE_ROOT）。
+- hook 从"指向具体版本脚本"改为装**固定解析入口** `resolve-entry.py`：运行时读项目 `.agate-version`（asdf 模式 cwd 向上找，`agate: vX.Y.Z` 精确版本）→ 解析版本目录 → exec 对应版本 gate py。解析优先级：AGATE_ROOT env 最高 → AGATE_HOME（版本根基址，DEBT0042）→ 项目声明 → current → legacy 软链兜底（无版本目录时软链目标本身 = AGATE_ROOT）。
 - 新增工具：`agate-install.py`（安装/卸载/环境探测）、`agate-resolve.py`（解析查询）、`agate-pack-offline.py` + `install-offline.py`（外网打包 → 内网离线安装，平台核对 + checksum 校验）。
 - `agate_common.resolve_agate_root` 扩展四层解析语义，作为全部 gate 脚本统一解析入口。
 

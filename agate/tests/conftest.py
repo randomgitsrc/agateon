@@ -106,9 +106,15 @@ def _run_cli_impl(*args, cwd=None, input=None, env=None):
     本机稳定版（本机与 CI 结果分歧的根因）。同时经 PYTHONPATH 带回用户 site-packages，
     避免切断 `~/.local` 下第三方包的可见性。显式 `env` 中的 HOME/USERPROFILE/PYTHONPATH
     覆盖默认值——需要构造假 `~/.agate` 布局的测试照常传自己的 HOME。
+
+    **同时中和 `AGATE_HOME`**（DEBT0042 新增的基址 env）：它是解析链里比 `~/.agate`
+    更高优先的一层，若外环境设了它，隔离 HOME 就形同虚设——同一类"本机环境决定红绿"
+    会经新变量复发（实测未中和时 20 failed / 53 passed）。需要显式指定基址的测试
+    在 `env=` 里传自己的值（在下方 update 时覆盖本行的删除）。
     """
     cmd = [str(a) for a in args]
     full_env = os.environ.copy()
+    full_env.pop("AGATE_HOME", None)
     # HOME 与 USERPROFILE 同时设（Windows 的 expanduser 读 USERPROFILE）
     full_env["HOME"] = _isolated_home()
     full_env["USERPROFILE"] = full_env["HOME"]
