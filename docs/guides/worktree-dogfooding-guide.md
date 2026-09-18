@@ -12,8 +12,8 @@ agate 自身改造 = 用 agate 改造 agate（dogfooding）。涉及双工作区
 
 ## 前置条件
 
-- 主 checkout（`/home/kity/oclab/agate`）在 main 且干净
-- `~/.agate` 软链指向主 checkout/agate（稳定版）
+- 开发 checkout（本仓库）在 main 且干净
+- `~/.agate` 是**版本管理根目录**（非软链）——稳定版来自 `~/.agate/current/`，与开发 checkout **解耦**（见 §「本机稳定版布局」；2026-09-18 前为 legacy 软链布局）
 - 任务已 P0 立项（P0-brief + .state.yaml 在 agate-workspace/tasks/）
 
 ## 流程（10 步）
@@ -134,7 +134,7 @@ git log --oneline -3   # 确认交接单已提交
 
 | 纪律 | 说明 |
 |------|------|
-| 主 checkout 禁止改动 | 它是稳定版来源 + hook 的 AGATE_ROOT |
+| 开发 checkout 的 `agate/` 不改 | 正常改动走 worktree。**注意**：迁移到版本管理布局后它**已不是**稳定版来源（稳定版 = `~/.agate/current/`），但仍是你的开发 checkout——改它会让本地状态混入"看起来像已发布"的假象 |
 | `~/.agate` 禁止改动 | 稳定版（当前发布 tag），跑 gate / 读卡片用它 |
 | gate 工具 ≠ 检查对象 | commit hook 用 `~/.agate` 判定；但 `check-protocol-consistency.py` 必须用 worktree 自己的（检查 worktree 里的文件） |
 | `~/.agate` 脚本显示主 checkout 上下文 | `agate-summary.py` 在 worktree 跑显示稳定版 main/HEAD，不代表 worktree 状态 |
@@ -142,6 +142,68 @@ git log --oneline -3   # 确认交接单已提交
 | commit 时 phase = 本 commit 产出阶段 | 防 pre-commit 用下一阶段 gate 拦截 |
 
 ---
+
+## 本机稳定版布局（`~/.agate`）
+
+> **2026-09-18 起**：本机已从 legacy 单软链布局迁移到**版本管理布局**。
+
+```
+~/.agate/                       # 版本管理根（非软链）
+├── repo/                       # 从 origin clone 的独立仓库副本
+├── v0.71.1/                    # 已安装版本目录（含 agate/ + agate-workspace/）
+├── latest → v0.71.1            # 指针：最新已安装版
+├── current → latest            # 指针：当前使用版
+└── scripts/                    # 单源副本（随安装/升级刷新，非软链）
+```
+
+**与 worktree 流程的关系**：
+
+| 项 | 迁移前（legacy） | 迁移后（版本管理） |
+|----|-----------------|------------------|
+| 稳定版来源 | 软链 → 开发 checkout 的 `agate/` | **`~/.agate/current/`**（独立目录） |
+| 改开发 checkout 的 `agate/` | **立即影响** hook 判定 | **不影响**（hook 用稳定版） |
+| `agate-summary.py` 显示 | 开发 checkout 的上下文 | **稳定版**的 `AGATE_ROOT` + 版本号 |
+| 版本锁定 | ❌ 无 | ✅ 项目根 `.agate-version` 写 `agate: vX.Y.Z` |
+
+**运维命令**：
+
+```bash
+python3 ~/.agate/scripts/agate-resolve.py              # 查看当前解析（AGATE_ROOT / VERSION / REASON）
+python3 ~/.agate/scripts/agate-install.py latest       # 更新到最新发布版（幂等）
+python3 ~/.agate/scripts/agate-install.py v0.70.0      # 装指定版本
+python3 ~/.agate/scripts/agate-install.py --uninstall v0.70.0   # 卸载（含项目引用保护）
+```
+
+**迁移路径**（三步，`install.sh --versions` fail-closed 保护已有软链）：
+```bash
+mv ~/.agate ~/.agate.bak && mkdir -p ~/.agate && bash install.sh --versions
+```
+
+**回退**：`rm -rf ~/.agate && mv ~/.agate.bak ~/.agate`（备份保留着原软链）。
+
+> **⚠ 对 worktree 流程的影响**：
+> 1. **hook 仍用稳定版判定**（设计意图不变），但稳定版现在来自 `~/.agate/current/` 而非开发 checkout
+> 2. **要验证新 gate 行为**：须显式跑 worktree 的脚本（`python3 agate/scripts/check-gate.py ...`），不能靠"改开发 checkout 后 commit 试试"
+> 3. **项目可钉版本**：如 PeekView 在 `.agate-version` 写 `agate: v0.70.0` 即锁定，与全局 `current` 解耦
+
+## 改动通道：worktree 优先，hotfix 例外
+
+> **默认**：agate 自身改造任务（P0-P8）**必须**走 worktree。
+>
+> **hotfix 通道**：**不构成 agate 任务**的一次性修复，满足**全部**下列条件时**可不开 worktree**（直接在开发 checkout 改 → 分支 → PR）：
+>
+> | # | 条件 |
+> |---|------|
+> | 1 | 改动面 ≤2 文件、无跨模块影响 |
+> | 2 | **不触发 SELF-GATE**（不碰 `agate/scripts/*`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml`） |
+> | 3 | 不产生阶段产出（无 P0-brief/.state.yaml/P1-P8） |
+> | 4 | 有明确验证判据（单测 + 目标命令 exit code），不需多轮评审 |
+>
+> **典型**：配置 key 对齐上游 schema（如 DSH persona `text`→`prefix`，PR #325）、文案修正、单文件 bug、CI 配置微调。
+>
+> **不适用**：任何 `agate/` 协议本体/脚本改动（SELF-GATE）、需阶段产出的改动（= agate 任务）、跨子系统探索性设计。
+>
+> **hotfix 也走 PR**（main 受保护），只是不开 worktree、不建任务目录。
 
 ## 发布与合并：tag / PR / merge 策略（TAG0035 复盘补全）
 

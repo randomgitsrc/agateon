@@ -9,10 +9,56 @@
 
 ## 仓库四块
 
-- `<仓库根>/`：开发资料（README / CHANGELOG / docs/ / archived/）+ 本文件。**主 checkout 禁止改动**（worktree 开发时它是协议本体 + hook 的 AGATE_ROOT）
-- `agate/`：协议本体，`~/.agate` 软链指向这里。改它触发 SELF-GATE（见下）
+- `<仓库根>/`：开发资料（README / CHANGELOG / docs/ / archived/）+ 本文件。**开发 checkout**——正常改动走 worktree（见下方「hotfix 通道」的例外）
+- `agate/`：协议本体。改它触发 SELF-GATE（见下）。**运行时稳定版来自 `~/.agate/current/agate/`**（版本管理布局，与开发 checkout 解耦，见「本机稳定版布局」）
 - `agate-workspace/`：任务数据（tasks/、roadmap/、debt/、reviews/ 等）。roadmap 回写 `done` 是 P8 gate 硬校验（RM-AG0043）
 - `site/`：产品 Web 层（VitePress 站点源码：首页/博客）。属于产品对外内容，**在协议 gate 治理之外**——改它不触发 SELF-GATE，detect-docs-only 视其改动为 docs-only（跳过全量 pytest/shellcheck）。唯一硬校验 = `npm run build` 通过。品牌唯一权威源在 `docs/brand/`，`site/public/` 是构建快照（`npm run sync:brand` + `sync-covers.mjs` 生成，不入库；博客封面同步到 `public/covers/` 供列表页引用）。**接博客任务先读**：文档索引 `site/guides/README.md`，机械流程见 `site/guides/CONTRIBUTING.md`，质量标准见 `site/guides/BLOG-STANDARDS.md`（发布前必须过独立评审）
+
+## 改动通道：worktree 优先，hotfix 例外
+
+> **默认**：任何改动走 worktree（隔离、可回滚、gate 完整）+ PR。**这一条覆盖绝大多数场景**。
+>
+> **hotfix 通道**：满足**全部**下列条件时，**可不开 worktree**（直接在开发 checkout 改 → 分支 → PR）：
+>
+> | # | 条件 | 判据 |
+> |---|------|------|
+> | 1 | **改动面极小** | ≤2 个文件，且无跨模块影响 |
+> | 2 | **不触发 SELF-GATE** | 不碰 `agate/scripts/*`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml` |
+> | 3 | **不产生阶段产出** | 无 P0-brief/.state.yaml/P1-P8 产物（即：不是 agate 任务，是一次性修复） |
+> | 4 | **可快速验证** | 有明确判据（如单测 + 目标命令 exit code），不需多轮评审 |
+>
+> **典型 hotfix**：配置 key 对齐上游 schema、文案修正、单文件 bug 修复、CI 配置微调。
+>
+> **不适用 hotfix**（必须走 worktree）：
+> - 任何 `agate/` 协议本体或脚本改动（触发 SELF-GATE，需独立评审）
+> - 需要阶段产出/看板登记/roadmap 回写的改动（= agate 任务）
+> - 改动跨多个子系统或需探索性设计
+>
+> **hotfix 也走 PR**（不直接推 main——main 受保护），只是不开 worktree、不建任务目录。
+
+## 本机稳定版布局（`~/.agate`）
+
+`~/.agate` 是**版本管理根目录**（非软链），与开发 checkout **解耦**：
+
+```
+~/.agate/
+├── repo/              # 从 origin clone 的独立仓库副本
+├── vX.Y.Z/            # 各已安装版本目录（含 agate/ 与 agate-workspace/）
+├── latest → vX.Y.Z    # 指针：最新已安装版
+├── current → latest   # 指针：当前使用版
+└── scripts/           # 单源副本（随安装/升级刷新，非软链）
+```
+
+**关键含义**：
+
+| 事实 | 说明 |
+|------|------|
+| **稳定版来源** = `~/.agate/current/` | **不是**开发 checkout——改开发 checkout 的 `agate/` **不影响** hook/工具链判定（避免"用未验证的新 gate 判自己"） |
+| hook 是**固定解析入口** | `.git/hooks/*` → `~/.agate/scripts/resolve-entry.py`，运行时按项目 `.agate-version` 解析版本再 exec——**切版本无需重装 hook** |
+| 项目可**钉版本** | 在项目根 `.agate-version` 写 `agate: vX.Y.Z`；不写则用 `current` |
+| 运维命令 | `agate-install.py latest`（更新，幂等）/ `agate-install.py vX.Y.Z`（装指定版）/ `--uninstall` / `agate-resolve.py`（查看解析结果） |
+
+**历史**：本机原为 legacy 单软链布局（`~/.agate` → 开发 checkout 的 `agate/`），2026-09-18 迁移至版本管理布局（三步：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`）。
 
 ## 改脚本的工作流
 
@@ -51,9 +97,10 @@
 > - 交接单模板：`agate/assets/templates/handoff-template.md`（复制到 worktree 根 `HANDOFF-{Txxx}.md` 填写）
 
 - **双工作区**：改造对象 = worktree 的 `agate/`；开发工具 = `~/.agate`（稳定版，**勿动**）。跑 gate/读卡片用 `~/.agate`，改代码/跑测试在 worktree
-- **gate 工具 ≠ 检查对象**：commit hook 用 `~/.agate`（稳定版）判定；但 `check-protocol-consistency.py` **必须用 worktree 自己的**（否则扫到主 checkout 的协议文件）
+- **gate 工具 ≠ 检查对象**：commit hook 用 `~/.agate`（稳定版）判定；但 `check-protocol-consistency.py` **必须用 worktree 自己的**（`python3 agate/scripts/check-protocol-consistency.py`——检查对象是 worktree 里的协议文件；用 `~/.agate` 的会扫到稳定版目录 `~/.agate/current/`，而非你的改动）
 - **编排/派发类工具一律用 `~/.agate/scripts/` 稳定版**：`agate-inject-card.py` / `agate-render-dispatch-prompt.py` / `agate-next-card.py` 等有 AGATE_ROOT 自解析逻辑，worktree 相对路径调用会读到 worktree 正在修改的协议卡片，把未发布的新机制注入任务（TAG0016 教训）
-- `~/.agate` 脚本在 worktree 跑显示主 checkout 上下文（`agate-summary.py` 显示稳定版版本，不代表 worktree 状态）
+- `~/.agate` 脚本显示**稳定版上下文**（`agate-summary.py` 显示 `AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号，**不是**你的 worktree/开发 checkout 状态——后者用 `git log`/`git status` 看）
+- **迁移提示（2026-09-18 起）**：本机已从 legacy 软链切到版本管理布局，稳定版来源是 `~/.agate/current/`（见上方「本机稳定版布局」）。**改开发 checkout 的 `agate/` 不再影响 hook 判定**——要验证新 gate 行为，须显式跑 worktree 的脚本
 
 **工具纪律（本环境实战验证，T001/TAG0004 起）**：
 - bash 一律加 `timeout`（外层 `timeout N cmd`，N 按预期耗时 30-90s），工具 timeout 参数同步设——无 timeout 的 bash 多次被 abort/挂起
