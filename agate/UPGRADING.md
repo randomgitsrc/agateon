@@ -54,6 +54,65 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 两种布局的「更新」指令在文档面对齐、各自**幂等**：legacy 侧 = `git pull`（+ 按需重跑 hook），版本管理侧 = `agate-install.py latest`。
 
+### 路径层次与解析优先级（易混淆点）
+
+> 本节回答高频混淆：`~/.agate` / `current` / `AGATE_HOME` / `AGATE_ROOT` / `.agate-version` 各是什么、什么关系。
+
+**① 三种性质不同的东西，勿混为一谈**：
+
+| 名字 | 性质 | 说明 |
+|------|------|------|
+| `~/.agate` | **文件系统实体** | 版本管理根目录（**不是**协议根） |
+| `current` / `latest` | **指针** | POSIX 软链；Windows 无符号链接权限时为文本指针文件（内容 = 目标版本目录名） |
+| `AGATE_ROOT` / `AGATE_HOME` | **环境变量** | 解析链前两层，见下表 |
+| `.agate-version` | **项目侧声明文件** | asdf 模式，cwd 向上查找 |
+| `AGATE_VER_ROOT` | **不是环境变量** | 仅 `install.sh --versions` 内的**本地变量**（取值 `${AGATE_HOME:-$HOME/.agate}`）。命名刻意区别于 `AGATE_HOME`，避免把环境变量遮蔽为本地赋值 |
+
+**② 目录层次（版本管理布局）**：
+
+```
+~/.agate/                    ← 版本管理根（AGATE_HOME 指向这一层）
+├── vX.Y.Z/                  ← 已安装版本目录
+│   └── agate/               ← 协议根（AGATE_ROOT 指向这一层；scripts/ assets/ 在此）
+├── latest  → vX.Y.Z         ← 指针
+├── current → latest         ← 指针（可多级跳）
+├── repo/                    ← 从 origin clone 的主仓库
+└── scripts/                 ← 入口副本（hook 安装目标；随安装刷新，见下一节）
+```
+
+> ⚠ **`~/.agate` ≠ 协议根**，多一层版本目录。整仓形态（GitHub 直装）下协议根为 `<版本目录>/`（无 `agate/` 子目录）——由 `_protocol_root` 两形态探测兼容。
+
+**③ 解析优先级（五层，自上而下，实测验证）**：
+
+| # | 来源 | 指向的层次 | `AGATE_REASON` 字样 |
+|---|------|-----------|-------------------|
+| 1 | `AGATE_ROOT` env | **协议根**（直接指定，跳过版本解析） | `AGATE_ROOT 环境变量覆盖` |
+| 2 | `AGATE_HOME` env | **版本根基址**（换"版本仓库在哪"） | 其后各层的字样（如 `全局 current`） |
+| 3 | 项目 `.agate-version` | 版本号（在基址下找同名版本目录） | `引用 .agate-version` |
+| 4 | `current` 指针链 | 版本目录 → 协议根 | `全局 current` |
+| 5 | legacy 软链兜底 | 软链目标即协议根 | `legacy 软链布局（无版本指针）` |
+
+**`AGATE_ROOT` 与 `AGATE_HOME` 的关键差别**（最易混）：
+
+| | `AGATE_ROOT` | `AGATE_HOME` |
+|---|---|---|
+| 指向 | **协议根**（其下直接是 `scripts/`、`assets/`） | **版本根**（其下是 `vX.Y.Z/` 与指针） |
+| 类比 | "用哪份协议" | "版本仓库在哪" |
+| 典型值 | `~/.agate/v0.71.1/agate` | `~/.agate` |
+| 误用后果 | 指向版本根 → 找不到 `scripts/` → fail-closed（调用方会报错） | — |
+
+**项目钉版本**：项目根写 `.agate-version`（内容 `agate: vX.Y.Z`），cwd 向上查找（子目录自动继承）。⚠ **声明未安装的版本 / 格式非法 → stderr 警告 + 回退全局 `current`（exit 仍 0，不阻断）**——即"以为锁定了 vX.Y.Z，实际跑的是 current"。切换后须用 `agate-resolve.py` 确认实际解析（输出 `AGATE_ROOT` / `AGATE_VERSION` / `AGATE_REASON` 三行）。
+
+**hook 的实际解析链**（真正生效处）：
+
+```
+git commit
+  → .git/hooks/<hook>          （软链 → <版本管理根>/scripts/<hook>.sh）
+  → resolve-entry.py           （固定入口，不随版本变）
+  → resolve_hook_root()        （与 resolve_agate_root 同一解析链，走上面五层）
+  → exec <解析到的协议根>/scripts/<gate>.py
+```
+
 ### hook 重装时机（统一口径）
 
 `install-hook.py` 安装的是**固定解析入口** `resolve-entry.py`（一段薄壳 `.sh` + 一个不随版本变的 Python 入口），
