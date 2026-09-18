@@ -141,6 +141,162 @@ git log --oneline -3   # 确认交接单已提交
 | 工具稳定优先 | hook 指向稳定版，不指向 worktree（避免"用未验证的新 gate 判自己"）——用户已确认此哲学 |
 | commit 时 phase = 本 commit 产出阶段 | 防 pre-commit 用下一阶段 gate 拦截 |
 
+---
+
+## 发布与合并：tag / PR / merge 策略（TAG0035 复盘补全）
+
+> **本节回答三个高频疑问**：tag 打在哪个 commit？worktree 要不要 merge main？PR 用什么 merge 策略？
+
+### 1. tag 打在哪里：**打在 worktree 的 P8 commit 上**（现状，且是对的）
+
+P8 卡片明确规定（`phase-cards/P8-release.md:12`）：
+
+> 主 Agent 执行 gate 验证 → 通过后执行 bump-version + CHANGELOG 更新 → **同一 commit + tag**
+
+**实测确认**（v0.71.1）：
+
+```bash
+$ git rev-parse v0.71.1^{commit}     # → ac2cc73（worktree 分支的 P8 commit，单 parent）
+$ git merge-base --is-ancestor v0.71.1 origin/main && echo OK    # → OK
+$ git describe --tags origin/main    # → v0.71.1-7-g8890a09  ✅ 正确
+```
+
+**为什么这样是对的**：tag 标记的是「**发布内容**」（bump 后的 version 文件 + CHANGELOG），而 PR 的 merge commit **不改变这些内容**。tag 指向 P8 commit → 经 PR merge 进入 main 历史 → `describe` 正常工作。
+
+**⚠ 漂移风险只有一个**：**PR 必须用普通 merge（`--no-ff`），禁止 squash**。
+squash 会产生「内容相同但 SHA 不同」的新 commit → tag 指向的 P8 commit **不在 main 历史里** → `git describe --tags --abbrev=0` **回退到旧 tag** → CHECK 7（README badge vs tag）报错（v0.31.0 事故）。
+
+**若已误用 squash**：
+```bash
+git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force
+```
+
+#### 附注标签 vs 轻量标签（**实测发现的不一致**）
+
+**背景**：验证 tag 是否漂移时，`git ls-remote --tags` 与 `git rev-parse vX.Y.Z^{commit}` 会给出**不同的 SHA**——这**不是漂移**，而是 tag 类型差异：
+
+| 命令 | 返回什么 |
+|------|---------|
+| `git ls-remote --tags origin vX.Y.Z` | **tag 对象的 SHA**（附注标签）或 commit SHA（轻量标签） |
+| `git rev-parse vX.Y.Z^{commit}` | **总是**解引用到 commit SHA |
+| `git cat-file -t vX.Y.Z` | `tag`（附注）或 `commit`（轻量） |
+
+**实测（2026-09-17）**：
+
+```bash
+$ git cat-file -t v0.71.1     # → tag     （附注标签）
+$ git cat-file -t v0.71.0     # → commit  （轻量标签）
+$ git cat-file -t v0.70.0     # → commit
+$ git cat-file -t v0.69.0     # → commit
+```
+
+**即：`v0.71.1` 是仓库里第一个附注标签，v0.71.0 及更早全是轻量标签。**
+
+**影响评估：无功能危害**——既有机制全部用 `git describe --tags --abbrev=0`（CHECK 7 / P8 G-5 验证），而 `describe` **对两种标签一视同仁**：
+```bash
+$ git describe --tags --abbrev=0 origin/main    # → v0.71.1  ✅
+```
+
+**但建议统一**：附注标签能带 tagger/日期/说明（`git cat-file -p v0.71.1` 可看到 "Agateon v0.71.1 — gate 健壮性批…"），信息更丰富；轻量标签更简洁。**当前不一致属历史遗留，无需回改**，但**新版本应统一用同一种**——若要改为附注（推荐，可写发布说明）：
+
+```bash
+git tag -a vN.N.0 -m "Agateon vN.N.0 — <一句话发布说明>"
+```
+
+> **⚠ 提醒**：`git ls-remote --tags` 与 `rev-parse^{commit}` 的 SHA 差异**不要误判为漂移**。判断漂移的正确命令是：
+> ```bash
+> git merge-base --is-ancestor vX.Y.Z origin/main && echo "在 main 历史 ✓" || echo "漂移 ✗"
+> ```
+> （用 `^{commit}` 解引用后判断，或直接用 tag 名——`merge-base` 会自动解引用附注标签。）
+
+
+### 2. worktree 要不要 merge main：**看情况，但合并前必须确认无冲突面**
+
+| 场景 | 做法 |
+|------|------|
+| 任务期间 main 前进（其他 PR 合并） | **可 merge `origin/main` 进 worktree 分支**——保持分支最新，减少合并时的冲突 |
+| PR 报 `BEHIND`（落后 main） | **必须先 merge**：GitHub 保护规则要求 up-to-date 才允许合并 |
+| 无冲突面 | 直接 `git merge origin/main`（会生成 merge commit，正常） |
+
+**实测（PR #325 的经历）**：
+```bash
+$ gh pr view 325 --json mergeStateStatus,mergeable
+{"mergeable":"MERGEABLE","state":"BEHIND"}      # BEHIND ≠ 冲突，只是落后
+$ git merge origin/main                          # 解决 BEHIND
+$ git push && gh pr merge ...                    # 然后才能合并
+```
+
+**⚠ 注意**：worktree 里 merge main 会产生 merge commit（如 `ff4df74 Merge remote-tracking branch 'origin/main' into hotfix/...`）——这是正常的，**不影响 tag**（tag 打在 P8 那个 commit 上，不在 merge commit 上）。
+
+### 3. PR merge 策略：**普通 merge（`--no-ff`），禁 squash / 禁 rebase**
+
+```bash
+# 正确（git-to-main 默认行为）：
+/home/kity/bin/git-to-main <PR#>          # gh pr merge --merge
+
+# 错误（会导致 tag 漂移）：
+gh pr merge <PR#> --squash                 # ❌ tag 指向的 commit 不在 main 历史
+gh pr merge <PR#> --rebase                 # ❌ 同上
+```
+
+**理由**：CHECK 7（`check_version_badge`）与 P8 的 G-5 验证都用 `git describe --tags --abbrev=0` 取最新 tag；squash/rebase 生成的 SHA 与 tag 分叉 → describe 回退旧版。
+
+---
+
+## 收尾：合并后同步主 checkout（**实测四次踩坑**）
+
+> **本节是 TAG0032/0035 等任务中反复出现的问题**——合并 PR 后同步主 checkout 时，ff 合并被"本地未跟踪/已修改文件"挡住。四次都发生在同一模式上。
+
+### 症状
+
+在**主 checkout** 执行 `git fetch && git merge --ff-only origin/main` 时报错：
+
+```
+error: 您对下列文件的本地修改将被合并操作覆盖：
+	agate-workspace/roadmap/roadmap.md
+请在合并前提交或贮藏您的修改。
+```
+或
+```
+error: 工作区中下列未跟踪的文件将会因为合并操作而被覆盖：
+	docs/reviews/review-260916-0828.md
+```
+
+**根因**：你（或并行会话）曾**在主 checkout 直接创建/修改过**这些文件，而它们**已被 PR 合并进 main**——于是本地副本成了"挡路的重复品"。
+
+### 处理流程（**必须先核对内容，再清除**）
+
+```bash
+# ① 逐文件核对：本地工作区 vs origin/main 是否逐字节一致
+for f in <被挡住的文件列表>; do
+  if git show origin/main:$f 2>/dev/null | diff -q - $f >/dev/null 2>&1; then
+    echo "  ✓ 一致: $f"
+  else
+    echo "  ★不一致: $f  ← 停下来人工看，不要删"
+  fi
+done
+
+# ② 全部一致 → 安全清除本地副本
+git checkout -- <已跟踪且一致的文件>
+rm -f <未跟踪且一致的文件>
+
+# ③ 完成 ff 合并
+git merge --ff-only origin/main
+```
+
+**关键原则**：**`diff` 一致才清除**——不一致说明本地有 main 没有的内容（可能是你的未提交工作），此时必须人工判断，**不得直接删**。
+（四次实践均通过此流程零丢失；`git-to-main` 的 `--force` 与 `rm -rf` 都不需要。）
+
+### 为什么会有这些"重复副本"？
+
+| 来源 | 例子 |
+|------|------|
+| 之前用主 checkout 直接改了 workspace 数据面（roadmap / 看板 / P0-brief），随后在 worktree 提交并 PR | TAG0035 收尾、RM-AG0063/0064 立项 |
+| 用户提供的评审/附件文件放在主 checkout，随后被 PR 收进仓库 | `docs/reviews/review-*.md` |
+| 运行时产物（gate-events.jsonl 等） | 与合并带入的跟踪版本冲突 |
+
+---
+
 ## 完成后清理
 
 ```bash
@@ -157,6 +313,26 @@ git branch -D feat/{Txxx}-{slug}
 # 若 PR 未自动删远端分支：
 # git push origin --delete feat/{Txxx}-{slug}
 # 收尾自检：主 checkout 根 `ls HANDOFF-*.md` 应为空（归档 + 清理后不残留）
+
+# ⚠ 最后一步：按上一节「收尾：合并后同步主 checkout」同步主 checkout
+# （若你在主 checkout 造过 workspace 文件，ff 合并会被挡住——先 diff 核对再清除）
+```
+
+### 任务收尾检查清单（TAG0035 复盘补全）
+
+任务 P8 READY + PR 合并后，逐项确认：
+
+| # | 项 | 校验命令 |
+|---|----|---------|
+| 1 | HANDOFF 已归档 | `ls agate-workspace/archived/plans/HANDOFF-{Txxx}.md` |
+| 2 | 看板已入「已完成（归档）」区 | `awk '/^### /{s=$0} /{Txxx}/{print s}' agate-workspace/tasks/active-tasks.md` |
+| 3 | roadmap 关联条目已 `done` | P8 gate 硬校验（RM-AG0043）会自动查；手动核对 `grep "{RM-AGxxxx}" agate-workspace/roadmap/roadmap.md` |
+| 4 | **复盘已产出** | `ls agate-workspace/tasks/{Txxx}-*/retrospective.md` ⚠️ **TAG0035 曾漏此项** |
+| 5 | DEBT 回写：本任务修复的置 `closed` + `task_id` 用**纯编号** | `grep -A5 "## DEBT00xx" agate-workspace/debt/tech-debt.md` |
+| 6 | **被移出/未纳入的 DEBT 有去向** | 若评审移出过条目，确认已登记归属（RM 或独立立项）⚠️ **TAG0035 的 DEBT0040/0041 曾悬空** |
+| 7 | worktree 与分支已清理 | `git worktree list`、`git branch --list 'feat/{Txxx}*'` |
+| 8 | 主 checkout 已同步且干净 | `git status --short`（空）+ `git log --oneline -1` |
+| 9 | tag 有效且在 main 历史 | `git merge-base --is-ancestor v{版本} origin/main && git describe --tags origin/main` |
 ```
 
 ## 与 AGENTS.md 的关系
