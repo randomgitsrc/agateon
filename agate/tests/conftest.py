@@ -53,9 +53,6 @@ def _write_utf8(path, text):
     path.write_text(text, encoding="utf-8")
 
 
-_ISOLATED_HOME = None
-
-
 def _isolated_home():
     """测试子进程的默认隔离 HOME：**每进程一份**的空目录（含 .agate 不存在 → 解析链失败）。
 
@@ -74,12 +71,14 @@ def _isolated_home():
       互不共享；同进程内复用同一目录（避免每次调用都建目录的开销与泄漏）。
     - **atexit 自动清理**：用 mkdtemp 建唯一目录并注册清理，跑完不留残渣
       （早期版本用固定路径 + PID 命名且不清理，实测泄漏 495 个目录）。
+    - 缓存挂在函数属性上（避免 `global`，ruff PLW0603）。
     """
-    global _ISOLATED_HOME
-    if _ISOLATED_HOME is None:
-        _ISOLATED_HOME = tempfile.mkdtemp(prefix="_agate_test_home_")
-        atexit.register(shutil.rmtree, _ISOLATED_HOME, ignore_errors=True)
-    return _ISOLATED_HOME
+    cached = getattr(_isolated_home, "_cached", None)
+    if cached is None:
+        cached = tempfile.mkdtemp(prefix="_agate_test_home_")
+        atexit.register(shutil.rmtree, cached, ignore_errors=True)
+        _isolated_home._cached = cached
+    return cached
 
 
 def _user_site_packages():
