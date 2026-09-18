@@ -319,3 +319,187 @@ def test_tag0032_bdd_7_rootproto_resolve_semantics_unchanged(
     assert f"AGATE_ROOT={expected_root}" in result.output
     assert f"AGATE_ROOT={expected_root}/agate" not in result.output
     assert "AGATE_VERSION=v0.50.0" in result.output
+
+
+# ============================================================
+# DEBT0042：AGATE_HOME 基址 env 覆盖
+#
+# 动机：_resolve_version_info 原先硬编码 `base = os.path.expanduser("~/.agate")`，
+# 测试只能靠重定向 HOME 才能隔离（现有用例即如此）。加 AGATE_HOME 后基址可直接注入，
+# 既让测试不必动 HOME，也让「多版本根并存」等场景可在同一 HOME 下并行验证。
+#
+# 优先级契约（不可倒）：AGATE_ROOT（直接指定协议根）> AGATE_HOME（版本根基址）>
+#   项目声明 > current 链 > legacy 软链兜底。AGATE_HOME 只换"版本根在哪"，不改层序。
+# ============================================================
+
+
+def _make_version_root(base, versions=("v0.43.0", "v0.44.0"), current="latest", latest="v0.44.0"):
+    """在 base 下直接建版本根（版本目录 + current/latest 文本指针），返回 base。"""
+    for v in versions:
+        (base / v).mkdir(parents=True, exist_ok=True)
+    (base / "latest").write_text(latest + "\n", encoding="utf-8")
+    (base / "current").write_text(current + "\n", encoding="utf-8")
+    return base
+
+
+def test_debt0042_agate_home_overrides_base(run_cli, python_exe, agate_scripts, tmp_path):
+    """AGATE_HOME 指定版本根基址 → current 链在该基址下解析（不读真实 ~/.agate）。
+
+    用【不存在的 HOME】反向证明：若实现仍读 ~/.agate，则解析必然失败。
+    """
+    vroot = _make_version_root(tmp_path / "custom-root")
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        env={
+            "AGATE_ROOT": "",
+            "AGATE_HOME": str(vroot),
+            "HOME": str(tmp_path / "nonexistent-home"),
+            "USERPROFILE": str(tmp_path / "nonexistent-home"),
+        },
+    )
+    assert result.returncode == 0, f"AGATE_HOME 未被采纳：{result.output!r}"
+    expected = str((vroot / "v0.44.0").resolve())
+    assert f"AGATE_ROOT={expected}" in result.output
+    assert "AGATE_VERSION=v0.44.0" in result.output
+
+
+def test_debt0042_agate_home_project_declaration(run_cli, python_exe, agate_scripts, tmp_path):
+    """AGATE_HOME 与项目声明共存：声明命中版本根内的已安装版本（层序不变）。"""
+    vroot = _make_version_root(tmp_path / "custom-root")
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_version_decl(project, "v0.43.0")
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        cwd=str(project),
+        env={
+            "AGATE_ROOT": "",
+            "AGATE_HOME": str(vroot),
+            "HOME": str(tmp_path / "nonexistent-home"),
+            "USERPROFILE": str(tmp_path / "nonexistent-home"),
+        },
+    )
+    assert result.returncode == 0, f"AGATE_HOME + 项目声明未生效：{result.output!r}"
+    assert f"AGATE_ROOT={(vroot / 'v0.43.0').resolve()!s}" in result.output
+    assert "AGATE_VERSION=v0.43.0" in result.output
+
+
+def test_debt0042_agate_root_takes_precedence_over_agate_home(
+    run_cli, python_exe, agate_scripts, tmp_path
+):
+    """优先级：AGATE_ROOT（直接指定协议根）> AGATE_HOME（版本根基址）。"""
+    vroot = _make_version_root(tmp_path / "custom-root")
+    direct = tmp_path / "direct-root"
+    (direct / "scripts").mkdir(parents=True)
+    (direct / "assets").mkdir(parents=True)
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        env={
+            "AGATE_ROOT": str(direct),
+            "AGATE_HOME": str(vroot),
+            "HOME": str(tmp_path / "nonexistent-home"),
+            "USERPROFILE": str(tmp_path / "nonexistent-home"),
+        },
+    )
+    assert result.returncode == 0
+    assert f"AGATE_ROOT={direct}" in result.output
+    # 正向断言：确认走的是 AGATE_ROOT 分支（而非间接反证）
+    assert "AGATE_REASON=AGATE_ROOT 环境变量覆盖" in result.output
+    assert "AGATE_VERSION=" in result.output
+
+
+def test_debt0042_agate_home_empty_string_equals_unset(
+    run_cli, python_exe, agate_scripts, tmp_path
+):
+    """AGATE_HOME="" 等同未设（走默认 ~/.agate 基址，由 HOME 重定向决定）。"""
+    home = _make_home(tmp_path)
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        env={
+            "AGATE_ROOT": "",
+            "AGATE_HOME": "",
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+        },
+    )
+    assert result.returncode == 0
+    assert f"AGATE_ROOT={(home / '.agate' / 'v0.44.0').resolve()!s}" in result.output
+
+
+def test_debt0042_agate_home_legacy_symlink(run_cli, python_exe, agate_scripts, tmp_path):
+    """AGATE_HOME 指向 legacy 软链布局 → 第 4 层（软链兜底）在该基址下生效。"""
+    real = tmp_path / "protocol-body"
+    (real / "scripts").mkdir(parents=True)
+    (real / "assets").mkdir(parents=True)
+    # 版本根布局但其中是 legacy 软链（无 vX.Y.Z 目录/无指针）
+    custom = tmp_path / "custom-home"
+    custom.mkdir()
+    link = custom / "body"
+    try:
+        os.symlink(str(real), str(link))
+    except (OSError, NotImplementedError):
+        pytest.skip("该平台不支持符号链接（Windows 无权限）")
+    # 需要 base 自身是软链才走 legacy 分支——把 AGATE_HOME 直接指向软链
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        env={
+            "AGATE_ROOT": "",
+            "AGATE_HOME": str(link),
+            "HOME": str(tmp_path / "nonexistent-home"),
+            "USERPROFILE": str(tmp_path / "nonexistent-home"),
+        },
+    )
+    assert result.returncode == 0, f"legacy 软链兜底未在 AGATE_HOME 下生效：{result.output!r}"
+    assert "legacy" in result.output
+
+
+def test_debt0042_agate_home_expanduser(run_cli, python_exe, agate_scripts, tmp_path):
+    """AGATE_HOME 含 `~` → 按 HOME 展开（expanduser 语义）。"""
+    home = _make_home(tmp_path)
+    vroot = home / ".agate"
+    result = run_cli(
+        python_exe,
+        str(agate_scripts / "agate-resolve.py"),
+        env={
+            "AGATE_ROOT": "",
+            "AGATE_HOME": "~/.agate",
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+        },
+    )
+    assert result.returncode == 0, f"AGATE_HOME 的 ~ 未展开：{result.output!r}"
+    assert f"AGATE_ROOT={(vroot / 'v0.44.0').resolve()!s}" in result.output
+
+
+def test_debt0042_agate_home_via_resolve_hook_root(
+    run_cli, python_exe, agate_scripts, tmp_path
+):
+    """第二消费者：resolve_hook_root（hook 解析入口）同样认 AGATE_HOME。"""
+    vroot = _make_version_root(tmp_path / "custom-root")
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(agate_scripts)!r})\n"
+        "from agate_common import resolve_hook_root\n"
+        "root, warns = resolve_hook_root(__file__)\n"
+        "print('ROOT=' + str(root))\n"
+        "print('WARNS=' + ','.join(warns))\n",
+        encoding="utf-8",
+    )
+    result = run_cli(
+        python_exe,
+        str(probe),
+        env={
+            "AGATE_ROOT": "",
+            "AGATE_HOME": str(vroot),
+            "HOME": str(tmp_path / "nonexistent-home"),
+            "USERPROFILE": str(tmp_path / "nonexistent-home"),
+        },
+    )
+    assert result.returncode == 0, f"resolve_hook_root 未认 AGATE_HOME：{result.output!r}"
+    assert f"ROOT={(vroot / 'v0.44.0').resolve()!s}" in result.output

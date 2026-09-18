@@ -14,8 +14,10 @@ set -euo pipefail
 # --versions：进入「版本管理布局」（TAG0032）。~/.agate 变目录根，含 repo/ 主克隆 +
 # vX.Y.Z/ 版本 worktree + latest/current 指针 + 根 scripts/ 入口副本。原无参「单软链」路径不变。
 if [ "${1:-}" = "--versions" ]; then
-    AGATE_HOME="$HOME/.agate"
-    if [ -L "$AGATE_HOME" ]; then
+    # 变量名用 AGATE_VER_ROOT 而非 AGATE_HOME——后者已是环境变量（版本根基址，DEBT0042），
+    # 同名会把环境变量遮蔽为本地赋值，造成"设了 env 却被忽略"的静默分叉。
+    AGATE_VER_ROOT="${AGATE_HOME:-$HOME/.agate}"
+    if [ -L "$AGATE_VER_ROOT" ]; then
         cat >&2 <<'EOF'
 错误: ~/.agate 是 legacy 软链布局，install.sh --versions 会穿透软链把 repo/ 与 vX.Y.Z/ 静默建进源仓库，已拒绝（fail-closed）。
 迁移到版本管理布局（三步）：
@@ -35,13 +37,13 @@ EOF
         exit 1
     fi
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    mkdir -p "$AGATE_HOME"
-    if [ ! -d "$AGATE_HOME/repo/.git" ]; then
-        git clone "${AGATE_REPO_URL:-https://github.com/randomgitsrc/agateon}" "$AGATE_HOME/repo"
+    mkdir -p "$AGATE_VER_ROOT"
+    if [ ! -d "$AGATE_VER_ROOT/repo/.git" ]; then
+        git clone "${AGATE_REPO_URL:-https://github.com/randomgitsrc/agateon}" "$AGATE_VER_ROOT/repo"
     fi
     # 优先用刚 clone 的 repo 副本内的安装器（curl … | bash -s -- --versions 场景下
     # $SCRIPT_DIR 是当前工作目录、无 agate/scripts/）；仅 repo 缺失时回退 $SCRIPT_DIR。
-    INSTALLER="$AGATE_HOME/repo/agate/scripts/agate-install.py"
+    INSTALLER="$AGATE_VER_ROOT/repo/agate/scripts/agate-install.py"
     [ -f "$INSTALLER" ] || INSTALLER="$SCRIPT_DIR/agate/scripts/agate-install.py"
     exec "$PY" "$INSTALLER" latest
 fi

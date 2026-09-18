@@ -712,6 +712,12 @@ python3 ~/.agate/scripts/install-hook.py
 - **符号链接模式（Linux/macOS 标准）**：升级后 hook 自动跟随新解析入口，无需重装。
 - **复制模式（Windows 无符号链接权限）**：hook 是复制品，不自动跟随 → **必须重跑** `python3 ~/.agate/scripts/install-hook.py`（复制模式 + `.agate-root` 标记保留）。
 - AGATE_ROOT env 显式覆盖仍是最高优先级（既有契约未破坏）。
+- **基址 env 覆盖（DEBT0042 起）**：版本根所在目录（默认 `~/.agate`）可经 **`AGATE_HOME`** 覆盖——只换"版本根在哪"，**不改层序**。完整优先级：`AGATE_ROOT`（直接指定协议根）> `AGATE_HOME`（版本根基址）> 项目声明 > `current` 链 > legacy 软链兜底。
+  - **覆盖面（如实）**：`AGATE_HOME` 被 `agate_common`（解析链）与 `agate-install.py`（安装目标）读取，两者**同源**——否则"装到哪"与"解析到哪"会分叉。
+  - **不影响**：`install-hook.py`（其参数是**协议根**而非版本根基址——优先级 `argv[1] > AGATE_ROOT > ~/.agate`，语义不同故不接该变量）；`agate-pack-offline.py` / `install-offline.py`（有 `--repo` / `--dest-root` 逃生舱）；`install.sh`（`--versions` 首装，硬编码 `$HOME/.agate`）。
+  - **⚠ 语义差别**：`AGATE_HOME` 指向**版本根**（其下是 `vX.Y.Z/` 与指针）；`AGATE_ROOT` 指向**协议根**（其下直接是 `scripts/`、`assets/`）。版本管理布局下协议根是 `$AGATE_HOME/<版本目录>/agate`（或整仓形态的 `<版本目录>/`）。
+  - **⚠ 风险**：设定 `AGATE_HOME` 后，hook 会**执行该基址下 `current` 指向版本的 gate**（解析链的一部分，非旁路）。只在确知后果时对长期环境设它。
+  - **主要用途**：测试隔离（不必重定向 `HOME`，从而不影响 `~/.local` 下第三方包可见性）。
 
 **④ 新工具（可选使用）**：
 

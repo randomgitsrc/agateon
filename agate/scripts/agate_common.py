@@ -182,15 +182,23 @@ def _protocol_root(vdir):
 def _resolve_version_info(start_dir=None, use_legacy=True):
     """版本解析核心：env → 项目声明 → current 链 → legacy 软链兜底。
 
+    ⚠ 基址逻辑与 agate-install._agate_home 须同源（两处未共享实现）；改动其一须同步
+    另一处 + tests/unit/test_agate_version_resolve.py 的 test_debt0042_* 用例。
+
     返回 dict {root, version, reason, warnings}。root 为 None = 终态失败（调用方须
     fail-closed）。env 覆盖返回 env 原值（不 resolve，与既有契约一致，兼容字面盘符路径）。
     声明未安装 / 格式非法 → warnings 加警告 + 回退 current（绝不静默禁用，BDD-13/14）。
+
+    基址（版本根所在目录，默认 `~/.agate`）可经 `AGATE_HOME` 覆盖（DEBT0042）——只换
+    "版本根在哪"，不改层序：`AGATE_ROOT`（直接指定协议根）> `AGATE_HOME`（版本根基址）
+    > 项目声明 > current 链 > legacy 软链兜底。
     """
     env_root = os.environ.get("AGATE_ROOT", "")
     if env_root:
         return {"root": env_root, "version": "", "reason": "AGATE_ROOT 环境变量覆盖", "warnings": []}
 
-    base = os.path.expanduser("~/.agate")
+    env_home = os.environ.get("AGATE_HOME", "")
+    base = os.path.expanduser(env_home) if env_home else os.path.expanduser("~/.agate")
     warnings = []
     status, declared = _find_project_declaration(start_dir)
     if status == "ok":

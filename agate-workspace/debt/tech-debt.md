@@ -1457,7 +1457,7 @@ task_id: null   # 待立项；归属 RM-AG0065（数据契约一致性批，2026
 id: DEBT0042
 category: protocol
 title: "~/.agate 基址硬编码且无 env 覆盖——版本解析链（TAG0032 核心能力）缺隔离测试手段，8 个测试因此依赖本机布局状态"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate/scripts/agate_common.py
@@ -1468,6 +1468,10 @@ evidence:
     note: "同类 1 个：test_icb_idempotent_2_changed_card_updates——注入工具解析到稳定版卡片，改本仓卡片后哈希不变"
   - ref: agate-workspace/tasks/TAG0035-gate-robustness/retrospective.md
     note: "TAG0036 建 worktree 时发现（P0 基线红）；主 checkout 同样复现，非任务改动引起"
+  - ref: agate/scripts/agate_common.py
+    note: "修复（task_id TAG0035 派生）：_resolve_version_info 支持 AGATE_HOME 覆盖基址（`base = os.path.expanduser(env_home) if env_home else os.path.expanduser('~/.agate')`），层序不变；agate-install.py._agate_home 同源读取，避免装/解析分叉"
+  - ref: agate/tests/unit/test_agate_version_resolve.py
+    note: "P5 证据：新增 3 个隔离用例（test_debt0042_*：基址覆盖 / 与项目声明共存 / AGATE_ROOT 优先于 AGATE_HOME），均以不存在的 HOME 反向证明不读真实 ~/.agate；P6 证据：全量 1660 passed / 2 skipped（并行与串行）、consistency 0 ERROR、ruff 通过"
 impact: "① 测试依赖本机环境状态（本机 legacy 布局则绿、版本管理布局则红）——同一份代码两种结果；② 更严重：TAG0032 交付的【版本解析链】（.agate-version 声明 → vX.Y.Z 目录 → current 指针）**无任何隔离测试**，改 _resolve_version_info 时无回归保护"
 recommendation: "实现层加 env 覆盖基址（如 AGATE_HOME，`base = os.environ.get(\"AGATE_HOME\") or os.path.expanduser(\"~/.agate\")`）→ 使版本解析链可隔离测试；随后补覆盖测试：建 tmp 版本根（v0.1.0/ + latest/current 指针 + repo/），断言 resolve_agate_root/resolve_hook_root 的四种解析路径（env 覆盖 / 项目声明 / current / 回退）。测试侧 HOME 隔离已由 PR #332 落地（8 个测试），本 DEBT 只负责实现层可测性缺口"
 closure_criteria:
@@ -1476,6 +1480,6 @@ closure_criteria:
   - "全量 pytest 在【本机默认环境】与【CI 无 ~/.agate 环境】两种条件下均全绿"
 source: retrospective
 created_at: 2026-09-18
-task_id: null   # 待立项
+task_id: TAG0035   # 由 TAG0035 复盘派生（PR #334 修测试侧，本 PR 补实现侧）
 ```
 

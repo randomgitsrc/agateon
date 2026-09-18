@@ -13,7 +13,7 @@
 
 ## agate_root / project_root 覆盖（大多数项目不需要，删掉这节即可）
 
-如果你的 agate 没装在默认位置 `~/.agate`（TAG0008 起也可为版本管理根目录——项目经 `.agate-version` 解析到 `~/.agate/vX.Y.Z/`，此时 orchestrator 自动解析无需覆盖；若需要显式指定可用 AGATE_ROOT env），或者 `project_root` 不能用"向上找最近的 `.git` 目录"这条默认规则正确推出来（比如 monorepo 里想显式指定某个子目录为 project_root），在这里声明：
+如果你的 agate 没装在默认位置 `~/.agate`（TAG0008 起也可为版本管理根目录——项目经 `.agate-version` 解析到 `~/.agate/vX.Y.Z/`，此时 orchestrator 自动解析无需覆盖；若需要显式指定可用 AGATE_ROOT env；只想换"版本根在哪"（如多套版本根并存）用 AGATE_HOME env），或者 `project_root` 不能用"向上找最近的 `.git` 目录"这条默认规则正确推出来（比如 monorepo 里想显式指定某个子目录为 project_root），在这里声明：
 
 ```
 agate_root: /path/to/your/agate-clone/agate

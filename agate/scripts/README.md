@@ -68,7 +68,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 | 脚本 | 用途 |
 |------|------|
 | `agate-install.py` | 安装/卸载 agate 版本 + 环境探测：无参 / `latest` = 装 latest 指针（最新发布版，幂等）；`vX.Y.Z` = 装指定版本（repo 单克隆 + worktree add tag，幂等）；`--uninstall vX` = 删版本目录 + worktree remove + 指针清理（含项目引用保护扫描）；`--check` = 环境探测（python3/pyyaml/git/bash，分平台修复指引）|
-| `agate-resolve.py` | 版本解析 CLI：cwd 向上找 `.agate-version` → 映射版本目录 → 输出 AGATE_ROOT/AGATE_VERSION/AGATE_REASON（优先级 env 最高 → 项目声明 → current → legacy 软链兜底）|
+| `agate-resolve.py` | 版本解析 CLI：cwd 向上找 `.agate-version` → 映射版本目录 → 输出 AGATE_ROOT/AGATE_VERSION/AGATE_REASON（优先级 AGATE_ROOT → AGATE_HOME → 项目声明 → current → legacy 软链兜底；AGATE_HOME 指定版本根基址，DEBT0042）|
 | `resolve-entry.py` | hook 固定解析入口：读项目 `.agate-version`（或 current/latest/legacy 兜底）→ 得 AGATE_ROOT → exec 对应版本 gate py。切版本不用重装 hook |
 | `agate-pack-offline.py` | 外网离线打包器：`vX.Y.Z [--platform linux-x86_64|windows-x86_64] [--include-python] [--include-pillow]` → 平台标签 bundle + manifest.json（sha256 checksum）|
 | `install-offline.py` | 内网离线安装器：读 manifest.json 平台核对（不匹配拒绝）+ checksum 校验（不匹配拒绝）→ `pip install --no-index --find-links wheels/` → 建 `~/.agate/vX.Y.Z/` + hook/orchestrator 指向 + 验证闭环 |
