@@ -171,6 +171,45 @@ squash 会产生「内容相同但 SHA 不同」的新 commit → tag 指向的 
 git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force
 ```
 
+#### 附注标签 vs 轻量标签（**实测发现的不一致**）
+
+**背景**：验证 tag 是否漂移时，`git ls-remote --tags` 与 `git rev-parse vX.Y.Z^{commit}` 会给出**不同的 SHA**——这**不是漂移**，而是 tag 类型差异：
+
+| 命令 | 返回什么 |
+|------|---------|
+| `git ls-remote --tags origin vX.Y.Z` | **tag 对象的 SHA**（附注标签）或 commit SHA（轻量标签） |
+| `git rev-parse vX.Y.Z^{commit}` | **总是**解引用到 commit SHA |
+| `git cat-file -t vX.Y.Z` | `tag`（附注）或 `commit`（轻量） |
+
+**实测（2026-09-17）**：
+
+```bash
+$ git cat-file -t v0.71.1     # → tag     （附注标签）
+$ git cat-file -t v0.71.0     # → commit  （轻量标签）
+$ git cat-file -t v0.70.0     # → commit
+$ git cat-file -t v0.69.0     # → commit
+```
+
+**即：`v0.71.1` 是仓库里第一个附注标签，v0.71.0 及更早全是轻量标签。**
+
+**影响评估：无功能危害**——既有机制全部用 `git describe --tags --abbrev=0`（CHECK 7 / P8 G-5 验证），而 `describe` **对两种标签一视同仁**：
+```bash
+$ git describe --tags --abbrev=0 origin/main    # → v0.71.1  ✅
+```
+
+**但建议统一**：附注标签能带 tagger/日期/说明（`git cat-file -p v0.71.1` 可看到 "Agateon v0.71.1 — gate 健壮性批…"），信息更丰富；轻量标签更简洁。**当前不一致属历史遗留，无需回改**，但**新版本应统一用同一种**——若要改为附注（推荐，可写发布说明）：
+
+```bash
+git tag -a vN.N.0 -m "Agateon vN.N.0 — <一句话发布说明>"
+```
+
+> **⚠ 提醒**：`git ls-remote --tags` 与 `rev-parse^{commit}` 的 SHA 差异**不要误判为漂移**。判断漂移的正确命令是：
+> ```bash
+> git merge-base --is-ancestor vX.Y.Z origin/main && echo "在 main 历史 ✓" || echo "漂移 ✗"
+> ```
+> （用 `^{commit}` 解引用后判断，或直接用 tag 名——`merge-base` 会自动解引用附注标签。）
+
+
 ### 2. worktree 要不要 merge main：**看情况，但合并前必须确认无冲突面**
 
 | 场景 | 做法 |
