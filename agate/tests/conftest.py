@@ -5,6 +5,7 @@
 #   * 所有文本 I/O 显式 encoding="utf-8"（BDD-7）
 #   * fixture 内容运行时构造，不写字面命中行（BDD-5）
 
+import atexit
 import base64
 import os
 import re
@@ -52,13 +53,69 @@ def _write_utf8(path, text):
     path.write_text(text, encoding="utf-8")
 
 
+def _isolated_home():
+    """测试子进程的默认隔离 HOME：**每进程一份**的空目录（含 .agate 不存在 → 解析链失败）。
+
+    为什么需要（DEBT0042 同族，2026-09-18）：被测脚本（resolve_agate_root /
+    resolve_hook_root 等）的版本解析链**优先查 `~/.agate` 的 current/latest 指针**，
+    只有解析失败才回退"脚本路径上溯"。若子进程继承真实 HOME，则本机装了稳定版
+    （`~/.agate/vX.Y.Z/`）时会解析到稳定版目录，而非测试所在仓库——导致同一份代码
+    在本机红、在 CI（无 `~/.agate`）绿，测试反馈不可信。
+
+    隔离后 `~/.agate` 不存在 → 解析链失败 → 回退脚本路径上溯 → 指向测试仓库，
+    与 CI 行为一致。需要验证版本解析链自身的测试显式传 `HOME`（见
+    test_agate_version_resolve.py 的 `_resolve_env`），显式值覆盖本默认值。
+
+    **实现要点**：
+    - **每进程一份（惰性创建、缓存复用）**：并行跑时各 xdist worker 是独立进程，
+      互不共享；同进程内复用同一目录（避免每次调用都建目录的开销与泄漏）。
+    - **atexit 自动清理**：用 mkdtemp 建唯一目录并注册清理，跑完不留残渣
+      （早期版本用固定路径 + PID 命名且不清理，实测泄漏 495 个目录）。
+    - 缓存挂在函数属性上（避免 `global`，ruff PLW0603）。
+    """
+    cached = getattr(_isolated_home, "_cached", None)
+    if cached is None:
+        cached = tempfile.mkdtemp(prefix="_agate_test_home_")
+        atexit.register(shutil.rmtree, cached, ignore_errors=True)
+        _isolated_home._cached = cached
+    return cached
+
+
+def _user_site_packages():
+    """当前解释器的用户级 site-packages（`~/.local/lib/pythonX.Y/site-packages`）。
+
+    隔离 HOME 会**连带切断**用户 site-packages 的可见性（它经 `~` 定位），导致装在
+    `~/.local` 的第三方包（如 Pillow）在子进程里 import 失败——实测
+    `test_img_4_ahash_valid_image_64bit` 报 SKIP_NO_PILLOW。故隔离时经 PYTHONPATH
+    显式带回该目录（不含 ~/.agate 相关路径，隔离目标不受影响）。
+    """
+    try:
+        import site as _site
+        cand = _site.getusersitepackages()
+    except Exception:
+        return None
+    return cand if cand and os.path.isdir(cand) else None
+
+
 def _run_cli_impl(*args, cwd=None, input=None, env=None):
     """等价 bats `run`：subprocess 封装，返回 CommandResult。
 
     参数：cwd=（等价 bats `cd`）、input=（等价 stdin 管道）、env=（附加环境变量）。
+
+    **默认隔离 HOME**：子进程不再继承真实 HOME，避免被测脚本经 `~/.agate` 解析到
+    本机稳定版（本机与 CI 结果分歧的根因）。同时经 PYTHONPATH 带回用户 site-packages，
+    避免切断 `~/.local` 下第三方包的可见性。显式 `env` 中的 HOME/USERPROFILE/PYTHONPATH
+    覆盖默认值——需要构造假 `~/.agate` 布局的测试照常传自己的 HOME。
     """
     cmd = [str(a) for a in args]
     full_env = os.environ.copy()
+    # HOME 与 USERPROFILE 同时设（Windows 的 expanduser 读 USERPROFILE）
+    full_env["HOME"] = _isolated_home()
+    full_env["USERPROFILE"] = full_env["HOME"]
+    user_site = _user_site_packages()
+    if user_site:
+        existing = full_env.get("PYTHONPATH", "")
+        full_env["PYTHONPATH"] = (user_site + os.pathsep + existing) if existing else user_site
     if env:
         full_env.update(env)
     proc = subprocess.run(
