@@ -24,8 +24,8 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 
 | 区块 | 职责 | 权威入口 | 改动影响 |
 |------|------|----------|----------|
-| `<根>` | 项目开发资料：README（中英）/ CHANGELOG / docs / archived / 根 `AGENTS.md` | `AGENTS.md`（开发指引）| 主 checkout **禁止改动**；worktree 开发时它是协议本体 + hook 的 AGATE_ROOT |
-| `agate/` | **协议本体**：阶段卡片 / 角色库 / 脚本 / 模板 / rules | `agate/AGENTS.md` → `agate/WORKFLOW.md` | 改它触发 SELF-GATE（见 `SELF-GATE.md`）；`~/.agate` 软链指向这里 |
+| `<根>` | 项目开发资料：README（中英）/ CHANGELOG / docs / archived / 根 `AGENTS.md` | `AGENTS.md`（开发指引）| **开发 checkout**——正常改动走 worktree（hotfix 例外见 `AGENTS.md`「改动通道」） |
+| `agate/` | **协议本体**：阶段卡片 / 角色库 / 脚本 / 模板 / rules | `agate/AGENTS.md` → `agate/WORKFLOW.md` | 改它触发 SELF-GATE（见 `SELF-GATE.md`）；**运行时稳定版来自 `~/.agate/current/agate/`**（版本管理布局，与开发 checkout 解耦） |
 | `agate-workspace/` | **任务数据**：tasks（含各任务 `.state.yaml`）/ roadmap / debt / reviews 等 9 个子目录 | `agate-workspace/tasks/active-tasks.md`、`agate-workspace/roadmap/roadmap.md` | roadmap 回写 `done` 是 P8 gate 硬校验（RM-AG0043） |
 | `site/` | **产品 Web 层**：VitePress 站点（首页 + 博客 + 中文 i18n）| `site/guides/README.md` | 在协议 gate 治理之外；唯一硬校验 = `npm run build`；博客发布须过独立评审 |
 
