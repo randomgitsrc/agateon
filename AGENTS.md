@@ -23,7 +23,7 @@
 > | # | 条件 | 判据 |
 > |---|------|------|
 > | 1 | **改动面极小** | ≤2 个文件，且无跨模块影响 |
-> | 2 | **不触发 SELF-GATE** | 不碰 `agate/scripts/*`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml` |
+> | 2 | **不触发 SELF-GATE** | 不碰 `agate/scripts/*`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml`、**`AGENTS.md`**、**`README.md`**（后两者也在 hook 触发面内，见 `commit-msg-self-gate.py` 正则） |
 > | 3 | **不产生阶段产出** | 无 P0-brief/.state.yaml/P1-P8 产物（即：不是 agate 任务，是一次性修复） |
 > | 4 | **可快速验证** | 有明确判据（如单测 + 目标命令 exit code），不需多轮评审 |
 >
@@ -49,16 +49,17 @@
 └── scripts/           # 单源副本（随安装/升级刷新，非软链）
 ```
 
-**关键含义**：
+**关键含义**（对开发者的影响）：
 
 | 事实 | 说明 |
 |------|------|
 | **稳定版来源** = `~/.agate/current/` | **不是**开发 checkout——改开发 checkout 的 `agate/` **不影响** hook/工具链判定（避免"用未验证的新 gate 判自己"） |
 | hook 是**固定解析入口** | `.git/hooks/*` → `~/.agate/scripts/resolve-entry.py`，运行时按项目 `.agate-version` 解析版本再 exec——**切版本无需重装 hook** |
-| 项目可**钉版本** | 在项目根 `.agate-version` 写 `agate: vX.Y.Z`；不写则用 `current` |
-| 运维命令 | `agate-install.py latest`（更新，幂等）/ `agate-install.py vX.Y.Z`（装指定版）/ `--uninstall` / `agate-resolve.py`（查看解析结果） |
+| 项目可**钉版本** | 项目根 `.agate-version` 写 `agate: vX.Y.Z`；不写则用 `current`。⚠️ 声明未安装版本 → **警告 + 回退全局**（exit 0），须用 `agate-resolve.py` 确认实际解析 |
 
-**历史**：本机原为 legacy 单软链布局（`~/.agate` → 开发 checkout 的 `agate/`），2026-09-18 迁移至版本管理布局（三步：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`）。
+**安装 / 迁移 / 更新 / 回退 / hook 重装时机 / 根 `scripts/` 维护语义** → 权威源 `agate/UPGRADING.md`「版本管理生命周期」节（单一权威口径），本文件不重复。
+
+**历史**：本机原为 legacy 单软链布局（`~/.agate` → 开发 checkout 的 `agate/`），2026-09-18 迁移至版本管理布局。
 
 ## 改脚本的工作流
 
@@ -100,7 +101,6 @@
 - **gate 工具 ≠ 检查对象**：commit hook 用 `~/.agate`（稳定版）判定；但 `check-protocol-consistency.py` **必须用 worktree 自己的**（`python3 agate/scripts/check-protocol-consistency.py`——检查对象是 worktree 里的协议文件；用 `~/.agate` 的会扫到稳定版目录 `~/.agate/current/`，而非你的改动）
 - **编排/派发类工具一律用 `~/.agate/scripts/` 稳定版**：`agate-inject-card.py` / `agate-render-dispatch-prompt.py` / `agate-next-card.py` 等有 AGATE_ROOT 自解析逻辑，worktree 相对路径调用会读到 worktree 正在修改的协议卡片，把未发布的新机制注入任务（TAG0016 教训）
 - `~/.agate` 脚本显示**稳定版上下文**（`agate-summary.py` 显示 `AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号，**不是**你的 worktree/开发 checkout 状态——后者用 `git log`/`git status` 看）
-- **迁移提示（2026-09-18 起）**：本机已从 legacy 软链切到版本管理布局，稳定版来源是 `~/.agate/current/`（见上方「本机稳定版布局」）。**改开发 checkout 的 `agate/` 不再影响 hook 判定**——要验证新 gate 行为，须显式跑 worktree 的脚本
 
 **工具纪律（本环境实战验证，T001/TAG0004 起）**：
 - bash 一律加 `timeout`（外层 `timeout N cmd`，N 按预期耗时 30-90s），工具 timeout 参数同步设——无 timeout 的 bash 多次被 abort/挂起

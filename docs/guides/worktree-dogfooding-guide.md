@@ -143,48 +143,37 @@ git log --oneline -3   # 确认交接单已提交
 
 ---
 
-## 本机稳定版布局（`~/.agate`）
+## 本机稳定版布局（对 dogfooding 的影响）
 
-> **2026-09-18 起**：本机已从 legacy 单软链布局迁移到**版本管理布局**。
+> **布局细节不在本 guide**：目录结构（`repo/` + `vX.Y.Z/` + `latest`/`current` 指针 + 根 `scripts/`）、
+> 安装 / 迁移 / 更新 / 回退四动作、**hook 重装时机**、**根 `~/.agate/scripts/` 副本维护语义**——
+> 权威源 = `agate/UPGRADING.md`「版本管理生命周期」节（自称"单一权威口径"，其余文档遇分歧以它为准）。
+>
+> 本节只写**dogfooding 需要知道的部分**（UPGRADING 不覆盖的 worktree 视角）。
 
-```
-~/.agate/                       # 版本管理根（非软链）
-├── repo/                       # 从 origin clone 的独立仓库副本
-├── v0.71.1/                    # 已安装版本目录（含 agate/ + agate-workspace/）
-├── latest → v0.71.1            # 指针：最新已安装版
-├── current → latest            # 指针：当前使用版
-└── scripts/                    # 单源副本（随安装/升级刷新，非软链）
-```
+**背景**：2026-09-18 本机 `~/.agate` 从 legacy 单软链布局迁移到版本管理布局。
 
-**与 worktree 流程的关系**：
+**三件必须知道的事**：
 
-| 项 | 迁移前（legacy） | 迁移后（版本管理） |
-|----|-----------------|------------------|
-| 稳定版来源 | 软链 → 开发 checkout 的 `agate/` | **`~/.agate/current/`**（独立目录） |
-| 改开发 checkout 的 `agate/` | **立即影响** hook 判定 | **不影响**（hook 用稳定版） |
-| `agate-summary.py` 显示 | 开发 checkout 的上下文 | **稳定版**的 `AGATE_ROOT` + 版本号 |
-| 版本锁定 | ❌ 无 | ✅ 项目根 `.agate-version` 写 `agate: vX.Y.Z` |
+| # | 事实 | 为什么重要 |
+|---|------|-----------|
+| 1 | **稳定版来源 ≠ 开发 checkout**：稳定版 = `~/.agate/current/`（指向 `vX.Y.Z/`） | 改开发 checkout 的 `agate/` **不再影响** hook 判定（迁移前会立即影响） |
+| 2 | **要验证新 gate 行为须显式跑 worktree 脚本** | hook 用稳定版判定——`python3 agate/scripts/check-gate.py ...`（worktree 内的），不能靠"改完 commit 试试" |
+| 3 | **项目可钉版本**：项目根 `.agate-version` 写 `agate: vX.Y.Z` | 与全局 `current` 解耦（如 PeekView 可钉 v0.70.0 而全局用 v0.71.1） |
 
-**运维命令**：
+> **⚠ 钉版本的容错陷阱（实测）**：声明**未安装**的版本 → **警告 + 回退全局 current**（exit 仍 0，不阻断）——
+> 即"你以为锁定了 v0.70.0，实际跑的是 v0.71.1"。切换后须用下方命令确认解析结果。
+
+**验证自己的解析**：
 
 ```bash
-python3 ~/.agate/scripts/agate-resolve.py              # 查看当前解析（AGATE_ROOT / VERSION / REASON）
-python3 ~/.agate/scripts/agate-install.py latest       # 更新到最新发布版（幂等）
-python3 ~/.agate/scripts/agate-install.py v0.70.0      # 装指定版本
-python3 ~/.agate/scripts/agate-install.py --uninstall v0.70.0   # 卸载（含项目引用保护）
+python3 ~/.agate/scripts/agate-resolve.py
+# 输出三行：AGATE_ROOT=<版本目录> / AGATE_VERSION=<版本号> / AGATE_REASON=<解析原因>
+# REASON 取值：AGATE_ROOT 环境变量覆盖 > 引用 .agate-version > 全局 current > legacy 软链布局
 ```
 
-**迁移路径**（三步，`install.sh --versions` fail-closed 保护已有软链）：
-```bash
-mv ~/.agate ~/.agate.bak && mkdir -p ~/.agate && bash install.sh --versions
-```
-
-**回退**：`rm -rf ~/.agate && mv ~/.agate.bak ~/.agate`（备份保留着原软链）。
-
-> **⚠ 对 worktree 流程的影响**：
-> 1. **hook 仍用稳定版判定**（设计意图不变），但稳定版现在来自 `~/.agate/current/` 而非开发 checkout
-> 2. **要验证新 gate 行为**：须显式跑 worktree 的脚本（`python3 agate/scripts/check-gate.py ...`），不能靠"改开发 checkout 后 commit 试试"
-> 3. **项目可钉版本**：如 PeekView 在 `.agate-version` 写 `agate: v0.70.0` 即锁定，与全局 `current` 解耦
+**注意**：`~/.agate/scripts/agate-summary.py` 显示**稳定版上下文**（`AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号），
+**不是**你的 worktree 状态——后者用 `git log` / `git status` 看。
 
 ## 改动通道：worktree 优先，hotfix 例外
 
@@ -195,7 +184,7 @@ mv ~/.agate ~/.agate.bak && mkdir -p ~/.agate && bash install.sh --versions
 > | # | 条件 |
 > |---|------|
 > | 1 | 改动面 ≤2 文件、无跨模块影响 |
-> | 2 | **不触发 SELF-GATE**（不碰 `agate/scripts/*`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml`） |
+> | 2 | **不触发 SELF-GATE**（不碰 `agate/` 下任何文件、`AGENTS.md`、`README.md`、`SELF-GATE.md`） |
 > | 3 | 不产生阶段产出（无 P0-brief/.state.yaml/P1-P8） |
 > | 4 | 有明确验证判据（单测 + 目标命令 exit code），不需多轮评审 |
 >
