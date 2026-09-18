@@ -712,6 +712,7 @@ python3 ~/.agate/scripts/install-hook.py
 - **符号链接模式（Linux/macOS 标准）**：升级后 hook 自动跟随新解析入口，无需重装。
 - **复制模式（Windows 无符号链接权限）**：hook 是复制品，不自动跟随 → **必须重跑** `python3 ~/.agate/scripts/install-hook.py`（复制模式 + `.agate-root` 标记保留）。
 - AGATE_ROOT env 显式覆盖仍是最高优先级（既有契约未破坏）。
+- **基址 env 覆盖（DEBT0042 起）**：版本根所在目录（默认 `~/.agate`）可经 **`AGATE_HOME`** 覆盖——只换"版本根在哪"，**不改层序**。完整优先级：`AGATE_ROOT`（直接指定协议根）> `AGATE_HOME`（版本根基址）> 项目声明 > `current` 链 > legacy 软链兜底。`agate-install.py` 与 `agate_common` 同源读取该变量（否则"装到哪"与"解析到哪"会分叉）。主要用途：测试隔离（不必重定向 HOME）、以及在非标准位置维护多套版本根。
 
 **④ 新工具（可选使用）**：
 

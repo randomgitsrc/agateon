@@ -73,6 +73,14 @@ _SCAN_MTIME_WINDOW = 365 * 24 * 3600
 
 
 def _agate_home():
+    """版本根目录：`AGATE_HOME` env 覆盖优先，否则 `~/.agate`（DEBT0042）。
+
+    与 agate_common._resolve_version_info 的基址口径须同源——否则"装到哪"与
+    "解析到哪"会分叉。
+    """
+    env_home = os.environ.get("AGATE_HOME", "")
+    if env_home:
+        return os.path.expanduser(env_home)
     return os.path.join(os.path.expanduser("~"), AGATE_DIRNAME)
 
 
