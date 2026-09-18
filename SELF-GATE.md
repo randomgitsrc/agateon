@@ -12,13 +12,27 @@
 
 ## 触发条件
 
-以下任一文件有改动并准备 commit 时：
-  - `agate/scripts/*.sh`（现仅 3 个 hook 薄壳：pre-commit-gate.sh / commit-msg-self-gate.sh / pre-push-gate.sh；保留防御性列举）
-  - `agate/scripts/*.py`
-- `agate/*.md`（协议文档：WORKFLOW.md / state-machine.md / dispatch-protocol.md 等）
-- `agate/**/*.md`（角色文件、模板文件等子目录）
-- `agate/rules/*.yaml`（数据面权威源：phases.yaml / dispatch.yaml / roles.yaml / dispatch-tiers.yaml；CHECK 15 专扫）
-- `SELF-GATE.md`（本文件自身的改动也走 self-gate）
+> **权威源 = hook 实现**：`agate/scripts/commit-msg-self-gate.py` 的 `_SELF_GATE_RE` 正则。
+> 本节只做**人类可读的分类说明**，不重抄清单——避免两处漂移（RM-AG0017 教训：改了 hook 正则
+> 而正文未同步，导致 `README.md`/`AGENTS.md` 长期不在正文清单内）。
+
+**触发面（按 hook 正则解读）**：
+
+| 类别 | 匹配 | 说明 |
+|------|------|------|
+| 脚本 | `agate/scripts/*.sh`、`agate/scripts/*.py` | 含 3 个 hook 薄壳（防御性列举） |
+| 协议文档（顶层） | `agate/*.md` | WORKFLOW.md / state-machine.md / dispatch-protocol.md 等 |
+| 协议文档（子目录） | `agate/**/*.md` | 正则片段 `agate/.+/.*\.md`——`agate/` 下**任意层级**的 `.md`（角色文件 / phase-cards / rules 下的 README 等，实测均触发） |
+| 数据面 | `agate/rules/*.yaml` | phases.yaml / dispatch.yaml / roles.yaml / dispatch-tiers.yaml（CHECK 15 专扫） |
+| **仓库根级文档** | `SELF-GATE.md`、`README.md`、`AGENTS.md` | ⚠️ 三个**均触发**——易漏项（RM-AG0017 补入 hook 的正是后两个） |
+
+**判断某个文件是否触发**（不必心算正则）：
+
+```bash
+grep -qE "^(agate/scripts/.*\.(sh|py)|agate/[^/]+\.md|agate/.+/.*\.md|agate/rules/[^/]+\.ya?ml|SELF-GATE\.md|README\.md|AGENTS\.md)$" <<< "<文件路径>" && echo 触发 || echo 不触发
+```
+
+> **不触发**：`docs/**`（开发资料）、`agate-workspace/**`（任务数据）、`site/**`（产品 Web 层）。
 
 ## 检查清单
 
