@@ -7,6 +7,8 @@
 #       等价 bats 的 cp 备份 + 恢复，bats 源注释不变）
 
 import hashlib
+import os
+import shutil
 
 import pytest
 
@@ -93,7 +95,18 @@ role: analyst
 """
 
 
-def _run_inject(agate_scripts, python_exe, run_cli, tmp_path, *args):
+def _make_link(src, dst):
+    """平台分支：Linux 真软链；Windows（ln -sf 退化为复制）用 copytree/copy2。"""
+    if os.name == "nt":
+        if os.path.isdir(str(src)):
+            shutil.copytree(str(src), str(dst))
+        else:
+            shutil.copy2(str(src), str(dst))
+    else:
+        os.symlink(str(src), str(dst))
+
+
+def _run_inject(agate_scripts, python_exe, run_cli, tmp_path, *args, env=None):
     """跑注入工具。
 
     HOME 隔离（TAG0032 版本管理布局引入）：agate-inject-card.py 经 resolve_agate_root
@@ -101,12 +114,17 @@ def _run_inject(agate_scripts, python_exe, run_cli, tmp_path, *args):
     会解析到稳定版目录（~/.agate/vX.Y.Z/agate）而非本测试所在仓库——导致"改本仓卡片 →
     断言注入哈希变化"类用例失败（卡片来自稳定版，未变）。隔离后解析链失败 → 回退脚本
     路径上溯 → 指向本仓，还原测试原意。
+
+    env=（可选）：附加/覆盖环境变量（如 AGATE_ROOT 指向隔离假协议树）。
     """
+    full = {"HOME": str(tmp_path)}
+    if env:
+        full.update(env)
     return run_cli(
         python_exe,
         str(agate_scripts / "agate-inject-card.py"),
         *args,
-        env={"HOME": str(tmp_path)},
+        env=full,
     )
 
 
@@ -236,23 +254,45 @@ def test_icb_idempotent_1_unchanged_card_exit_0(agate_scripts, python_exe, run_c
 def test_icb_idempotent_2_changed_card_updates(
     agate_scripts, python_exe, run_cli, agate_root, tmp_path
 ):
+    """卡片变化后重新注入 → 块内容更新（哈希变化）。
+
+    **隔离假协议树（2026-09-18 修 flaky）**：本用例原先直接改**真实仓库**的
+    `agate/phase-cards/P3-tdd.md` 再恢复——并行跑（`-n auto`）时会与同时读该文件
+    算哈希的用例（test_agate_next_card.py::test_nc_cross_checkout_paths_hash_consistent）
+    竞争，导致 "phase P3 hash mismatch" 的间歇失败（实测约 1/3 概率）。
+    改为在 tmp_path 下建独立协议树（软链 scripts/ + 真实 rules/、可写 phase-cards/），
+    经 AGATE_ROOT 指向它——不改仓库任何文件，并行安全。
+    """
     task_dir = tmp_path / "task_idem2"
     task_dir.mkdir()
     dc = task_dir / "P3-dispatch-context-test-designer.md"
     dc.write_text(_SIMPLE_DC, encoding="utf-8")
-    first = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P3", str(task_dir))
+
+    # 隔离协议树：scripts/ 软链到真实（复用被测脚本与其依赖），rules/ 复制真实，
+    # phase-cards/ 为可写副本（本用例唯一需要改动的部分）
+    proto = tmp_path / "proto"
+    proto.mkdir()
+    _make_link(agate_root / "scripts", proto / "scripts")
+    shutil.copytree(str(agate_root / "rules"), str(proto / "rules"))
+    (proto / "phase-cards").mkdir()
+    card_src = proto / "phase-cards" / "P3-tdd.md"
+    shutil.copy2(str(agate_root / "phase-cards" / "P3-tdd.md"), str(card_src))
+
+    env = {"AGATE_ROOT": str(proto)}
+
+    first = _run_inject(
+        agate_scripts, python_exe, run_cli, tmp_path, "P3", str(task_dir), env=env
+    )
     assert first.returncode == 0
     first_hash = _sha256_utf8(_between_markers(dc.read_text(encoding="utf-8")))
 
-    card_src = agate_root / "phase-cards" / "P3-tdd.md"
-    backup = card_src.read_bytes()
-    try:
-        with open(card_src, "a", encoding="utf-8") as fh:
-            fh.write("\n## 临时测试追加内容\n")
-        second = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P3", str(task_dir))
-        assert second.returncode == 0
-    finally:
-        card_src.write_bytes(backup)
+    with open(card_src, "a", encoding="utf-8") as fh:
+        fh.write("\n## 临时测试追加内容\n")
+
+    second = _run_inject(
+        agate_scripts, python_exe, run_cli, tmp_path, "P3", str(task_dir), env=env
+    )
+    assert second.returncode == 0
 
     second_hash = _sha256_utf8(_between_markers(dc.read_text(encoding="utf-8")))
     assert first_hash != second_hash
