@@ -1,0 +1,96 @@
+# direct evidence: BDD-36 (四态 exit 0) / BDD-37 (无参数/目录不存在 exit 2) / BDD-38 (只读)
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "pass-b", "tests_filter": "python -m pytest tests/a -q"}, {"id": "fail-b", "tests_filter": "python -m pytest tests/a -q"}, {"id": "red-b", "tests_filter": "python -m pytest tests/a -q"}, {"id": "unk-b", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/fail-b.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/pass-b.log ---
+command: git status --short
+exit_code: 0
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/red-b.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+expected_red: ["t/a.py::t_a"]
+failed_tests: ["t/a.py::t_a"]
+
+=== BDD-36: 四态混合任务，默认模式 ===
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-jfsvkdha/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (4 lines) ---
+MVWU_RESULT: PASS batch=pass-b
+MVWU_RESULT: FAIL batch=fail-b
+MVWU_RESULT: EXPECTED_RED batch=red-b
+MVWU_RESULT: UNKNOWN batch=unk-b reason=evidence
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+=== BDD-36: --observe ===
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-jfsvkdha/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (4 lines) ---
+| pass-b | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| fail-b | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | FAIL |
+| red-b | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | EXPECTED_RED |
+| unk-b | python -m pytest tests/a -q | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+--- STDERR ---
+check-mvwu: baseline: empty range
+TRACEBACK_IN_OUTPUT: False
+四态 verdicts=['PASS', 'FAIL', 'EXPECTED_RED', 'UNKNOWN'] ; exit codes=(0,0)
+CONCLUSION BDD-36: PASS
+
+=== BDD-38: 只读校验 ===
+task 目录文件集/字节 运行前后相同: True
+git status --porcelain 运行前后相同: True (before='' after='')
+.git/index 字节 运行前后相同: True
+.state.yaml / gate-events.jsonl 字节不变: True
+CONCLUSION BDD-38: PASS
+
+=== BDD-37: 用法/目标错误 ===
+
+-- argv=[]
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py 
+EXIT_CODE: 2
+--- STDOUT (0 lines) ---
+
+--- STDERR ---
+usage: check-mvwu.py [-h] [--observe] task_dir
+check-mvwu.py: error: the following arguments are required: task_dir
+TRACEBACK_IN_OUTPUT: False
+
+-- argv=['<tmp>/no-such-dir']
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-jfsvkdha/no-such-dir
+EXIT_CODE: 2
+--- STDOUT (0 lines) ---
+
+--- STDERR ---
+check-mvwu: 目标目录不存在 (does not exist): /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-jfsvkdha/no-such-dir
+TRACEBACK_IN_OUTPUT: False
+
+-- argv=['--observe', '<tmp>/no-such-dir']
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-jfsvkdha/no-such-dir
+EXIT_CODE: 2
+--- STDOUT (0 lines) ---
+
+--- STDERR ---
+check-mvwu: 目标目录不存在 (does not exist): /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-jfsvkdha/no-such-dir
+TRACEBACK_IN_OUTPUT: False
+
+-- argv=['--observe']
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe
+EXIT_CODE: 2
+--- STDOUT (0 lines) ---
+
+--- STDERR ---
+usage: check-mvwu.py [-h] [--observe] task_dir
+check-mvwu.py: error: the following arguments are required: task_dir
+TRACEBACK_IN_OUTPUT: False
+CONCLUSION BDD-37: PASS (均 exit 2、stdout 无契约行、stderr 有说明、无 traceback)

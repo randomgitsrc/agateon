@@ -1,0 +1,88 @@
+# 文档类 BDD-6/7/8/9 证据：目标文档满足 Then 的原文行（file:行号）。P6 阶段实跑 grep/python，非引用 P5
+# 节范围（由 grep -n '^## ' 定位）: P2 卡「dispatch_plan 机器字段」= agate/phase-cards/P2-design.md 106-143；architect.md「批次设计」= agate/assets/execution-roles/architect.md 209-267
+
+##### BDD-6：P2 卡片「dispatch_plan 机器字段」节的要点字面标记 #####
+  [FOUND] 字面「tests_filter」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:123: ### batches[] 可选键：tests_filter / output 与批切分判据（TAG0036）
+      agate/phase-cards/P2-design.md:125: > 本小节是 `tests_filter` / `output` 写法的**权威定义**（architect 角色文件只写"如何选"并引用本节，不复述契约）。两个键都嵌套在 `dispatch_plan.batches[]` 内，不新增 frontmatter 顶层键。
+      agate/phase-cards/P2-design.md:127: `batches[]` 的每一批除 `id` + `complexity` 外，可再声明两个**可选**键（`tests_filter` 与 `output`）：
+  [FOUND] 字面「可选」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:106: ## dispatch_plan 机器字段（可选，TAG0014）
+      agate/phase-cards/P2-design.md:113: # ── v2.0 派发编排字段（可选）──
+      agate/phase-cards/P2-design.md:119: - `parallel_limit` 可选，≥1 整数——并行上限（缺省 3）
+  [FOUND] 字面「双引号」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:133: - **`tests_filter`（可选）**：该批**绿灯确认**用的测试命令，写在 P2-design.md 的 frontmatter，值须用**双引号**包裹（值内含引号/空格的 node id 同理保持双引号可解析）。**只覆盖该批交付面**的测试，**禁止全量**套件、不含后续批才交付的测试——全量回归属 `gate_commands.P5`，不属批级过滤。**缺省**（不写）时 gate 行为不变，该批只是不产生批级证据，不会被拦截。
+  [FOUND] 字面「禁止全量」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:133: - **`tests_filter`（可选）**：该批**绿灯确认**用的测试命令，写在 P2-design.md 的 frontmatter，值须用**双引号**包裹（值内含引号/空格的 node id 同理保持双引号可解析）。**只覆盖该批交付面**的测试，**禁止全量**套件、不含后续批才交付的测试——全量回归属 `gate_commands.P5`，不属批级过滤。**缺省**（不写）时 gate 行为不变，该批只是不产生批级证据，不会被拦截。
+  [FOUND] 字面「expected_red」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:135: - **`expected_red` 声明位置**：该批确有设计上应红的测试（属后续批交付面，但已落在本批 `tests_filter` 命中范围内）时，由运行者在证据日志 `P4-evidence/{batch}.log` 的 `expected_red` 键里声明，不写进 P2-design.md。`{batch}` 即该批的 `id`，须匹配 `[A-Za-z0-9._-]+`（filename-safe，不含空格、斜杠、`..`），因为它直接拼成证据文件名。
+  [FOUND] 字面「P4-evidence/{batch}.log」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:135: - **`expected_red` 声明位置**：该批确有设计上应红的测试（属后续批交付面，但已落在本批 `tests_filter` 命中范围内）时，由运行者在证据日志 `P4-evidence/{batch}.log` 的 `expected_red` 键里声明，不写进 P2-design.md。`{batch}` 即该批的 `id`，须匹配 `[A-Za-z0-9._-]+`（filename-safe，不含空格、斜杠、`..`），因为它直接拼成证据文件名。
+  [FOUND] 字面「[A-Za-z0-9._-]+」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:135: - **`expected_red` 声明位置**：该批确有设计上应红的测试（属后续批交付面，但已落在本批 `tests_filter` 命中范围内）时，由运行者在证据日志 `P4-evidence/{batch}.log` 的 `expected_red` 键里声明，不写进 P2-design.md。`{batch}` 即该批的 `id`，须匹配 `[A-Za-z0-9._-]+`（filename-safe，不含空格、斜杠、`..`），因为它直接拼成证据文件名。
+  [FOUND] 字面「缺省」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:110: 方案含多个独立子任务（多包/多模块/high 复杂度）时，P2-design.md frontmatter 应声明 `dispatch_plan:`（单行 flow YAML，与 candidate_count 同级，**不入 frontmatter-check schema**，缺省不校验）：
+      agate/phase-cards/P2-design.md:119: - `parallel_limit` 可选，≥1 整数——并行上限（缺省 3）
+      agate/phase-cards/P2-design.md:133: - **`tests_filter`（可选）**：该批**绿灯确认**用的测试命令，写在 P2-design.md 的 frontmatter，值须用**双引号**包裹（值内含引号/空格的 node id 同理保持双引号可解析）。**只覆盖该批交付面**的测试，**禁止全量**套件、不含后续批才交付的测试——全量回归属 `gate_commands.P5`，不属批级过滤。**缺省**（不写）时 gate 行为不变，该批只是不产生批级证据，不会被拦截。
+  [FOUND] 字面「python -m pytest」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:130: dispatch_plan: {mode: static-batch, parallel_limit: 3, batches: [{id: order-cancel, complexity: medium, tests_filter: "python -m pytest tests/unit/test_order_cancel.py -q", output: [src/order/cancel.py, src/order/api.py]}, {id: order-refund, complexity: low}]}
+      agate/phase-cards/P2-design.md:134: - **平台中立**：`tests_filter` 示例写 `python -m pytest …` 形态，不裸 `python3`（不同平台解释器名不同，Windows 无 `make`/`python3`）；实际解释器名以本项目 `AGATE_PYTHON` / `probe_python` 探测为准，示例仅示意。
+  [FOUND] 字面「只覆盖该批交付面」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:133: - **`tests_filter`（可选）**：该批**绿灯确认**用的测试命令，写在 P2-design.md 的 frontmatter，值须用**双引号**包裹（值内含引号/空格的 node id 同理保持双引号可解析）。**只覆盖该批交付面**的测试，**禁止全量**套件、不含后续批才交付的测试——全量回归属 `gate_commands.P5`，不属批级过滤。**缺省**（不写）时 gate 行为不变，该批只是不产生批级证据，不会被拦截。
+-- 补充：要点“tests_filter 为可选键”“缺省时 gate 行为不变”的原文行:
+- **`tests_filter`（可选）**：该批**绿灯确认**用的测试命令，写在 P2-design.md 的 frontmatter，值须用**双引号**包裹（值内含引号/空格的 node id 同理保持双引号可解析）。**只覆盖该批交付面**的测试，**禁止全量**套件、不含后续批才交付的测试——全量回归属 `gate_commands.P5`，不属批级过滤。**缺省**（不写）时 gate 行为不变，该批只是不产生批级证据，不会被拦截。
+
+##### BDD-7：architect.md「批次设计」节 #####
+  [FOUND] 字面「禁止全量」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:261: - **scoping**：`tests_filter` 只含该批交付面的测试，不含后续批才交付的测试，**禁止全量**套件；全量回归属 `gate_commands.P5`。
+  [FOUND] 字面「gate_commands.P3」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:243: - 与 P3 红灯批的边界：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 给出），后续批仍按常规批级验证走。
+      agate/assets/execution-roles/architect.md:262: - **与 P3 的分工**：`gate_commands.P3` 是任务级**红灯基线**（测试先于实现，确认红），`tests_filter` 是批级**绿灯确认**（该批交付后其交付面测试确认绿）；二者互不替代。
+  [FOUND] 字面「红灯基线」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:243: - 与 P3 红灯批的边界：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 给出），后续批仍按常规批级验证走。
+      agate/assets/execution-roles/architect.md:262: - **与 P3 的分工**：`gate_commands.P3` 是任务级**红灯基线**（测试先于实现，确认红），`tests_filter` 是批级**绿灯确认**（该批交付后其交付面测试确认绿）；二者互不替代。
+  [FOUND] 字面「绿灯确认」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:262: - **与 P3 的分工**：`gate_commands.P3` 是任务级**红灯基线**（测试先于实现，确认红），`tests_filter` 是批级**绿灯确认**（该批交付后其交付面测试确认绿）；二者互不替代。
+  [FOUND] 字面「expected_red」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:236: 设计 `batches[]` 时，除上面的硬规则与检查项外，按以下三条判据切批，并为每批决定是否写可选键 `tests_filter` / `output`。字段契约（值须双引号、`expected_red` 落点、`{batch}` 命名规则、`output` 的边界）的权威定义在 P2 卡片「dispatch_plan 机器字段」的「batches[] 可选键」小节，本节只写"怎么选"，不复述契约。这些是判据式引导，不新增 gate 校验。
+      agate/assets/execution-roles/architect.md:263: - **`expected_red`**：该批确有设计上应红的测试（如命中范围内含后续批的红灯用例）时，留待运行者写入证据日志 `P4-evidence/{batch}.log` 的 `expected_red` 键，architect 在 P2-design.md 里注明哪些应红及理由即可。
+  [FOUND] 字面「不含后续批才交付」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:261: - **scoping**：`tests_filter` 只含该批交付面的测试，不含后续批才交付的测试，**禁止全量**套件；全量回归属 `gate_commands.P5`。
+-- 「硬规则」四条逐字未变：git diff efb113b 对 architect.md 含删除/修改行数（仅 '^-' 且非 '---' 行）:
+$ git diff efb113b -- agate/assets/execution-roles/architect.md | grep '^-[^-]' | wc -l
+0
+$ git diff efb113b --numstat -- agate/assets/execution-roles/architect.md   (added removed file)
+34	0	agate/assets/execution-roles/architect.md
+-- 硬规则标记行: 217:**硬规则**：
+基线 209-233 行（含「硬规则」四条）与现行 209-233 行逐字相同（diff exit 0）
+
+##### BDD-8：tests_filter 示例值内不含裸 python3 #####
+$ grep -rInE 'tests_filter: *"[^"]*\bpython3\b' agate --exclude-dir=tests
+grep_exit=1 (1=0 命中)
+-- 平台中立约束字样(AGATE_PYTHON / DEBT0014 / 不裸 python3) 各文件命中:
+  agate/phase-cards/P2-design.md:
+      134:- **平台中立**：`tests_filter` 示例写 `python -m pytest …` 形态，不裸 `python3`（不同平台解释器名不同，Windows 无 `make`/`python3`）；实际解释器名以本项目 `AGATE_PYTHON` / `probe_python` 探测为准，示例仅示意。
+  agate/assets/execution-roles/architect.md:
+      265:- **平台中立**：示例与实际值写 `python -m pytest …` 形态，不裸 `python3`；解释器名遵循项目 `AGATE_PYTHON` 探测。
+
+##### BDD-9：output 可选键写入说明（P2 卡 + architect.md）及两脚本 diff 为空 #####
+-- P2 卡 (106-143):
+  [FOUND] 字面「output」 (agate/phase-cards/P2-design.md 行 136-136):
+      agate/phase-cards/P2-design.md:136: - **`output`（可选）**：该批预期改动的文件路径列表（如上例）。**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对时读取，**不新增 gate 校验**——缺省、写错都不影响任何阶段 gate；`agate-frontmatter-check.py` 与 `check-structure-consistency.py` 均不因这两个键而改动（嵌套键，不触碰顶层白名单）。
+  [FOUND] 字面「可选」 (agate/phase-cards/P2-design.md 行 136-136):
+      agate/phase-cards/P2-design.md:136: - **`output`（可选）**：该批预期改动的文件路径列表（如上例）。**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对时读取，**不新增 gate 校验**——缺省、写错都不影响任何阶段 gate；`agate-frontmatter-check.py` 与 `check-structure-consistency.py` 均不因这两个键而改动（嵌套键，不触碰顶层白名单）。
+  [FOUND] 字面「--observe」 (agate/phase-cards/P2-design.md 行 136-136):
+      agate/phase-cards/P2-design.md:136: - **`output`（可选）**：该批预期改动的文件路径列表（如上例）。**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对时读取，**不新增 gate 校验**——缺省、写错都不影响任何阶段 gate；`agate-frontmatter-check.py` 与 `check-structure-consistency.py` 均不因这两个键而改动（嵌套键，不触碰顶层白名单）。
+  [FOUND] 字面「不新增 gate 校验」 (agate/phase-cards/P2-design.md 行 136-136):
+      agate/phase-cards/P2-design.md:136: - **`output`（可选）**：该批预期改动的文件路径列表（如上例）。**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对时读取，**不新增 gate 校验**——缺省、写错都不影响任何阶段 gate；`agate-frontmatter-check.py` 与 `check-structure-consistency.py` 均不因这两个键而改动（嵌套键，不触碰顶层白名单）。
+-- architect.md (209-267):
+  [FOUND] 字面「output」 (agate/assets/execution-roles/architect.md 行 266-266):
+      agate/assets/execution-roles/architect.md:266: - **`output`（可选）**：该批预期改动的文件路径列表，**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对读取，**不新增 gate 校验**；不写不影响任何 gate。
+  [FOUND] 字面「可选」 (agate/assets/execution-roles/architect.md 行 266-266):
+      agate/assets/execution-roles/architect.md:266: - **`output`（可选）**：该批预期改动的文件路径列表，**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对读取，**不新增 gate 校验**；不写不影响任何 gate。
+  [FOUND] 字面「--observe」 (agate/assets/execution-roles/architect.md 行 266-266):
+      agate/assets/execution-roles/architect.md:266: - **`output`（可选）**：该批预期改动的文件路径列表，**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对读取，**不新增 gate 校验**；不写不影响任何 gate。
+  [FOUND] 字面「不新增 gate 校验」 (agate/assets/execution-roles/architect.md 行 266-266):
+      agate/assets/execution-roles/architect.md:266: - **`output`（可选）**：该批预期改动的文件路径列表，**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对读取，**不新增 gate 校验**；不写不影响任何 gate。
+$ git diff --exit-code efb113b -- agate/scripts/agate-frontmatter-check.py agate/scripts/check-structure-consistency.py
+EXIT_CODE: 0

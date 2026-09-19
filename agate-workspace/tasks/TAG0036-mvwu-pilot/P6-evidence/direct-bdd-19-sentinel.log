@@ -1,0 +1,38 @@
+# direct evidence: BDD-19 (check-mvwu.py 绝不执行 command / tests_filter)
+# 独立于测试代码：本脚本自建临时 git 仓库与任务目录，直接运行 check-mvwu.py
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "sentinel-batch", "complexity": "low", "tests_filter": "touch /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-_w5htb_v/SENTINEL2_SHOULD_NOT_EXIST"}]}
+--- INPUT: P4-evidence/sentinel-batch.log ---
+command: touch /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-_w5htb_v/SENTINEL_SHOULD_NOT_EXIST
+exit_code: 0
+git_head: fc8589b79fe96283e67a5ffc92ee0fa11d34890d
+timestamp: 2026-09-19T10:00:00Z
+PRE-CHECK: sentinel exists? False / sentinel2 exists? False
+
+=== 默认模式 ===
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-_w5htb_v/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: PASS batch=sentinel-batch
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+AFTER default: sentinel exists? False / sentinel2 exists? False
+
+=== --observe 模式 ===
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-_w5htb_v/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+| sentinel-batch | touch /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-_w5htb_v/SENTINEL2_SHOULD_NOT_EXIST | - | yes | UNKNOWN | UNKNOWN | PASS |
+--- STDERR ---
+check-mvwu: baseline: empty range
+TRACEBACK_IN_OUTPUT: False
+AFTER observe: sentinel exists? False / sentinel2 exists? False
+
+=== 对照（证明哨兵手法有效：若命令真被执行，哨兵会出现）===
+CONTROL: 手动执行同一 command 后 sentinel exists? True
+
+CONCLUSION BDD-19: PASS (check-mvwu.py 两种模式运行后哨兵均不存在；对照组证明 touch 命令本身有效)

@@ -1,0 +1,31 @@
+# BDD-69 登记面同步与计数（P6 阶段实跑）
+-- scripts/README.md 脚本表 check-mvwu.py 行:
+47:| `check-mvwu.py` | MVWU 阶段 1 观测器（TAG0036）：读任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，每批输出一行 `MVWU_RESULT: <VERDICT> batch=<id>`（verdict = PASS/FAIL/EXPECTED_RED/UNKNOWN）；`--observe`=输出 7 列观察表行。仅观测、不阻断（不挂 gate/hook/CI）| 0=任一 verdict（含 FAIL/UNKNOWN，不阻断）, 2=用法/目标错误 |
+-- 字面核对(该行): 观测 / 不阻断 / --observe / exit 0 / 2
+  含 观测       : True
+  含 不阻断      : True
+  含 --observe: True
+  含 0=       : True
+  含 2=       : True
+-- tests/README.md 表 check-mvwu 测试文件行:
+88:| check-mvwu.py（MVWU 观测器）| unit/test_check_mvwu.py | 111 |
+-- pytest --collect-only 对该文件的实际用例数:
+$ timeout 120 python3 -m pytest agate/tests/unit/test_check_mvwu.py --collect-only -q -p no:cacheprovider | tail -3
+agate/tests/unit/test_check_mvwu.py::test_bdd_45_observe_huge_duration_does_not_drop_rows[400-digit-fractional]
+
+111 tests collected in 0.04s
+-- test_mvwu_protocol_docs.py 收集数:
+
+65 tests collected in 0.04s
+-- tests/README.md 中 mvwu 相关全部行:
+88:| check-mvwu.py（MVWU 观测器）| unit/test_check_mvwu.py | 111 |
+89:| MVWU 协议文档断言（TAG0036）| unit/test_mvwu_protocol_docs.py | 65 |
+-- CHANGELOG.md [Unreleased] 段含 TAG0036:
+  [Unreleased] 段长度=643 字符；含 TAG0036: True
+  ### 新增（TAG0036：MVWU 阶段 1 观测，RM-AG0063）
+  来源：TAG0036（RM-AG0063）。
+$ git diff efb113b --stat -- CHANGELOG.md agate/scripts/README.md agate/tests/README.md
+ CHANGELOG.md            | 15 ++++++++++++++-
+ agate/scripts/README.md |  1 +
+ agate/tests/README.md   |  2 ++
+ 3 files changed, 17 insertions(+), 1 deletion(-)

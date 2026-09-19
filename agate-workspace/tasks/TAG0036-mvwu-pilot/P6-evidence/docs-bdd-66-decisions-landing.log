@@ -1,0 +1,42 @@
+# 文档类 BDD-66 证据：项目侧决策落点与 P2 读取（P6 阶段实跑）
+-- P2 卡「前置条件」(23-27) 与「项目侧架构决策」节 (29-36) 原文:
+## 前置条件
+
+- [ ] P1-requirements.md 含 domains / risk_level / phases 声明
+- [ ] P0-brief.md env_constraints 可查阅
+- [ ] 若项目存在 `{AGATE_WORKSPACE}/decisions/`，已读取其中既有决策（见下节「项目侧架构决策」）
+
+## 项目侧架构决策（decisions/，TAG0036）
+
+项目内**跨任务的架构决策**（影响不止本任务、后续任务也会依赖的取舍）落在 `{AGATE_WORKSPACE}/decisions/`，与协议自身的 `adr.md`（agate 协议层决策）分开。具体文件名与模板不作规定，由项目自定。
+
+- **P2 开始前读取既有决策**：写候选方案之前先读 `decisions/` 下的既有决策，方案不得在不知情的情况下与之冲突；有冲突时在 P2-design.md 说明取舍。
+- **写入时机**：P2 定稿后，若方案含新的跨任务架构决策，将其写入 `{AGATE_WORKSPACE}/decisions/`（P7 一致性检查阶段亦可核对）。
+- **前提被证伪时就地标注**：发现某条既有决策的前提已被后续变更证伪，在该条决策原处标注「已过时 + 被什么取代」，**不删除**（保留决策史）。
+- 这是读取与登记的约定，不由 gate 校验，也不设自动过期机制。
+-- 字面核对 (P2 卡 23-36):
+  [FOUND] 字面「decisions/」 (agate/phase-cards/P2-design.md 行 23-36):
+      agate/phase-cards/P2-design.md:27: - [ ] 若项目存在 `{AGATE_WORKSPACE}/decisions/`，已读取其中既有决策（见下节「项目侧架构决策」）
+      agate/phase-cards/P2-design.md:29: ## 项目侧架构决策（decisions/，TAG0036）
+      agate/phase-cards/P2-design.md:31: 项目内**跨任务的架构决策**（影响不止本任务、后续任务也会依赖的取舍）落在 `{AGATE_WORKSPACE}/decisions/`，与协议自身的 `adr.md`（agate 协议层决策）分开。具体文件名与模板不作规定，由项目自定。
+  [FOUND] 字面「读取既有决策」 (agate/phase-cards/P2-design.md 行 23-36):
+      agate/phase-cards/P2-design.md:33: - **P2 开始前读取既有决策**：写候选方案之前先读 `decisions/` 下的既有决策，方案不得在不知情的情况下与之冲突；有冲突时在 P2-design.md 说明取舍。
+  [FOUND] 字面「已过时 + 被什么取代」 (agate/phase-cards/P2-design.md 行 23-36):
+      agate/phase-cards/P2-design.md:35: - **前提被证伪时就地标注**：发现某条既有决策的前提已被后续变更证伪，在该条决策原处标注「已过时 + 被什么取代」，**不删除**（保留决策史）。
+  [FOUND] 字面「不删除」 (agate/phase-cards/P2-design.md 行 23-36):
+      agate/phase-cards/P2-design.md:35: - **前提被证伪时就地标注**：发现某条既有决策的前提已被后续变更证伪，在该条决策原处标注「已过时 + 被什么取代」，**不删除**（保留决策史）。
+  [FOUND] 字面「写入时机」 (agate/phase-cards/P2-design.md 行 23-36):
+      agate/phase-cards/P2-design.md:34: - **写入时机**：P2 定稿后，若方案含新的跨任务架构决策，将其写入 `{AGATE_WORKSPACE}/decisions/`（P7 一致性检查阶段亦可核对）。
+  [FOUND] 字面「写入」 (agate/phase-cards/P2-design.md 行 23-36):
+      agate/phase-cards/P2-design.md:34: - **写入时机**：P2 定稿后，若方案含新的跨任务架构决策，将其写入 `{AGATE_WORKSPACE}/decisions/`（P7 一致性检查阶段亦可核对）。
+-- 写入决策的时机在 P2 卡（同一行含 decisions/ 与 写入）:
+- **写入时机**：P2 定稿后，若方案含新的跨任务架构决策，将其写入 `{AGATE_WORKSPACE}/decisions/`（P7 一致性检查阶段亦可核对）。
+-- P7 卡 (agate/phase-cards/P7-consistency.md) 检查项 6（decisions/ 相关行）:
+36:6. **架构决策落点与过时标注核对**：核对 `{AGATE_WORKSPACE}/decisions/` 是否已写入本任务应落的跨任务架构决策，且被本任务证伪的既有决策已就地标注「已过时 + 被什么取代」而非删除。仅核对，不在 P7 撰写决策正文（缺失项记为待办，由决策的提出方在下一次 P2 前补写入 `decisions/`；见 DEBT0039）
+-- 不含“必须拦截”式 gate 表述：P2 卡决策节 (23-36) + P7 检查项 6 内 '拦截|必须拦截|gate 拦截' 命中行数（期望 0）: 0
+-- 决策节明确“不由 gate 校验”:
+36:- 这是读取与登记的约定，不由 gate 校验，也不设自动过期机制。
+205:- 只要求"该维度存在"：本任务涉及某条架构约束时，对应检查应在 `gate_commands` 里有位置；不要求覆盖所有维度，也不由 gate 校验其存在。
+-- check-gate.py 无读取 decisions/ 的新代码：git diff efb113b -- agate/scripts/check-gate.py 行数（期望 0）: 0 ; check-gate.py 中 'decisions' 出现行数: 0 (基线: 0)
+-- 具体文件名/模板不作规定（原文）:
+31:项目内**跨任务的架构决策**（影响不止本任务、后续任务也会依赖的取舍）落在 `{AGATE_WORKSPACE}/decisions/`，与协议自身的 `adr.md`（agate 协议层决策）分开。具体文件名与模板不作规定，由项目自定。

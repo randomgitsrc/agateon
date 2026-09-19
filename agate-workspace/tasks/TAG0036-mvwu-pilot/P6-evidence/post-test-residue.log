@@ -1,0 +1,43 @@
+# post-test 环境残留检查（P6 强制步骤）——验收动作前后的 git status 快照 + tmp 目录清理情况
+
+## 验收前快照（第一条命令之后立即取，排除本任务 P6-evidence/；P6-progress.md 为验收开始时写入的进度文件）
+$ git status --porcelain | grep -v P6-evidence/
+ M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-dispatch-context-verifier.md
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-progress.md
+
+## 验收后快照
+$ git status --porcelain
+ M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-acceptance.md
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-dispatch-context-verifier.md
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-evidence/
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-progress.md
+
+## 差异判读
+1a2
+> ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-acceptance.md
+验收后 P6-acceptance.md 状态: ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-acceptance.md
+$ git diff --stat -- agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl  (验收前即为已修改，mtime 早于验收开始，本次验收未触碰)
+ agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl | 2 ++
+ 1 file changed, 2 insertions(+)
+-rw-r--r-- 1 kity kity 3386 2026-09-19 18:10:09.754700113 +0800 agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+$ git diff --name-only  (已跟踪文件的改动列表，须仅有 gate-events.jsonl)
+agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+$ git diff --cached --name-only  (暂存区，须为空)
+(以上为空表示未 git add)
+$ git log --oneline -1  (HEAD 未变，未 commit)
+e1ac29e wf(TAG0036-P5): 技术验证——gate_commands.P5 10/10 exit 0（1842 passed / 2 skipped，failed 0）
+
+## tmp 目录清理
+本次验收所有临时 git 仓库/任务目录均建于会话 scratchpad 目录下 p6repo-* / p6b1-* / p6nogit-* 前缀，脚本内 shutil.rmtree 后复核:
+$ ls -d /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6* 2>&1
+ls: 无法访问 '/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6*': 没有那个文件或目录
+$ find /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad -maxdepth 1 -name 'p6*' | wc -l
+0
+系统 /tmp 下匹配 /tmp/p6* 的条目共 54 个，全部为其它历史任务遗留（修改时间 2026-08-13 至 2026-09-08，非本次验收创建）；今天(2026-09-19)修改/新建的 /tmp/p6* 条目数: 0（本次验收未使用裸 /tmp）
+
+## 被 .gitignore 忽略的既有目录（非本次新增，验收前已存在；不计入 git status）
+drwxrwxr-x 3 kity kity 4096 2026-09-19 13:30:37.363784566 +0800 .pytest_cache
+drwxr-xr-x 4 kity kity 4096 2026-09-19 15:44:21.356083929 +0800 .ruff_cache
+(.pytest_cache 创建于 13:30，早于本次验收；本次 pytest 均带 -p no:cacheprovider)

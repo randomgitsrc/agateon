@@ -1,0 +1,48 @@
+# 文档类 BDD-10 / BDD-11 证据（P6 阶段实跑）
+
+##### BDD-10：P4 阶段卡「批级证据 P4-evidence」节（agate/phase-cards/P4-implementation.md 行 69-86）#####
+  [FOUND] 字面「P4-evidence/{batch}.log」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:73: - **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
+  [FOUND] 字面「key: value」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:75: - **格式**：逐行 `key: value`，最小内容：
+  [FOUND] 字面「command」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:76:   - `command`：实际运行的命令
+  [FOUND] 字面「exit_code」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:77:   - `exit_code`：命令退出码
+  [FOUND] 字面「git_head」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:78:   - `git_head`：运行时的 HEAD，须为全长 commit 对象名
+  [FOUND] 字面「全长 commit 对象名」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:78:   - `git_head`：运行时的 HEAD，须为全长 commit 对象名
+  [FOUND] 字面「timestamp」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:79:   - `timestamp`：运行时间
+  [FOUND] 字面「expected_red」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:80:   - `expected_red`：预期为红的用例，默认 `[]`
+      agate/phase-cards/P4-implementation.md:83: - **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
+  [FOUND] 字面「duration_seconds」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:81:   - `duration_seconds`：耗时秒数
+  [FOUND] 字面「failed_tests」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:82:   - `failed_tests`（可选）：实际失败的用例，默认 `[]`
+      agate/phase-cards/P4-implementation.md:83: - **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
+  [FOUND] 字面「node id」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:83: - **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
+  [FOUND] 字面「双引号」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:83: - **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
+  [FOUND] 字面「主 Agent 在该批 commit 前」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:74: - **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
+  [FOUND] 字面「不阻断」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:69: ## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
+      agate/phase-cards/P4-implementation.md:71: > 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
+      agate/phase-cards/P4-implementation.md:84: - **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
+  [FOUND] 字面「filename-safe」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:73: - **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
+  [FOUND] 字面「不进 judge 白名单」 (agate/phase-cards/P4-implementation.md 行 69-86):
+      agate/phase-cards/P4-implementation.md:85: - **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
+
+##### BDD-11：task-files.md 模板 #####
+-- 阶段产出表 P4 行:
+33:| P4 | P4-evidence/{batch}.log | 批级证据日志（MVWU 阶段 1，可选、不阻断；逐行 `key: value`，`{batch}` 为 dispatch_plan 批 `id`；由主 Agent 在该批 commit 前机械转录 `tests_filter` 的运行结果；`check-mvwu.py` 事后观测；不进 gate / judge 白名单）|
+-- dispatch_plan 示例注释 tests_filter 可选说明:
+253:# 批内可选键 tests_filter / output：tests_filter 为该批的验证命令（可选，缺省不影响 gate；示例用 `python -m pytest ...` 或遵循 AGATE_PYTHON 探测，不写裸 python3）；output 为该批产出说明（可选）；写法与约束以 P2 卡「dispatch_plan 机器字段」为准
+$ git diff efb113b --stat -- agate/assets/templates/task-files.md
+ agate/assets/templates/task-files.md | 2 ++
+ 1 file changed, 2 insertions(+)

@@ -1,0 +1,29 @@
+# BDD-57：check-mvwu 自身单测覆盖 / 合规性（P6 阶段实跑：对测试文件做静态检查 + 运行前后 git status agate-workspace）
+文件: agate/tests/unit/test_check_mvwu.py ; 行数 1104
+测试函数数: 56
+文件内首个测试用例: test_bdd_13_basic_contract_two_batches_in_declared_order ; 装饰器: ['pytest.mark.windows_smoke'] ; 含 windows_smoke: True
+检查 1-5 各 ≥1 失败用例 (BDD-14,15,20,23,24) -> {14: True, 15: True, 20: True, 23: True, 24: True}
+verdict 四态各 ≥1 用例 (BDD-25 PASS,26/27 FAIL,28 EXPECTED_RED,29 UNKNOWN) -> {25: True, 26: True, 28: True, 29: True}
+--observe 七列 (BDD-43,45,46,47,48,49,50,51,52,53,54) -> {43: True, 45: True, 46: True, 47: True, 48: True, 49: True, 50: True, 51: True, 52: True, 53: True, 54: True}
+exit-code 约定 (BDD-36/37) -> {36: True, 37: True}
+reason 判定顺序 (BDD-34) -> {34: True}
+列表编码含参数化 id (BDD-30/31/32) -> {30: True, 31: True, 32: True}
+输出转义 (BDD-22/44) -> {22: True, 44: True}
+硬编码 '/tmp' 字面量出现次数: 0
+裸 'python3' 字面量出现（作为子进程命令）行: []
+使用 sys.executable 次数: 4
+对仓库内 agate-workspace 的写入：文件中出现 'agate-workspace' 的行（应仅为 tmp_path 内相对路径）:
+   L7: # 隔离（DEBT0040）：一切 git 仓库/任务目录都建在 pytest tmp_path，不触碰仓库内 agate-workspace。
+   L47: def __init__(self, tmp_path, ws="agate-workspace", branch="main"):
+   L72: if ws != "agate-workspace":
+   L909: repo.commit("feat-a", {"src/a.py": "v2\n", "agate-workspace/tasks/T1/P4-evidence/A.log": ev})
+   L926: repo.commit("feat-b", {"src/b.py": "v2\n", "agate-workspace/tasks/T1/note.md": "n\n"})
+
+-- 运行前后 git status --porcelain agate-workspace（本 pytest 运行不得在仓库 agate-workspace 内产生新文件）:
+运行前:
+ M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+.......................................                                  [100%]
+111 passed in 9.27s
+运行后:
+ M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+SNAPSHOT_UNCHANGED: true

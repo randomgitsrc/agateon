@@ -1,0 +1,43 @@
+# direct evidence: BDD-34 (多故障并存时 reason 按 tests_filter→evidence→command→exit_code→git_head→expected_red 取首个)
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "P"}, {"id": "Q", "tests_filter": "python -m pytest tests/a -q"}, {"id": "R", "tests_filter": "python -m pytest tests/a -q"}, {"id": "S", "tests_filter": "python -m pytest tests/a -q"}, {"id": "TU", "tests_filter": "python -m pytest tests/a -q"}, {"id": "TU", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/Q.log ---
+command: no-such-runner-xyz tests/
+exit_code: oops
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/R.log ---
+command: git status --short
+exit_code: oops
+git_head: deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/S.log ---
+command: git status --short
+exit_code: 1
+git_head: deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+timestamp: 2026-09-19T10:00:00Z
+expected_red: t_a
+--- INPUT: P4-evidence/TU.log ---
+command: git status --short
+exit_code: 0
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-dmjk99c3/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (6 lines) ---
+MVWU_RESULT: UNKNOWN batch=P reason=tests_filter
+MVWU_RESULT: UNKNOWN batch=Q reason=command
+MVWU_RESULT: UNKNOWN batch=R reason=exit_code
+MVWU_RESULT: UNKNOWN batch=S reason=git_head
+MVWU_RESULT: UNKNOWN batch=TU reason=evidence
+MVWU_RESULT: UNKNOWN batch=TU reason=evidence
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 断言 ---
+expected reasons=['tests_filter', 'command', 'exit_code', 'git_head', 'evidence', 'evidence']
+got reasons=     ['tests_filter', 'command', 'exit_code', 'git_head', 'evidence', 'evidence']
+CONCLUSION BDD-34: PASS

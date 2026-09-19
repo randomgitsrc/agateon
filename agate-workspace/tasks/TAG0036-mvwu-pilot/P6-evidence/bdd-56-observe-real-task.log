@@ -1,0 +1,63 @@
+# BDD-56 判据 6：--observe 在仓库内真实任务目录上跑通（P6 阶段实跑，不引用 P5）
+
+################ TAG0035-gate-robustness ################
+$ git status --porcelain   # 运行前快照（排除本任务 P6-evidence/ 自身）
+   M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-dispatch-context-verifier.md
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-progress.md
+$ FILE=agate-workspace/tasks/TAG0035-gate-robustness/P2-design.md python3 agate/scripts/agate-md-field-get.py dispatch_plan   # 取 batches 数
+  {"mode": "serial", "batches": [{"id": "sub-batch-A", "complexity": "low"}, {"id": "sub-batch-B", "complexity": "medium"}, {"id": "sub-batch-C", "complexity": "medium"}, {"id": "sub-batch-D", "complexity": "medium"}]}
+batches_count=4  (期望行数 = max(N,1) = 4)
+$ ls agate-workspace/tasks/TAG0035-gate-robustness/P4-evidence   # 真实任务目录是否含证据
+  ls: 无法访问 'agate-workspace/tasks/TAG0035-gate-robustness/P4-evidence': 没有那个文件或目录
+$ python3 agate/scripts/check-mvwu.py --observe agate-workspace/tasks/TAG0035-gate-robustness
+EXIT_CODE: 0
+--- STDOUT ---
+| sub-batch-A | - | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+| sub-batch-B | - | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+| sub-batch-C | - | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+| sub-batch-D | - | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+--- STDERR ---
+stdout 行数=4
+  GFM 切分列数=7  列=['sub-batch-A', '-', '-', 'no', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']
+  GFM 切分列数=7  列=['sub-batch-B', '-', '-', 'no', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']
+  GFM 切分列数=7  列=['sub-batch-C', '-', '-', 'no', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']
+  GFM 切分列数=7  列=['sub-batch-D', '-', '-', 'no', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']
+每行均恰 7 列: True
+$ git status --porcelain   # 运行后快照（排除本任务 P6-evidence/ 自身）
+   M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-dispatch-context-verifier.md
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-progress.md
+SNAPSHOT_UNCHANGED: true
+$ git diff --stat -- agate-workspace/tasks/TAG0035-gate-robustness   # 该任务目录无改动
+(diff exit=0)
+
+################ TAG0034-dispatch-routing ################
+$ git status --porcelain   # 运行前快照（排除本任务 P6-evidence/ 自身）
+   M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-dispatch-context-verifier.md
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-progress.md
+$ FILE=agate-workspace/tasks/TAG0034-dispatch-routing/P2-design.md python3 agate/scripts/agate-md-field-get.py dispatch_plan   # 取 batches 数
+  {"mode": "static-batch", "parallel_limit": 3, "batches": [{"id": "P4a", "complexity": "high"}, {"id": "P4b", "complexity": "medium"}, {"id": "P4c", "complexity": "low"}], "serial": true}
+batches_count=3  (期望行数 = max(N,1) = 3)
+$ ls agate-workspace/tasks/TAG0034-dispatch-routing/P4-evidence   # 真实任务目录是否含证据
+  ls: 无法访问 'agate-workspace/tasks/TAG0034-dispatch-routing/P4-evidence': 没有那个文件或目录
+$ python3 agate/scripts/check-mvwu.py --observe agate-workspace/tasks/TAG0034-dispatch-routing
+EXIT_CODE: 0
+--- STDOUT ---
+| P4a | - | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+| P4b | - | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+| P4c | - | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+--- STDERR ---
+stdout 行数=3
+  GFM 切分列数=7  列=['P4a', '-', '-', 'no', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']
+  GFM 切分列数=7  列=['P4b', '-', '-', 'no', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']
+  GFM 切分列数=7  列=['P4c', '-', '-', 'no', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']
+每行均恰 7 列: True
+$ git status --porcelain   # 运行后快照（排除本任务 P6-evidence/ 自身）
+   M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-dispatch-context-verifier.md
+  ?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-progress.md
+SNAPSHOT_UNCHANGED: true
+$ git diff --stat -- agate-workspace/tasks/TAG0034-dispatch-routing   # 该任务目录无改动
+(diff exit=0)
