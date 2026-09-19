@@ -42,7 +42,18 @@
 > 不被破坏**（探测序为红线，只可增量扩展）。
 ```
 
-- **legacy 形态天然符合**（软链直指本体）→ 在线/离线**对齐到它**
+- **⚠ 本体精确边界须成文（2026-09-19 补——用户质疑"装的是 agateon 全集还是协议本体"暴露）**：
+  契约不能只说"只含本体"，**必须明确本体的精确内容边界**——它是**子批 C 打包的必要输入**（打 tarball 时必须确定），
+  不该只在 known_risks 里当风险。须定：
+  | 项 | 待定问题 |
+  |----|---------|
+  | `agate/tests/` | **是否入包**？本体 4.1M 中含相当部分 tests——排除后用户侧 `check-protocol-consistency.py` 等可能受限 |
+  | `agate/AGENTS.md` / `CLAUDE.md` | 是否入包（面向开发者的指引 vs 面向使用者的 `agate/AGENTS.md`） |
+  | `__pycache__` / `.pyc` | **必须排除**（构建产物） |
+  | `.github/` / `site/` / `docs/` / `archived/` / `agate-workspace/` | **必须排除**（维护者产物 / 产品层 / 开发资料） |
+  | `HANDOFF-*.md` / `CHANGELOG.md` / `pyproject.toml` / `README*` | 逐个判定（部分对用户有用） |
+  - **判据**：契约文档须给出**完整清单**（入包 / 排除），且**可机械验证**（装后比对目录结构）
+- **本任务移除 legacy 形态**（2026-09-19 用户决策——见下方「子批 E」，原"legacy 天然符合"的论证随之作废）
 - 已装用户的 `vX.Y.Z/{...}`（当前在线形态）**须保持可解析**（兼容红线）
 
 **子批 B：修复 P0 —— 离线安装解析失效（真 BUG）**
@@ -81,11 +92,37 @@ GitHub Release vX.Y.Z（tag push 时自动创建）
 - **保留**「装任意历史 tag」：`repo/`（59M）**保留**，`git worktree add` 路径仍可用（Release asset 是便利路径而非唯一路径）
 - 排除清单**来源与维护方式**须 P2 定（候选：`.gitattributes export-ignore` / 显式清单文件 / `git archive` 语义）
 
+**子批 E：彻底删除 legacy 软链支持（2026-09-19 用户决策）**
+
+> **用户决策原文**：「不该再支持原来的 legacy 软链 `~/.agate`，这样容易冲突」+「决定**彻底删除** legacy 支持」。
+
+**为什么该删（冲突实证）**：
+- **两布局已互斥**：`install.sh --versions` **已 fail-closed 拒绝软链**（既有代码）——同一工具对两种布局持**相反态度**，本身就是设计裂缝
+- **推高本任务全部复杂度**：子批 A 的结构契约要兼容两形态、`SETUP.md` 要用 `$AGATE_DIR` 绕开两布局、`_protocol_root` 得认两种探测序、`install.sh` 无参 vs `--versions` 行为不同——**"三条路径统一"的本质困难就来自 legacy 这一个额外形态**
+- **`~/.agate` 语义冲突**：legacy 下它是"指向协议本的软链"，版本管理下它是"版本根实体目录"——**同名不同义**，正是用户说的"容易冲突"
+
+**删除范围（实测影响面）**：
+
+| 层 | 删除项 |
+|----|--------|
+| **实现** | `agate_common.py:219-220` 的 `use_legacy and os.path.islink(base)` 分支 + `:182` 的 `use_legacy` 参数 + `:231` 的 `use_legacy=True` + `:243` 调用（改为统一无 legacy） |
+| **安装** | `install.sh` 无参分支（建软链）→ 改为**直接进版本管理布局**（不再产生 legacy） |
+| **解析** | `agate-resolve.py` 的 `legacy` 相关表述（`:5/:12/:16/:37`）与 fail-closed 文案 |
+| **测试** | 4 个真 legacy 测试删除/改写：`test_bdd_30_legacy_symlink_direct_root`、`test_debt0042_agate_home_legacy_symlink`、`test_tag0032_bdd_1_legacy_symlink_install_fail_closed`、`test_tag0032_bdd_2_legacy_symlink_rejection_migration_hint`。⚠ **注意排除撞名**——测试名含 `bdd_30` 的多数与 legacy 无关（spawn_agent / quoted node ids / formatter 等），**勿误删** |
+| **文档** | `UPGRADING.md` 的 legacy 整列（`:48` 对照表）/ `:113` 解析优先级表 / `:809` **「红线，BDD-30」承诺须改写**（从"行为不变"改为"legacy 已移除 + 迁移指引"）/ `:315/:319/:329` 的版本历史注记（保留历史，但标注现状）；`README.md` / `README.zh-CN.md` 首推装法改写；`SETUP.md` 的 `$AGATE_DIR` 解析去掉 legacy 分支（改为 `~/.agate/current/agate`）；`adr.md` / `AGENTS.md`/`project-map.md`/`worktree-dogfooding-guide.md` 等的 legacy 表述 |
+
+**4 平台适配不受影响（已实测）**：Claude Code / OpenCode / DSH / Codex 的接入**全部用 `$AGATE_DIR`（协议根）**——但 `$AGATE_DIR` 的取值逻辑**含 legacy fallback**（`[ -d ~/.agate/current ] && ... || echo ~/.agate`），**删除 legacy 后该 fallback 须一并去掉**（改为直接取 `~/.agate/current/agate`，与版本管理布局唯一形态对齐）。
+
+**⚠ 破坏性变更的处置（须 P1 明确）**：
+- 本任务**删除 legacy 支持**是**破坏性变更**——UPGRADING 的「存量单软链用户行为不变（红线）」承诺**作废**
+- **须 P1 决定**：① 是否需要**迁移工具**（`agate-migrate-*.py` 先例）② 或仅提供**文档化迁移三步**（`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`，现有文案可直接复用）③ 迁移窗口/版本号（major bump？）
+- **P1 须确认存量用户规模**（本机是唯一已知实例，且已迁移）
+
 ### 完成判据
 
 | # | 判据 | 验证方式 |
 |---|------|---------|
-| 1 | **结构契约成文**（权威源：`agate/UPGRADING.md`「版本管理生命周期」节） | 文档评审 |
+| 1 | **结构契约成文**（权威源：`agate/UPGRADING.md`「版本管理生命周期」节），且**含本体的精确边界清单**（入包 / 排除逐项，可机械验证） | 文档评审 + 装后目录结构比对 |
 | 2 | 三条路径**产出同一结构** | 集成测试：三种装法各装一次，断言版本目录内容一致 |
 | 3 | **P0 修复**：离线安装后 `agate-resolve.py` 解析成功 | 新增 e2e 测试（**用真实 pack 产物结构**，非假 bundle） |
 | 4 | `_make_bundle` 反映真实布局 | 测试评审（防同源假设复发） |
@@ -94,6 +131,8 @@ GitHub Release vX.Y.Z（tag push 时自动创建）
 | 7 | 在线安装**只装本体**（冗余对比有量化下降） | 装后 `du -sh` 对比 |
 | 8 | 已装旧形态**仍可解析** | 兼容性测试（用当前 `vX.Y.Z/{agate,docs,...}` 结构） |
 | 9 | Full pytest + consistency 0 ERROR ✅ | 常规 gate |
+| **10** | **legacy 软链支持彻底删除**：`use_legacy` 分支 / `install.sh` 无参软链分支 / 4 个真 legacy 测试 / 文档红线承诺 —— 全部移除或改写 | 全仓 `grep -rn "use_legacy\|legacy 软链布局"` 无残留（撞名的 `bdd_30_*` 除外）；解析链仅剩「env → 项目声明 → current」三层 |
+| **11** | **4 平台适配保持正常**（Claude Code / OpenCode / DSH / Codex）：`$AGATE_DIR` 去掉 legacy fallback 后接入仍可用 | 各平台接入命令实跑；`SETUP.md` 四节命令验证 |
 
 ### out-of-scope
 
@@ -102,10 +141,12 @@ GitHub Release vX.Y.Z（tag push 时自动创建）
 - **不改** `.state.yaml` schema、`rules/*.yaml` 权威源
 - **不做**包管理器集成（npm/pip/brew 等）——本轮只做 GitHub Release + tarball
 - **不做** `install-hook.py` 的 `AGATE_HOME` 语义统一（它是**协议根**而非版本根基址，属独立议题；本轮仅在文档点明层次差别）
-- **不迁移已装用户的目录结构**（仅保证**可解析**；主动迁移另议）
+- **不迁移已装用户的目录结构**（仅保证**可解析**；主动迁移另议）——**但 legacy 软链用户例外**：本任务**删除 legacy 支持**后，软链用户须迁移（迁移方式由 P1 定，见子批 E）
 
 ### known_risks
 
+- **🔴 破坏性变更（本任务最大风险，2026-09-19 用户决策引入）**：**彻底删除 legacy 软链支持**——`UPGRADING.md:809` 的「存量单软链用户行为不变（**红线，BDD-30**）」承诺**作废**。须 P1 定：① 是否提供迁移工具 ② 或仅文档化迁移三步 ③ 版本号（**major bump？**）④ 存量用户规模（本机是唯一已知实例且已迁移）。
+  - **缓解**：删除**只影响 legacy 软链用户**（版本管理布局用户无感）；现有迁移三步文案可直接复用；4 平台接入不依赖 legacy（已实测）。
 - **兼容性是最大风险**：已有用户装了当前形态（`vX.Y.Z/{agate, agate-workspace, docs, ...}`）。**结构契约若收紧，必须保证旧形态仍能解析**——`_protocol_root` 的探测序是红线，只可增量扩展。P1 须先勘察「本机之外还有多少种已装形态」（本机实测只有当前形态 + legacy 软链）。
 - **CI 改动的许可边界**：新增 release workflow 需用户明确许可（`AGENTS.md` 规则 5）。**P1 必须先确认**：是"允许新增 workflow 文件"，还是"连触发条件/权限也要逐项确认"。
 - **`git archive` vs `export-ignore` vs 显式清单**：三种排除机制语义不同（`export-ignore` 会影响所有 archive 消费者）。P2 须比对，**勿默认选一个**。
