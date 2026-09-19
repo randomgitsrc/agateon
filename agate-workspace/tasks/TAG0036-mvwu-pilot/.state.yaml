@@ -1,11 +1,20 @@
 task_id: TAG0036
-phase: P1
+phase: P2
 status: active
-judge:
-  enabled: true
 retries:
   P1:
-    - round: 1
-      failure_mode: quality
-      prompt_changed: true
-      adjustment: null
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: null
+  P2:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: null
+  - round: 2
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: null
+judge:
+  enabled: true

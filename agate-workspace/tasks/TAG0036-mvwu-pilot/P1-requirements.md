@@ -502,6 +502,7 @@ domains:
 - Given 本任务全部提交完成（命中 SELF-GATE 触发面：`agate/scripts/*.py` 与 `agate/**/*.md`）
 - When 依次运行：`python3 -m pytest agate/tests/ --reruns 1 -n auto`；`python3 agate/scripts/check-protocol-consistency.py --strict-errors-only`；`~/.venvs/agate-dev/bin/ruff check agate/`
 - Then pytest 0 failed、passed ≥ 1666 + 新增用例数、skipped 仍为 2；consistency **0 ERROR**（含 CHECK 10：所有文档中的 `check-mvwu.py` 引用可解析）；ruff 0 error；本任务未新增/修改任何 `.sh` 文件，故 shellcheck 不适用（`git diff <内核基线> --name-only | grep '\.sh$'` 为空）
+- [BASELINE_CHANGE: P2 评审（plan-eng-review B1）实测：新增 `agate/scripts/check-mvwu.py` 命中 `check-*.py` glob 而不在 CHECK 9 锚点表 → 既有测试 `test_protocol_alignment_review.py::test_sg_6_check9_anchor_table_covers_all_gate_scripts` 由绿转红，与本 BDD 的「pytest 0 failed」不可同时成立；P1 §4.3 对 CHECK 9 锚点表「本次不处理」是推理未实测，据此纠正。主 Agent 批准（2026-09-19）：把 `agate/scripts/check-mvwu.py` 加入 `check-protocol-consistency.py::GATE_SCRIPT_EXEMPT`（一行，注释「观测脚本，不挂 gate」，与该集合「工具类脚本、无 gate 逻辑」语义一致）；该文件不在零内核清单内（P0 out-of-scope 未列）。本条不改本 BDD 的 Given/When/Then 语义，仅补充其达成条件：`test_sg_6` 为绿、`CHECK9-coverage` 无新增 WARNING。]
 
 #### BDD-71: SELF-GATE 语义审查留痕
 - Given 本任务 P4 完成
@@ -555,7 +556,7 @@ domains:
 | `CHANGELOG.md` `[Unreleased]` | **处理**（BDD-69） | P8 `check-changelog.py` 要求含 task_id |
 | `agate/UPGRADING.md` | **本次不处理** | 版本章节随发布（AGENTS.md 发布清单第 3 步），非本任务交付 |
 | `agate/scripts/agate-summary.py` `_GUARD_SCRIPTS` / `_DRIFT_SCRIPTS` | **本次不处理** | 二者列的是 hook 链/漂移防护脚本；本脚本不挂 gate（BDD-68 断言 0 命中） |
-| `check-protocol-consistency.py` CHECK 9 锚点表 | **本次不处理** | 该表是"文档声明规则 ↔ 脚本关键词"锚点，对独立观测脚本无强制新增；CHECK 10 会自动覆盖引用漂移 |
+| `check-protocol-consistency.py` CHECK 9 锚点表 / `GATE_SCRIPT_EXEMPT` | ~~本次不处理~~ → **处理（P2 评审纠正）**：锚点表不动，`GATE_SCRIPT_EXEMPT` 加 `check-mvwu.py` 一行 | 原判断未实测；实测新脚本使 `test_sg_6` 变红并新增 `CHECK9-coverage` WARNING（见 BDD-70 的 [BASELINE_CHANGE]）；CHECK 10 仍自动覆盖引用漂移 |
 | `.github/workflows/protocol-tests.yml` | **本次不处理** | 新单测经 `pytest agate/tests/` 自动纳入；无需独立 CI step（不引入 CI 机制，且 BDD-68 断言 `.github/` 0 命中） |
 | `agate/WORKFLOW.md` 表（如 2.12 行式） | **本次不处理** | 该表登记 hook 触发的检查；本脚本不触发 |
 | `agate/phase-cards/P4-implementation.md` | **处理**（BDD-10） | 证据写入方说明 + 可选提及 `check-mvwu.py` 为事后观测工具 |
