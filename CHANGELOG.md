@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+（暂无——下个版本的变更在此累积。）
+
+## [0.72.0] - 2026-09-19
+
 ### 新增（TAG0036：MVWU 阶段 1 观测，RM-AG0063）
 
 - **`agate/scripts/check-mvwu.py` 观测器**：读取任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与

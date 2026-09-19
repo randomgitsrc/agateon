@@ -212,6 +212,37 @@ git commit
 
 > 升级到新版本前，检查你的项目是否触及以下变更点。
 
+### v0.72.0 — MVWU 阶段 1 观测（TAG0036：RM-AG0063 阶段 1）
+
+> **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 / `phases.yaml` / gate 分支
+> （`check-gate.py` 零改动）/ 审计链（`gate-events.jsonl`、`check-p6-provenance.py`、`check-judge-verdict.py` 零改动）/
+> 3 个 hook 薄壳（本任务改动清单无 `.sh` 改动），无需重跑 `install-hook.py`（软链布局 `git pull` 即生效；Windows 复制模式
+> 重跑 SETUP.md 步骤 2 的 `cp`）。
+
+1. **新增 `agate/scripts/check-mvwu.py` 观测脚本——不挂 gate / hook / CI，任一 verdict 均 exit 0**：读取任务目录
+   `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，对每批做六项静态检查并输出四态 verdict
+   （`PASS` / `FAIL` / `EXPECTED_RED` / `UNKNOWN`；**`UNKNOWN` 不等价于 `PASS`，不得作为放行依据**）。只读、不改 `.state.yaml`、
+   不执行 `tests_filter`。`--observe` 模式输出可粘贴进观察表的 7 列行。**既有项目不需要任何动作**；如想采集观察行，可对含
+   `dispatch_plan.batches` 的任务运行 `python3 {agate_root}/scripts/check-mvwu.py --observe <task_dir>`。
+2. **`dispatch_plan.batches[]` 新增两个可选键 `tests_filter` / `output`——缺省行为完全不变**：`tests_filter`（该批测试过滤表达式）
+   与 `output`（该批声明的产出文件集，供 `--observe` 比对 boundary）均为**可选**；不写则既有任务的 P2 gate 结果与本版本前逐字节一致
+   （`check-gate.py` 的 `_gate_p2_dispatch_plan` 不拒绝未知键，本任务未改它）。新任务由 architect 在 P2 按
+   `agate/assets/execution-roles/architect.md` 新增节与 P2 阶段卡写法说明选择性填写（示例中 `python -m pytest` 仅示意，解释器名以本项目
+   `AGATE_PYTHON` / `probe_python` 探测为准）。
+3. **新增 `P4-evidence/{batch}.log` 证据落点约定——仅成文，不新增 gate 校验**：P4 阶段卡新节与 `task-files.md` 登记该目录与逐行
+   `key: value` 格式（`command` / `exit_code` / `git_head` / `timestamp` / `expected_red` / `duration_seconds`，可选 `failed_tests`），
+   由主 Agent 在批 commit 前**机械转录**测试运行结果。该目录**不进** judge 白名单 / provenance 审计面 / 目录登记（`grep P4-evidence
+   agate/rules/` 0 命中）；既有项目**不需要**创建该目录，无 `P4-evidence/` 时 `check-mvwu.py` 判该批 `UNKNOWN`（reason=evidence），不报错。
+4. **⑤ 组方法学概念成文——纯文档新增 / 补充**：`CONTEXT.md` 新增 5 个术语；`role-system.md` 新增「审查锚点（Deep Modules）」节；P2 卡 /
+   `architect.md` 新增批切分判据（Tracer Bullet / Vertical Slice）、Walking Skeleton 吸收/拒绝说明（与既有 `P2-skeleton.md` 机制**同词
+   不同义**，不动机制）、架构适应度检查（Fitness Functions，由项目自选、协议本体不提供检查）；`adr.md` 头部新增复审触发条件；P2 / P7
+   卡新增 `decisions/` 落点与过时标注核对说明。**均只成文、不宣称机制已生效**，不改动既有阶段卡片判定逻辑、gate 脚本、状态机。
+5. **`agate-workspace/decisions/` 目录**：仅当项目产生**跨任务架构决策**时才由项目自行创建并落笔（P2 卡写明「P2 开始前读取既有决策 /
+   P2 定稿后写入」；P7 卡新增第 6 项为**核对**，缺失记为待办、不 author 决策正文）。**既有项目无需预先创建**；本仓库该目录当前不存在（`ls
+   agate-workspace/decisions` 实测无此目录）。
+6. **升级动作**：`git pull` 即完成；无迁移动作。老项目：无需动作；新项目：照常 `SETUP.md`，无新增步骤。（CHECK 13：CHANGELOG 最新版 ↔
+   UPGRADING §3 章节一致。）
+
 ### v0.71.1 — gate 健壮性批（TAG0035：DEBT0037/0038 修复 + RM-AG0062）
 
 > **本版本无破坏性变更，零迁移动作**——未改 `.state.yaml` schema / 既有任务文件格式 /
