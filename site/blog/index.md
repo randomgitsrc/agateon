@@ -1,6 +1,7 @@
 ---
 title: Blog
 description: Engineering notes and retrospectives from building Agateon.
+sidebar: false
 ---
 
 <script setup>

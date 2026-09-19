@@ -2,9 +2,44 @@
 // 全站富 footer（layout-bottom 注入）：品牌块 + 三列链接 + 底栏。
 // 背景固定 ink 深底（明暗两版都用深色 footer 收尾，页面不"戛然而止"）。
 import { useData } from 'vitepress'
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const { localeIndex } = useData()
+const footerEl = ref<HTMLElement | null>(null)
+let raf = 0
+
+// 文章页左侧 sidebar 是 fixed(top:0;bottom:0)，滚动到底会盖住 footer。
+// 监听滚动：footer 进入视口时把 sidebar 底部收缩到 footer 顶部上方。
+// sidebar 每次滚动时实时查询（layout-bottom 挂载可能早于 sidebar 渲染）。
+function updateSidebarBottom() {
+  const sidebar = document.querySelector('.VPSidebar')
+  if (!footerEl.value || !sidebar) return
+  const ft = footerEl.value.getBoundingClientRect()
+  const vh = window.innerHeight
+  if (ft.top < vh) {
+    sidebar.style.bottom = Math.max(0, vh - ft.top) + 'px'
+  } else {
+    sidebar.style.bottom = ''
+  }
+}
+
+function onScroll() {
+  if (raf) cancelAnimationFrame(raf)
+  raf = requestAnimationFrame(updateSidebarBottom)
+}
+
+onMounted(() => {
+  // 总是注册监听（layout-bottom 挂载时 sidebar 可能尚未渲染，
+  // updateSidebarBottom 内部每次查询，sidebar 出现后自然生效）
+  window.addEventListener('scroll', onScroll, { passive: true })
+  window.addEventListener('resize', onScroll, { passive: true })
+  updateSidebarBottom()
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('resize', onScroll)
+  if (raf) cancelAnimationFrame(raf)
+})
 const zh = computed(() => localeIndex.value === 'zh')
 const year = new Date().getFullYear()
 
@@ -66,7 +101,7 @@ const cols = computed(() =>
 </script>
 
 <template>
-  <footer class="site-footer">
+  <footer ref="footerEl" class="site-footer">
     <div class="sf-inner">
       <div class="sf-brand">
         <img src="/logo-mark-dark-bg.svg" alt="" width="34" height="34" />

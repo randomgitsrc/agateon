@@ -149,7 +149,13 @@ html[lang='zh-CN'] .vp-doc h1 {
 .site-footer {
   background: #151a17;
   color: rgba(237, 245, 241, 0.82);
-  margin-top: 0;
+  /* ① 首页 gap：Layout 是 flex column，VPContent flex:1 会吃掉剩余空间——
+     margin-top:auto 把剩余空间吸收到 footer 上方之外，footer 贴住内容底 */
+  margin-top: auto;
+  /* ② blog 页 sidebar 是 fixed(z-index:25) 且 top:0;bottom:0 占满视口，
+     滚动到底会盖住 footer——footer 提层盖回，背景不透明 */
+  position: relative;
+  z-index: 26;
 }
 
 .dark .site-footer {
