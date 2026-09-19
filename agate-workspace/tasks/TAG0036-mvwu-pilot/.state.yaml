@@ -18,4 +18,5 @@ retries:
     adjustment: null
 judge:
   enabled: true
+  judge_token_budget: 400000
 p5_pass_commit: 4ee499ff46d3dd0c3ed5faa45ba44899da34b92d
