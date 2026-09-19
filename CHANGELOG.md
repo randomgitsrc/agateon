@@ -20,7 +20,7 @@
 - **`P4-evidence/<id>.log` 落点**：P4 批级证据日志的目录与逐行 `key: value` 格式成文于阶段卡 /
   角色定义 / 任务文件模板。
 - **⑤ 组方法学概念成文**：MVWU 概念与术语进入 `role-system.md`、`adr.md` 等协议文档，并登记
-  `check-mvwu.py` 脚本表与测试映射表（新增 `test_check_mvwu.py` 109 用例、`test_mvwu_protocol_docs.py`
+  `check-mvwu.py` 脚本表与测试映射表（新增 `test_check_mvwu.py` 111 用例、`test_mvwu_protocol_docs.py`
   65 用例）。
 
 来源：TAG0036（RM-AG0063）。

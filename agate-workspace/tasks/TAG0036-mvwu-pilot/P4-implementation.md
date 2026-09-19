@@ -62,3 +62,11 @@ agent: implementer
 - MAJOR（P4-review）：`check-mvwu.py --observe` 耗时列遇超长数字时 `_fmt_duration` 抛 `ValueError`/`OverflowError`，致后续批行丢失。修复三层叠加：`DURATION_RE` 限长（整数/小数各 1-15 位，超出即不可解析落 `-`）；`_fmt_duration` 内捕获 `(ValueError, OverflowError)` 返回 `-`；观察表输出循环加 per-row 兜底（任何意外异常仅令该批输出一行 `UNKNOWN` 观察行，stderr 一行 `internal error`，每批恰一行）。既有耗时口径（`8s`/`8.5s`/缺失→`-`）不变。
 - 新增单测 `test_bdd_45_observe_huge_duration_does_not_drop_rows`（参数化 2 例：5000 位整数、400 位 + `.5`），修前红（输出 2 行）→ 修后绿；`test_check_mvwu.py` 用例数 109 → 111，`tests/README.md` 同步。
 - 术语（protocol-alignment-review A2）：`agate/CONTEXT.md` `boundary(I1)` 行末尾（定义句之后）补「（`--observe` 列取值 `exact` / `mismatch` / `UNKNOWN`；不参与 verdict）」，原措辞未删、仍三列。
+
+## 新增文件核对表备注（收尾更正）
+
+更正上文「项目未采用 CODE-MAP」的说法：`agate-workspace/agents/CODE-MAP.md` 存在，`check-mvwu.py` 已于本次收尾在其 scripts 节登记（`[CODE_MAP_UPDATED]`）。
+
+## 测试注释小修（testfix，非批次）
+
+P4 收口前发现 `test_mvwu_protocol_docs.py` 第 11 行注释含 `/tmp` 字面量，致 `test_check_platform_assumptions.py::test_bdd_8_clean_tree_zero_detection` 转红；仅改注释措辞（无任何断言/逻辑改动），详见 `P4-progress.md` 的 `[testfix]` 行。
