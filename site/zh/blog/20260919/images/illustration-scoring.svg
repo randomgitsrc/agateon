@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="900" height="520" fill="#FAF9F4"/>
+
+  <text x="450" y="52" font-size="27" font-weight="700" fill="#1A1A18" text-anchor="middle">输入五个信号，输出一个 tier</text>
+  <text x="450" y="82" font-size="16" font-style="italic" fill="#444441" text-anchor="middle">并根据它进行声明检查，单向执行</text>
+
+  <!-- left column: five evidence signals -->
+  <text x="60" y="126" font-family="Noto Sans SC, serif" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.5">EVIDENCE SIGNALS</text>
+  <g font-family="'Helvetica Neue', Arial, sans-serif" font-size="14.5">
+    <circle cx="72" cy="156" r="5" fill="#D85A30"/><text x="92" y="161" fill="#1A1A18">文件类型</text>
+    <circle cx="72" cy="190" r="5" fill="#D85A30"/><text x="92" y="195" fill="#1A1A18">敏感路径</text>
+    <circle cx="72" cy="224" r="5" fill="#1D9E75"/><text x="92" y="229" fill="#1A1A18">变更规模</text>
+    <circle cx="72" cy="258" r="5" fill="#1D9E75"/><text x="92" y="263" fill="#1A1A18">影响范围</text>
+    <circle cx="72" cy="292" r="5" fill="#7F77DD"/><text x="92" y="297" fill="#1A1A18">域标记</text>
+  </g>
+  <text x="60" y="326" font-size="13.5" fill="#444441">每个信号输出各自的证据行，</text>
+  <text x="60" y="346" font-size="13.5" fill="#444441">而非单纯的数字</text>
+
+  <!-- arrow to tier -->
+  <path d="M 300 224 L 366 224" fill="none" stroke="#085041" stroke-width="4"/>
+  <path d="M 358 215 L 372 224 L 358 233" fill="none" stroke="#085041" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- middle: tier decision -->
+  <g>
+    <rect x="384" y="120" width="200" height="212" rx="12" fill="#FAF9F4" stroke="#085041" stroke-width="3"/>
+    <text x="484" y="150" font-family="Noto Sans SC, serif" font-size="13" font-weight="700" fill="#085041" text-anchor="middle" letter-spacing="1.5">TIER</text>
+    <rect x="404" y="166" width="160" height="46" rx="8" fill="#E3E0F7" stroke="#4C45A8" stroke-width="2.5"/>
+    <text x="484" y="195" font-family="Noto Sans SC, serif" font-size="16" font-weight="700" fill="#4C45A8" text-anchor="middle">thin</text>
+    <rect x="404" y="222" width="160" height="46" rx="8" fill="#FAF9F4" stroke="#1D9E75" stroke-width="2.5"/>
+    <text x="484" y="251" font-family="Noto Sans SC, serif" font-size="16" font-weight="700" fill="#0E8A72" text-anchor="middle">standard</text>
+    <rect x="404" y="278" width="160" height="46" rx="8" fill="#FAF9F4" stroke="#712B13" stroke-width="2.5"/>
+    <text x="484" y="307" font-family="Noto Sans SC, serif" font-size="16" font-weight="700" fill="#712B13" text-anchor="middle">full</text>
+    <text x="484" y="352" font-family="Noto Sans SC, serif" font-size="14" fill="#444441" text-anchor="middle">任意高 &#8594; full · 全低 &#8594; thin</text>
+  </g>
+
+  <!-- right: one-way check -->
+  <path d="M 596 224 L 662 224" fill="none" stroke="#085041" stroke-width="4"/>
+  <path d="M 654 215 L 668 224 L 654 233" fill="none" stroke="#085041" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g>
+    <rect x="680" y="120" width="176" height="212" rx="12" fill="#FAF9F4" stroke="#085041" stroke-width="3"/>
+    <text x="768" y="150" font-family="Noto Sans SC, serif" font-size="13" font-weight="700" fill="#085041" text-anchor="middle" letter-spacing="1.5">DECLARATION</text>
+    <!-- more ceremony: allowed -->
+    <rect x="700" y="168" width="136" height="52" rx="8" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2.5"/>
+    <text x="768" y="192" font-family="Noto Sans SC, serif" font-size="14" font-weight="700" fill="#085041" text-anchor="middle">请求更多</text>
+    <text x="768" y="210" font-family="Noto Sans SC, serif" font-size="14" fill="#085041" text-anchor="middle">允许 — 耗时</text>
+    <!-- less ceremony: blocked -->
+    <rect x="700" y="234" width="136" height="52" rx="8" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5" stroke-dasharray="6,4"/>
+    <text x="768" y="258" font-family="Noto Sans SC, serif" font-size="14" font-weight="700" fill="#D85A30" text-anchor="middle">请求更少</text>
+    <text x="768" y="276" font-family="Noto Sans SC, serif" font-size="14" fill="#D85A30" text-anchor="middle">exit 1 — 已拦截</text>
+    <text x="768" y="316" font-family="Noto Sans SC, serif" font-size="14" fill="#444441" text-anchor="middle">fail-closed，按设计执行</text>
+  </g>
+
+  <text x="450" y="378" font-size="15" font-style="italic" fill="#444441" text-anchor="middle">thin 仍保留 P5 和 P6 — 流程简化，验证不减</text>
+
+  <!-- bottom band: cost / value -->
+  <g>
+    <rect x="60" y="404" width="796" height="86" rx="10" fill="#FAF9F4" stroke="#D8D5CB" stroke-width="2"/>
+    <text x="86" y="436" font-family="Noto Sans SC, serif" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.5">代价 / 捕获效果</text>
+    <text x="86" y="464" font-family="Noto Sans SC, serif" font-size="14" fill="#1A1A18">中位数 21 小时耗时 &#183; 13 次提交 &#183; ~6,700 行制品</text>
+    <text x="500" y="464" font-family="Noto Sans SC, serif" font-size="14" fill="#1A1A18">119 次 gate 运行 &#183; 3 次实际拦截</text>
+  </g>
+</svg>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="1200" height="630" fill="#FAF9F4"/>
+  <text x="70" y="86" font-family="'Helvetica Neue', Arial, sans-serif" font-size="19" letter-spacing="3.5" fill="#1D9E75" font-weight="600">AGATEON — ORCHESTRATION PROTOCOL</text>
+  <text x="70" y="200" font-size="58" font-weight="700" fill="#1A1A18" font-family="Noto Sans SC, serif">你的 agent 工作流</text>
+  <text x="70" y="272" font-size="58" font-weight="700" fill="#1D9E75" font-family="Noto Sans SC, serif">该不该上协议？</text>
+  <text x="70" y="322" font-size="22" font-style="italic" fill="#444441" font-family="Noto Sans SC, serif">算证据，不算自信</text>
+
+  <line x1="600" y1="400" x2="600" y2="500" stroke="#1A1A18" stroke-width="6"/>
+  <line x1="530" y1="500" x2="670" y2="500" stroke="#1A1A18" stroke-width="6" stroke-linecap="round"/>
+  <line x1="400" y1="432" x2="800" y2="396" stroke="#1A1A18" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="600" cy="414" r="10" fill="#1D9E75"/>
+
+  <line x1="400" y1="432" x2="400" y2="462" stroke="#1A1A18" stroke-width="3"/>
+  <path d="M 330 462 L 470 462 L 440 500 L 360 500 Z" fill="#E3E0F7" stroke="#4C45A8" stroke-width="3"/>
+  <text x="400" y="488" font-family="Noto Sans SC, sans-serif" font-size="20" font-weight="700" fill="#4C45A8" text-anchor="middle">3 道 gate</text>
+
+  <line x1="800" y1="396" x2="800" y2="426" stroke="#1A1A18" stroke-width="3"/>
+  <path d="M 730 426 L 870 426 L 840 464 L 760 464 Z" fill="#FAF9F4" stroke="#712B13" stroke-width="3"/>
+  <text x="800" y="452" font-family="Noto Sans SC, sans-serif" font-size="20" font-weight="700" fill="#712B13" text-anchor="middle">8 个 phase</text>
+
+  <g>
+    <rect x="930" y="360" width="196" height="150" rx="12" fill="#FAF9F4" stroke="#085041" stroke-width="3"/>
+    <text x="1028" y="390" font-family="Noto Sans SC, sans-serif" font-size="15" font-weight="700" fill="#085041" text-anchor="middle" letter-spacing="1.5">风险算分</text>
+    <line x1="1028" y1="436" x2="1086" y2="436" stroke="#1D9E75" stroke-width="3"/>
+    <line x1="1028" y1="458" x2="1096" y2="458" stroke="#1D9E75" stroke-width="3"/>
+    <line x1="1028" y1="480" x2="1078" y2="480" stroke="#1D9E75" stroke-width="3"/>
+    <circle cx="970" cy="436" r="5" fill="#1D9E75"/>
+    <circle cx="970" cy="458" r="5" fill="#1D9E75"/>
+    <circle cx="970" cy="480" r="5" fill="#1D9E75"/>
+  </g>
+  <path d="M 926 435 L 862 435" fill="none" stroke="#085041" stroke-width="4"/>
+  <path d="M 870 427 L 856 435 L 870 443" fill="none" stroke="#085041" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="600" y="560" font-size="19" font-style="italic" fill="#444441" text-anchor="middle" font-family="Noto Sans SC, serif">档位从 git 证据算出来——从不自报</text>
+  <text x="600" y="598" font-size="16" fill="#444441" text-anchor="middle" font-family="Noto Sans SC, serif">你永远可以要求比算分更重的仪式，永远不能更轻</text>
+</svg>
