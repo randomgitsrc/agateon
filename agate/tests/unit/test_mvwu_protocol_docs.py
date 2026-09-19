@@ -8,7 +8,7 @@
 #   * git 基线依赖型断言（BDD-3/5/9/12/67/68② 的 `git diff <内核基线>` 部分）不在本文件：
 #     由 P5 gate_commands（P5_kernel_diff / P5_kernel_diff_wt / P5_roles_diff / P5_history_untouched）
 #     承担，避免"一次性交付事实"被写成永久回归测试后假性变红（TAG0025 教训；P2 R5）。
-# 平台无关（AGENTS.md「测试约定」）：tmp_path、sys.executable、pathlib、显式 utf-8、无 /tmp 字面量。
+# 平台无关（AGENTS.md「测试约定」）：tmp_path、sys.executable、pathlib、显式 utf-8、不依赖固定临时目录路径字面量。
 
 import json
 import os

@@ -1,3 +1,49 @@
+---
+phase: P4
+generated_by: agate-inject-card.py + 主 Agent
+task_id: TAG0036
+role: protocol-alignment-review
+---
+
+<dispatch_guide>
+> ⚠️ 以下派发指引是本次任务的强制指令，不是参考信息。执行优先级：派发指引 > 客观查证信息 > 阶段卡片（参考规范）
+> 本次是 P4 收口的 SELF-GATE 语义审查（P1 BDD-71）；与 `review`（P4-review.md）**并行、互相独立**，你不要读对方产出。
+
+### 目标
+
+对本任务在 worktree 中的**全部未提交改动**（`git status` / `git diff` 可见：新增 `agate/scripts/check-mvwu.py`、`check-protocol-consistency.py` 的 M18 一行、`P2-design.md` 卡片、`architect.md`、`P4-implementation.md` 卡片、`task-files.md`、`role-system.md`、`adr.md`、`P7-consistency.md`、`CONTEXT.md`、`scripts/README.md`、`tests/README.md`、`CHANGELOG.md`、`agate-workspace/debt/tech-debt.md`、两个新测试文件）按 `protocol-alignment-review.md` 的 A1-A7 清单逐项给出 ALIGNED / MISALIGNED / NEEDS_HUMAN_REVIEW，写入 `P4-protocol-alignment-review.md`。
+
+### 约束
+
+1. **逐项引用原文（行号）与脚本代码（行号）**，不说"大概一致"；A4 **必须附你本人实跑的全量 pytest 输出**（CI 口径 `timeout 580 python3 -m pytest agate/tests/ --reruns 1 -n auto -q -p no:cacheprovider`，含 passed/failed 计数；无实跑输出的 ✓ 无效）。当前预期：仅 `test_bdd_71_p4_protocol_alignment_review_exists_with_conclusion` 红（等待你产出本文件）；若出现其他失败，如实记录并判 MISALIGNED。
+2. **重点核对（本任务特有）**：
+   - **A1/A2**：`check-mvwu.py` 的行为（六项检查顺序、四态 verdict、exit code 0/2、`--observe` 七列、`|` 转义、git 区间口径、从不执行 command）与 `P2-design.md` 卡片新增节、`P4-implementation.md` 卡片新增节、`task-files.md`、`scripts/README.md` 的文字**语义一致**（不是关键词存在）；`P4-evidence` 日志最小内容（含 `failed_tests`/`duration_seconds`/`output` 可选键）在 P4 卡片、`task-files.md`、`check-mvwu.py` 三处口径一致。
+   - **A3a/A3b（反向传播，列出"应受影响但未在 diff 中"的文件并逐一验证）**：`dispatch-protocol.md`（`batches` 字段说明是否需提 `tests_filter`——P1 §4.2 判"不处理"，请复核该判断）、`orchestrator-template.md`/`WORKFLOW.md`（阶段产出/P4 落点是否需同步）、`SETUP.md`、`agate/rules/*.yaml`（`P4-evidence` 不应出现）、`UPGRADING.md`（发布时写，不应本任务改）、其余角色文件（`implementer.md` 是否需要知道 `P4-evidence`——若 P1/P2 已判"不改"，只需确认不构成断链）、`state-machine.md`。
+   - **A5**：`CHANGELOG.md [Unreleased]` 是否如实标注（不写"机制已生效"）；对既有项目 gate 行为是否**零影响**（`tests_filter` 可选键、`check-mvwu.py` 不挂 gate）；`P4-evidence` 目录未登记进 gate/judge 白名单/provenance/目录登记面。
+   - **A6**：M18（`GATE_SCRIPT_EXEMPT` 加一行）是否正确处理；`CHECK9-coverage` 无新增 WARNING；`SCRIPT_ALIGNMENT_ANCHORS` 未动是否合理。
+   - **A7（ADR 一致性）**：新增 `adr.md`「复审触发条件」节本身是否与既有 ADR（技术栈中立、协议边界等）一致；⑤-d Walking Skeleton 的"拒绝部署/CI"表述是否与 `adr.md` 技术栈中立相符；⑤-b Deep Modules 审查锚点与 architect/implementer 既有"不规定步骤"哲学是否一致；⑤-c 三判据未规定具体架构工具；`decisions/` 落点与工作区 9 子目录约定一致。
+   - **零内核改动核对**：对 `P2-design.md` §7 `P5_kernel_diff_wt` 所列路径执行 `git diff --exit-code HEAD -- <路径清单>`（清单见该 key；用 `P2_DESIGN=agate-workspace/tasks/TAG0036-mvwu-pilot/P2-design.md python3 ~/.agate/scripts/agate-read-p5-commands.py` 读回后逐字执行），须 exit 0；`P5_roles_diff` 同理；如不为空，判 MISALIGNED 并列出。
+3. **只审不改**：不修改任何代码/文档，不 git add/commit；修复由主 Agent 派 implementer 落地。
+4. **产出格式**：frontmatter 用 `agate-md-field-set.py`（先 `--list`；phase=P4 / task_id=TAG0036 / parent=P4-implementation.md / trace_id=TAG0036-P4-align-20260919 / type=review / created=2026-09-19 / status=approved 或 rejected / `agent: protocol-alignment-review`（≠ main）；`review_date`/`reviewer`/`change_summary`/`files_changed` 等参照 `TAG0035-gate-robustness/P4-protocol-alignment-review.md` 的头部）；正文含「审查结论汇总表（A1-A7）」+ 逐项证据 + 最终结论。**status 判定**：任一 MISALIGNED → `rejected`；仅 NEEDS_HUMAN_REVIEW 且不涉及本任务缺陷 → 可 `approved` 并在正文列出。BDD-71 要求文件含结论字样（approved/rejected）。
+5. 分阶段落盘：读一个文件追加一行到 `P4-review-progress.md`（`>>`，行首加 `[align]` 前缀；与并行的 `review` 共用，只追加）。
+
+### 上游关联
+
+- `P1-requirements.md`（BDD-71 及口径）；`P2-design.md`（§0 影响面梳理、§7 gate_commands、§12 完成标志）；`P4-implementation*.md`（各批实现记录，含波 1-3）；`P0-brief.md`
+
+### 输入文件
+
+- 全部 worktree 改动（`git status --short` / `git diff`；新增文件 `git status` 的 `??` 项直接读）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P2-design.md、P4-implementation.md 及 `P4-implementation-*.md`
+- ~/.agate/v0.71.1/agate/assets/review-roles/protocol-alignment-review.md（角色定义，已随派发）
+- agate/adr.md、agate/scripts/check-protocol-consistency.py（CHECK 9/10/14 一带）
+</dispatch_guide>
+
+<!-- AGATE_CARD_START -->
+## 当前阶段卡片：P4
+
+路径：phase-cards/P4-implementation.md
+---
 # P4 — 代码实现
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
@@ -65,24 +111,6 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - P4-implementation.md 必须声明 `implementation_dir: {实际路径}`
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
-
-## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
-
-> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
-
-- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
-- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
-- **格式**：逐行 `key: value`，最小内容：
-  - `command`：实际运行的命令
-  - `exit_code`：命令退出码
-  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
-  - `timestamp`：运行时间
-  - `expected_red`：预期为红的用例，默认 `[]`
-  - `duration_seconds`：耗时秒数
-  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
-- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
-- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
-- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
 
 ## 新增文件核对表
 
@@ -195,3 +223,8 @@ check-gate.py P4 $TASK_DIR
 > 完成 → 读 phase-cards/P5-verification.md
 
 6. **修改 P1 文档**：P4 发现 BDD 矛盾时标 DESIGN_GAP，不直接改 P1-requirements.md。需变更 P1 时标 `[BASELINE_CHANGE: 理由]` 并经主 Agent 批准。
+<!-- AGATE_CARD_END -->
+
+<objective_info>
+主 Agent 实测（worktree 根，波 3 + 测试注释小修后）：ruff `agate/` All checks passed；`check-protocol-consistency.py --strict-errors-only` 0 ERROR（367 WARNING，`CHECK9-coverage` 无新增）；`check-platform-assumptions.py` 0 命中；`count-tests.sh` 总数 1842（= 1668 + 109 + 65）；全量 pytest 先前 1838 passed / 2 failed（其一已修，其余待你产出本文件）；改动文件 9 个 `agate/` 文档/脚本 + 2 个新测试文件 + CHANGELOG + tech-debt.md。
+</objective_info>

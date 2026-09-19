@@ -1,3 +1,53 @@
+---
+phase: P4
+generated_by: agate-inject-card.py + 主 Agent
+task_id: TAG0036
+role: implementer
+---
+
+<dispatch_guide>
+> ⚠️ 以下派发指引是本次任务的强制指令，不是参考信息。执行优先级：派发指引 > 客观查证信息 > 阶段卡片（参考规范）
+> 本次是 P4 首次派发，**波 2 / 批 `review-anchors-and-decision-recheck`**（波 2 三批并行，**并发上限 ≤3**；三批**文件面互不重叠**，只改本批文件）。
+
+### 目标
+
+实现批 `review-anchors-and-decision-recheck`：落地 ⑤-b（Deep Modules 审查锚点，`role-system.md`）与 ⑤-e 协议侧（`adr.md` 复审触发条件；P7 卡片的决策落点核对项）。
+
+### 约束
+
+1. **测试是规格，P1 是权威**：`agate/tests/unit/test_mvwu_protocol_docs.py`（P3 已提交）是本批验收规格，**不得修改任何测试文件**；发现测试与 P1/P2 矛盾 → 不改测试，在 `P4-progress.md` 记 `DESIGN_GAP` 并报告。**字面标记逐字取自 `P1-requirements.md` 对应 BDD 的"字面：…"**，不得改写；文本须真实成文（不是把关键词塞进注释凑断言）。
+2. **只改本批文件**：`agate/role-system.md`（M8）、`agate/adr.md`（M9）、`agate/phase-cards/P7-consistency.md`（M10）——3 文件。**不改**其他任何文件——尤其不改 `agate/scripts/*`（`check-mvwu.py` 已由波 1 落库）、`check-gate.py`/`phases.yaml`/`rules/`/hook/审计链/`dispatch-protocol.md`/`assets/execution-roles/` 中本批之外的任何角色文件；不新增 `.sh`；不 git add/commit；并行的另外两批文件面见 `P2-design.md` §6 批表，**不要碰**。
+3. **改动落点**（P2 §0.1，**插入位置以标题定位**，行号仅供参考）：
+   - **M8** `role-system.md`：在 `### 专家组并行评审 + 组长汇总` 之后、`## 子派发权限边界` 之前新增 `## 审查锚点：角色文件是否浅化接口（Deep Modules，TAG0036）`。判据：审查角色文件/阶段卡片时问「是否规定了'第 1 步做 A、第 2 步做 B'式执行顺序（而协议哲学是给资源地图 + 判据，不给步骤脚本）」；成文即可，**不宣称机制已生效**；不改任何既有角色文件（BDD-60，`P5_roles_diff` 断言 `assets/execution-roles/` 除 architect.md 外空 diff）
+   - **M9** `adr.md`：文件头 `>` 引言块之后、首个 `---` 分隔线之前新增 `## 复审触发条件（过时不删）`：某 ADR 的前提被后续变更证伪时须就地标注「已过时 + 被什么取代」、**不删除**（保留决策史）；复审时机 = 每次新增 ADR 时顺带复核相关旧 ADR + P7 一致性检查阶段；不含自动过期/强制复审 gate 表述；既有 ADR 正文**零删除行**（BDD-65）
+   - **M10** `phase-cards/P7-consistency.md`：`## 执行方式` 检查清单末尾追加第 6 项「架构决策落点与过时标注核对」——**核对**（`{AGATE_WORKSPACE}/decisions/` 是否落了应落的跨任务决策、被证伪的是否已就地标注而非删除），**不 author 正文**（见 DEBT0039）（BDD-66 P7 卡侧）
+4. **本批 BDD**：BDD-60、65、66(P7 卡侧)——逐条读 P1 原文（含 Given/When/Then 与字面锚点），文档内容须满足其 Then；⑤ 组只要求「成文到位」，**不得写"机制已生效/已验证有效"** 之类断言（BDD-60/62）。
+5. **CHECK 14 平台词（P2 R3，硬约束）**：`agate/*.md` 顶层叙述面（含 `role-system.md`、`adr.md`、`CONTEXT.md`）不得出现裸词 `task` / `goal` / `workflow` / `DSH` / `OpenCode` / `Claude Code` / `ralph`（大小写不敏感，详见 P2 R3 与 `check-protocol-consistency.py` CHECK 14）；用"任务/目标/流程"等中文或既有替代词；写完用 `python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` 自查 0 ERROR。任何文档中出现 `check-mvwu.py` 引用须可解析（脚本已存在）。
+6. **技术栈中立 / 边界**：不规定架构适应度工具、不强制垂直切分、不引入部署/CI 机制、不做决策自动过期 gate（P0-brief out-of-scope）；`tests_filter` 示例不得裸 `python3`（用 `python -m pytest` 示意或注明遵循 `AGATE_PYTHON` 探测，BDD-8）。
+7. **R3 硬约束（P2 §0.3）**：`role-system.md` 与 `adr.md` 属 CHECK 14 的顶层叙述面，**新增文字禁裸词** `task` / `goal` / `workflow` / `DSH` / `OpenCode` / `Claude Code` / `ralph`（含大小写变体；如需指代用「任务」「目标」等中文，或放入既有允许的反引号/引用形态——以 CHECK 14 实际判定为准，写完必跑 consistency 自查）。`P7-consistency.md` 在 `phase-cards/` 下，不在该叙述面。
+8. **验证（自查，非 gate）**：`timeout 240 python3 -m pytest agate/tests/unit/test_mvwu_protocol_docs.py -q --tb=short -p no:cacheprovider`，**本批相关用例须转绿**（BDD-60、65、66(P7 卡侧)；其余批的文档类用例仍红属预期，勿去改）；`timeout 120 python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` 0 ERROR 且 `CHECK9-coverage` 无新增；`git diff --stat` 确认只动了本批文件。自查通过 ≠ P5 gate 通过，返回里不得声称"P5 已过"。
+9. **产出记录**：写 `P4-implementation-review-anchors-and-decision-recheck.md`（frontmatter 用 `agate-md-field-set.py`：phase=P4 / task_id=TAG0036 / parent=P3-test-cases.md / trace_id=TAG0036-P4-20260919 / type=implementation / created=2026-09-19 / status=draft / `implementation_dir: agate/`；`agent: implementer` set 不接受则 Edit 单行），正文：本批摘要（各文件改动落点 + 对应 BDD）、自查结果、新增文件核对表（本批无新增文件则写"无新增文件"）。`P4-implementation.md`（主文件）由波 1 创建，**本批不改**。
+10. 范围外需求标 `[SCOPE+]`（行首声明格式）写入 `P4-progress.md`（用 `>>` 追加，行首加 `[review-anchors-and-decision-recheck]` 前缀，与并行批共用该文件）并报告，不直接做。
+
+### 上游关联
+
+- `P2-design.md`（§0.1 改什么表 / §0.3 风险 R3-R14 / §3 ⑤ 组落点（插入位置 + 字面标记）/ §6 批表 / §10 files_to_read）；`P1-requirements.md`（BDD-60、65、66(P7 卡侧) 及其字面锚点）；`P3-test-cases-docs.md`（BDD→用例映射）
+
+### 输入文件（files_to_read）
+
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P2-design.md（§0.1 本批行、§3、§6）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P1-requirements.md（BDD-60、65、66(P7 卡侧)）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P3-test-cases-docs.md
+- agate/tests/unit/test_mvwu_protocol_docs.py（本批相关用例，只读）
+- agate/role-system.md、agate/adr.md、agate/phase-cards/P7-consistency.md（本批三文件；`adr.md` 全文较长，先读头部与既有 ADR 标题结构即可）
+- agate/scripts/check-protocol-consistency.py（仅读 CHECK 14 的词表与判定逻辑段，弄清允许形态）
+</dispatch_guide>
+
+<!-- AGATE_CARD_START -->
+## 当前阶段卡片：P4
+
+路径：phase-cards/P4-implementation.md
+---
 # P4 — 代码实现
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
@@ -65,24 +115,6 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - P4-implementation.md 必须声明 `implementation_dir: {实际路径}`
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
-
-## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
-
-> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
-
-- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
-- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
-- **格式**：逐行 `key: value`，最小内容：
-  - `command`：实际运行的命令
-  - `exit_code`：命令退出码
-  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
-  - `timestamp`：运行时间
-  - `expected_red`：预期为红的用例，默认 `[]`
-  - `duration_seconds`：耗时秒数
-  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
-- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
-- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
-- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
 
 ## 新增文件核对表
 
@@ -195,3 +227,10 @@ check-gate.py P4 $TASK_DIR
 > 完成 → 读 phase-cards/P5-verification.md
 
 6. **修改 P1 文档**：P4 发现 BDD 矛盾时标 DESIGN_GAP，不直接改 P1-requirements.md。需变更 P1 时标 `[BASELINE_CHANGE: 理由]` 并经主 Agent 批准。
+<!-- AGATE_CARD_END -->
+
+<objective_info>
+- 波 1 已完成：`agate/scripts/check-mvwu.py`（476 行）+ M18 落库；`test_check_mvwu.py` + `test_protocol_alignment_review.py` 117 passed；ruff 0；consistency 0 ERROR（--strict-errors-only）。
+- 基线：`test_mvwu_protocol_docs.py` 波 1 后仍有 ~27 个文档类用例红（本批负责其中与 BDD-60、65、66(P7 卡侧) 相关者）。
+- 稳定版协议根 `~/.agate/v0.71.1/agate`（勿改）。
+</objective_info>

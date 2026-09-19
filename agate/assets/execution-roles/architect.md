@@ -231,6 +231,40 @@ P2 方案含多个独立子任务（多包 / 多模块 / 高复杂度）时，**
 - [ ] **资源密集型批次已判定串行**：批次的 gate 命令属全量测试 xdist / E2E 浏览器 / 构建安装类时，默认串行（判据见 dispatch-protocol.md「派发编排机制」并行规则第 4 条"资源密集型默认串行"），要并行须先分配隔离参数
 - [ ] **长命令已声明 `{key}_timeout_seconds`**：`gate_commands` 里耗时较长的 key（E2E / 构建 / 全量回归）按 per-key 形式声明预期耗时上限（如 `P5_e2e_timeout_seconds: 300`）。字段规则四点（排除 P3 / per-key 声明 / 三档默认基准表 / 缺字段向后兼容）的权威定义在 P2 卡片「gate_commands 声明」的 `{key}_timeout_seconds` 字段规则，本节只做声明位提醒，不重复展开基准表细节
 
+### 批切分判据与 tests_filter 写法（TAG0036）
+
+设计 `batches[]` 时，除上面的硬规则与检查项外，按以下三条判据切批，并为每批决定是否写可选键 `tests_filter` / `output`。字段契约（值须双引号、`expected_red` 落点、`{batch}` 命名规则、`output` 的边界）的权威定义在 P2 卡片「dispatch_plan 机器字段」的「batches[] 可选键」小节，本节只写"怎么选"，不复述契约。这些是判据式引导，不新增 gate 校验。
+
+**判据一：Tracer Bullet**
+
+- 触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。
+- 做法：首个批切成该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证，而不是该批的完整单元测试。
+- 目的：在投入全部实现之前，先取得"管道确实通"的反馈。
+- 与 P3 红灯批的边界：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 给出），后续批仍按常规批级验证走。
+- Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+
+**判据二：Vertical Slice**
+
+- 批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而非一个技术层。
+- 自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。
+- 必须按技术层切时，在 P2-design.md **写明理由**（不禁止，也没有 gate 拦截）。
+- 与判据一的关系：端到端批天然就是垂直切片，二者是同一决策的两个面。
+
+**判据三：Architecture Fitness Functions**
+
+- `gate_commands` 除功能测试外，应为本任务涉及的架构约束配置适应度检查（维度示例：依赖方向、分层边界、循环依赖、公共 API 稳定性）。具体写法见 P2 卡片「gate_commands 声明」的「架构适应度检查」小节。
+- agate 不规定具体工具，由项目自选；命令仍经 `gate_commands` 注入，只要求"该维度存在"。
+- 项目判定无架构约束时，在 P2-design.md 写明"本任务无架构适应度检查"即可，不强制。
+
+**tests_filter 写法（选取方法）**
+
+- **scoping**：`tests_filter` 只含该批交付面的测试，不含后续批才交付的测试，**禁止全量**套件；全量回归属 `gate_commands.P5`。
+- **与 P3 的分工**：`gate_commands.P3` 是任务级**红灯基线**（测试先于实现，确认红），`tests_filter` 是批级**绿灯确认**（该批交付后其交付面测试确认绿）；二者互不替代。
+- **`expected_red`**：该批确有设计上应红的测试（如命中范围内含后续批的红灯用例）时，留待运行者写入证据日志 `P4-evidence/{batch}.log` 的 `expected_red` 键，architect 在 P2-design.md 里注明哪些应红及理由即可。
+- **批 `id` filename-safe**：`{batch}` 即批 `id`，会拼成证据文件名，须匹配 `[A-Za-z0-9._-]+`。
+- **平台中立**：示例与实际值写 `python -m pytest …` 形态，不裸 `python3`；解释器名遵循项目 `AGATE_PYTHON` 探测。
+- **`output`（可选）**：该批预期改动的文件路径列表，**仅供** `check-mvwu.py --observe` 做 boundary / commit 形态比对读取，**不新增 gate 校验**；不写不影响任何 gate。
+
 ## 返回给主 Agent
 文件路径 + 一句话摘要（方案要点 / 一致性结论，含双向检查结果）
 

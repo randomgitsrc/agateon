@@ -1485,3 +1485,29 @@ created_at: 2026-09-18
 task_id: TAG0035   # 由 TAG0035 复盘派生（PR #334 修测试侧，本 PR 补实现侧）
 ```
 
+## DEBT0043
+
+```yaml
+id: DEBT0043
+category: technical
+title: "check-gate.py::_gate_p2_dispatch_plan 对解析失败 / 非 dict / 缺字段 return None 静默放行（fail-open），与 TAG0035 子批 A 同类"
+status: open
+priority: low
+evidence:
+  - path: agate/scripts/check-gate.py
+    note: "实测 _gate_p2_dispatch_plan（def 在 767 行，TAG0035 前为 743 行）三处 return None 静默放行：769-770 行 `if not raw: return None`（缺 dispatch_plan 字段/坏 frontmatter）；772-774 行 `except ValueError: return None`（json.loads 失败）；775-776 行 `if not isinstance(plan, dict): return None`。调用点 919-922 行仅在返回非空错误串时 exit 1，None 一律视为无问题——P2 声明了 dispatch_plan 但 JSON 写坏时 gate 不报错，校验被整体跳过"
+  - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P1-requirements.md
+    note: "BDD-5 / P0 发现：同类 fail-open 只此一处；其余 gate 函数的 fail-open 属 TAG0035 已处理范围。判断依据：`grep -n \"_gate_p2_dispatch_plan\\|dispatch_plan\" agate-workspace/debt/tech-debt.md` 在本条登记前无相关条目"
+  - ref: agate-workspace/tasks/TAG0035-gate-robustness/retrospective.md
+    note: "TAG0035 子批 A 收口的同类 fail-open（gate 解析失败静默放行）；该批未覆盖 _gate_p2_dispatch_plan，仅致其行号 743→767"
+impact: "dispatch_plan 是 P4 批编排的机器字段，写坏（如 JSON 语法错误、顶层非对象）时 P2 gate 不拒绝、也不告警，mode / parallel_limit / batches 校验形同虚设；MVWU 观测器（check-mvwu.py）读同一字段，坏字段下只能给 UNKNOWN 而非在 P2 就被拦下"
+recommendation: "本任务（TAG0036）只登记、不修——零内核硬约束。后续修复向：字段存在但 JSON 解析失败 / 非 dict 时返回错误串（fail-closed，exit 1）；仅「字段确实缺失」保持 return None（向后兼容不声明 dispatch_plan 的任务）；补对应红灯用例"
+closure_criteria:
+  - "dispatch_plan 字段存在但 json.loads 失败或非 dict 时，check-gate.py P2 返回非零并给出明确错误信息"
+  - "字段缺失（未声明 dispatch_plan）仍按向后兼容放行，并有回归用例锁定两种行为"
+  - "全量 pytest 全绿 + consistency 0 ERROR"
+source: review
+created_at: 2026-09-19
+task_id: null   # 待立项；由 TAG0036 P0/P1 发现并登记，不在本任务修复
+```
+

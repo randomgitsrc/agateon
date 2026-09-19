@@ -35,3 +35,8 @@
 | pytest | agate 测试框架。开发者在 Linux 全量 `python3 -m pytest agate/tests/`，Windows 只跑冒烟；用例数以 `bash agate/tests/scripts/count-tests.sh` 为准 | AGENTS.md §测试约定 |
 | windows_smoke marker | `@pytest.mark.windows_smoke`，Windows CI 冒烟代表（每文件第 1 个用例 + 平台敏感关键词用例），Linux 全量覆盖、Windows 只验证平台敏感机制成立 | AGENTS.md §测试约定 |
 | conftest | agate/tests/conftest.py，全局 fixture（agate_root / task_dir / git_repo / run_cli / py_path），根目录自动加载，test_*.py 无需 load 语句 | tests/README.md |
+| MVWU | 最小可验证工作单元：P4 批内一次可独立验证的交付面，由批 `id`、该批 `tests_filter` 与 `P4-evidence/{batch}.log` 证据构成；MVWU 观测只记录、不阻断 | docs/design-notes/design-mvwu-protocol.md |
+| tests_filter | `dispatch_plan.batches[]` 的可选键，声明该批交付面的测试过滤命令（双引号包裹、只覆盖本批、禁止全量套件），供批级绿灯确认；缺省时 gate 行为不变 | phase-cards/P2-design.md |
+| P4-evidence | 任务目录下 `P4-evidence/{batch}.log`，主 Agent 在批 commit 前机械转录该批 `tests_filter` 的实际运行结果（命令 / exit_code / git_head / expected_red 等）；记录不阻断 | phase-cards/P4-implementation.md |
+| 四态 verdict | `check-mvwu.py` 对每批的观测结论：`PASS` / `FAIL` / `EXPECTED_RED`（红灯全部命中预期）/ `UNKNOWN`（无法核对）。UNKNOWN 不等价于 PASS，无法核对时不得当作通过 | scripts/check-mvwu.py |
+| boundary(I1) | MVWU 不变量 I1：批声明的 `output` 文件集与该批 commit 实际改动集的比对（相等为 PASS，改了未声明的文件为 FAIL），仅由 `check-mvwu.py --observe` 观察，不新增 gate 校验（`--observe` 列取值 `exact` / `mismatch` / `UNKNOWN`；不参与 verdict） | docs/design-notes/design-mvwu-protocol.md |

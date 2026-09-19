@@ -44,6 +44,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 | `check-tdd-red.py` | TDD 红灯检查（读 gate_commands.P3 + formatter 判定 A/B 类）| 0=红灯/B 类, 1=A 类, 2=绿灯, 3=无运行器 |
 | `check-platform-assumptions.py` | 平台假设静态扫描器（R1-R5，扫描覆盖 .bats/.bash/.sh/.py）| 0=零命中, 1=有命中, 2=目标不存在 |
 | `check-debt.py` | 技术债登记校验：默认 FILE 模式=DEBT 条目 schema 校验（fail-closed）；`--retreat-coverage`=回退覆盖比对（`git log retreat:` 提交 vs `source: retreat` 条目，缺失 WARNING）| FILE 模式 0=通过, 1=校验失败；回退模式：依赖加载失败 exit 2（需主 Agent 自判），无 retreat 提交等有意跳过 exit 0 |
+| `check-mvwu.py` | MVWU 阶段 1 观测器（TAG0036）：读任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，每批输出一行 `MVWU_RESULT: <VERDICT> batch=<id>`（verdict = PASS/FAIL/EXPECTED_RED/UNKNOWN）；`--observe`=输出 7 列观察表行。仅观测、不阻断（不挂 gate/hook/CI）| 0=任一 verdict（含 FAIL/UNKNOWN，不阻断）, 2=用法/目标错误 |
 
 ### 公共库
 

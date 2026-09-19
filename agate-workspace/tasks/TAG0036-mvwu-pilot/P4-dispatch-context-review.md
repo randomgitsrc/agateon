@@ -1,3 +1,51 @@
+---
+phase: P4
+generated_by: agate-inject-card.py + 主 Agent
+task_id: TAG0036
+role: review
+---
+
+<dispatch_guide>
+> ⚠️ 以下派发指引是本次任务的强制指令，不是参考信息。执行优先级：派发指引 > 客观查证信息 > 阶段卡片（参考规范）
+> 本次是 P4 实现评审（backend 域，C8 映射 → `review` 单角色，无需组长汇总），写入 `P4-review.md`；与 `protocol-alignment-review` **并行、互相独立**，不要读对方产出。
+
+### 目标
+
+以"偏执 Staff Engineer"视角评审 P4 实现（**重点 `agate/scripts/check-mvwu.py`**，次要文档改动），判定 approved / rejected（任何 BLOCKER → rejected）。
+
+### 约束
+
+1. **check-mvwu.py 偏执核查（须实测，不只读代码）**：
+   - **只读 / 从不执行**：脚本是否真的从不执行 `command`/`tests_filter`（含通过 `shell=True`、`os.system`、`subprocess` 间接执行、`shlex` 后 `execv`）；是否写任何文件（除 stdout/stderr）。用一个含哨兵命令（如 `touch <tmp>/sentinel`）的证据文件实跑验证。
+   - **输入注入 / 特殊字符**：批 `id`、`tests_filter`、`output` 含空格 / `|` / 反引号 / 换行 / `../` / 绝对路径 / 超长 / 非 UTF-8 / BOM / CRLF 时是否每批恰一行输出、无 traceback、无路径穿越读取任务目录外文件（含符号链接逃逸，Windows 上 skip）；`task_dir` 以 `-` 开头（伪参数注入 git）、含空格、不存在、是文件而非目录、无 `.git` 的情形。
+   - **git 调用面**：所有 git 调用是否只读；`base`/`sha` 是否经过校验后才拼进命令（`SHA_RE` / `cat-file`）；`-z` 解析在文件名含换行/空格/非 ASCII 时是否正确；大仓库性能（单趟读取，不 N×M）；`git` 不在 PATH / 非 git 目录 / 浅克隆 / 无 origin 的降级。
+   - **异常兜底**：单批内任何意外异常是否仅令该批 `UNKNOWN reason=evidence` 而不影响其他批（构造一个会触发异常的证据文件实测）；是否有裸 `except:` 吞掉 KeyboardInterrupt/SystemExit。
+   - **verdict 正确性**：六项顺序（tests_filter → evidence → command → exit_code → git_head → expected_red）与口径 A-H 一致；`UNKNOWN` 从不被当 PASS；`expected_red` 空列表/缺省/不可解析三态；`exit_code: 0` 但 `failed_tests` 非空（自相矛盾）落 `reason=exit_code`。抽查至少 6 个边界用例（自行构造，`tmp` 目录内，用后删除）。
+   - **平台/语法**：Python 3.8+ 语法（禁 `match`/`removeprefix`/`X | Y` 注解——可用 `python3 -c "import ast,sys; ast.parse(open(p).read(), feature_version=(3,8))"` 核查）；无 `/tmp` 字面量；显式 utf-8；`sys.stdout.reconfigure` 不可用时不崩；`--help` 含三条字面局限。
+2. **M18**：`check-protocol-consistency.py` 是否**仅**新增 `GATE_SCRIPT_EXEMPT` 一行（`git diff` 核对），其余零改动。
+3. **文档改动抽查**（次要）：新增小节的插入位置正确、无破坏既有结构（既有四条硬规则/既有 29 条术语/既有 ADR 逐字未删）、无"机制已生效"式断言、`tests_filter` 示例平台中立；`tech-debt.md` 新条 DEBT0043 schema 合法且**未修** `_gate_p2_dispatch_plan`。
+4. **范围**：`git diff --stat` 核对无零内核清单文件被改、无 `.sh` 新增、无测试断言被放宽（`git diff HEAD -- agate/tests/unit/test_mvwu_protocol_docs.py agate/tests/unit/test_check_mvwu.py` 应仅有未提交的一行注释措辞修订）。
+5. 评审输出：**Pass 1（CRITICAL）/ Pass 2（INFORMATIONAL）** 分列，每条给文件:行号与可复现方式；BLOCKER 须给最小复现。`agent: review`（≠ main）。**只审不改**（不改任何文件、不 git add/commit；临时文件放 `tmp` 后删除，`git status` 除 `P4-review.md` / `P4-review-progress.md` 外不得新增）。frontmatter 用 `agate-md-field-set.py`（phase=P4 / task_id=TAG0036 / parent=P4-implementation.md / trace_id=TAG0036-P4-20260919 / created=2026-09-19 / status=approved|rejected；`agent: review` set 不接受则 Edit 单行）。
+6. 若发现需登记的技术债，用标准 DEBT 格式（`assets/templates/tech-debt-template.md`，evidence 必填），写在评审正文「建议登记」里，**不要自己写入 tech-debt.md**。
+7. 分阶段落盘：读一个文件追加一行到 `P4-review-progress.md`（`>>`，行首加 `[review]` 前缀；与并行的 protocol-alignment-review 共用，只追加）。
+
+### 上游关联
+
+- `P1-requirements.md`（口径 A-H、BDD-13 至 58）；`P2-design.md`（§2 设计、§9 minimal_validation、§0.3 风险 R1-R14）；`P4-implementation*.md`
+
+### 输入文件
+
+- agate/scripts/check-mvwu.py（重点，全读）
+- agate/tests/unit/test_check_mvwu.py（只读，对照契约）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P2-design.md（§2、§0.3）、P1-requirements.md（口径 A-H）
+- `git diff` 中的文档改动（次要）
+</dispatch_guide>
+
+<!-- AGATE_CARD_START -->
+## 当前阶段卡片：P4
+
+路径：phase-cards/P4-implementation.md
+---
 # P4 — 代码实现
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
@@ -65,24 +113,6 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - P4-implementation.md 必须声明 `implementation_dir: {实际路径}`
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
-
-## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
-
-> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
-
-- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
-- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
-- **格式**：逐行 `key: value`，最小内容：
-  - `command`：实际运行的命令
-  - `exit_code`：命令退出码
-  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
-  - `timestamp`：运行时间
-  - `expected_red`：预期为红的用例，默认 `[]`
-  - `duration_seconds`：耗时秒数
-  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
-- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
-- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
-- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
 
 ## 新增文件核对表
 
@@ -195,3 +225,8 @@ check-gate.py P4 $TASK_DIR
 > 完成 → 读 phase-cards/P5-verification.md
 
 6. **修改 P1 文档**：P4 发现 BDD 矛盾时标 DESIGN_GAP，不直接改 P1-requirements.md。需变更 P1 时标 `[BASELINE_CHANGE: 理由]` 并经主 Agent 批准。
+<!-- AGATE_CARD_END -->
+
+<objective_info>
+主 Agent 实测：`test_check_mvwu.py` 109 全绿；`check-mvwu.py` 476 行；ruff/consistency/platform-assumptions 均通过；全量 pytest 先前 1838 passed（余 2 项已修/待对齐审查产物）。
+</objective_info>

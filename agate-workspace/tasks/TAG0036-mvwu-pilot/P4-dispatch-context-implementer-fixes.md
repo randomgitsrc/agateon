@@ -1,3 +1,44 @@
+---
+phase: P4
+generated_by: agate-inject-card.py + 主 Agent
+task_id: TAG0036
+role: implementer
+---
+
+<dispatch_guide>
+> ⚠️ 以下派发指引是本次任务的强制指令，不是参考信息。执行优先级：派发指引 > 客观查证信息 > 阶段卡片（参考规范）
+> 本次是 P4 **评审后修复**（非批次）：`P4-review.md`（approved，0 BLOCKER）的 1 条 MAJOR + `P4-protocol-alignment-review.md`（approved）A2 的 1 条 NEEDS_HUMAN_REVIEW，主 Agent 裁决**两条都修**。
+
+### 目标
+
+1. **MAJOR（`check-mvwu.py`）**：`--observe` 耗时列遇超长数字（如 5000 位 `9`、或 400 位 `9` + `.5`）时 `_fmt_duration`（约 136-144 行）的 `int()`/`float()` 抛 `ValueError`/`OverflowError`，且调用点（约 447-452 行的观察表输出循环）无 per-row 兜底，致后续批的行丢失并被"无批"占位行顶替，违反"每批恰一行"与 BDD-45（"不可解析 → `-`"）。**修法（叠加，最小改动）**：(a) 给 `DURATION_RE` 限长（如 `[0-9]{1,15}(?:\.[0-9]{1,15})?`，超出即不可解析落 `-`）；(b) `_fmt_duration` 内 `try/except (ValueError, OverflowError)` 返回 `-`；(c) 观察表输出循环对每行渲染加 per-row 兜底：任何意外异常仅令**该批**输出一行 `UNKNOWN` 观察行（沿用现有"无批占位行"的列结构与转义，批 id 仍用口径 D 编码），stderr 一行 `internal error`，**其余批不受影响、每批恰一行**。**不得改变**任何既有口径行为（正常耗时格式 `8s`/`8.5s`、缺失→`-`）。
+2. **补 1 条单测**（`agate/tests/unit/test_check_mvwu.py`，**只追加**，不改任何既有用例）：命名 `test_bdd_45_observe_huge_duration_does_not_drop_rows`（或同风格），用 `tmp_path` 建 3 批任务，b2 的证据含 `duration_seconds` 为 5000 个 `9`（另加参数化变体：400 个 `9` + `.5`），断言 `--observe` 恰 3 行、b2 行耗时列为 `-`、b1/b3 行不受影响、exit 0；**先在未修代码上确认该用例红、修后绿**（记录到 progress）。同样遵守 P3 测试约束（`sys.executable`、`tmp_path`、无 `/tmp` 字面量、显式 utf-8、不写仓库内文件）。
+3. **术语（`agate/CONTEXT.md` 第 42 行 `boundary(I1)`）**：定义括号后补半句「（`--observe` 列取值 `exact` / `mismatch` / `UNKNOWN`；不参与 verdict）」——**原有措辞一字不删**（P0-brief/P1 BDD-59 的字面要求保持：该行仍为三列、首次定义位置不变）；新增文字**不得**出现 CHECK 14 裸词（task/goal/workflow/DSH/OpenCode/Claude Code/ralph）。
+4. **同步计数**：新增 1 个（或含参数化的 N 个）用例后，`agate/tests/README.md` 中 `check-mvwu.py` 行的用例数须 = `python3 -m pytest agate/tests/unit/test_check_mvwu.py --collect-only -q` 的**实测**数；`bash agate/tests/scripts/count-tests.sh` 总数 = 1668 + 新 test_check_mvwu 用例数 + 65；`test_bdd_69_tests_readme_row_matches_collected_count` 须保持绿。
+
+### 约束
+
+1. **只改**：`agate/scripts/check-mvwu.py`、`agate/tests/unit/test_check_mvwu.py`（仅追加）、`agate/CONTEXT.md`（仅第 42 行补半句）、`agate/tests/README.md`（仅 `check-mvwu.py` 行的用例数）。**不改**任何其他文件；不改既有断言；不放宽测试；不 git add/commit。零内核清单文件不动。
+2. **自查（非 gate）**：`timeout 240 python3 -m pytest agate/tests/unit/test_check_mvwu.py agate/tests/unit/test_mvwu_protocol_docs.py agate/tests/scripts/test_check_platform_assumptions.py -q --tb=short -p no:cacheprovider`（预期仅 `test_bdd_71_*` 不再红，因对齐审查文件已存在——应全绿）；`~/.venvs/agate-dev/bin/ruff check agate/`；`timeout 120 python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` 0 ERROR；`python3 agate/scripts/check-platform-assumptions.py` 0 命中；`ast.parse(..., feature_version=(3,8))` 对 `check-mvwu.py` 通过。不得声称"P5 已过"。
+3. 在 `P4-progress.md` 用 `>>` 追加 `[fixes]` 前缀记录；在 `P4-implementation.md` 末尾**追加**一节「评审后修复（TAG0036）」（不改既有内容）说明 MAJOR 修复与术语补句。
+
+### 上游关联
+
+- `P4-review.md`（MAJOR 复现与建议，含最小复现）；`P4-protocol-alignment-review.md`（A2）；`P1-requirements.md`（BDD-45、BDD-59、口径 A/D）
+
+### 输入文件
+
+- agate/scripts/check-mvwu.py（`DURATION_RE`、`_fmt_duration`、观察表输出循环；约 40-70、130-150、420-460 行）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P4-review.md（"关于上一轮遗留问题"节）
+- agate/tests/unit/test_check_mvwu.py（BDD-45 相关既有用例，风格参照）
+- agate/CONTEXT.md（第 42 行）、agate/tests/README.md（check-mvwu 行）
+</dispatch_guide>
+
+<!-- AGATE_CARD_START -->
+## 当前阶段卡片：P4
+
+路径：phase-cards/P4-implementation.md
+---
 # P4 — 代码实现
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
@@ -65,24 +106,6 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - P4-implementation.md 必须声明 `implementation_dir: {实际路径}`
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
-
-## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
-
-> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
-
-- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
-- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
-- **格式**：逐行 `key: value`，最小内容：
-  - `command`：实际运行的命令
-  - `exit_code`：命令退出码
-  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
-  - `timestamp`：运行时间
-  - `expected_red`：预期为红的用例，默认 `[]`
-  - `duration_seconds`：耗时秒数
-  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
-- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
-- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
-- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
 
 ## 新增文件核对表
 
@@ -195,3 +218,9 @@ check-gate.py P4 $TASK_DIR
 > 完成 → 读 phase-cards/P5-verification.md
 
 6. **修改 P1 文档**：P4 发现 BDD 矛盾时标 DESIGN_GAP，不直接改 P1-requirements.md。需变更 P1 时标 `[BASELINE_CHANGE: 理由]` 并经主 Agent 批准。
+<!-- AGATE_CARD_END -->
+
+<objective_info>
+- 主 Agent：全量 pytest 先前 1838 passed；`test_check_mvwu.py` 109 用例、`test_mvwu_protocol_docs.py` 65 用例；对齐审查文件已产出（`test_bdd_71_*` 应转绿）。
+- 复现（review 实测）：b2 证据 `duration_seconds: 99…9`（4301+ 位）→ `--observe` 输出 2 行而非 3 行，stderr `ValueError: Exceeds the limit (4300 digits)`。
+</objective_info>

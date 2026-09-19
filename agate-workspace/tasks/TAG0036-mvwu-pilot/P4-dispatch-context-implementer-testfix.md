@@ -1,3 +1,40 @@
+---
+phase: P4
+generated_by: agate-inject-card.py + 主 Agent
+task_id: TAG0036
+role: implementer
+---
+
+<dispatch_guide>
+> ⚠️ 以下派发指引是本次任务的强制指令，不是参考信息。执行优先级：派发指引 > 客观查证信息 > 阶段卡片（参考规范）
+> 本次是 P4 **收口前小修**（非批次）：修复 P3 测试文件自身触发的平台假设检查 R4。
+
+### 目标
+
+`agate/tests/unit/test_mvwu_protocol_docs.py` 第 11 行注释含 `/tmp` 字面量，被 `check-platform-assumptions.py` 的 R4 检出，致既有测试 `agate/tests/scripts/test_check_platform_assumptions.py::test_bdd_8_clean_tree_zero_detection` 由绿转红。**只改这一行注释的措辞**（例如把"无 /tmp 字面量"改为"不依赖固定临时目录路径字面量"），使 `python3 agate/scripts/check-platform-assumptions.py` 输出 0 命中（exit 0）。
+
+### 约束
+
+1. **只允许改该文件的注释文字**：不得改任何用例逻辑、断言、用例名、参数、import；不得放宽/删除断言；不改其他任何文件（除自记录）。改后 `git diff agate/tests/unit/test_mvwu_protocol_docs.py` 应仅 1 行（或注释所在最少行）。
+2. 同时用 `python3 agate/scripts/check-platform-assumptions.py` 核对 `test_check_mvwu.py` 及全仓其余文件 0 命中（若还有别的命中，列出并只修**本任务新增的两个测试文件**内的注释/字面量，其余文件命中在返回里报告，不改）。
+3. 自查：`timeout 200 python3 -m pytest agate/tests/scripts/test_check_platform_assumptions.py agate/tests/unit/test_mvwu_protocol_docs.py agate/tests/unit/test_check_mvwu.py -q --tb=short -p no:cacheprovider`（预期仅 `test_bdd_71_*` 仍红，属收口产物）；`~/.venvs/agate-dev/bin/ruff check agate/tests/unit/test_mvwu_protocol_docs.py` 0 error。
+4. 不 git add/commit；在 `P4-progress.md` 用 `>>` 追加一行 `[testfix]` 记录改动。
+
+### 上游关联
+
+- 检出来源：主 Agent 全量 pytest（CI 口径）实测 `R4 agate/tests/unit/test_mvwu_protocol_docs.py:11`。
+
+### 输入文件
+
+- agate/tests/unit/test_mvwu_protocol_docs.py（仅第 1-20 行）
+- agate/scripts/check-platform-assumptions.py（仅读 R4 规则）
+</dispatch_guide>
+
+<!-- AGATE_CARD_START -->
+## 当前阶段卡片：P4
+
+路径：phase-cards/P4-implementation.md
+---
 # P4 — 代码实现
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
@@ -65,24 +102,6 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - P4-implementation.md 必须声明 `implementation_dir: {实际路径}`
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
-
-## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
-
-> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
-
-- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
-- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
-- **格式**：逐行 `key: value`，最小内容：
-  - `command`：实际运行的命令
-  - `exit_code`：命令退出码
-  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
-  - `timestamp`：运行时间
-  - `expected_red`：预期为红的用例，默认 `[]`
-  - `duration_seconds`：耗时秒数
-  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
-- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
-- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
-- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
 
 ## 新增文件核对表
 
@@ -195,3 +214,8 @@ check-gate.py P4 $TASK_DIR
 > 完成 → 读 phase-cards/P5-verification.md
 
 6. **修改 P1 文档**：P4 发现 BDD 矛盾时标 DESIGN_GAP，不直接改 P1-requirements.md。需变更 P1 时标 `[BASELINE_CHANGE: 理由]` 并经主 Agent 批准。
+<!-- AGATE_CARD_END -->
+
+<objective_info>
+全量 pytest（CI 口径）：1838 passed / 2 failed（本项 + `test_bdd_71_*` 待收口产物）/ 2 skipped。
+</objective_info>

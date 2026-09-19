@@ -10,7 +10,20 @@
 
 ## [Unreleased]
 
-（暂无——下个版本的变更在此累积。）
+### 新增（TAG0036：MVWU 阶段 1 观测，RM-AG0063）
+
+- **`agate/scripts/check-mvwu.py` 观测器**：读取任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与
+  `P4-evidence/<id>.log`，对每批做六项静态检查并输出四态 verdict（PASS / FAIL / EXPECTED_RED /
+  UNKNOWN）；`--observe` 输出 7 列观察表行。仅观测、不阻断，不挂 gate / hook / CI。
+- **`batches[].tests_filter` 可选键**：`dispatch_plan.batches` 每批可声明该批的测试过滤表达式（可选，
+  缺省不影响既有任务）。
+- **`P4-evidence/<id>.log` 落点**：P4 批级证据日志的目录与逐行 `key: value` 格式成文于阶段卡 /
+  角色定义 / 任务文件模板。
+- **⑤ 组方法学概念成文**：MVWU 概念与术语进入 `role-system.md`、`adr.md` 等协议文档，并登记
+  `check-mvwu.py` 脚本表与测试映射表（新增 `test_check_mvwu.py` 109 用例、`test_mvwu_protocol_docs.py`
+  65 用例）。
+
+来源：TAG0036（RM-AG0063）。
 
 ## [0.71.1] - 2026-09-16
 

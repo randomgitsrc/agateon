@@ -1,3 +1,50 @@
+---
+phase: P4
+generated_by: agate-inject-card.py + 主 Agent
+task_id: TAG0036
+role: implementer
+---
+
+<dispatch_guide>
+> ⚠️ 以下派发指引是本次任务的强制指令，不是参考信息。执行优先级：派发指引 > 客观查证信息 > 阶段卡片（参考规范）
+> 本次是 P4 首次派发，**波 1 / 批 `mvwu-verdict-observer`**（P2 §6：`check-mvwu.py` 先于所有引用它的文档落库，CHECK 10）。**本批同时是主 `P4-implementation.md` 的作者**（见约束 6）。
+
+### 目标
+
+实现 `agate/scripts/check-mvwu.py`（新建，单文件自包含 + 只读 `import agate_common`，方案 A）并完成 **M18**（`agate/scripts/check-protocol-consistency.py::GATE_SCRIPT_EXEMPT` 加一行），使 P3 已提交的 `agate/tests/unit/test_check_mvwu.py`（109 个用例）**全部变绿**，并使 `test_mvwu_protocol_docs.py` 中与本批相关的用例（`test_bdd_70_gate_script_exempt_contains_check_mvwu`、`test_bdd_68_check_mvwu_not_registered_in_gate_hook_ci_surfaces` 等）通过；`test_protocol_alignment_review.py::test_sg_6_check9_anchor_table_covers_all_gate_scripts` 保持绿。
+
+### 约束
+
+1. **测试是规格，P1 口径 A-H 是权威**：`agate/tests/unit/test_check_mvwu.py` 已提交（P3），**不得修改任何测试文件**；发现测试与 P1/P2 矛盾 → 不改测试、不改口径，在 `P4-progress.md` 记 `DESIGN_GAP` 并在返回里报告。P2 §2.1-2.4 给出**数据流 / 模块结构 / git 调用面**，按其函数分区实现（资源地图，不是步骤脚本——内部实现细节可自主决定，但外部契约必须与口径一致）。
+2. **只改两个文件**：`agate/scripts/check-mvwu.py`（新建）与 `agate/scripts/check-protocol-consistency.py`（**仅** `GATE_SCRIPT_EXEMPT` 集合内新增一行 `"agate/scripts/check-mvwu.py",  # 观测脚本，不挂 gate`，不动 `SCRIPT_ALIGNMENT_ANCHORS` 与其他任何内容）。**不改** `agate_common.py`、`check-gate.py`、`phases.yaml`、`rules/schema/`、hook 三件套、审计链、`P6.5`/provenance 相关脚本，也**不改任何文档**（文档由后续批负责）；不得新增 `.sh`；不在 gate/hook/CI/`agate-summary.py`/rules 中登记 `check-mvwu`（BDD-68）。
+3. **平台与语法**：Python 3.8+（禁 `match` / `str.removeprefix` / `X | Y` 注解 / 海象以外的新语法请慎用）；显式 `encoding="utf-8"`；无 `/tmp` 字面量；`agate_common` 只 import 使用（`run_git` / `split_frontmatter` / `resolve_workspace`，三者已核实存在）；脚本**从不执行** `command`/`tests_filter`（只做 `shutil.which`/`os.access` 静态探测）、**只读**（除 stdout/stderr 外不写任何文件）、任何 verdict 都 exit 0，仅用法/目标错误 exit 2（口径/BDD-36/37）。
+4. **docstring / `--help`** 逐字含三条字面已知局限：`仅检查首词`、`不比对 command 与 tests_filter`、`UNKNOWN 不等价于 PASS，不得作为放行依据`，并写明 exit code 约定与 `--observe` 用法（BDD-17/18/35）。
+5. **验证（自查，非 gate）**：`timeout 120 python3 -m pytest agate/tests/unit/test_check_mvwu.py -q`（须全绿）；`timeout 240 python3 -m pytest agate/tests/unit/test_mvwu_protocol_docs.py -q --tb=no` 对照：本批相关用例应转绿，其余文档类用例仍红属预期（后续批负责）；`timeout 120 python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q`（`test_sg_6` 须绿）；`~/.venvs/agate-dev/bin/ruff check agate/scripts/check-mvwu.py agate/scripts/check-protocol-consistency.py` 0 error；`python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` 0 ERROR（此时文档尚未引用 `check-mvwu.py`，CHECK 10 不应有新增问题；`CHECK9-coverage` 无新增 WARNING）。自查通过 ≠ P5 gate 通过，返回里不得声称"P5 已过"。
+6. **主 `P4-implementation.md`（本批负责创建，其余批各写 `P4-implementation-{批id}.md`）**：frontmatter 用 `agate-md-field-set.py`（phase=P4 / task_id=TAG0036 / parent=P3-test-cases.md / trace_id=TAG0036-P4-20260919 / type=implementation / created=2026-09-19 / status=draft / `implementation_dir: agate/`；`agent: implementer` set 若不接受则 Edit 单行）；正文含：本批实现摘要（M1/M18 落点、关键设计选择、自查结果）、**批次索引**（列出其余 5 批的文件名 `P4-implementation-architect-batch-guidance.md` / `-batch-evidence-landing.md` / `-review-anchors-and-decision-recheck.md` / `-mvwu-glossary-and-debt-log.md` / `-mvwu-script-registry.md`，标"由对应批产出"）、**新增文件核对表**（仅 `agate/scripts/check-mvwu.py`；本项目未采用骨架/CODE-MAP 则本节省略并写明）。
+7. **不 git add / commit**（主 Agent 汇总统一处理）。发现范围外需要做的事 → 标 `[SCOPE+]`（行首声明格式）写入 `P4-progress.md` 并报告，不直接做。
+8. **本批并发上限**：波 1 仅本批，独占；后续波次并发 ≤3（主 Agent 掌握，无需你处理）。
+
+### 上游关联
+
+- `P2-design.md`（§0.1 M1/M18 / §2 数据流·模块结构·git 调用面·被否决细节 / §3 / §9 minimal_validation 的 V1-V8 可复用 / §10 files_to_read / §12 完成标志）；`P1-requirements.md`（口径 A-H、BDD-4/13-58、BDD-70 的 [BASELINE_CHANGE]）；`P3-test-cases.md`（BDD→用例映射）
+
+### 输入文件（files_to_read）
+
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P2-design.md（§2、§9、§10 中本批段）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P1-requirements.md（口径 A-H 与 BDD-4/13-58）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P3-test-cases.md
+- agate/tests/unit/test_check_mvwu.py（规格，只读）
+- agate/scripts/agate_common.py（仅读 `run_git` / `split_frontmatter` / `resolve_workspace` 相关段）
+- agate/scripts/check-platform-assumptions.py（独立 check 脚本风格参照，只读）
+- agate/scripts/check-protocol-consistency.py（仅 `GATE_SCRIPT_EXEMPT` 一带）
+- docs/design-notes/design-mvwu-protocol.md（§5.1.1 / §7.2，背景）
+</dispatch_guide>
+
+<!-- AGATE_CARD_START -->
+## 当前阶段卡片：P4
+
+路径：phase-cards/P4-implementation.md
+---
 # P4 — 代码实现
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
@@ -65,24 +112,6 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - P4-implementation.md 必须声明 `implementation_dir: {实际路径}`
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
-
-## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
-
-> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
-
-- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
-- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
-- **格式**：逐行 `key: value`，最小内容：
-  - `command`：实际运行的命令
-  - `exit_code`：命令退出码
-  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
-  - `timestamp`：运行时间
-  - `expected_red`：预期为红的用例，默认 `[]`
-  - `duration_seconds`：耗时秒数
-  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
-- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
-- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
-- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
 
 ## 新增文件核对表
 
@@ -195,3 +224,10 @@ check-gate.py P4 $TASK_DIR
 > 完成 → 读 phase-cards/P5-verification.md
 
 6. **修改 P1 文档**：P4 发现 BDD 矛盾时标 DESIGN_GAP，不直接改 P1-requirements.md。需变更 P1 时标 `[BASELINE_CHANGE: 理由]` 并经主 Agent 批准。
+<!-- AGATE_CARD_END -->
+
+<objective_info>
+- 基线：`agate/scripts/check-mvwu.py` 不存在；`test_check_mvwu.py` 109 用例全红（断言失败/文件缺失），`test_mvwu_protocol_docs.py` 65 用例 28 红 37 绿；全量基线 1668 用例（CI 口径 1666 passed / 2 skipped）。
+- P3 已提交（`e0513d0`）。本地 `main` = `efb113b`；`git symbolic-ref refs/remotes/origin/HEAD` → `refs/remotes/origin/main`。
+- 稳定版协议根 `~/.agate/v0.71.1/agate`（勿改）；`GATE_SCRIPT_EXEMPT` 现含 2 条（约 805 行）。
+</objective_info>

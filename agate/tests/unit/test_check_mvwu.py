@@ -1085,3 +1085,20 @@ def doc_text(repo):
     src = SCRIPT.read_text(encoding="utf-8")
     doc = ast.get_docstring(ast.parse(src)) or ""
     return doc + "\n" + res.stdout
+
+
+@pytest.mark.parametrize(
+    "huge",
+    ["9" * 5000, "9" * 400 + ".5"],
+    ids=["5000-digit-integer", "400-digit-fractional"],
+)
+def test_bdd_45_observe_huge_duration_does_not_drop_rows(tmp_path, huge):
+    repo = MvwuRepo(tmp_path)
+    repo.setup([(batch("b1"), {"duration_seconds": "8"}), (batch("b2"), {"duration_seconds": huge}), (batch("b3"), {"duration_seconds": "8.5"})])
+    res = repo.run("--observe")
+    assert res.returncode == 0, res.stdout + res.stderr
+    rows = observe_rows(res.stdout, 3)  # 恰 3 行：超长耗时不丢批、不被占位行顶替
+    assert [r[COL_MVWU] for r in rows] == ["b1", "b2", "b3"]
+    assert rows[1][COL_DUR] == "-"
+    assert rows[0][COL_DUR] == "8s" and rows[2][COL_DUR] == "8.5s"
+    assert rows[0][COL_VERDICT] == rows[2][COL_VERDICT] == "PASS"

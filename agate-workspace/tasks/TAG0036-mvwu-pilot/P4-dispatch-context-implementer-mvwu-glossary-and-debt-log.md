@@ -1,3 +1,50 @@
+---
+phase: P4
+generated_by: agate-inject-card.py + 主 Agent
+task_id: TAG0036
+role: implementer
+---
+
+<dispatch_guide>
+> ⚠️ 以下派发指引是本次任务的强制指令，不是参考信息。执行优先级：派发指引 > 客观查证信息 > 阶段卡片（参考规范）
+> 本次是 P4 首次派发，**波 3 / 批 `mvwu-glossary-and-debt-log`**（波 3 两批并行，**并发上限 ≤3**；两批文件面互不重叠，只改本批文件）。波 1、波 2 已完成。
+
+### 目标
+
+实现批 `mvwu-glossary-and-debt-log`：⑤-a 术语补录（`CONTEXT.md` 追加 5 条 MVWU 术语，Ubiquitous Language 落地）+ 登记 P0 发现的 `_gate_p2_dispatch_plan` 同类 fail-open 技术债（只登记不修）。
+
+### 约束
+
+1. **测试是规格，P1 是权威**：`agate/tests/unit/test_mvwu_protocol_docs.py`（P3 已提交）是本批验收规格，**不得修改任何测试文件**；发现测试与 P1/P2 矛盾 → 不改测试，在 `P4-progress.md` 记 `DESIGN_GAP` 并报告。字面标记逐字取自 `P1-requirements.md` 对应 BDD。
+2. **只改本批文件**：`agate/CONTEXT.md`（M11）、`agate-workspace/debt/tech-debt.md`（M12，仓库根下的工作区文件，非 `agate/`）——2 文件。**不改**其他任何文件（波 1/2 已落库的脚本与文档都不再动）；不新增 `.sh`；不 git add/commit。
+3. **改动落点**（P2 §0.1，插入位置以标题/表格位置定位）：
+   - **M11** `CONTEXT.md`：术语表**末尾**（`conftest` 行之后）**只追加**恰 5 行三列（术语 | 定义 | 首次定义位置）：`MVWU` / `tests_filter` / `P4-evidence` / 四态 verdict / `boundary(I1)`（BDD-59；顺序与字面以 P1 BDD-59 为准；"首次定义位置"指向仓库中**真实存在**的文件路径，基准与既有行一致；**既有 29 行（含表头）一字不动**，不加机械校验）
+   - **M12** `agate-workspace/debt/tech-debt.md`：文末追加 1 条 DEBT（当前末条 DEBT0042 → 取 DEBT0043，**落笔时以文件实际末编号为准**；schema 以 `agate-debt-check.py` / `check-debt.py` 为准，抄 DEBT0041/0042 的样式；条目内容：`check-gate.py::_gate_p2_dispatch_plan` 在 `except ValueError` / `not isinstance(plan, dict)` / 缺 `dispatch_plan` 时 `return None` 静默放行（与 TAG0035 子批 A 同类 fail-open），**本任务只登记、不修**；`evidence` 必填，写实测行号与判断依据；BDD-5 的字面要点以 P1 为准）
+4. **本批 BDD**：BDD-5、BDD-59——逐条读 P1 原文（Given/When/Then 与字面锚点），内容须满足其 Then。
+5. **CHECK 14 平台词**：`agate/*.md` 顶层叙述面（含 `CONTEXT.md`、`scripts/README.md`）新增文字不得出现裸词 `task` / `goal` / `workflow` / `DSH` / `OpenCode` / `Claude Code` / `ralph`（以 `check-protocol-consistency.py` CHECK 14 实际判定为准，写完必跑自查）。
+6. **DEBT 校验**：写完跑 `python3 agate/scripts/check-debt.py agate-workspace/debt/tech-debt.md`（须通过）；DEBT 条目 `evidence` 必填、状态用 open。
+7. **验证（自查，非 gate）**：`timeout 240 python3 -m pytest agate/tests/unit/test_mvwu_protocol_docs.py -q --tb=short -p no:cacheprovider`，**本批相关用例（BDD-5、BDD-59）须转绿**（`test_bdd_71_*` 属 P4 收口的对齐审查产物，不在本批）；`timeout 120 python3 agate/scripts/check-protocol-consistency.py --strict-errors-only` 0 ERROR 且 `CHECK9-coverage` 无新增；`git diff --stat` 确认只动了本批文件。自查通过 ≠ P5 gate 通过，返回里不得声称"P5 已过"。
+8. **产出记录**：写 `P4-implementation-mvwu-glossary-and-debt-log.md`（frontmatter **必须用 `agate-md-field-set.py`**：phase=P4 / task_id=TAG0036 / parent=P3-test-cases.md / trace_id=TAG0036-P4-20260919 / type=implementation / created=2026-09-19 / status=draft / `implementation_dir: agate/`；`agent: implementer` set 不接受则 Edit 单行），正文：本批摘要、自查结果、新增文件核对表（无新增文件写"无新增文件"）。主 `P4-implementation.md` 不改。
+9. 范围外需求标 `[SCOPE+]`（行首声明格式）写入 `P4-progress.md`（`>>` 追加，行首加 `[mvwu-glossary-and-debt-log]` 前缀）并报告，不直接做。
+
+### 上游关联
+
+- `P2-design.md`（§0.1 本批行 / §0.3 风险 / §6 批表 / §10 files_to_read）；`P1-requirements.md`（BDD-5、BDD-59）；`P3-test-cases-docs.md`
+
+### 输入文件（files_to_read）
+
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P2-design.md（§0.1 本批行、§6）
+- {AGATE_WORKSPACE}/tasks/TAG0036-mvwu-pilot/P1-requirements.md（BDD-5、BDD-59）
+- agate/tests/unit/test_mvwu_protocol_docs.py（本批相关用例，只读）
+- agate/CONTEXT.md、agate-workspace/debt/tech-debt.md（本批两文件；tech-debt.md 较长，读末尾 DEBT0041/0042 样式与 schema 即可）
+- agate/scripts/check-debt.py（仅读 schema 校验规则）、agate/scripts/check-gate.py（仅读 `_gate_p2_dispatch_plan` 一带，取实测行号作证据）
+</dispatch_guide>
+
+<!-- AGATE_CARD_START -->
+## 当前阶段卡片：P4
+
+路径：phase-cards/P4-implementation.md
+---
 # P4 — 代码实现
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
@@ -65,24 +112,6 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - P4-implementation.md 必须声明 `implementation_dir: {实际路径}`
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
-
-## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
-
-> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
-
-- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
-- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
-- **格式**：逐行 `key: value`，最小内容：
-  - `command`：实际运行的命令
-  - `exit_code`：命令退出码
-  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
-  - `timestamp`：运行时间
-  - `expected_red`：预期为红的用例，默认 `[]`
-  - `duration_seconds`：耗时秒数
-  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
-- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
-- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
-- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
 
 ## 新增文件核对表
 
@@ -195,3 +224,9 @@ check-gate.py P4 $TASK_DIR
 > 完成 → 读 phase-cards/P5-verification.md
 
 6. **修改 P1 文档**：P4 发现 BDD 矛盾时标 DESIGN_GAP，不直接改 P1-requirements.md。需变更 P1 时标 `[BASELINE_CHANGE: 理由]` 并经主 Agent 批准。
+<!-- AGATE_CARD_END -->
+
+<objective_info>
+- 波 1/2 已完成：`check-mvwu.py` + M18 + M2-M10 落库；`test_mvwu_protocol_docs.py` 现 58 绿 7 红（红：BDD-5 DEBT 登记、BDD-59 术语 ×2、BDD-69 ×3、BDD-71 对齐审查）；consistency 0 ERROR。
+- 基线全量用例数 `count-tests.sh` = 1668（本任务新增 test_check_mvwu.py 109 用例 + test_mvwu_protocol_docs.py 65 用例，README 计数以 `pytest --collect-only` 实数为准，且须等于波前基线 + 新增）。
+</objective_info>
