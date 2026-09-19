@@ -2,6 +2,7 @@
 phase: P6
 date: 2026-09-19
 trigger: gate_fail
+agent: main
 ---
 # P6.5 Gate 诊断（judge 阶段）
 
