@@ -287,6 +287,20 @@ $ git push && gh pr merge ...                    # 然后才能合并
 
 **⚠ 注意**：worktree 里 merge main 会产生 merge commit（如 `ff4df74 Merge remote-tracking branch 'origin/main' into hotfix/...`）——这是正常的，**不影响 tag**（tag 打在 P8 那个 commit 上，不在 merge commit 上）。
 
+#### 合并被拒时怎么做（实测症状与处理）
+
+`git-to-main <PR#>` **报 `Merge blocked`** 时，先分辨**三种不同原因**——处理方式不同：
+
+| 症状（`gh pr view <PR#> --json mergeStateStatus`） | 原因 | 处理 |
+|--------------------------------------------------|------|------|
+| `BEHIND` | 分支落后 main（保护规则要求 up-to-date） | `git merge origin/main` → `git push` → **重新等一轮 CI**（合并前必须再绿） |
+| `BLOCKED` + 某 required check 未完成 | CI 还在跑（不是真阻塞） | `gh pr checks <PR#> --watch` 等完 |
+| `BLOCKED` + check 为 `skipping` | **docs-only 快路径**：`platform-scan` / `ruff` 被跳过，但保护规则仍要求它们 | 见 `docs/guides/ci-docs-only-playbook.md`；同步 main 后重跑通常可解 |
+
+**实测（TAG0036 收尾，2026-09-19）**：合并被拒一次，根因是分支保护要求与 main 同步——`git merge origin/main` 把 main 的 4 个 docs-site 提交合入分支，**再等一轮 CI 全绿**后才合并成功。
+
+> **要点**：**merge main 之后必须重新等 CI**，不能复用合并前的绿灯（merge 引入了新代码面）。
+
 ### 3. PR merge 策略：**普通 merge（`--no-ff`），禁 squash / 禁 rebase**
 
 ```bash
@@ -358,6 +372,8 @@ git merge --ff-only origin/main
 
 ## 完成后清理
 
+> **⚠️ HANDOFF 归档是最常被漏的一步**——TAG0028 漏过，**TAG0035 与 TAG0036 又连续漏了两次**（2026-09-19 实测：仓库根残留 `HANDOFF-TAG0035.md` + `HANDOFF-TAG0036.md`，需单独补一个 PR 归档）。**建议在 P8 收尾的同一个 PR 里就做掉归档**，不要留到"以后再说"——任务一合并，人就切走了。
+
 ```bash
 # 任务合并 main 后，先归档 HANDOFF（HANDOFF 已被 git 跟踪且随 PR 并入 main，是 main 的正式文件——
 # 不归档则仓库根累积历史 HANDOFF-TAG0xxx.md。TAG0028 漏归档实证：worktree 清理只删分支，
@@ -371,7 +387,9 @@ git worktree remove .worktrees/agate-{Txxx} --force
 git branch -D feat/{Txxx}-{slug}
 # 若 PR 未自动删远端分支：
 # git push origin --delete feat/{Txxx}-{slug}
-# 收尾自检：主 checkout 根 `ls HANDOFF-*.md` 应为空（归档 + 清理后不残留）
+# 收尾自检（两条都要过）：
+#   ls HANDOFF-*.md                      # 应为空（仓库根无残留）
+#   ls agate-workspace/archived/plans/HANDOFF-{Txxx}.md   # 应存在（已归档）
 
 # ⚠ 最后一步：按上一节「收尾：合并后同步主 checkout」同步主 checkout
 # （若你在主 checkout 造过 workspace 文件，ff 合并会被挡住——先 diff 核对再清除）
