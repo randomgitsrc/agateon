@@ -30,14 +30,7 @@
 | RM-AG0032 | 独立 Judge 机制（P6.5 验收独立裁判）：TAG0018 实证 4 场 LLM 评审≈0 净收益而机械 gate 全胜——评审失手根因是"评审者与作者同信任链/同上下文"，修复=新增 review 角色 judge（fresh context 只给标准 P1 BDD+P2 验收设计、信息隔离白名单禁传实现者自述）+ 三层防造假（①信息隔离 ②证据交叉核对：BDD 计数对照/md5 去重/git 留痕 ③append-only 事件账本 gate-events.jsonl 行间哈希链防改写）+ 三档预算（轮次≤2/token 100k/时间 30min，超限诚实降级 partial 不静默放行）+ 挂靠现有机制（status 门槛映射/专家组评审/dispatch-prompt 模板，零新架构）；设计文档：docs/design-notes/design-independent-judge.md（含完整文件改动清单：review-roles/judge.md 角色、check-judge-verdict.py、check-events.py、state-machine P6.5 转移行、phase-cards/P6 补节）；v0.59.0 已发布、PR #184 已合并，历史记录缺口补记 done（TAG0023 复盘发现，RM-AG0043 修复项②）| done | 竞品研究（oh-my-agent 独立 judge）+ TAG0018 实证（2026-08-21）| TAG0020 | 2026-08-21 | 2026-08-24 |
 | RM-AG0033 | DSH 深度集成（TAG0018 MVP 后的第二层）：TAG0018 已交付 preset+skill 接入（身份层），本条目做运行时增强——@agate/dsh-plugin cordis 插件（①gate runner 服务：check-gate 结果面板 + 阶段状态机可视化 ②PostToolUse session hooks 实时 gate，早于 git commit 拦截）+ workflow 批量并行派发食谱产品化（P3/P4 多批并行一行脚本，TAG0017 的 5 批并行模式）+ goal 跨轮续跑增强（长任务崩溃恢复运行时化）；定位：平台原生 hooks 正在把 gate 变成平台内置能力，agate 价值从"发明 gate"转向"定义 gate 语义 + 编排 gate 组合"；参考 docs/design-notes/dsh-integration.md §4 扩展点清单（packages/extensions/cordis-*-runner、packages/hooks/）与 §8.5 能力超集表 | backlog | TAG0018 完成后的自然延续（2026-08-21）| — | 2026-08-21 | 2026-08-21 |
 | RM-AG0034 | 平台扩展（第四平台起）：竞品 gap——oh-my-agent 已覆盖 10+ 运行时（Claude Code/Codex/Cursor 等）而 agate 目前 3 个（OpenCode/Claude Code/DSH）；按 TAG0018 已立模板扩展 Codex/Cursor/Gemini CLI 等——每平台交付物 = assets/templates/ 身份模板（agent-preset 或 agent md）+ SETUP.md「步骤 N」章节 + platform-notes.md 条目 + 回归测试（test_dsh_preset.py 先例）；平台能力差异表驱动（task 工具形态/hooks 机制/sandbox 语义）；CLI 型平台优先评估 session hooks 替代 git hooks 的场景；各平台接入须符合"不发明新结构"原则（文档化符号链接 + 唯一 install-hook.py）；**调研已完成**（docs/design-notes/platform-extension-research.md，2026-08-25）：Codex/Cursor/Gemini CLI 三平台能力对照 + 优先级建议（Codex>Cursor>Gemini），Aider 因默认 `--no-verify` 跳过 commit gate 判为不兼容，建议文档标注；接入前需实机复核 Codex subagent max_depth 旧记录与沙箱默认值 | backlog | 竞品分析（2026-08-21，v1/v2）| — | 2026-08-21 | 2026-08-25 |
-| RM-AG0035 | 品牌改名执行（Agateon，2026-08-23 决策已定）：agate 名称与 4+ 活跃项目撞车（GitHub in:name 1223）——**用户拍板改名 Agateon**（"agent gates on"闸门开启/验证激活；2026-08-23 四源核验：npm/PyPI 空闲、**agateon.com 已注册（2026-08-25）**、.dev/.io 未注册[.io 因 TLD 存续风险未采用]、GitHub 0 真实撞名；保留 agate 前缀迁移成本最低；候选对比与淘汰记录于 docs/design-notes/rename-recommendation.md[gatewise 因域名被占淘汰/agaton 造词感/turngate 有 4 撞名]）。**执行设计评审通过**：docs/design-notes/design-rename-execution.md（2026-08-25 三轮独立评审收敛，三层解耦——品牌名 agateon/主仓 agateon/目录 agate 永久保留 + 分层迁移 + 基础设施层 AGATE_*/~/.agate/agate-*.py 兼容策略 + brand-check（一致性 gate 不校验品牌）；门户暂定独立仓 agateon-portal，否决 monorepo）。**剩余工作（转执行型）**：①商标正式申请（**调研已完成**：docs/design-notes/agateon-trademark-research.md，2026-08-25；建议美→中→欧 9+42 类、约 ¥1 万内，申请前人工复核 EAGATON/AGATON/AGON 商品项目）②仓库改名（agate→agateon，原 URL 301 + install.sh/README×2/agate-install.py/agate-changes.py 硬编码 URL 同批更新）③`agate-*.py` 脚本前缀 + `~/.agate`/`AGATE_*` 环境变量兼容别名策略 ④品牌 prose 迁移（in-scope 文件 + backtick token 判定规则）+ brand-check ⑤v1.0 迁移窗口 ⑥GitHub org 占名防抢注（**已占 2026-08-25**：github.com/agateon 空 org 仅占名，迁 org 随门户立项再议）；验收锚=仓库/文档/脚本品牌统一 agateon + AGATE_* 兼容别名生效、旧 URL 301 跳转正常。**部分完成
-（TAG0025，2026-08-26）**：②已完成——GitHub 主仓已改名为 `randomgitsrc/agateon`
-改名执行 + 7 处硬编码 URL 同批更新（install.sh/README×2/agate-install.py/agate-changes.py）+
-本机 remote 迁移，4 条验收锚（301/ls-remote/残留扫描/GitHub 搜索）实测通过；品牌声明（README
-首屏 "Agateon (formerly agate)"）已随批同步上线。①③④⑤⑥**仍未完成**（①商标申请人工复核未做/
-③CLI 别名/④prose 统一+brand-check/⑤后续窗口重评估/⑥org 迁移待门户立项），状态维持 `backlog`
-不标 `done`（TAG0025 未关联进「关联任务」列，避免触发 RM-AG0043 单任务闭环校验——本条目需
-后续任务补齐剩余 5 项才应整条标 done）。| backlog | 用户决策（2026-08-23 拍板 Agateon）| — | 2026-08-21 | 2026-08-26 |
+| RM-AG0035 | 品牌改名执行（Agateon，2026-08-23 决策已定）：agate 名称与 4+ 活跃项目撞车（GitHub in:name 1223）——**用户拍板改名 Agateon**（"agent gates on"闸门开启/验证激活；2026-08-23 四源核验：npm/PyPI 空闲、**agateon.com 已注册（2026-08-25）**、.dev/.io 未注册[.io 因 TLD 存续风险未采用]、GitHub 0 真实撞名；保留 agate 前缀迁移成本最低；候选对比与淘汰记录于 docs/design-notes/rename-recommendation.md[gatewise 因域名被占淘汰/agaton 造词感/turngate 有 4 撞名]）。**执行设计评审通过**：docs/design-notes/design-rename-execution.md（2026-08-25 三轮独立评审收敛，三层解耦——品牌名 agateon/主仓 agateon/目录 agate 永久保留 + 分层迁移 + 基础设施层 AGATE_*/~/.agate/agate-*.py 兼容策略 + brand-check（一致性 gate 不校验品牌）；门户暂定独立仓 agateon-portal，否决 monorepo）。**剩余工作（转执行型）**：①商标正式申请（**调研已完成**：docs/design-notes/agateon-trademark-research.md，2026-08-25；建议美→中→欧 9+42 类、约 ¥1 万内，申请前人工复核 EAGATON/AGATON/AGON 商品项目）②仓库改名（agate→agateon，原 URL 301 + install.sh/README×2/agate-install.py/agate-changes.py 硬编码 URL 同批更新）③`agate-*.py` 脚本前缀 + `~/.agate`/`AGATE_*` 环境变量兼容别名策略 ④品牌 prose 迁移（in-scope 文件 + backtick token 判定规则）+ brand-check ⑤v1.0 迁移窗口 ⑥GitHub org 占名防抢注（**已占 2026-08-25**：github.com/agateon 空 org 仅占名，迁 org 随门户立项再议）；验收锚=仓库/文档/脚本品牌统一 agateon + AGATE_* 兼容别名生效、旧 URL 301 跳转正常。**部分完成（TAG0025，2026-08-26）**：②已完成——GitHub 主仓已改名为 `randomgitsrc/agateon`改名执行 + 7 处硬编码 URL 同批更新（install.sh/README×2/agate-install.py/agate-changes.py）+本机 remote 迁移，4 条验收锚（301/ls-remote/残留扫描/GitHub 搜索）实测通过；品牌声明（README首屏 "Agateon (formerly agate)"）已随批同步上线。①③④⑤⑥**仍未完成**（①商标申请人工复核未做/③CLI 别名/④prose 统一+brand-check/⑤后续窗口重评估/⑥org 迁移待门户立项），状态维持 `backlog`不标 `done`（TAG0025 未关联进「关联任务」列，避免触发 RM-AG0043 单任务闭环校验——本条目需后续任务补齐剩余 5 项才应整条标 done）。| backlog | 用户决策（2026-08-23 拍板 Agateon）| — | 2026-08-21 | 2026-08-26 |
 | RM-AG0036 | 国际化（英文协议文档先行）：全球采用第一道门槛——README 已双语但协议正文（WORKFLOW/dispatch-protocol/state-machine/phase-cards/角色文件，约 8000 行 md）全中文；策略：先核心后全量（orchestrator-template/WORKFLOW/phase-cards 先行，Fallback 文档殿后）+ 双语一致性 gate 防漂移（联动 RM-AG0022 结构化层——YAML 声明可作双语锚点，S-1~S-6 检查扩展）+ 里程碑=首个英文-only 接入项目；涉及体量大（8000+ 行），适合独立 task，P1 需按文件分组 BDD 并做影响面梳理（用户明确不愿一轮轮来回改）| backlog | 竞品分析（2026-08-21）| — | 2026-08-21 | 2026-08-21 |
 | RM-AG0037 | ruff 检查合并强制（防第四次复发）：TAG0019(23 处)+TAG0020(12 处) 带 ruff 违规合并进 main，靠事后 PR #183 补修（35 处全清）；TAG0021 靠内部 P5 自抓 70 处回修——CI 已有 ruff job（protocol-tests.yml:106）但对 PR 合并非硬性。修复：①ruff job 设为 PR required check（分支保护）②可选：pre-merge 前强制 ruff 0 error gate；验收锚=新任务合并时 ruff 零违规无需事后补修 | done | TAG0019-21 全面分析（2026-08-22，合并后 main 实测 35 处错误）| TAG0022 | 2026-08-22 | 2026-08-22 |
 | RM-AG0038 | 结构化层 M2 迁移闭环（RM-AG0022 剩余工作）：check-gate.py（主 Agent 每阶段总闸）实测仍 22 处 markdown/grep 解析、0 处 YAML；53 脚本大量 grep 残留——"权威源"目前是并行双源（YAML+md），未真正切换，双份维护漂移风险仍在（S-1~S-6 只防漂移不消灭 grep）。修复：check-gate.py 等核心脚本迁移到 rules/*.yaml（对齐已迁移的 gate_commands 族经 agate-md-field-get 模式）+ 迁移后 S-1~S-6 收紧为"YAML 权威、md 禁止承载可判定规则"；验收锚=check-gate.py 零 md 解析 + 全量测试绿 | done | TAG0019-21 全面分析（2026-08-22，实测）| TAG0022 | 2026-08-22 | 2026-08-22 |
@@ -73,6 +66,7 @@
 | RM-AG0065 | **数据契约一致性批**（DEBT0040 + DEBT0041——TAG0035 独立评审判定与「gate 判据健壮性」不同簇、且 DEBT0040 含 CI 改动需用户许可，遂移出）：① 事件账本 `gate-events.jsonl` 写入测试无 `tmp_path` 隔离强制（单测真实写仓库内 committed 账本，TAG0034 P6.5 judge 跑全量 pytest 污染历史账本）② `agate-md-field-set` 支持字段集与 `check-p6-provenance.py` 必备 frontmatter 字段集**不同源**（`P3-test-cases.md` 的 `agent` 字段落在缝里，P6→P7 被 exit 2 挡住） | backlog | TAG0035 独立评审（2026-09-16 移出项，复盘措施 3 闭环） | — | 2026-09-16 | 2026-09-16 |
 | RM-AG0066 | **安装与多版本模型统一**（Release 发布 + 本体安装包 + 三路径结构统一 + 离线解析失效修复）：① 引入 GitHub Release（tag push 自动建，notes 取 CHANGELOG 段）+ 本体 tarball asset（**portable**，解压即用，无需 git）② 统一在线/离线/legacy 三条安装路径的**目录结构契约** ③ 修 **P0 离线安装解析失效**（pack 用 worktree 检出整仓 → `bundle/agate/agate/` 多一层嵌套 → `_protocol_root` 探测不到 scripts）④ 本体目录名**可扩展**（不硬编码 `agate/`，由 manifest 声明）⑤ 在线安装**只装本体**（现状 43M vs 本体 4.1M，冗余 91%）；**保留**「装任意历史 tag」能力（即 `repo/` 保留） | scheduled | 用户 2026-09-19 提出（安装机制审计后续）| TAG0037 | 2026-09-19 | 2026-09-19 |
 | RM-AG0067 | **MVWU 阶段 2：批级 gate**（RM-AG0063 阶段 1 的后续，**触协议内核**）：在 P4 批粒度上把 `check-mvwu.py` 的 verdict 接入 gate（设计依据 `docs/design-notes/design-mvwu-protocol.md` §7 阶段 2）。**前置（均未满足）**：① Q1（`tests_filter` 在多数批上稳定可执行）≥90% 的真实多批任务试点数据——TAG0036 只交付采集能力（`check-mvwu.py --observe`），Q1/Q3 未答；② **提交粒度决策由用户裁决**（合并 commit 保原子性 vs 逐批 commit 换 I1 可归属；实测 Q2 = 13%，原「≥90%」门槛已被证伪）；③ 触 `check-gate.py`，须走 SELF-GATE 与 TAG0035 fail-open 加固的同一约束。**不主动造样本、不回填历史任务** | backlog | TAG0036 P8（RM-AG0063 done 时另立承接项，防阶段 2 从规划层消失；2026-09-19 用户确认登记） | — | 2026-09-19 | 2026-09-19 |
+| RM-AG0068 | **check 脚本与流程衔接健壮性批**（TAG0036 复盘登记的 DEBT0045 + DEBT0046，均问题明确、均触 SELF-GATE）：① **DEBT0045**（medium）`check-p6-provenance.py` 对『缺 agent 字段（协作规范，**不阻塞**）』返回 **exit 2**，而 `agate-next.py` 仅认 exit 0 推进 P6→P7 → **P6→P7 被一条自称"不阻塞"的警告卡住**，且 `agate-next` 只输出"验收异常"不指出真因；暂停落盘的占位 `P6-exit2-resolution.md` 易被批量 `git add` 带进提交（TAG0036 实测）② **DEBT0046**（medium）新增 `agate/scripts/check-*.py` **无登记面清单**（SG.6 断言 basename 须现于 consistency 文本 / CHECK 9 锚点或豁免 / CHECK 10 引用 / scripts README / tests 计数 / CHANGELOG / CONTEXT）→ 凡新增 check 脚本的任务必踩（TAG0036 M18 实测由绿转红），且 P1 同类扫描**凭推理判"不处理"**（P2 评审实测才发现） | backlog | TAG0036 复盘（DEBT0045/0046，2026-09-19） | — | 2026-09-19 | 2026-09-19 |
 ## 状态标识
 
 | 状态 | 说明 | 何时进入 |
@@ -650,6 +644,44 @@
 - **⚠ 状态变更（2026-09-16）：已并入 RM-AG0062**——两条同属 gate/check-script **健壮性**（同簇同性质同流程），`check-gate.py` 改动面**直接重叠**（0062 的 DEBT0037 改 `_gate_p4` 判据，本条的 fail-open 改 `handlers` 分发）；且 RM-AG0062 本身即为「归并批」形态（参照 TAG0023/TAG0031 先例），并入零额外开销。**立项为 TAG0035**，本条作为其**子批 A**（fail-open）+ **子批 B**（三处数字序号假设）交付。
 
 ---
+
+## RM-AG0068 详情
+
+**check 脚本与流程衔接健壮性批（2026-09-19，TAG0036 复盘登记）**
+
+> **来源**：TAG0036（MVWU 阶段 1）P8 复盘登记的 5 条机制缺口（DEBT0044-0048）中，判定 **DEBT0045 与 DEBT0046 问题最明确且会重复踩**，合并为本批；其余 3 条（DEBT0044 low / DEBT0047 medium / DEBT0048 low）暂留 DEBT 清单。
+
+### ① DEBT0045（medium/technical）——「不阻塞」的警告却阻断流程
+
+**问题（有行号）**：
+- `check-p6-provenance.py:530/545`：stderr 写「缺 agent 字段（协作规范，**不阻塞**）」并置 `warning_found`
+- 同文件 `572-573`：`if warning_found == 1: sys.exit(2)` —— **自称"不阻塞"的警告使退出码由 0 变 2**
+- `agate-next.py:257-258`：P6 前进特例要求 provenance **exit 0**；`368-372`：未过 → 真暂停并 `_write_exit2_resolution`（`213-243`）落盘**占位模板**（`<非空证据 / FAIL 计数等客观证据>` 未填充）
+
+**影响（TAG0036 实测）**：P6→P7 被卡；`agate-next` 只报「验收异常」**不指出真因**（需手动再跑 provenance 才能看到那行提示）；占位 resolution 文件作为**未跟踪文件**被 `git add <任务目录>` 一并提交，留下未填充的审计文件。
+
+**修复方向**：① provenance 的协作规范警告**不应改变退出码**（或统一改 exit 1 并把提示语改为"阻塞"，**二者择一**使提示与行为一致）② `agate-next` 暂停时把 provenance 的 stderr 原因**回显到 stdout** ③ 占位 resolution 仅在用户确认暂停语义时落盘，或落盘到 `.gitignore` 的暂存名。
+
+**closure_criteria**：provenance 仅有"不阻塞"警告时 exit 0（或提示语与 exit 1 一致）+ 单测覆盖；`agate-next` 暂停信息含 provenance 具体原因行（单测断言 stdout）；全量 pytest 全绿 + consistency 0 ERROR。
+
+### ② DEBT0046（medium/technical）——新增 check 脚本的登记面无清单
+
+**问题（有行号）**：
+- `test_protocol_alignment_review.py:71-88`（SG.6）：`agate/scripts/check-*.py` 每个 basename **必须出现在 `check-protocol-consistency.py` 文本中**——新增 `check-mvwu.py` 使其**由绿转红**（P2 评审副本复现）
+- `check-protocol-consistency.py:805` 起 `GATE_SCRIPT_EXEMPT` / `check_anchor_coverage`：新 `check-*.py` 未入锚点表且未入豁免集 → **CHECK9-coverage WARNING**
+
+**影响**：凡新增 `check-*.py` 的任务**都会踩同一坑**；协议**没有**「新增脚本要同步哪些登记面」的权威清单（SG.6 / CHECK 9 / CHECK 10 / scripts README / tests 计数 / CHANGELOG / CONTEXT）；且 P1/P2 卡的**同类扫描没有强制"实测而非推理"**——TAG0036 的 P1 §4.3 凭推理判「本次不处理」，到 P2 评审实测才发现（主 Agent 以 `[BASELINE_CHANGE]` 纠正）。
+
+**修复方向**：在 `architect.md` / P2 卡「影响面梳理」处新增「**新增脚本登记面清单**」（含 SG.6 与 CHECK 9，并要求**在临时副本放空脚本实跑一次相关测试**）；或在 `scripts/README.md` 头部维护登记面表。
+
+**closure_criteria**：P2 卡或 `architect.md` 含「新增脚本登记面清单」并点名 SG.6 / CHECK 9 / CHECK 10；同类扫描节要求对「既有测试是否被新增文件触发」做**实测**（grep 断言测试兜底）；consistency 0 ERROR。
+
+### 归属与约束
+
+- **独立任务**（预计一个 task 内 2 子批，参照 TAG0035 归并批形态）。
+- **触发 SELF-GATE**（`agate/scripts/*.py` + `agate/assets/execution-roles/*.md`）。
+- **不涉及 CI 配置改动**（本批无需改 `.github/workflows/`）——故不触 `AGENTS.md` 规则 5 的许可要求。
+- **与 RM-AG0065 / RM-AG0067 的边界**：RM-AG0065 是数据契约一致性（账本/字段集）；RM-AG0067 是 MVWU 阶段 2（批级 gate）；本条是 **check 脚本与其登记面/流程衔接**——三者文件面可能部分重叠（都触 `agate/scripts/`），立项时须复核。
 
 ## RM-AG0066 详情
 
