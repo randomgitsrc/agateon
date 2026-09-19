@@ -31,7 +31,15 @@
 
 ```
 ~/.agate/vX.Y.Z/
-└── agate/              # 本体（唯一内容；目录名可经 manifest 声明，不硬编码）
+└── agate/              # 本体（唯一内容；目录名固定 `agate/`，见下方说明）
+
+> **④ 本体目录名「可扩展」已删除（2026-09-19）**：原拟"由 manifest 声明目录名、不硬编码 `agate/`"，
+> 但与既有设计决策冲突——`docs/design-notes/design-rename-execution.md` §8.1 明确：
+> 「`agate/` 目录名**永久保留**，不改成 `core/`。内部实现不跟品牌。」该文档 §1 已论证：
+> `agate/` 不是纯品牌层而是**协议基础设施**（`~/.agate` 软链目标 / 所有 hook 的 `AGATE_ROOT` /
+> `agate-*.py` 自定位根 / 双工作区纪律的物理基础），改名成本收益不划算。
+> **本任务只需保证 `_protocol_root` 的既有两形态探测（`vdir/scripts` / `vdir/agate/scripts`）
+> 不被破坏**（探测序为红线，只可增量扩展）。
 ```
 
 - **legacy 形态天然符合**（软链直指本体）→ 在线/离线**对齐到它**
