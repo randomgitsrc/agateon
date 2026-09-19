@@ -118,16 +118,27 @@ python3 agate/scripts/check-mvwu.py --observe <task_dir>
 
 > 协议对此**只有单边立场、从未讨论另一侧**（实测 `dispatch-protocol.md:618` 规定"汇总统一 commit"，无任何条文讨论逐批 commit 的权衡）。**本任务不自行决定**——须用户裁决后，阶段 2 的可行性才能确定。
 
-**⑤ 四个方法学概念的落地（用户 2026-09-19 提出，并入本任务）**
+**⑤ 方法学概念的落地（用户 2026-09-19 提出，两批共 7 个概念，并入本任务）**
 
-> **背景**：用户提出「Ubiquitous Language / Deep Modules / Tracer Bullet / Walking Skeleton 是否应适用 agateon 的角色或场景」。逐项核实后判定：**两个已有对应、一个真缺口（与本任务同源）、一个有哲学张力**——故并入本任务一并处理（文件面与本任务高度重合）。
+> **背景**：用户先后提出两组方法学概念，问「是否应适用 agateon 的角色或场景」。**用户并明确**：agateon 是为「**用 agateon 开发的项目**」服务的——若概念有益处/收益大，**应放进协议**（供项目使用），而非仅用于 agateon 自身。
+> **核实方法**：逐项在协议本体中**实测**（grep + 结构核查 + 目录实况），区分「已有对应」「真缺口」「边界冲突」三类，再定处置。
+
+**第一批（4 个）**：
 
 | 概念 | agateon 现状（实测核实） | 本任务处置 |
 |------|------------------------|-----------|
 | **Ubiquitous Language**（解决"叫什么"） | ✅ **已有**：`agate/CONTEXT.md`（29 条术语 + "首次定义位置"回溯列） | **不引入概念**；但**补本任务的新术语**（见下 ⑤-a） |
 | **Deep Modules**（解决"怎么封装"） | ✅ **精神已内化**：`architect.md` 明写"不告诉你按什么顺序做"、`implementer.md` 明写"不要求按步骤脚本执行"；`role-system.md` 有「三层角色」结构 | **转为审查视角**（见下 ⑤-b）——非新机制 |
 | **Tracer Bullet**（解决"怎么开始并快速反馈"） | ❌ **真缺口**：P1→P8 全串行，**P4 完成后才有 P5 验证**——中间无"先打通一条端到端路径"的机制 | **新增设计判据**（见下 ⑤-c）——与本任务 MVWU **同源** |
-| **Walking Skeleton**（架构骨架 + 部署 + CI） | ❌ 无对应，**且与本协议边界冲突** | **部分吸收**（见下 ⑤-d）：仅取"骨架先跑通"，**拒绝部署/CI 部分** |
+| **Walking Skeleton**（架构骨架 + 部署 + CI） | ❌ 无对应，**且与本协议边界冲突**（`adr.md`: 技术栈中立） | **部分吸收**（见下 ⑤-d）：仅取"骨架先跑通"，**拒绝部署/CI 部分** |
+
+**第二批（3 个，用户 2026-09-19 追加）**：
+
+| 概念 | agateon 现状（实测核实） | 本任务处置 |
+|------|------------------------|-----------|
+| **Vertical Slice**（按业务能力切，而非技术层） | ⚠️ **机制在但无引导**：`batches[].id` 是自由字符串、`packages` 由项目自定——切法**完全自由**，但协议**从不问"按什么切的"**（`packages` 命名习惯反易诱导按技术层切） | **并入 ⑤-c**（与 Tracer Bullet 同一决策点：怎么切批） |
+| **Evolutionary Architecture**（架构随需求演进） | ❌ **真缺口且有实证**：`{AGATE_WORKSPACE}/decisions/` 是 9 子目录之一、**但无任何卡片/角色规定写它** → **本机实测为空**；`agate/adr.md` 的 A7 审查只比对**会话内**变更与既有 ADR，**无"旧决策是否仍成立"的复审**（实证：`adr.md:278` 的解析优先级已因 `AGATE_HOME` 变更而失实，静默漂移） | **新增 ⑤-e**（决策复审机制） |
+| **Architecture Fitness Functions**（防架构腐化） | ⚠️ **有雏形但语义偏窄**：`gate_commands` 是**功能适应度**（"功能对不对"），**不含架构适应度**（依赖方向 / 分层 / 循环依赖等"架构约束有没有被违反"）；协议无任何引导 | **并入 ⑤-c**（与批切分同在 architect 的 P2 决策点） |
 
 **⑤-a 术语表补录（Ubiquitous Language 的实际落地）**
 
@@ -143,24 +154,42 @@ python3 agate/scripts/check-mvwu.py --observe <task_dir>
   > **该文件是否把"实现细节"写进了"接口"（浅化）？** 具体判据：是否规定了"第 1 步做 A、第 2 步做 B"式的执行顺序（而协议哲学是给"资源地图 + 判据"，不给步骤脚本）。
 - **与 ⑤-c 的关系**：Deep Modules 管"**角色文件怎么写**"，Tracer Bullet 管"**批怎么切**"——两者正交，不可互相替代。
 
-**⑤-c Tracer Bullet → 首个批的端到端判据（与 MVWU 同源）**
+**⑤-c 批切分判据（Tracer Bullet + Vertical Slice + Architecture Fitness Functions 三者共用一处）**
 
-- **缺口（实测）**：P4 的 `dispatch_plan` 有 5 模式（`single`/`static-batch`/`parallel`/`recon-then-split`/`serial`），**全部是"完成所有批"语义**，无"先打通一条端到端路径、快速取得反馈"的表达。
-- **与 MVWU 的同源性**：MVWU 要求每个批有 `tests_filter` + 证据落点；**若某个批的 `tests_filter` 是端到端路径，该批即 tracer bullet**。故**不新增机制**，而是给 `tests_filter` 补一条**设计判据**。
+- **缺口（实测）**：P4 的 `dispatch_plan` 有 5 模式（`single`/`static-batch`/`parallel`/`recon-then-split`/`serial`），**全部是"完成所有批"语义**，无"先打通一条端到端路径、快速取得反馈"的表达；且协议**从不问 `batches`/`packages` "按什么切的"**（Vertical Slice 维度缺席）；`gate_commands` 只承载**功能适应度**（Fitness Functions 维度缺席）。
+- **与 MVWU 的同源性**：MVWU 要求每个批有 `tests_filter` + 证据落点；**若某个批的 `tests_filter` 是端到端路径，该批即 tracer bullet**。故**不新增机制/字段**，而是给 `tests_filter` 与批切分补**三条设计判据**。
 - **交付物**：
-  - `agate/assets/execution-roles/architect.md`：补"**何时把首个批设计为端到端打通**"的判据（与既有 `tests_filter` 写法说明同处）
-  - `agate/phase-cards/P2-design.md`：同判据的卡片侧表述
-- **判据草案（P2 细化）**：
+  - `agate/assets/execution-roles/architect.md`：补三条判据（与既有 `tests_filter` 写法说明同处）
+  - `agate/phase-cards/P2-design.md`：同判据的卡片侧表述（落在「dispatch_plan 机器字段」与「gate_commands 声明」两节附近）
+- **判据一：Tracer Bullet（何时首个批做端到端打通）**：
   > 当任务**包含 ≥2 个批**且**存在一条可端到端验证的关键路径**（如"输入→处理→输出"或"API 调用链"）时，**首个批应设计为端到端最小打通**（tracer bullet）：其 `tests_filter` 覆盖该路径的冒烟级验证，而非该批的完整单元测试。**目的**：在投入全部实现前取得"管道确实通"的反馈。
   - ⚠ **与 P3 红灯批的边界**：tracer bullet **不替代** P3 的完整红灯批；它是**首个批的切法**，后续批仍按常规 MVWU 设计。
+- **判据二：Vertical Slice（批/包按什么切）**：
+  > **优先按业务能力切**（vertical slice——一个批 = 一条端到端可交付的能力，含其所需的数据/逻辑/接口改动），**而非按技术层切**（如"改完所有 model"、"改完所有 API"）。**若必须按技术层切，须在 P2-design.md 写明理由**（如"纯基础设施重构，无业务能力可归属"）。**判据**：批的 `id` 应能回答"这个批交付了什么能力"，而非"这个批动了哪层代码"。
+  - **与 tracer bullet 的关系**：一个端到端打通的批**天然是垂直切片**——两者是同一决策的两个面（**先做哪个** vs **按什么分**），故共用一处判据。
+- **判据三：Architecture Fitness Functions（防架构腐化）**：
+  > `gate_commands` 除**功能测试**外，**应为本任务涉及的架构约束**配置适应度检查（如依赖方向 / 分层边界 / 循环依赖 / 公共 API 稳定性）。**agateon 不规定具体工具**（ArchUnit / dependency-cruiser / import-linter 等由项目自选），**只要求"该维度存在"**——命令仍经 `gate_commands` 由项目注入（保持技术栈中立）。
+  - **边界**：仅**提示维度 + 要求声明**；若项目判定无架构约束可查，写明"本任务无架构适应度检查"即可（不强制）。
 
 **⑤-d Walking Skeleton → 仅吸收"骨架先跑通"，拒绝部署/CI 部分**
 
 - **明确拒绝的部分（有协议依据）**：`agate/adr.md` 记载——agate「**不硬编码测试框架/语言/部署方式**，只定义**流程骨架**。技术栈相关的命令通过 P2-design.md 的 `gate_commands` 字段注入，由**项目自定义**」。故 Walking Skeleton 的"自动化部署 + CI 配置"部分**违反技术栈中立**，**不引入**。
-- **吸收的部分**：仅取"**骨架必须先能跑通**"这一纪律——**并入 ⑤-c 的 tracer bullet 判据**（端到端最小打通 = 可运行的骨架）。
+- **吸收的部分**：仅取"**骨架必须先能跑通**"这一纪律——**并入 ⑤-c 判据一**（端到端最小打通 = 可运行的骨架）。
 - **理由**：两概念在此重合点是"先可运行、再填功能"；但 agateon 只在**流程层**要求它，**不规定**骨架的技术形态。
 
-**⑤ 的完成判据（并入下方总表）**：⑤-a 术语补录完成；⑤-b 审查锚点成文；⑤-c 判据落 `architect.md` + `P2-design.md` 卡片；⑤-d 仅以"拒绝理由 + 吸收点"记录（无独立交付物）。
+**⑤-e 决策复审机制（Evolutionary Architecture 的实际落地）**
+
+- **缺口（实测，有两条独立证据）**：
+  1. `{AGATE_WORKSPACE}/decisions/` 是工作区 9 子目录之一（`orchestrator-template.md` / `state-machine.md` / `SETUP.md` 均创建它），**但无任何阶段卡片或角色规定"谁在什么时机写它"** → **本机实测该目录为空**（`ls agate-workspace/decisions/` 无文件）。
+  2. `agate/adr.md` 的 A7 审查（`protocol-alignment-review.md`）只比对**本次变更**是否符合既有 ADR，**无"既有 ADR 的前提是否仍成立"的复审**。**实证**：`adr.md:278` 记录的解析优先级，已因 `AGATE_HOME`（PR #335）引入而失实——静默漂移，无人复审。
+- **交付物**：
+  - `agate/adr.md`：在文件头部（"本文件记录…"之后）补**复审触发条件**——当某 ADR 的**前提被后续变更证伪**时，须就地标注「**已过时 + 被什么取代**」，**不删除**（保留决策史）；复审时机 = 每次新增 ADR 时顺带复核相关旧 ADR，以及 P7 一致性检查阶段。
+  - `agate/phase-cards/P2-design.md` 或 `P7-consistency.md`：补一条**项目侧**对应机制——项目内跨任务的架构决策**应落 `{AGATE_WORKSPACE}/decisions/`**（现目录空置＝机制未启用），并在后续任务 P2 读取既有决策、必要时标注过时。
+  - 具体形态（文件名/模板）由 P2 定；**本任务只需建立机制并指明落点**。
+- **为何**：这是 7 个概念中**唯一有"协议自身已因缺此机制而实际受损"证据**的（`adr.md:278` 漂移 + `decisions/` 空置）——收益最明确。
+- **边界**：**不做**决策的自动过期/强制复审 gate（避免过度机制化）；只要求"有触发条件 + 有落点 + 过时不删"。
+
+**⑤ 的完成判据（并入下方总表）**：⑤-a 术语补录完成；⑤-b 审查锚点成文；⑤-c 三条判据落 `architect.md` + `P2-design.md` 卡片；⑤-d 仅以"拒绝理由 + 吸收点"记录（无独立交付物）；⑤-e 复审触发条件 + 项目侧落点成文。
 
 ### 完成判据与样本依赖（本任务边界的关键澄清）
 
@@ -178,8 +207,9 @@ python3 agate/scripts/check-mvwu.py --observe <task_dir>
 | 6 | **`--observe` 在至少 1 个任务上真实跑通**（**不要求该样本"多批"**——可在本任务自身或任意任务上验证工具可用性，产出 1 行观察记录） | 本任务可完成 |
 | **7** | **⑤-a 术语补录**：`CONTEXT.md` 收本任务新术语（`MVWU` / `tests_filter` / `P4-evidence` / 四态 verdict / boundary(I1)），沿用三列格式 | 本任务可完成 |
 | **8** | **⑤-b Deep Modules 审查锚点**成文（`role-system.md` 一节：判据 = 角色文件是否规定执行顺序而浅化接口） | 本任务可完成 |
-| **9** | **⑤-c Tracer Bullet 判据**落 `architect.md` + `phase-cards/P2-design.md`（含"与 P3 红灯批的边界"） | 本任务可完成 |
+| **9** | **⑤-c 三条判据**（Tracer Bullet / Vertical Slice / Architecture Fitness Functions）落 `architect.md` + `phase-cards/P2-design.md`（含"与 P3 红灯批的边界"、Vertical Slice 的判据式表述、Fitness Functions 的"不规定工具"边界） | 本任务可完成 |
 | **10** | **⑤-d Walking Skeleton**：仅记录「拒绝部署/CI 部分 + 吸收"骨架先跑通"」（依据 `adr.md` 技术栈中立），无独立交付物 | 本任务可完成 |
+| **11** | **⑤-e 决策复审机制**：`adr.md` 补「前提被证伪 → 标注已过时+取代者，不删除」的触发条件；项目侧补「跨任务架构决策落 `{AGATE_WORKSPACE}/decisions/`」（现目录空置）并在后续任务 P2 读取/标注过时 | 本任务可完成 |
 
 > **判据 6 修正（评审指出"视交付方式"不是判据）**：原稿写"至少 1 个真实样本（若自身拆批提交，自身即样本）"——把判据与交付形态绑定，等于没判据。**修正为**：判据 6 = **工具在真实任务上跑通**（验证 `--observe` 能产出格式正确的行），**而非"拿到足以回答 Q1 的样本量"**；后者需自然样本累积，**不在本任务完成判据内**。
 
@@ -213,6 +243,9 @@ python3 agate/scripts/check-mvwu.py --observe <task_dir>
 - **不做**：DAG / Task Graph / Verification Graph（分析报告 §10 的架构方向，均为后续议题）
 - **⑤-a 不重构既有术语表**：`CONTEXT.md` 只**追加**本任务新术语；既有 29 条不动，不新增术语一致性机械校验（后者属独立议题）
 - **⑤-b 不改角色职责实质**：Deep Modules 只作为**审查视角**成文（`role-system.md` 一节），**不重写**任何既有角色文件的行为约定
+- **⑤-c 不规定架构适应度工具**：只提示"该维度存在"+要求声明；ArchUnit / dependency-cruiser / import-linter 等由项目自选（保持技术栈中立）
+- **⑤-c 不强制垂直切分**：优先 vertical slice 是**判据**而非硬规则；按技术层切须**写明理由**即可（不 gate 拦截）
+- **⑤-e 不做决策自动过期/强制复审 gate**：只要求"有触发条件 + 有落点 + 过时不删"，避免过度机制化
 - **⑤-d 不引入部署/CI 机制**：Walking Skeleton 的"自动化部署 + CI 配置"部分**明确拒绝**——`agate/adr.md` 记载本协议**技术栈中立**（不硬编码测试框架/语言/部署方式），技术栈相关命令由项目经 `gate_commands` 注入。仅吸收"骨架先跑通"并入 ⑤-c
 
 ### known_risks
