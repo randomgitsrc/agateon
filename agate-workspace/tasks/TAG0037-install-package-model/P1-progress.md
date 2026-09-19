@@ -1,0 +1,33 @@
+- [start] read dispatch/role/P0-brief
+- read HANDOFF/roadmap/install.sh
+- read agate-install.py (no update/rollback subcommands; --uninstall/--check/latest/vX.Y.Z only; islink fail-closed at _cmd_install)
+- read pack-offline / install-offline: findings: (a) pack `git worktree add <bundle>/agate <tag>` → 整仓根且含 .git 文件（worktree 指针）被 install 复制进 vdir; (b) install-offline 的 current 直指 vdir（不经 latest）、不写 latest、不 _sync_root_scripts（无 ~/.agate/scripts/ 根入口）、_DEFAULT_DEST 硬编码 ~/.agate 不认 AGATE_HOME、无 islink 检查; (c) pip --python-version 311 硬编码
+- read agate_common/_resolve/resolve-entry: resolve_hook_root 用 use_legacy=False 且有脚本路径上溯+.agate-root 兜底(第4层,hook 需要,保留) 
+- grep legacy scan on docs done
+- 重要漂移：tag v0.72.0 已存在（TAG0036 已发布，CHANGELOG [0.72.0]/UPGRADING v0.72.0 已有）→ 本任务 minor bump 应为 v0.73.0，非 dispatch-context 所述 v0.72.0；P0-brief 数据以 v0.71.1 测得（轻微漂移，记 P0_STALE 轻微）
+- read tests legacy: 4 真 legacy 测 + test_debt0034_* x2(迁移文案双写守护,保留改写) + test_upgrading_lifecycle:66-68 断言 'git pull'/legacy（须改写,未列入P0）+ test_bdd_5 注释 'pre-P4 legacy 分支'
+- size: tracked agate/ 3.3MB, tests 1.6MB(48%), non-tests 1.7MB; repo tracked top-level: agate-workspace 2571 files, agate 370, archived 220, site 131, docs 93, .github 4; root files LICENSE NOTICES.md pyproject.toml CHANGELOG README*, SELF-GATE.md, CLAUDE.md, AGENTS.md; agate/AGENTS.md exists, agate/CLAUDE.md NOT exist
+- agate-changes.py 需 agate git 仓库(_find_git_root, isdir .git)—portable/worktree vdir 下均 exit 1(既有); agate-summary CHANGELOG hint 探 rp.parent/CHANGELOG.md; check-protocol-consistency/check-platform-assumptions 为维护者工具依赖仓库根
+- test_offline_bundle_roundtrip.py 实在 regression/ (非 integration/); test_agate_pack_offline.py::_fake_artifacts_side_effect 同源假设(mock subprocess 造 bundle/agate/WORKFLOW.md)
+- 同源假设三处: test_install_offline::_make_bundle / test_agate_pack_offline::_fake_artifacts_side_effect / regression/test_offline_bundle_roundtrip::_fake_pack_artifacts（后者不调 resolve）
+- 判据10 grep 须覆盖 '单软链/软链兜底/legacy 软链' 等同义词(仅 use_legacy|legacy 软链布局 会漏: SETUP.md/adr.md/WORKFLOW.md/agate-summary.py/UPGRADING 用 '单软链')
+- .installed-version 无消费方仅离线写; offline 缺 latest 指针 + 根 scripts/ 副本(SETUP 命令 ~/.agate/scripts/* 离线后不可用)
+- 复现 P0: git archive v0.72.0 → bundle/agate + copytree → _protocol_root 返回 vdir 原样(失效)确认; 实测(apparent bytes) v0.71.1 vdir 35.6MB, body 3.28MB, tests 1.50MB(46%)
+- 发现: 官网/README 主推 'curl install.sh | bash' 即 legacy 无参路径 → 删除后须定义无参语义(=进版本布局, --versions 保留为别名) + AGATE_REPO_DIR/AGATE_SYMLINK 废弃 env 处置; 存量 legacy 用户重跑 one-liner 须 fail-closed 三步
+- 已规划 BDD 分组 A结构/B离线/C Release+portable/D 在线本体/E legacy删除+4平台/F 收口+负向; 待补 SETUP 4平台命令核对
+- 边界: LICENSE(MIT 要求随拷贝分发)/NOTICES.md(role-system 引用)/CHANGELOG.md(agate-summary 每会话提示读取, F1 形态下存在于 vdir 顶层)→建议入包(vdir 顶层登记元数据); 包内文档对包外路径既有 ~122 处引用/45 文件(多数指项目侧路径)不构成新回归; tests 排除建议
+- 收集完毕(gh: 0 stars/forks, clones 14d uniq 284; ~/.agate 非软链); 开始写 P1-requirements.md 正文(50 BDD 规划: A1-8 B9-12 C13-21 D22-26 E27-45 F46-50)
+- P1-requirements.md 正文已写(50 BDD); 下一步: agate-md-field-set 填 frontmatter + check-frontmatter + BDD 编号连续性检查
+- frontmatter: 已用 agate-md-field-set 写 phase/task_id/type/parent/trace_id/status/created/risk_level/phases/packages/domains; ceremony/agent 被 set 拒绝(非法 key)→未手改, 需主 Agent 补写; check-frontmatter rc=0, check-routing rc=0; BDD 编号 1..50 连续
+- 主Agent授权手写 ceremony: full / agent: analyst 已加入 frontmatter; check-frontmatter/check-routing 复跑
+- [review] start: reading P1-requirements/P0-brief
+- [review] read P1-requirements+P0-brief; running fact checks (grep/git, ~10s each)
+- [review] use_legacy(9 lines/5 files) verified; islink/_protocol_root lines verified; running BDD-37 scan feasibility
+- [review] checks done: BDD-37 scan gaps, CHECK7 describe, tagtest vs CHANGELOG; now verifying test names + collect count
+- [review] P1-review.md written, status=needs-revision (4 MAJOR)
+- [retry1] 读 dispatch-context-retry1 + P1-review
+- [retry1] 已实扫: BDD-37 范围内 23 文件命中(12 改写清零 R + 11 白名单 W); v0.72.0 sizes: agate 3,309,321 tests 1,608,842(48.6%) B 1,864,871; check-platform-assumptions 在无 tests 目录时 FATAL 非 Traceback; 新增 BDD-51(软链基址+有效current) BDD-52(缺 tests 冒烟); offline manifest.version 须严格 vX.Y.Z(预发布 tag 取去后缀)
+- [retry1] 完成: M-1(全或无+参数化 12 条)/M-2/M-3(实扫23=R12+W11)/M-4 + m-1..m-11 全处置, 新增 BDD-51/52, §10 处置记录; check-frontmatter/routing rc=0; frontmatter 未改
+- [review-retry1] start re-review
+- [review-retry1] M-1..M-4 mostly verified; BDD-37 scan 23 hits = W∪R exact; checking BDD-52/43/45 claims + tail sections
+- [review-retry1] P1-review.md overwritten, status=approved
