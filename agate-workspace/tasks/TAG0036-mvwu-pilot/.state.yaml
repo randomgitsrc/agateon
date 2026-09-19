@@ -1,5 +1,5 @@
 task_id: TAG0036
-phase: P8
+phase: READY
 status: active
 retries:
   P1:
