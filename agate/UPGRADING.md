@@ -50,9 +50,29 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 | 安装（新机）| `curl -sSL .../install.sh \| bash`（`~/.agate` → clone 出来的 `agate/` 子目录）| `install.sh --versions`（一键进入版本管理布局：建 `repo/` + 首个 `vX.Y.Z/` + `latest`/`current` 指针 + 根 `scripts/` 副本；`~/.agate` 已是软链则 fail-closed，提示下方迁移三步）|
 | 迁移（软链 → 版本管理）| — | 三步（与 `agate-install.py` fail-closed 文案同源）：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions` |
 | 更新 | `cd <你克隆 Agateon 的目录> && git pull`（是否需重跑 `install-hook.py` 见下方「hook 重装时机」；`git pull` 无新提交时是 no-op，**幂等**）| `python3 ~/.agate/scripts/agate-install.py latest`（**幂等**：重复执行不报错、不重复建版本目录、`latest`/`current` 指针幂等切换）|
-| 回退 | `git checkout <旧 tag>` | `python3 ~/.agate/scripts/agate-install.py v<旧版本>`，再在项目根 `.agate-version` 钉 `agate: v<旧版本>`（或把 `current` 指针切回旧版本目录）|
+| 回退 | `git checkout <旧 tag>` | 见下方「回退（两种场景，不可混用）」 |
 
 两种布局的「更新」指令在文档面对齐、各自**幂等**：legacy 侧 = `git pull`（+ 按需重跑 hook），版本管理侧 = `agate-install.py latest`。
+
+#### 回退（两种场景，不可混用）
+
+> ⚠ **`agate-install.py vX.Y.Z` 只把版本目录装进版本根，不建/不改 `latest`/`current` 指针**（该命令的职责是"预装版本"，改变全局默认是 `latest` 的职责）。因此"装完旧版"本身**不构成回退**——必须再做下面之一，否则**若版本根本无指针，解析会失败**（`agate-resolve.py` 报 `无可用 AGATE_ROOT`）。
+
+| 场景 | 你要谁用旧版 | 步骤 |
+|------|-------------|------|
+| **A. 单项目回退** | 只有某个项目 | ① `python3 ~/.agate/scripts/agate-install.py v<旧版本>`（预装）② 在该**项目根**写 `.agate-version`：`agate: v<旧版本>` ③ 验证：在该项目内跑 `python3 ~/.agate/scripts/agate-resolve.py`，确认 `AGATE_VERSION=v<旧版本>` |
+| **B. 全局回退** | 所有未声明版本的项目 | ① 同上预装 ② 切换全局指针：`ln -sfn v<旧版本> ~/.agate/current`（Windows 复制模式则把文本指针内容改为 `v<旧版本>`）③ 验证：`python3 ~/.agate/scripts/agate-resolve.py` 应报 `AGATE_REASON=全局 current` 且版本正确 |
+
+**两条都要做的验证**（回退失败的最常见原因是漏了第 ③ 步）：
+
+```bash
+python3 ~/.agate/scripts/agate-resolve.py     # 输出 AGATE_ROOT / AGATE_VERSION / AGATE_REASON
+```
+
+**回滚回退**：`python3 ~/.agate/scripts/agate-install.py latest`（把 `latest`/`current` 指回最新发布版，幂等）。
+
+**卸载旧版**：`python3 ~/.agate/scripts/agate-install.py --uninstall v<旧版本>`（含项目引用保护扫描——若仍有项目 `.agate-version` 引用它会拒绝）。
+
 
 ### 路径层次与解析优先级（易混淆点）
 

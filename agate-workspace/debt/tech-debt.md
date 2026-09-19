@@ -1198,13 +1198,15 @@ task_id: TAG0030
 id: DEBT0034
 category: technical
 title: "TAG0032 三步 legacy 软链迁移指引文案在 agate-install.py(_LEGACY_SYMLINK_MSG) 与 install.sh(heredoc) 双写"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate/scripts/agate-install.py
-    note: "_LEGACY_SYMLINK_MSG 模块常量（Python 侧 fail-closed 拒绝文案）"
+    note: "_LEGACY_SYMLINK_MSG 模块常量（Python 侧 fail-closed 拒绝文案）。P6 证据：新增 test_debt0034_migration_steps_consistent_across_entries 逐片段比对两侧三步指引（backup/mkdir/install），负向验证——注入漂移后 1 failed；task_id TAG0032 派生的 TAG0035 批次处理"
   - path: install.sh
-    note: "--versions 分支的 heredoc（shell 侧同一三步迁移指引），措辞需人工与 Python 侧保持同步"
+    note: "--versions 分支的 heredoc（shell 侧同一三步迁移指引）。P5 证据：test_debt0034_install_sh_heredoc_is_guarded 锁定 `[ -L \"$AGATE_VER_ROOT\" ]` 检测与 `<<'EOF'` 引号形态（防变量展开致漂移），负向验证通过"
+  - ref: agate/tests/unit/test_agate_version_install.py
+    note: "设计取舍：两侧首句主体刻意不同（各自说明是哪个命令穿透软链，属有用上下文），故只锁定【三步迁移指引】部分；不正文化 DEBT0034 原建议的『收敛到单一来源』——软链检测发生在 clone 之前，此刻无 agate-install.py 可用（curl|bash 场景 SCRIPT_DIR 是 cwd），委托不可行"
 impact: "两处文案漂移风险：改一处忘另一处 → 用户在两条入口看到不一致的迁移指引；BDD-2 只 grep Python 侧，install.sh 侧漂移不被测"
 recommendation: "收敛到单一来源：install.sh --versions 的软链拒绝分支改为直接 exec agate-install.py（由其打印统一文案并 exit 1），或抽一份公共文案资源"
 closure_criteria:

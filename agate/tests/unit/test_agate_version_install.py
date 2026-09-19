@@ -491,3 +491,63 @@ def test_tag0032_bdd_5_install_sh_versions_bootstrap(
         if "/repo/" in ln or re.search(r"/v[0-9]+\.[0-9]+\.[0-9]+/", ln)
     ]
     assert not bad, f"install.sh --versions 不得污染源仓库树：{bad}"
+
+
+# ============================================================
+# DEBT0034：legacy 软链拒绝文案「双写漂移」守护
+#
+# 背景：同一份"三步迁移指引"在两侧各自维护——agate-install.py 的
+# _LEGACY_SYMLINK_MSG（模块常量）与 install.sh 的 heredoc。原有 BDD-2 只测
+# Python 侧（_run_install 跑 agate-install.py），**install.sh 侧漂移不被测**。
+#
+# 设计取舍（为何不"收敛到单一来源"）：
+#   两条入口的**首句主体刻意不同**——各自说明是哪个命令穿透软链，这是有用的
+#   上下文，不应强行统一。真正必须一致的是【三步迁移指引】——它是用户照做的
+#   操作步骤，任一侧漂移都会误导用户。故本用例锁定指引部分，放开首句。
+#
+# 为何不用"install.sh 委托 agate-install.py 打印"：软链检测发生在 clone 之前，
+# 此刻无 agate-install.py 可用（curl|bash 场景 SCRIPT_DIR 是 cwd）——委托不可行。
+# ============================================================
+
+
+def _migration_steps(text):
+    """从拒绝文案中抽出三步迁移指引（三条命令片段）——两侧须一致。"""
+    steps = {}
+    m = re.search(r"mv\s+~?/?\.agate\s+\S*\.bak", text)
+    steps["backup"] = m.group(0) if m else None
+    m = re.search(r"mkdir\s+-p\s+~?/?\.agate", text)
+    steps["mkdir"] = m.group(0) if m else None
+    m = re.search(r"install\.sh\s+--versions", text)
+    steps["install"] = m.group(0) if m else None
+    return steps
+
+
+def test_debt0034_migration_steps_consistent_across_entries(agate_scripts):
+    """两步入口（agate-install.py / install.sh）的「三步迁移指引」须逐片段一致。"""
+    repo_root = _repo_root_from_scripts(agate_scripts)
+    py_text = (agate_scripts / "agate-install.py").read_text(encoding="utf-8")
+    sh_text = (repo_root / "install.sh").read_text(encoding="utf-8")
+
+    py_steps = _migration_steps(py_text)
+    sh_steps = _migration_steps(sh_text)
+
+    for key in ("backup", "mkdir", "install"):
+        assert py_steps[key] is not None, f"Python 侧缺三步指引片段：{key}"
+        assert sh_steps[key] is not None, f"install.sh 侧缺三步指引片段：{key}"
+        assert py_steps[key] == sh_steps[key], (
+            f"三步迁移指引漂移（{key}）：Python 侧 {py_steps[key]!r} "
+            f"≠ install.sh 侧 {sh_steps[key]!r}——两处须同步（DEBT0034）"
+        )
+
+
+def test_debt0034_install_sh_heredoc_is_guarded(agate_scripts):
+    """install.sh 的软链拒绝分支须是 heredoc 形态（防被改成不一致的动态拼接）。"""
+    repo_root = _repo_root_from_scripts(agate_scripts)
+    sh_text = (repo_root / "install.sh").read_text(encoding="utf-8")
+    assert re.search(r"if\s+\[\s+-L\s+\"\$AGATE_VER_ROOT\"\s+\]", sh_text), (
+        "install.sh 缺 `[ -L \"$AGATE_VER_ROOT\" ]` 软链检测（或变量名被改）"
+    )
+    assert "cat >&2 <<'EOF'" in sh_text, (
+        "install.sh 的拒绝文案不再是 heredoc（引号形态变化会让变量被展开，"
+        "进而与 Python 侧文案漂移）"
+    )
