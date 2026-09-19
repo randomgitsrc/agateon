@@ -8,6 +8,27 @@
 
 ---
 
+## 先取协议根路径（本指南后续命令都用它）
+
+**两种布局的协议根位置不同**，故下述各平台命令统一用变量 `$AGATE_DIR` 指代协议根（`orchestrator-template.md` 与 `assets/` 都在它下面）：
+
+| 布局 | `~/.agate` 是什么 | 协议根在哪 |
+|------|-----------------|-----------|
+| **单软链**（`install.sh` 无参，README 首推的一键装法） | 软链 → `<repo>/agate/` | **`~/.agate` 本身** |
+| **版本管理**（`install.sh --versions`，多版本/钉版用） | 实体目录（`repo/` + `vX.Y.Z/` + 指针） | **`~/.agate/current/agate`** |
+
+**一行取到它**（两种布局通用）：
+
+```bash
+AGATE_DIR="$([ -d "$HOME/.agate/current" ] && echo "$HOME/.agate/current/agate" || echo "$HOME/.agate")"
+# 自检：两条都应可读
+test -r "$AGATE_DIR/orchestrator-template.md" && echo "✅ 模板可读" || echo "❌ 协议根解析失败"
+```
+
+> 判据是 `current` 指针是否存在——版本管理布局有，单软链布局没有。`$AGATE_DIR` 是**当前 shell 变量**，下面各平台命令块在同一 shell 会话里执行即可（新开终端需重跑这一行）。
+
+---
+
 ## 核心结论先说
 
 - **只需要注册 orchestrator 这一个 agent**。P1-P8 的执行角色/评审角色不需要在平台层预注册——派发时是"派一个通用 subagent，把角色文件路径写进 prompt 让它自己读"，见 `role-system.md`「方法 B」。
@@ -77,7 +98,7 @@ cp {agate_root}/assets/templates/project.md {AGATE_WORKSPACE}/agents/project.md
 
 ```bash
 mkdir -p .claude/agents
-ln -sf ~/.agate/orchestrator-template.md .claude/agents/orchestrator.md
+ln -sf "$AGATE_DIR/orchestrator-template.md" .claude/agents/orchestrator.md
 ```
 
 **注意用文件级链接，不要把整个 `.claude/agents` 目录链到别处**——那样会让这个目录里以后任何非 Agateon 的自定义 agent 都被迫绑定到同一个源头，也可能把无关文件暴露给 agent 发现机制。只链这一个文件。
@@ -94,7 +115,7 @@ claude --agent orchestrator -p "echo test"
 
 ```bash
 mkdir -p .opencode/agents
-ln -sf ~/.agate/orchestrator-template.md .opencode/agents/orchestrator.md
+ln -sf "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
 ```
 
 同样是文件级链接，理由同上。
@@ -114,14 +135,14 @@ opencode debug agent orchestrator
 
 ```bash
 # Git Bash 里，和 Linux/macOS 写法一样：
-ln -sf ~/.agate/orchestrator-template.md .claude/agents/orchestrator.md
-ln -sf ~/.agate/orchestrator-template.md .opencode/agents/orchestrator.md
+ln -sf "$AGATE_DIR/orchestrator-template.md" .claude/agents/orchestrator.md
+ln -sf "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
 ```
 
 如果报错（没有开发者模式/非管理员），退化成复制：
 ```bash
-cp ~/.agate/orchestrator-template.md .claude/agents/orchestrator.md
-cp ~/.agate/orchestrator-template.md .opencode/agents/orchestrator.md
+cp "$AGATE_DIR/orchestrator-template.md" .claude/agents/orchestrator.md
+cp "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
 ```
 ⚠️ **复制模式的代价**：Agateon 升级模板后不会自动同步，你需要在每次升级完 Agateon 后手动重跑上面这两条 `cp` 命令。目前没有自动漂移检测（`agate-summary.py` 现有的漂移检测只覆盖 `scripts/` 目录下的脚本副本，不覆盖这个文件），这是已知的手动步骤，忘了也不会报错提醒——建议每次升级 Agateon 后养成习惯重跑一遍。
 
@@ -150,9 +171,9 @@ DSH 的身份注册机制是 **agent-preset**（`agent.cordis.yml` + `preset.yml
 ```bash
 # 1. 注册 orchestrator 身份（DSH preset，等价 .claude/agents/orchestrator.md 软链）
 mkdir -p ~/.dsh/.agent-presets/agate ~/.dsh/skills/agate-protocol
-ln -sf ~/.agate/assets/templates/dsh/agent.cordis.yml ~/.dsh/.agent-presets/agate/agent.cordis.yml
-ln -sf ~/.agate/assets/templates/dsh/preset.yml ~/.dsh/.agent-presets/agate/preset.yml
-ln -sf ~/.agate/assets/templates/dsh/SKILL.md ~/.dsh/skills/agate-protocol/SKILL.md
+ln -sf "$AGATE_DIR/assets/templates/dsh/agent.cordis.yml" ~/.dsh/.agent-presets/agate/agent.cordis.yml
+ln -sf "$AGATE_DIR/assets/templates/dsh/preset.yml" ~/.dsh/.agent-presets/agate/preset.yml
+ln -sf "$AGATE_DIR/assets/templates/dsh/SKILL.md" ~/.dsh/skills/agate-protocol/SKILL.md
 
 # 2. 装 hook（与所有平台一致，唯一安装脚本）
 python3 ~/.agate/scripts/install-hook.py
