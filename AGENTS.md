@@ -105,7 +105,7 @@
 **工具纪律（本环境实战验证，T001/TAG0004 起）**：
 - bash 一律加 `timeout`（外层 `timeout N cmd`，N 按预期耗时 30-90s），工具 timeout 参数同步设——无 timeout 的 bash 多次被 abort/挂起
 - 单步串行不并行 bash（并行是 abort 高危）；卡住就换路不重试同一 bash，改用 read/grep/glob 工具（不走 bash 通道）
-- 全量 pytest 分 unit/regression/integration 片跑、每片大 timeout、片内加 `-n auto` 并行（约 3.5x 提速；套件按隔离设计可安全并行，CI 同口径）；gate/consistency 单跑
+- 全量 pytest 分 unit/regression/integration 片跑、每片大 timeout、片内加 `-n auto` 并行（约 3.5x 提速；套件按隔离设计可安全并行）。**完整 CI 口径**（含 flaky 兜底的 `--reruns` 与所需插件）见 `agate/tests/README.md`——本机验证前先对齐，否则可能把已知 flaky 当新缺陷追；gate/consistency 单跑
 - 输出控制在几十行内；先看全输出再分析，不用 tail 截断（count-tests 教训：数字被 tail 吞掉误判）
 - commit 前检查 hook 会跑什么：pre-commit 按 .state.yaml phase 跑 check-gate，commit 时 phase 应与本次产出一致（P1 产出 → phase=P1 再 commit），否则 hook 拦截
 - hook 在共享 git 目录：worktree 的 `.git/hooks` 为空，hook 实际在 `<主 checkout>/.git/hooks/`（pre-commit / commit-msg / pre-push 软链已装），改 hook 装那里
