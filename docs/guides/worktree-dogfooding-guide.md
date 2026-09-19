@@ -73,12 +73,20 @@ ls -la /home/kity/oclab/agate/.git/hooks/ | grep -E 'pre-commit|commit-msg|pre-p
 ### Step 5：注册 orchestrator（SETUP）
 
 ```bash
+# 先取协议根（版本管理布局在 ~/.agate/current/agate；单软链布局就是 ~/.agate 本身）
+AGATE_DIR="$([ -d "$HOME/.agate/current" ] && echo "$HOME/.agate/current/agate" || echo "$HOME/.agate")"
+
 # OpenCode + Claude Code 双平台都注册（TAG0016/17 实际都双平台）
 mkdir -p .opencode/agents
-ln -sf ~/.agate/orchestrator-template.md .opencode/agents/orchestrator.md
+ln -sf "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
 mkdir -p .claude/agents
-ln -sf ~/.agate/orchestrator-template.md .claude/agents/orchestrator.md
+ln -sf "$AGATE_DIR/orchestrator-template.md" .claude/agents/orchestrator.md
+
+# 自检：链后必须可读（写错协议根会得到断链，症状是编排者身份不可用）
+test -r .claude/agents/orchestrator.md && echo "✅ 可读" || echo "❌ 断链——检查 $AGATE_DIR"
 ```
+
+> **为什么不能直接写 `~/.agate/orchestrator-template.md`**：该路径只在**单软链布局**下成立；**版本管理布局**下协议本体在 `~/.agate/vX.Y.Z/agate/`，直接写会得到断链（平台报 `--agent 'orchestrator' not found`）。细节见 `SETUP.md`「先取协议根路径」。
 
 `.opencode/` 与 `.claude/` 均已 gitignore（本地环境配置不入库），对应 setup 步骤见 `SETUP.md`（OpenCode 与 Claude Code 各一节）。
 
@@ -135,9 +143,9 @@ git log --oneline -3   # 确认交接单已提交
 | 纪律 | 说明 |
 |------|------|
 | 开发 checkout 的 `agate/` 不改 | 正常改动走 worktree。**注意**：迁移到版本管理布局后它**已不是**稳定版来源（稳定版 = `~/.agate/current/`），但仍是你的开发 checkout——改它会让本地状态混入"看起来像已发布"的假象 |
-| `~/.agate` 禁止改动 | 稳定版（当前发布 tag），跑 gate / 读卡片用它 |
+| `~/.agate` 禁止改动 | **版本管理根目录**（`repo/` + `vX.Y.Z/` + 指针 + 根 `scripts/` 副本），是稳定版来源；跑 gate / 读卡片用它，改它等于改稳定版 |
 | gate 工具 ≠ 检查对象 | commit hook 用 `~/.agate` 判定；但 `check-protocol-consistency.py` 必须用 worktree 自己的（检查 worktree 里的文件） |
-| `~/.agate` 脚本显示主 checkout 上下文 | `agate-summary.py` 在 worktree 跑显示稳定版 main/HEAD，不代表 worktree 状态 |
+| `~/.agate` 脚本显示**稳定版**上下文 | `agate-summary.py` 在 worktree 跑显示稳定版（`AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号），**不是** worktree/开发 checkout 状态——worktree 状态用 `git log`/`git status` 看 |
 | 工具稳定优先 | hook 指向稳定版，不指向 worktree（避免"用未验证的新 gate 判自己"）——用户已确认此哲学 |
 | commit 时 phase = 本 commit 产出阶段 | 防 pre-commit 用下一阶段 gate 拦截 |
 

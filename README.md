@@ -35,7 +35,7 @@ LLM agents are powerful but unreliable on long tasks: context gets polluted, sub
    ```bash
    curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh | bash
    ```
-   For **per-project version pinning**, enter the versioned layout with `install.sh --versions` (the official path; installs versioned directories under `~/.agate/vX.Y.Z/`, keeps the legacy `~/.agate` symlink for backward compatibility), then use the version manager to update or pin. The full install / migrate / update / rollback matrix is the "版本管理生命周期" section of [`agate/UPGRADING.md`](agate/UPGRADING.md):
+   For **per-project version pinning**, enter the versioned layout with `install.sh --versions` (the official path; installs versioned directories under `~/.agate/vX.Y.Z/`; `~/.agate` becomes a version-root **directory** — if it is still a legacy symlink the command fail-closes with instructions to back it up first), then use the version manager to update or pin. The full install / migrate / update / rollback matrix is the "版本管理生命周期" section of [`agate/UPGRADING.md`](agate/UPGRADING.md):
    ```bash
    install.sh --versions                                  # enter the versioned layout (repo/ + vX.Y.Z/ + pointers)
    python3 ~/.agate/scripts/agate-install.py latest       # update to the latest version (idempotent)

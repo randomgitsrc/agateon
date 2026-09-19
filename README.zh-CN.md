@@ -35,7 +35,7 @@ LLM Agent 在长任务上强大但不可靠：上下文被污染、subagent 漂�
    ```bash
    curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh | bash
    ```
-   需要**按项目锁定版本**时，用官方路径 `install.sh --versions` 进入版本管理布局（在 `~/.agate/vX.Y.Z/` 下安装版本目录，保留 `~/.agate` 软链向后兼容），再用版本管理器更新或钉版。安装 / 迁移 / 更新 / 回退完整口径见 [`agate/UPGRADING.md`](agate/UPGRADING.md) 的「版本管理生命周期」节：
+   需要**按项目锁定版本**时，用官方路径 `install.sh --versions` 进入版本管理布局（在 `~/.agate/vX.Y.Z/` 下安装版本目录；`~/.agate` 变为版本管理根**实体目录**——已是 legacy 软链时该命令会 fail-closed 拒绝，需按提示先备份软链再重跑），再用版本管理器更新或钉版。安装 / 迁移 / 更新 / 回退完整口径见 [`agate/UPGRADING.md`](agate/UPGRADING.md) 的「版本管理生命周期」节：
    ```bash
    install.sh --versions                                  # 进入版本管理布局（repo/ + vX.Y.Z/ + 指针）
    python3 ~/.agate/scripts/agate-install.py latest       # 更新到最新版（幂等）
