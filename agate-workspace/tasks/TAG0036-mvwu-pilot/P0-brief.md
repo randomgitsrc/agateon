@@ -297,3 +297,4 @@ python3 agate/scripts/check-mvwu.py --observe <task_dir>
 
 - 测试框架：pytest 9.0.3 可用；基线 1666 passed / 2 skipped（HANDOFF §2，CI 口径）。无 debug 服务 / 无 UI（不需浏览器自动化）。
 - `active-tasks.md` 已有 TAG0036 行（第 18 行）。
+- **[P0_STALE 补记，据 P1 analyst 复核]**：(c) TAG0035 已合并并归档（P8/READY），P0-brief 头部"TAG0035 先启动、可并行"表述过期——无重叠风险，仅致 `_gate_p2_dispatch_plan` 行号 743→767；scope ① 的「同类 fail-open 若 TAG0035 未覆盖则另立 DEBT」条件**已触发**（tech-debt.md 无登记）→ P1 BDD-5 落为「只登记 DEBT、不修」。(d) ⑤-e 证据 2（`adr.md:278` 解析优先级失实）已被 commit `28293d8`（DEBT0042 评审）修正——该行现已含 `AGATE_HOME`；⑤-e 缺口（`adr.md` 无「前提被证伪→复审」触发条件）与证据 1（`decisions/` 无人写）**仍成立**，交付物不变，仅证据措辞过期。
