@@ -279,3 +279,21 @@ python3 agate/scripts/check-mvwu.py --observe <task_dir>
 - **worktree**：`.worktrees/agate-TAG0036`（分支 `feat/TAG0036-mvwu-pilot`），构建流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0036.md` 按模板全 9 节填写
 - **SELF-GATE 说明**：`check-mvwu.py`（`agate/scripts/*.py`）+ 两份卡片/角色文件（`agate/**/*.md`）均命中触发面 → 须走 `protocol-alignment-review` + 全量 pytest + consistency 0 ERROR
 - **check-mvwu.py 自身单测**：六项检查 + `--observe` 各需单测，**须用 `tmp_path`**（DEBT0040 教训：不得写仓库内真实账本/证据）
+
+## P0 自检记录（2026-09-19，启动 session 补，orchestrator 执行）
+
+### 同类/影响面预判（P0 卡强制项）
+
+- **同类/影响面预判（tests_filter 消费方）**：`grep tests_filter` 全仓在协议本体（`agate/`）命中 **0**；仅出现于设计文档/评审/roadmap/P0-brief/TAG0035 文档。`dispatch_plan` 现有消费方（`agate/` 内 13 文件）：`check-gate.py`（`_gate_p2_dispatch_plan`，不拒未知键）、`agate-md-field-get.py`（JSON_FIELDS，仅 frontmatter）、`check-structure-consistency.py`、`dispatch-protocol.md`、`architect.md`、`P2-design.md`、`task-files.md`、`UPGRADING.md`、`scripts/README.md`、`tests/README.md` + 3 个既有单测。新增可选键须**不破坏**这些既有测试；`task-files.md` / `scripts/README.md` 是否需同步登记，P1 细化。
+- **同类/影响面预判（P4-evidence 目录）**：`find agate-workspace -type d -name P4-evidence` = 0（全新目录）；沿用 `P{phase}-{kind}/` 命名，**不进** gate/judge 白名单/provenance/目录登记（P0-brief scope ② 已锁）。
+- **同类/影响面预判（⑤ 组文件面）**：6 个目标文件均已 git 跟踪（`CONTEXT.md` / `role-system.md` / `adr.md` / `architect.md` / `P2-design.md` / `P7-consistency.md`）；`grep decisions` 在卡片/角色中 0 命中 = 印证"无人写 decisions/"缺口。**同类未来实例**：新增判据/字段靠 grep 断言测试兜底（P3 决定）；⑤-b/⑤-d 仅成文，不宣称生效。
+
+### P0-brief 时效性自检（漂移判据）
+
+- 间隔：立项 2026-09-16 → 启动 2026-09-19（含 PR #341/#342/#343 合并）。逐条排查判据 1-3：① 方案未变（TAG0035 与本任务文件面仍不重叠）；② 环境前提未变（python 3.12.3 / pytest 9.0.3）；③ known_risks 无被解决/重叠（`tests_filter`/`P4-evidence` 仍 0 实现）。**结论：无严重漂移。**
+- **轻微漂移 [P0_STALE]**：(a) `_gate_p2_dispatch_plan` 现位于 `check-gate.py:767`（brief 写 `:743`，行号漂移，语义不变）；(b) 本 worktree 内 `agate-workspace/decisions/` **目录不存在**（brief 写"空置"，实为未创建——同样印证"机制未启用"，⑤-e 结论不变）。均不影响方案。
+
+### 环境自检
+
+- 测试框架：pytest 9.0.3 可用；基线 1666 passed / 2 skipped（HANDOFF §2，CI 口径）。无 debug 服务 / 无 UI（不需浏览器自动化）。
+- `active-tasks.md` 已有 TAG0036 行（第 18 行）。
