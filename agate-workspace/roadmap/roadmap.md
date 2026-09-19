@@ -71,6 +71,7 @@
 | RM-AG0063 | **MVWU（最小可验证工作单元）协议落地**：把既有 batch 实践升格为协议原语（四不变量 Boundary/Verification/Provenance/Composability + 最小契约 `batches[].tests_filter` + `P4-evidence/{batch}.log` + 字段预算 ≤5）——设计定稿见 `docs/design-notes/design-mvwu-protocol.md`；阶段 1 零协议内核改动（旁路声明 + 证据 + 不阻断 check） | scheduled | 编排模型演进分析（`docs/design-notes/design-orchestration-evolution-analysis.md` v6.2）+ 三轮外部评审；2026-09-16 用户确认入 roadmap | **TAG0036** | 2026-09-16 | 2026-09-16 |
 | RM-AG0064 | **【已并入 RM-AG0062】** gate 对未知阶段 fail-open：`check-gate.py` 的 `handlers.get(phase)` 返回 `None` 时 `exit 2`，而 exit 2 是 P0/P1/P2/P3/P5/P6/P8 的**通过码**——新增阶段若忘记注册 gate 函数会**静默通过**而非报错；应改为 fail-closed（未知阶段 → exit 1）并补回归测试 | cancelled | 编排模型演进分析 §5.3（2026-09-16 实测发现，与 DAG/MVWU 议题无关的独立缺陷） | — | 2026-09-16 | 2026-09-16 |
 | RM-AG0065 | **数据契约一致性批**（DEBT0040 + DEBT0041——TAG0035 独立评审判定与「gate 判据健壮性」不同簇、且 DEBT0040 含 CI 改动需用户许可，遂移出）：① 事件账本 `gate-events.jsonl` 写入测试无 `tmp_path` 隔离强制（单测真实写仓库内 committed 账本，TAG0034 P6.5 judge 跑全量 pytest 污染历史账本）② `agate-md-field-set` 支持字段集与 `check-p6-provenance.py` 必备 frontmatter 字段集**不同源**（`P3-test-cases.md` 的 `agent` 字段落在缝里，P6→P7 被 exit 2 挡住） | backlog | TAG0035 独立评审（2026-09-16 移出项，复盘措施 3 闭环） | — | 2026-09-16 | 2026-09-16 |
+| RM-AG0066 | **安装与多版本模型统一**（Release 发布 + 本体安装包 + 三路径结构统一 + 离线解析失效修复）：① 引入 GitHub Release（tag push 自动建，notes 取 CHANGELOG 段）+ 本体 tarball asset（**portable**，解压即用，无需 git）② 统一在线/离线/legacy 三条安装路径的**目录结构契约** ③ 修 **P0 离线安装解析失效**（pack 用 worktree 检出整仓 → `bundle/agate/agate/` 多一层嵌套 → `_protocol_root` 探测不到 scripts）④ 本体目录名**可扩展**（不硬编码 `agate/`，由 manifest 声明）⑤ 在线安装**只装本体**（现状 43M vs 本体 4.1M，冗余 91%）；**保留**「装任意历史 tag」能力（即 `repo/` 保留） | backlog | 用户 2026-09-19 提出（安装机制审计后续）| — | 2026-09-19 | 2026-09-19 |
 ## 状态标识
 
 | 状态 | 说明 | 何时进入 |
@@ -640,6 +641,78 @@
 - **⚠ 状态变更（2026-09-16）：已并入 RM-AG0062**——两条同属 gate/check-script **健壮性**（同簇同性质同流程），`check-gate.py` 改动面**直接重叠**（0062 的 DEBT0037 改 `_gate_p4` 判据，本条的 fail-open 改 `handlers` 分发）；且 RM-AG0062 本身即为「归并批」形态（参照 TAG0023/TAG0031 先例），并入零额外开销。**立项为 TAG0035**，本条作为其**子批 A**（fail-open）+ **子批 B**（三处数字序号假设）交付。
 
 ---
+
+## RM-AG0066 详情
+
+**安装与多版本模型统一（2026-09-19，用户提出 + 安装机制审计发现）**
+
+> **背景**：多版本机制已经历 4 轮 task（TAG0008 版本管理 v1 / TAG0017 工具链修复 / TAG0031 DEBT 清理 / TAG0032 版本生命周期），但用户反馈「问题还是不少」。系统性审计后确认根因：**四条安装路径、三套目录结构约定，从未定义过「版本目录里到底该有什么」这一根本契约**——四轮 task 都在修补局部。
+
+### 实测证据（2026-09-19 审计）
+
+| 路径 | 装了什么 | 版本目录结构 | 状态 |
+|------|---------|-------------|------|
+| `install.sh`（legacy 无参） | 只指本体 | `~/.agate` → `<repo>/agate` 软链 | ✅ 正确 |
+| `install.sh --versions` / `agate-install.py` | **整个 tag 树** | `vX.Y.Z/{agate, agate-workspace, docs, site, archived, HANDOFF-*.md, ...}` | ⚠️ 冗余 91% |
+| `agate-pack-offline.py` | **整个 tag 树** | `bundle/agate/{agate, ...}`（worktree 检出整仓到 `bundle/agate/`） | ❌ 与测试假设不符 |
+| `install-offline.py` | 整包复制 | `vX.Y.Z/{agate/{agate,...}, wheels, manifest.json}` | ❌ **解析失效** |
+
+**体积数据**：`~/.agate/v0.71.1/` = **43M**，其中 `agate/`（本体）= **4.1M** → 冗余 ≈39M（**91%**）；另 `repo/` = **59M**。
+**tag 构成**：v0.71.1 含 **3290 文件**，其中 `agate/` **367（11%）**；顶层含 `agate-workspace/`、`docs/`、`site/`、`HANDOFF-TAG0035.md`。
+**GitHub Release**：**0 个**（从未发布过 Release；「发布」= 仅打 tag + 仓库内 CHANGELOG）。
+
+### 缺陷分项
+
+- **🔴 P0 离线安装解析失效（新发现，真 BUG）**
+  - 现象：`_protocol_root(vX.Y.Z)` 探测 `vX.Y.Z/scripts` ✗ 与 `vX.Y.Z/agate/scripts` ✗（真实本体在 `vX.Y.Z/agate/agate/scripts`）→ 返回 `vX.Y.Z` 原样 → **解析链失效**。
+  - 根因：pack 侧 `git worktree add <bundle>/agate <tag>` 检出**整仓树**（`bundle/agate/` 是仓库根，不是本体）；install 侧 `_copy_tree(bundle → vX.Y.Z/)` 整包复制。
+  - **测试为何没抓到**：`test_install_offline.py::_make_bundle` 构造的是 `bundle/agate/WORKFLOW.md`（假设 `bundle/agate/` **就是本体**），而真实 packer 产出的是整仓树——**测试假设掩盖了真实布局**（该用例断言 `version_dir/agate/WORKFLOW.md` 存在，与实现同源错误）。
+  - **可独立修复**（用户已定「一起做」，但修法明确）。
+
+- **🟠 P1 在线安装装全量**：冗余 91%；且将 agateon **自身任务数据**（`agate-workspace/tasks/TAG0001-...`）、**维护者产物**（`HANDOFF-*.md`、`docs/reviews/`、`site/`）装入用户环境 → 语义混淆（用户可能误认为那是自己的任务空间）。
+
+- **🟠 P1 本体目录名硬编码、无扩展性**：`_protocol_root` 仅认两形态（`vdir/scripts`、`vdir/agate/scripts`），`core/`、`bundle/` 等不支持；且探测序标注「**不可颠倒**」红线，扩展需谨慎设计。
+
+- **🟡 P2 `repo/` 去留**：在线安装为 `git worktree add` 保留 `repo/`（59M）。**用户已定：保留「装任意历史 tag」能力 → `repo/` 保留**。
+
+- **🟡 P2 同领域第三个「指向层次」概念**：`install-hook.py` 的 `agate_root` 参数是**协议根**（非版本根基址），不认 `AGATE_HOME`——DEBT0042 评审已指出，需文档点明（属本模型的一部分）。
+
+### 用户已定的取舍（2026-09-19）
+
+| # | 决策 | 影响 |
+|---|------|------|
+| 1 | **要**引入 GitHub Release + asset 安装包 | 新增发布物形态 |
+| 2 | **保留**「装任意历史 tag」能力 | `repo/` 保留（不改为"仅从 Release 装"） |
+| 3 | P0 离线 BUG **并入本设计一起做** | 不单独 hotfix，随模型统一解决 |
+
+### 拟议模型（P2 细化）
+
+```
+GitHub Release vX.Y.Z（tag push 时自动创建）
+├── Release notes ← 自动提取 CHANGELOG 该版本段
+└── Assets
+    ├── agateon-vX.Y.Z.tar.gz              ← 只含本体（portable，解压即用，无需 git）
+    └── agateon-vX.Y.Z-offline-<platform>.tar.gz   ← 本体 + wheels（现状 pack 的修正版）
+
+安装方式：
+  portable   : 下载 asset → 解压到 ~/.agate/vX.Y.Z/ → 建 current 指针
+  在线升级   : agate-install.py latest（改为从 Release 取 asset；⚠ 保留 repo/ 兼容历史 tag 安装）
+  开发者     : git clone（现状保留）
+```
+
+**待 P2 定的开放问题**：
+1. 版本目录的**唯一结构契约**（本体直接铺开 `vX.Y.Z/scripts`，还是 `vX.Y.Z/agate/scripts`）——两条都要兼容已装用户。
+2. 本体目录名扩展机制（manifest 声明 vs 探测清单）。
+3. 排除清单的来源与维护（哪些顶层目录不入安装包）。
+4. Release 自动化（CI workflow，tag push 触发）——**新增 workflow 属 CI 配置改动，需用户许可**（AGENTS.md 规则 5）。
+5. 已装旧形态的迁移路径（若结构契约变更）。
+
+### 归属
+
+- **独立任务**（预计一个 task，含 P0 修复 + 模型统一 + Release 自动化）。
+- **触发 SELF-GATE**（`agate/scripts/*`、`install.sh`、可能新增 `.github/workflows/`）。
+- **关联**：DEBT0034（迁移文案双写，已 closed 于 PR #337）、DEBT0042（基址 env，已 closed 于 PR #335，本条的「指向层次」概念延续）；TAG0032（版本生命周期，本条的上一轮）。
+- **CI 改动需用户明确许可**（新增 release workflow）。
 
 ## RM-AG0065 详情
 
