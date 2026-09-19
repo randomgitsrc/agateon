@@ -1,0 +1,68 @@
+# BDD-71 SELF-GATE 语义审查留痕（P6 阶段实跑）
+$ ls -l agate-workspace/tasks/TAG0036-mvwu-pilot/P4-protocol-alignment-review.md
+-rw-r--r-- 1 kity kity 25316  9月 19 18:04 agate-workspace/tasks/TAG0036-mvwu-pilot/P4-protocol-alignment-review.md
+-- frontmatter（文件头）:
+---
+phase: P4
+task_id: TAG0036
+parent: P4-implementation.md
+trace_id: TAG0036-P4-align-20260919
+agent: protocol-alignment-review
+type: review
+created: 2026-09-19
+status: approved
+review_date: 2026-09-19
+reviewer: protocol-alignment-review
+change_summary: MVWU 阶段 1 观测：新增 check-mvwu.py 观测器（六项检查 / 四态 verdict / --observe 七列）+ batches[].tests_filter/output 可选键与 P4-evidence 落点成文（P2/P4 卡、architect、task-files）+ ⑤ 组方法学（decisions/ 约定、Deep Modules 锚点、adr 复审触发、术语）+ M18 豁免一行 + DEBT0043；零内核改动
+files_changed: [agate/scripts/check-mvwu.py, agate/scripts/check-protocol-consistency.py, agate/scripts/README.md, agate/tests/README.md, agate/tests/unit/test_check_mvwu.py, agate/tests/unit/test_mvwu_protocol_docs.py, agate/phase-cards/P2-design.md, agate/phase-cards/P4-implementation.md, agate/ph…
+---
+
+# 协议-脚本对齐审查（TAG0036 P4 收口，重派轮）
+
+> 说明：上一轮因 API 限流中断未产出；本轮所有结论均由本人重新实跑 / 重新核对，`P4-review-progress.md` 的 `[align]` 行仅作参考。只读审查，未改任何代码/文档，未 git add/commit。
+
+## 审查结论汇总
+-- 结论行（grep -n '结论'）:
+18:> 说明：上一轮因 API 限流中断未产出；本轮所有结论均由本人重新实跑 / 重新核对，`P4-review-progress.md` 的 `[align]` 行仅作参考。只读审查，未改任何代码/文档，未 git add/commit。
+20:## 审查结论汇总
+22:| # | 审查项 | 结论 |
+62:**备注（不构成 MISALIGNED）**：P4 卡:79 列出 `timestamp` 为最小内容键，脚本未读取该键。这符合"最小内容 = 记录方须写的字段，观测器只消费判定所需字段"的口径（P1 §2 ②），且观测器缺 `timestamp` 不误判；不改结论。
+64:**结论**：ALIGNED
+81:**结论**：NEEDS_HUMAN_REVIEW（仅此一条；其余脚本→文档同步项均 ALIGNED）
+120:**结论**：ALIGNED
+140:- 唯一失败即 BDD-71 的**预期红**（断言 `P4-protocol-alignment-review.md` 存在且含 approved/rejected 结论字样——本文件写出后转绿）；其余 1839 passed，2 skipped 与既往基线一致；无其他失败。1 rerun 属并行 flaky 重试（一次 `R`，重试后 `.` 通过）。
+144:**结论**：ALIGNED（有实跑输出；除本文件缺失导致的 BDD-71 预期红外无其他失败）
+158:**结论**：ALIGNED
+169:**结论**：ALIGNED
+187:**结论**：ALIGNED
+191:## 最终结论
+-- agent 字段值: agent: protocol-alignment-review  (须 ≠ main)
+-- P4 提交信息（4ee499f）含 self-gate-review: 路径:
+$ git log -1 --format=%B 4ee499f | grep -n 'self-gate-review'
+9:self-gate-review: agate-workspace/tasks/TAG0036-mvwu-pilot/P4-protocol-alignment-review.md
+-- P4 提交全文 (git log -1 --format=%B 4ee499f):
+wf(TAG0036-P4): MVWU 阶段 1 实现——check-mvwu.py（观测器，不挂 gate）+ tests_filter/P4-evidence 落点 + ⑤ 组 7 概念成文
+
+6 批（mvwu-verdict-observer / architect-batch-guidance / batch-evidence-landing /
+review-anchors-and-decision-recheck / mvwu-glossary-and-debt-log / mvwu-script-registry）
+合并提交；M18 GATE_SCRIPT_EXEMPT 一行（P2 评审 B1，P1 BASELINE_CHANGE）。
+P4-review approved（MAJOR 耗时超长吞行已修）；零内核 diff 空；
+pytest 1842 passed / 2 skipped，ruff 0，consistency 0 ERROR。
+
+self-gate-review: agate-workspace/tasks/TAG0036-mvwu-pilot/P4-protocol-alignment-review.md
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01LDa8WpfQWWEnfbx23PgStf
+
+-- 提交信息中 self-gate-review 指向的文件在 4ee499f 中存在:
+agate-workspace/tasks/TAG0035-gate-robustness/P4-protocol-alignment-review.md
+agate-workspace/tasks/TAG0036-mvwu-pilot/P4-protocol-alignment-review.md
+
+-- 审查文件「最终结论」节（行 191-末）原文:
+## 最终结论
+
+- 全部 A1-A7：A1/A3/A4/A5/A6/A7 **ALIGNED**；A2 含 1 条 **NEEDS_HUMAN_REVIEW**（CONTEXT.md:42 `boundary(I1)` 用设计文档 I1 的 PASS/FAIL 措辞，而观察器列取值为 `exact`/`mismatch`/`UNKNOWN`；低严重度术语口径，非行为缺陷，非本任务实现缺陷，测试与 gate 均不受影响）。
+- **无 MISALIGNED**；零内核改动核对全部 exit 0；全量 pytest：1 failed（BDD-71，预期，本文件产出后转绿）/ 1839 passed / 2 skipped；ruff 干净；CHECK9-coverage 无新增 WARNING；CHANGELOG 如实。
+- **status: approved**（仅 NEEDS_HUMAN_REVIEW 1 条且不涉本任务缺陷）。待办：commit 前由主 Agent / 人工对 A2 的 NEEDS_HUMAN_REVIEW 二选一——接受现状（补 `[HUMAN_CONFIRMED: 日期 确认：理由]`），或经 implementer 在 CONTEXT.md:42 补一句观察列取值后无需重审（纯措辞，`test_mvwu_protocol_docs.py` 对该行只断言行存在与三列格式）。
+-- 观察（不影响 BDD-71 判定）：审查文件 A2 段含一条 NEEDS_HUMAN_REVIEW 及待人工确认标记；CONTEXT.md:42 现文已含“--observe 列取值 exact/mismatch/UNKNOWN”括注:
+| boundary(I1) | MVWU 不变量 I1：批声明的 `output` 文件集与该批 commit 实际改动集的比对（相等为 PASS，改了未声明的文件为 FAIL），仅由 `check-mvwu.py --observe` 观察，不新增 gate 校验（`--observe` 列取值 `exact` / `mismatch` / `UNKNOWN`；不参与 verdict） | docs/design-notes/design-mvwu-protocol.md |

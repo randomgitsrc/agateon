@@ -1,0 +1,206 @@
+# 文档类 BDD-61/62/63/64 证据（P6 阶段实跑）：批切分三判据落 architect.md「批次设计」(209-267) 与 P2 卡片
+# P2 卡片范围：「dispatch_plan 机器字段」106-143；「gate_commands 声明」156-227（其中「架构适应度检查」193-207）
+
+##### BDD-61 判据一 Tracer Bullet（P2 卡 + architect）#####
+-- agate/phase-cards/P2-design.md 106 143
+  [FOUND] 字面「Tracer Bullet」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「≥2 个批」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「关键路径」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「端到端」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+      agate/phase-cards/P2-design.md:141: 2. **判据二：Vertical Slice（垂直切片）**——批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而不是一个技术层。判据式自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。若必须按技术层切，须在 P2-design.md **写明理由**（不禁止、也没有任何 gate 拦截）。与判据一的关系：端到端批天然是垂直切片，二者是同一决策的两个面。
+  [FOUND] 字面「冒烟」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「管道确实通」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「P3 红灯批」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「不替代 P3 完整红灯批」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+-- agate/assets/execution-roles/architect.md 209 267
+  [FOUND] 字面「Tracer Bullet」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:238: **判据一：Tracer Bullet**
+  [FOUND] 字面「≥2 个批」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:240: - 触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。
+  [FOUND] 字面「关键路径」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:240: - 触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。
+  [FOUND] 字面「端到端」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:240: - 触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。
+      agate/assets/execution-roles/architect.md:241: - 做法：首个批切成该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证，而不是该批的完整单元测试。
+      agate/assets/execution-roles/architect.md:248: - 批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而非一个技术层。
+  [FOUND] 字面「冒烟」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:241: - 做法：首个批切成该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证，而不是该批的完整单元测试。
+  [FOUND] 字面「管道确实通」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:242: - 目的：在投入全部实现之前，先取得"管道确实通"的反馈。
+  [FOUND] 字面「P3 红灯批」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:243: - 与 P3 红灯批的边界：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 给出），后续批仍按常规批级验证走。
+  [FOUND] 字面「不替代 P3 完整红灯批」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:243: - 与 P3 红灯批的边界：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 给出），后续批仍按常规批级验证走。
+
+##### BDD-62 ⑤-d Walking Skeleton 拒绝/吸收记录（architect 判据一处为必含；P2 卡同处为可选，此处两处均验）#####
+-- architect.md (必含):
+  [FOUND] 字面「Walking Skeleton」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:244: - Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+  [FOUND] 字面「吸收」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:244: - Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+  [FOUND] 字面「拒绝」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:244: - Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+  [FOUND] 字面「ADR-003」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:244: - Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+  [FOUND] 字面「P2-skeleton.md」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:244: - Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+  [FOUND] 字面「不是同一机制」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:244: - Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+  [FOUND] 字面「不新增字段」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:244: - Walking Skeleton：其中"骨架先跑通"的部分**吸收**进本判据；自动化部署 / CI 配置的部分**拒绝**——依据 `adr.md` ADR-003（最小约定，不绑定技术栈，不硬编码语言 / 框架 / 部署方式）。它与既有 `P2-skeleton.md`「骨架声明」（`project_phase: bootstrap` 项目的目录布局声明）**不是同一机制**，勿混用；本判据不新增字段、gate 或模板文件。
+-- P2 卡 (同处，可选；此处措辞为“不是既有 P2-skeleton.md … 二者是不同机制”):
+  [FOUND] 字面「Walking Skeleton」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:138: **批切分判据**（写 `batches[]` 时按以下三条判断怎么切；三条均是判据式引导，不是 gate 规则；`Walking Skeleton` 见判据一）：
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「吸收」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「拒绝」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「ADR-003」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「P2-skeleton.md」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「二者是不同机制」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+  [FOUND] 字面「不新增字段」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:140: 1. **判据一：Tracer Bullet（曳光弹）**——触发条件：任务含 ≥2 个批，且存在可端到端验证的关键路径。此时首个批应为该路径的端到端最小打通，其 `tests_filter` 覆盖该路径的**冒烟**级验证（"路径确实通"），而不是该批的完整单元测试。目的：在投入全部实现之前先取得"管道确实通"的反馈。**与 P3 红灯批的边界**：tracer bullet 只是**首个批的切法**，不替代 P3 完整红灯批（任务级红灯基线仍由 `gate_commands.P3` 承担），后续批仍按常规批级验证走。`Walking Skeleton` 中"骨架先跑通"的部分**吸收**进本判据；其自动化部署/CI 配置部分**拒绝**（技术栈中立，见 `adr.md` ADR-003）。这**不是**既有…
+-- 新增行中含“已生效”行数（P2 卡 + architect，期望 0）: 0
+$ git diff efb113b --name-status -- agate/assets/templates   (无 'A' 行=无新增模板文件)
+M	agate/assets/templates/task-files.md
+$ git diff efb113b --name-status | grep -c '^A' 之外，列出全部新增文件(A)：
+A	HANDOFF-TAG0036.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-dispatch-context-analyst-retry1.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-dispatch-context-analyst.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-dispatch-context-requirements-review-retry1.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-dispatch-context-requirements-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-dispatch-prompt-analyst.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-progress.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-requirements.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P1-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-design.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-dispatch-context-architect-retry1.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-dispatch-context-architect-retry2.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-dispatch-context-architect.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-dispatch-context-plan-eng-review-retry1.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-dispatch-context-plan-eng-review-retry2.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-dispatch-context-plan-eng-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-dispatch-prompt-architect.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-progress.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P2-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P3-dispatch-context-test-designer-docs.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P3-dispatch-context-test-designer-script.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P3-progress.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P3-test-cases-docs.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P3-test-cases.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-architect-batch-guidance.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-batch-evidence-landing.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-fixes.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-mvwu-glossary-and-debt-log.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-mvwu-script-registry.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-mvwu-verdict-observer.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-review-anchors-and-decision-recheck.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-implementer-testfix.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-protocol-alignment-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-dispatch-context-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-implementation-architect-batch-guidance.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-implementation-batch-evidence-landing.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-implementation-mvwu-glossary-and-debt-log.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-implementation-mvwu-script-registry.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-implementation-review-anchors-and-decision-recheck.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-implementation.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-progress.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-protocol-alignment-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-review-progress.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P4-review.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P5-dispatch-context-verifier.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P5-progress.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P5-test-results/fail-list.txt
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/P5-test-results/unit.md
+A	agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+A	agate/scripts/check-mvwu.py
+A	agate/tests/unit/test_check_mvwu.py
+A	agate/tests/unit/test_mvwu_protocol_docs.py
+
+##### BDD-63 判据二 Vertical Slice #####
+-- agate/phase-cards/P2-design.md 106 143
+  [FOUND] 字面「Vertical Slice」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:141: 2. **判据二：Vertical Slice（垂直切片）**——批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而不是一个技术层。判据式自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。若必须按技术层切，须在 P2-design.md **写明理由**（不禁止、也没有任何 gate 拦截）。与判据一的关系：端到端批天然是垂直切片，二者是同一决策的两个面。
+  [FOUND] 字面「业务能力」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:141: 2. **判据二：Vertical Slice（垂直切片）**——批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而不是一个技术层。判据式自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。若必须按技术层切，须在 P2-design.md **写明理由**（不禁止、也没有任何 gate 拦截）。与判据一的关系：端到端批天然是垂直切片，二者是同一决策的两个面。
+  [FOUND] 字面「写明理由」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:141: 2. **判据二：Vertical Slice（垂直切片）**——批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而不是一个技术层。判据式自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。若必须按技术层切，须在 P2-design.md **写明理由**（不禁止、也没有任何 gate 拦截）。与判据一的关系：端到端批天然是垂直切片，二者是同一决策的两个面。
+  [FOUND] 字面「这个批交付了什么能力」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:141: 2. **判据二：Vertical Slice（垂直切片）**——批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而不是一个技术层。判据式自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。若必须按技术层切，须在 P2-design.md **写明理由**（不禁止、也没有任何 gate 拦截）。与判据一的关系：端到端批天然是垂直切片，二者是同一决策的两个面。
+  [FOUND] 字面「动了哪层代码」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:141: 2. **判据二：Vertical Slice（垂直切片）**——批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而不是一个技术层。判据式自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。若必须按技术层切，须在 P2-design.md **写明理由**（不禁止、也没有任何 gate 拦截）。与判据一的关系：端到端批天然是垂直切片，二者是同一决策的两个面。
+  [FOUND] 字面「同一决策的两个面」 (agate/phase-cards/P2-design.md 行 106-143):
+      agate/phase-cards/P2-design.md:141: 2. **判据二：Vertical Slice（垂直切片）**——批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而不是一个技术层。判据式自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。若必须按技术层切，须在 P2-design.md **写明理由**（不禁止、也没有任何 gate 拦截）。与判据一的关系：端到端批天然是垂直切片，二者是同一决策的两个面。
+-- agate/assets/execution-roles/architect.md 209 267
+  [FOUND] 字面「Vertical Slice」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:246: **判据二：Vertical Slice**
+  [FOUND] 字面「业务能力」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:248: - 批 / 包**优先按业务能力切**：一个批 = 一条端到端可交付的能力，而非一个技术层。
+  [FOUND] 字面「写明理由」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:250: - 必须按技术层切时，在 P2-design.md **写明理由**（不禁止，也没有 gate 拦截）。
+  [FOUND] 字面「这个批交付了什么能力」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:249: - 自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。
+  [FOUND] 字面「动了哪层代码」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:249: - 自检：批 `id` 应能回答"这个批交付了什么能力"，而不是"动了哪层代码"。
+  [FOUND] 字面「同一决策的两个面」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:251: - 与判据一的关系：端到端批天然就是垂直切片，二者是同一决策的两个面。
+-- check-gate.py 无新增对批 id / 理由校验：git diff efb113b -- agate/scripts/check-gate.py 行数（期望 0）: 0
+
+##### BDD-64 判据三 Fitness Functions #####
+-- P2 卡「gate_commands 声明」节附近 (156-227，含「架构适应度检查」193-207):
+  [FOUND] 字面「Fitness Functions」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:193: ### 架构适应度检查（Fitness Functions，TAG0036）
+      agate/phase-cards/P2-design.md:195: 这是批切分判据三（Architecture Fitness Functions，判据一、二见「dispatch_plan 机器字段」节）：`gate_commands` 除功能测试外，**应为本任务涉及的架构约束**再配置适应度检查——把"架构约束不被破坏"变成有 exit code 的命令，而不是只靠评审目测。示例维度（取与本任务相关的至少几项即可，不必全配）：
+  [FOUND] 字面「适应度」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:193: ### 架构适应度检查（Fitness Functions，TAG0036）
+      agate/phase-cards/P2-design.md:195: 这是批切分判据三（Architecture Fitness Functions，判据一、二见「dispatch_plan 机器字段」节）：`gate_commands` 除功能测试外，**应为本任务涉及的架构约束**再配置适应度检查——把"架构约束不被破坏"变成有 exit code 的命令，而不是只靠评审目测。示例维度（取与本任务相关的至少几项即可，不必全配）：
+      agate/phase-cards/P2-design.md:206: - 项目判定本任务无架构约束时，在 P2-design.md 写明"本任务无架构适应度检查"即可，不强制。
+  [FOUND] 字面「依赖方向」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:197: - **依赖方向**：低层模块不得反向依赖高层模块
+  [FOUND] 字面「分层边界」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:198: - **分层边界**：跨层调用只走约定的接口，不穿层
+  [FOUND] 字面「循环依赖」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:199: - **循环依赖**：模块 / 包之间无环
+  [FOUND] 字面「公共 API 稳定性」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:200: - **公共 API 稳定性**：对外暴露的接口签名不被无意改动
+  [FOUND] 字面「由项目自选」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:204: - **agate 不规定具体工具**——用什么工具做这些检查由项目自选；命令仍经 `gate_commands` 注入（独立 key，遵守下方「`--strict` 反模式」的一 key 一命令规则），P5 照常执行。
+  [FOUND] 字面「本任务无架构适应度检查」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:206: - 项目判定本任务无架构约束时，在 P2-design.md 写明"本任务无架构适应度检查"即可，不强制。
+  [FOUND] 字面「agate 不规定具体工具」 (agate/phase-cards/P2-design.md 行 156-227):
+      agate/phase-cards/P2-design.md:204: - **agate 不规定具体工具**——用什么工具做这些检查由项目自选；命令仍经 `gate_commands` 注入（独立 key，遵守下方「`--strict` 反模式」的一 key 一命令规则），P5 照常执行。
+-- architect.md (209-267):
+  [FOUND] 字面「Fitness Functions」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:253: **判据三：Architecture Fitness Functions**
+  [FOUND] 字面「适应度」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:255: - `gate_commands` 除功能测试外，应为本任务涉及的架构约束配置适应度检查（维度示例：依赖方向、分层边界、循环依赖、公共 API 稳定性）。具体写法见 P2 卡片「gate_commands 声明」的「架构适应度检查」小节。
+      agate/assets/execution-roles/architect.md:257: - 项目判定无架构约束时，在 P2-design.md 写明"本任务无架构适应度检查"即可，不强制。
+  [FOUND] 字面「依赖方向」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:255: - `gate_commands` 除功能测试外，应为本任务涉及的架构约束配置适应度检查（维度示例：依赖方向、分层边界、循环依赖、公共 API 稳定性）。具体写法见 P2 卡片「gate_commands 声明」的「架构适应度检查」小节。
+  [FOUND] 字面「分层边界」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:255: - `gate_commands` 除功能测试外，应为本任务涉及的架构约束配置适应度检查（维度示例：依赖方向、分层边界、循环依赖、公共 API 稳定性）。具体写法见 P2 卡片「gate_commands 声明」的「架构适应度检查」小节。
+  [FOUND] 字面「循环依赖」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:255: - `gate_commands` 除功能测试外，应为本任务涉及的架构约束配置适应度检查（维度示例：依赖方向、分层边界、循环依赖、公共 API 稳定性）。具体写法见 P2 卡片「gate_commands 声明」的「架构适应度检查」小节。
+  [FOUND] 字面「公共 API 稳定性」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:255: - `gate_commands` 除功能测试外，应为本任务涉及的架构约束配置适应度检查（维度示例：依赖方向、分层边界、循环依赖、公共 API 稳定性）。具体写法见 P2 卡片「gate_commands 声明」的「架构适应度检查」小节。
+  [FOUND] 字面「由项目自选」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:256: - agate 不规定具体工具，由项目自选；命令仍经 `gate_commands` 注入，只要求"该维度存在"。
+  [FOUND] 字面「本任务无架构适应度检查」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:257: - 项目判定无架构约束时，在 P2-design.md 写明"本任务无架构适应度检查"即可，不强制。
+  [FOUND] 字面「agate 不规定具体工具」 (agate/assets/execution-roles/architect.md 行 209-267):
+      agate/assets/execution-roles/architect.md:256: - agate 不规定具体工具，由项目自选；命令仍经 `gate_commands` 注入，只要求"该维度存在"。
+-- agate/ 内（排除 tests）对 ArchUnit / dependency-cruiser / import-linter 的命中行数（期望 0，即无任何强制要求）:
+$ grep -rniE 'ArchUnit|dependency-cruiser|import-linter' agate --exclude-dir=tests | wc -l
+0

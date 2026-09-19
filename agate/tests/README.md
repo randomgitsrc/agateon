@@ -85,6 +85,8 @@ bash agate/tests/scripts/count-tests.sh
 | dispatch-context warning | unit/test_dispatch_context_warning.py | 1 |
 | 测试 helper（PYTHON 探测）| unit/test_helpers_python.py | 3 |
 | check-platform-assumptions.py | agate/tests/scripts/test_check_platform_assumptions.py | 16 |
+| check-mvwu.py（MVWU 观测器）| unit/test_check_mvwu.py | 111 |
+| MVWU 协议文档断言（TAG0036）| unit/test_mvwu_protocol_docs.py | 65 |
 | 文档/CI 断言（shellcheck/ruff/matrix）| unit/test_env_adapt_docs.py | 9 |
 | DSH 平台模板结构（TAG0018）| unit/test_dsh_preset.py | 8 |
 | 回归 (R1-R5) | regression/ | 17 |

@@ -1,0 +1,56 @@
+# direct evidence: BDD-1 / BDD-2 / BDD-4 —— 独立于测试代码，直接运行 agate-md-field-get.py、check-gate.py::_gate_p2_dispatch_plan、check-mvwu.py
+
+##### BDD-1 #####
+--- INPUT P2-design.md ---
+---
+phase: P2
+dispatch_plan: {mode: static-batch, batches: [{id: auth-token-parser, complexity: medium, tests_filter: "python -m pytest tests/auth/test_token.py -q"}]}
+---
+body
+$ FILE=<tmp>/P2-design.md python3 agate/scripts/agate-md-field-get.py dispatch_plan
+EXIT_CODE: 0
+--- STDOUT ---
+{"mode": "static-batch", "batches": [{"id": "auth-token-parser", "complexity": "medium", "tests_filter": "python -m pytest tests/auth/test_token.py -q"}]}
+合法 JSON: True ; batches[0].tests_filter='python -m pytest tests/auth/test_token.py -q' ; 与写入值逐字节相同: True
+CONCLUSION BDD-1: PASS
+
+##### BDD-2 #####
+_gate_p2_dispatch_plan(含 tests_filter) -> None
+_gate_p2_dispatch_plan(删去全部 tests_filter) -> None
+_gate_p2_dispatch_plan(对照：含 tests_filter 但缺 complexity) -> "dispatch_plan batch 'b1' 的 complexity 非法（当前: None），须 ∈ low/medium/high"
+CONCLUSION BDD-2: PASS (含/不含 tests_filter 均返回 None；对照组缺 complexity 仍被拒，证明只是未知键被忽略而非 fail-open)
+
+##### BDD-4 #####
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "complexity": "low", "tests_filter": "python -m pytest tests/a.py -q"}, {"id": "B", "complexity": "low"}]}
+--- INPUT: P4-evidence/A.log ---
+command: git status --short
+exit_code: 0
+git_head: d7784cc901fc17c0e63b08271eacf302e49bff92
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/B.log ---
+command: git status --short
+exit_code: 0
+git_head: d7784cc901fc17c0e63b08271eacf302e49bff92
+timestamp: 2026-09-19T10:00:00Z
+_gate_p2_dispatch_plan(混合 A 有/B 无 tests_filter) -> None
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-zlt3sy5s/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (2 lines) ---
+MVWU_RESULT: PASS batch=A
+MVWU_RESULT: UNKNOWN batch=B reason=tests_filter
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 对照：仅含批 A 的任务目录 ---
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-zlt3sy5s/agate-workspace/tasks/T2
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: PASS batch=A
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+CONCLUSION BDD-4: PASS (gate 校验 None；B=UNKNOWN reason=tests_filter；A=PASS 且与“无 B”对照输出相同)

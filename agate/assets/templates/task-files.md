@@ -30,6 +30,7 @@ agent: {main|analyst|architect|reviewer|test-designer|implementer|verifier|visio
 | P3 | {test_code_dir}/ | 测试代码目录（项目自定义，如 `backend/tests/`）|
 | P4 | P4-implementation.md | 声明 `implementation_dir: {实际路径}` |
 | P4 | {implementation_dir}/ | 代码目录（项目自定义，如 `src/` 或 `backend/app/`）|
+| P4 | P4-evidence/{batch}.log | 批级证据日志（MVWU 阶段 1，可选、不阻断；逐行 `key: value`，`{batch}` 为 dispatch_plan 批 `id`；由主 Agent 在该批 commit 前机械转录 `tests_filter` 的运行结果；`check-mvwu.py` 事后观测；不进 gate / judge 白名单）|
 | P5 | P5-test-results/unit.md | 标注 `failed: N`（仅供参考，gate 以主 Agent 跑 gate_commands.P5 为准）|
 | P5 | P5-test-results/e2e.md | UI 任务必须：Playwright 实跑结果 + 截图路径。须含 `status: passed` 字段（hook 检查） |
 | P6 | P6-acceptance.md | P1 每条 BDD 有实跑结果（**只允许 PASS 或 FAIL，不允许中间态**）；UI 条件含截图 |
@@ -249,6 +250,7 @@ ui_affected: false                # bool，必填
 # ── v2.0 派发编排字段（可选，TAG0014）──
 # dispatch_plan: {mode: static-batch, parallel_limit: 3, batches: [{id: pkg-a, complexity: medium}, {id: pkg-b, complexity: low}]}
 # 可选字段：多子任务编排方案（单行 flow YAML），契约以 P2 卡「dispatch_plan 机器字段」/ architect.md「批次设计」为准
+# 批内可选键 tests_filter / output：tests_filter 为该批的验证命令（可选，缺省不影响 gate；示例用 `python -m pytest ...` 或遵循 AGATE_PYTHON 探测，不写裸 python3）；output 为该批产出说明（可选）；写法与约束以 P2 卡「dispatch_plan 机器字段」为准
 ---
 ```
 `gate_commands:` / `files_to_read:` / `env_constraints:` / `minimal_validation:` **留正文**（不迁移 frontmatter）。

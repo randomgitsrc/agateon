@@ -1,5 +1,22 @@
 task_id: TAG0036
-phase: P0
+phase: READY
 status: active
+retries:
+  P1:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: null
+  P2:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: null
+  - round: 2
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: null
 judge:
   enabled: true
+  judge_token_budget: 400000
+p5_pass_commit: 4ee499ff46d3dd0c3ed5faa45ba44899da34b92d

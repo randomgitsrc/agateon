@@ -1,0 +1,80 @@
+# direct evidence: BDD-30 (含逗号/方括号的参数化 node id) 与 BDD-31 (近似 id 判 FAIL) 及 BDD-32 补充
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "bdd30-param-id", "tests_filter": "python -m pytest tests/a -q"}, {"id": "bdd31-near-id", "tests_filter": "python -m pytest tests/a -q"}, {"id": "bdd31-prefix-id", "tests_filter": "python -m pytest tests/a -q"}, {"id": "bdd32-scalar", "tests_filter": "python -m pytest tests/a -q"}, {"id": "bdd32-unclosed", "tests_filter": "python -m pytest tests/a -q"}, {"id": "bdd32-nonstr", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/bdd30-param-id.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+expected_red: ["tests/a/test_x.py::test_x[a,b-1]", "tests/a/test_y.py::test_y"]
+failed_tests: ["tests/a/test_x.py::test_x[a,b-1]"]
+--- INPUT: P4-evidence/bdd31-near-id.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+expected_red: ["tests/a/test_x.py::test_x[a,b-1]"]
+failed_tests: ["tests/a/test_x.py::test_x[a,b-2]"]
+--- INPUT: P4-evidence/bdd31-prefix-id.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+expected_red: ["tests/a/test_x.py::test_x[a,b-1]"]
+failed_tests: ["tests/a/test_x.py::test_x"]
+--- INPUT: P4-evidence/bdd32-nonstr.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+expected_red: [1, 2]
+failed_tests: ["t_a"]
+--- INPUT: P4-evidence/bdd32-scalar.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+expected_red: t_a
+failed_tests: ["t_a"]
+--- INPUT: P4-evidence/bdd32-unclosed.log ---
+command: git status --short
+exit_code: 1
+git_head: eaa70ea0417b718731d594654bd6a1eafc1655a8
+timestamp: 2026-09-19T10:00:00Z
+expected_red: [t_a, 
+failed_tests: ["t_a"]
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-7uzayu53/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (6 lines) ---
+MVWU_RESULT: EXPECTED_RED batch=bdd30-param-id
+MVWU_RESULT: FAIL batch=bdd31-near-id
+MVWU_RESULT: FAIL batch=bdd31-prefix-id
+MVWU_RESULT: UNKNOWN batch=bdd32-scalar reason=expected_red
+MVWU_RESULT: UNKNOWN batch=bdd32-unclosed reason=expected_red
+MVWU_RESULT: UNKNOWN batch=bdd32-nonstr reason=expected_red
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 断言（逐行对照）---
+  bdd30-param-id
+    got='MVWU_RESULT: EXPECTED_RED batch=bdd30-param-id'
+    exp='MVWU_RESULT: EXPECTED_RED batch=bdd30-param-id'  OK
+  bdd31-near-id
+    got='MVWU_RESULT: FAIL batch=bdd31-near-id'
+    exp='MVWU_RESULT: FAIL batch=bdd31-near-id'  OK
+  bdd31-prefix-id
+    got='MVWU_RESULT: FAIL batch=bdd31-prefix-id'
+    exp='MVWU_RESULT: FAIL batch=bdd31-prefix-id'  OK
+  bdd32-scalar
+    got='MVWU_RESULT: UNKNOWN batch=bdd32-scalar reason=expected_red'
+    exp='MVWU_RESULT: UNKNOWN batch=bdd32-scalar reason=expected_red'  OK
+  bdd32-unclosed
+    got='MVWU_RESULT: UNKNOWN batch=bdd32-unclosed reason=expected_red'
+    exp='MVWU_RESULT: UNKNOWN batch=bdd32-unclosed reason=expected_red'  OK
+  bdd32-nonstr
+    got='MVWU_RESULT: UNKNOWN batch=bdd32-nonstr reason=expected_red'
+    exp='MVWU_RESULT: UNKNOWN batch=bdd32-nonstr reason=expected_red'  OK
+CONCLUSION BDD-30 (行1): PASS ; BDD-31 (行2,3): PASS ; BDD-32 (行4-6): PASS ; all=True

@@ -1,0 +1,280 @@
+# direct evidence: BDD-47 / 48 / 49 / 50 —— git 区间口径 E（merge-base..HEAD）、commit 形态、基线不可确定降级
+# 独立于测试代码：自建临时 git 仓库直接运行 `check-mvwu.py --observe`
+
+=================== BDD-47 per-batch：src/a.py 在 main 更早历史中也被改过（区间外不可见），a/b 在任务分支两个独立 commit ===================
+--- git log (all branches, graph) ---
+* 4b01ce6 feat-b [HEAD -> feat/task]
+| 
+| src/b.py
+* 548aab8 feat-a []
+| 
+| src/a.py
+* 39af7c4 main-history-touches-a [main]
+| 
+| src/a.py
+* 7e34650 init []
+  
+  .agate.env
+  README
+  src/a.py
+  src/b.py
+--- default branch (main) tip vs HEAD ---
+HEAD=4b01ce6 branch=feat/task ; merge-base(HEAD,main)=39af7c4
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q", "output": ["src/a.py"]}, {"id": "B", "tests_filter": "python -m pytest tests/a -q", "output": ["src/b.py"]}]}
+--- INPUT: P4-evidence/A.log ---
+command: git status --short
+exit_code: 0
+git_head: 4b01ce695402efabc6fb477b2c887f3be0091670
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/B.log ---
+command: git status --short
+exit_code: 0
+git_head: 4b01ce695402efabc6fb477b2c887f3be0091670
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-z6rr__qt/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (2 lines) ---
+| A | python -m pytest tests/a -q | - | yes | per-batch | exact | PASS |
+| B | python -m pytest tests/a -q | - | yes | per-batch | exact | PASS |
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 解析（GFM 7 列）---
+  MVWU=A; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=per-batch; boundary=exact; verdict=PASS  (列数=7)
+  MVWU=B; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=per-batch; boundary=exact; verdict=PASS  (列数=7)
+期望 (commit形态, boundary, verdict)=[('per-batch', 'exact', 'PASS'), ('per-batch', 'exact', 'PASS')]
+RESULT: MATCH (exit=0)
+
+=================== BDD-47 补充：main 在分支后前进并再改 src/a.py，merge-base 区间不变 ===================
+--- git log (all branches, graph) ---
+* 4b01ce6 feat-b [HEAD -> feat/task]
+| 
+| src/b.py
+* 548aab8 feat-a []
+| 
+| src/a.py
+| * f4dc8dd main-advances-touches-a [main]
+|/  
+|   
+|   agate-workspace/tasks/T1/P2-design.md
+|   agate-workspace/tasks/T1/P4-evidence/A.log
+|   agate-workspace/tasks/T1/P4-evidence/B.log
+|   src/a.py
+* 39af7c4 main-history-touches-a []
+| 
+| src/a.py
+* 7e34650 init []
+  
+  .agate.env
+  README
+  src/a.py
+  src/b.py
+--- default branch (main) tip vs HEAD ---
+HEAD=4b01ce6 branch=feat/task ; merge-base(HEAD,main)=39af7c4
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q", "output": ["src/a.py"]}, {"id": "B", "tests_filter": "python -m pytest tests/a -q", "output": ["src/b.py"]}]}
+--- INPUT: P4-evidence/A.log ---
+command: git status --short
+exit_code: 0
+git_head: 4b01ce695402efabc6fb477b2c887f3be0091670
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/B.log ---
+command: git status --short
+exit_code: 0
+git_head: 4b01ce695402efabc6fb477b2c887f3be0091670
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-z6rr__qt/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (2 lines) ---
+| A | python -m pytest tests/a -q | - | yes | per-batch | exact | PASS |
+| B | python -m pytest tests/a -q | - | yes | per-batch | exact | PASS |
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 解析（GFM 7 列）---
+  MVWU=A; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=per-batch; boundary=exact; verdict=PASS  (列数=7)
+  MVWU=B; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=per-batch; boundary=exact; verdict=PASS  (列数=7)
+期望 (commit形态, boundary, verdict)=[('per-batch', 'exact', 'PASS'), ('per-batch', 'exact', 'PASS')]
+RESULT: MATCH (exit=0)
+
+=================== BDD-48 merged：src/a.py 与 src/b.py 同一 commit ===================
+--- git log (all branches, graph) ---
+* fae13aa feat-a-and-b-in-one-commit [HEAD -> feat/task]
+| 
+| src/a.py
+| src/b.py
+* 7e34650 init [main]
+  
+  .agate.env
+  README
+  src/a.py
+  src/b.py
+--- default branch (main) tip vs HEAD ---
+HEAD=fae13aa branch=feat/task ; merge-base(HEAD,main)=7e34650
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q", "output": ["src/a.py"]}, {"id": "B", "tests_filter": "python -m pytest tests/a -q", "output": ["src/b.py"]}]}
+--- INPUT: P4-evidence/A.log ---
+command: git status --short
+exit_code: 0
+git_head: fae13aa4e49067238d0cc9ec3ae669e471ec1b79
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/B.log ---
+command: git status --short
+exit_code: 0
+git_head: fae13aa4e49067238d0cc9ec3ae669e471ec1b79
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-1nyhb1cq/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (2 lines) ---
+| A | python -m pytest tests/a -q | - | yes | merged | UNKNOWN | PASS |
+| B | python -m pytest tests/a -q | - | yes | merged | UNKNOWN | PASS |
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 解析（GFM 7 列）---
+  MVWU=A; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=merged; boundary=UNKNOWN; verdict=PASS  (列数=7)
+  MVWU=B; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=merged; boundary=UNKNOWN; verdict=PASS  (列数=7)
+期望 (commit形态, boundary, verdict)=[('merged', 'UNKNOWN', 'PASS'), ('merged', 'UNKNOWN', 'PASS')]
+RESULT: MATCH (exit=0)
+
+=================== BDD-49 无法归属：未声明 output / output 文件区间内从未改动 / output 文件分散于 2 个 commit ===================
+--- git log (all branches, graph) ---
+* 5897d27 feat-e-2 [HEAD -> feat/task]
+| 
+| src/e.py
+* 8e1f791 feat-e-1 []
+| 
+| src/e.py
+* c6e10d9 main: add d,e [main]
+| 
+| src/d.py
+| src/e.py
+* 7e34650 init []
+  
+  .agate.env
+  README
+  src/a.py
+  src/b.py
+--- default branch (main) tip vs HEAD ---
+HEAD=5897d27 branch=feat/task ; merge-base(HEAD,main)=c6e10d9
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "C-no-output", "tests_filter": "python -m pytest tests/a -q"}, {"id": "D-never-changed", "tests_filter": "python -m pytest tests/a -q", "output": ["src/d.py"]}, {"id": "E-scattered", "tests_filter": "python -m pytest tests/a -q", "output": ["src/e.py"]}]}
+--- INPUT: P4-evidence/C-no-output.log ---
+command: git status --short
+exit_code: 0
+git_head: 5897d270dfc5bc632b5e5616e48ddf37c4145a85
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/D-never-changed.log ---
+command: git status --short
+exit_code: 0
+git_head: 5897d270dfc5bc632b5e5616e48ddf37c4145a85
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/E-scattered.log ---
+command: git status --short
+exit_code: 0
+git_head: 5897d270dfc5bc632b5e5616e48ddf37c4145a85
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-5j6k59kv/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (3 lines) ---
+| C-no-output | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| D-never-changed | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| E-scattered | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 解析（GFM 7 列）---
+  MVWU=C-no-output; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=UNKNOWN; boundary=UNKNOWN; verdict=PASS  (列数=7)
+  MVWU=D-never-changed; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=UNKNOWN; boundary=UNKNOWN; verdict=PASS  (列数=7)
+  MVWU=E-scattered; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=UNKNOWN; boundary=UNKNOWN; verdict=PASS  (列数=7)
+期望 (commit形态, boundary, verdict)=[('UNKNOWN', 'UNKNOWN', 'PASS'), ('UNKNOWN', 'UNKNOWN', 'PASS'), ('UNKNOWN', 'UNKNOWN', 'PASS')]
+RESULT: MATCH (exit=0)
+
+[BDD-50a 前置] git branch --list: * feat/task ;   trunk
+
+=================== BDD-50a 基线无法确定：仓库只有 trunk/feat 分支，无 origin/HEAD、无 main/master ===================
+--- git log (all branches, graph) ---
+* cca84ca feat-a [HEAD -> feat/task]
+| 
+| src/a.py
+* 7e34650 init [trunk]
+  
+  .agate.env
+  README
+  src/a.py
+  src/b.py
+--- default branch (main) tip vs HEAD ---
+HEAD=cca84ca branch=feat/task ; merge-base(HEAD,main)=<none>
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q", "output": ["src/a.py"]}]}
+--- INPUT: P4-evidence/A.log ---
+command: git status --short
+exit_code: 0
+git_head: cca84ca1a2819714e50d78d895facd6c23621e0b
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-znhwjxfn/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+| A | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+--- STDERR ---
+check-mvwu: baseline: no default branch (origin/HEAD, main, master)
+TRACEBACK_IN_OUTPUT: False
+--- 解析（GFM 7 列）---
+  MVWU=A; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=UNKNOWN; boundary=UNKNOWN; verdict=PASS  (列数=7)
+期望 (commit形态, boundary, verdict)=[('UNKNOWN', 'UNKNOWN', 'PASS')]
+RESULT: MATCH (exit=0)
+stderr 含 'baseline' 字样: True
+
+=================== BDD-50b 区间为空：HEAD 即 main 尖端，a 已提交 ===================
+--- git log (all branches, graph) ---
+* b270eba main-tip-touches-a [HEAD -> main]
+| 
+| src/a.py
+* 7e34650 init []
+  
+  .agate.env
+  README
+  src/a.py
+  src/b.py
+--- default branch (main) tip vs HEAD ---
+HEAD=b270eba branch=main ; merge-base(HEAD,main)=b270eba
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q", "output": ["src/a.py"]}]}
+--- INPUT: P4-evidence/A.log ---
+command: git status --short
+exit_code: 0
+git_head: b270eba3bc3e6f9f6b40a61a5735e7b45b15f972
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-ztg6hzrk/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+| A | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+--- STDERR ---
+check-mvwu: baseline: empty range
+TRACEBACK_IN_OUTPUT: False
+--- 解析（GFM 7 列）---
+  MVWU=A; tests_filter=python -m pytest tests/a -q; 耗时=-; evidence=yes; commit形态=UNKNOWN; boundary=UNKNOWN; verdict=PASS  (列数=7)
+期望 (commit形态, boundary, verdict)=[('UNKNOWN', 'UNKNOWN', 'PASS')]
+RESULT: MATCH (exit=0)
+stderr 含 'baseline' 字样: True
+
+CONCLUSION BDD-47: PASS; BDD-48: PASS; BDD-49: PASS; BDD-50: PASS

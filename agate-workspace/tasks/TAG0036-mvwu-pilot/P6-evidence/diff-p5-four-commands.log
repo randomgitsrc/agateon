@@ -1,0 +1,45 @@
+# 零内核/范围类 BDD（3、5 的 check-gate.py 空 diff、9、12、54/55(部分)、67、68②）在 P6 阶段重新执行 P2-design.md §7 四条命令（不引用 P5 结果）
+# 基线：git merge-base HEAD main = efb113ba5d491959cc2bdac4f68fefcc1d0130cc ; git rev-parse HEAD = e1ac29e71a214832501b3184b1159dedb0812ff9 ; 本地 main = 7f3ef3bc9d16c314f47003241142db0bfd2fa740
+$ P2_DESIGN=agate-workspace/tasks/TAG0036-mvwu-pilot/P2-design.md python3 ~/.agate/scripts/agate-read-p5-commands.py | (逐字取 4 个 key 执行)
+======================================================================
+KEY: P5_kernel_diff
+COMMAND (逐字，经 agate-read-p5-commands.py 读回):
+git diff --exit-code main...HEAD -- agate/scripts/check-gate.py agate/rules/phases.yaml agate/rules/schema agate/scripts/pre-commit-gate.py agate/scripts/pre-commit-gate.sh agate/scripts/commit-msg-self-gate.py agate/scripts/commit-msg-self-gate.sh agate/scripts/pre-push-gate.py agate/scripts/pre-push-gate.sh agate/scripts/check-state-yaml.py agate/scripts/agate-state-yaml-check.py agate/scripts/check-state-transition.py agate/scripts/check-events.py agate/scripts/agate_common.py agate/scripts/check-p6-provenance.py agate/scripts/check-judge-verdict.py agate/scripts/agate-archive-stale-outputs.py agate/assets/review-roles/judge.md agate/scripts/agate-frontmatter-check.py agate/scripts/check-structure-consistency.py agate/scripts/agate-md-field-get.py agate/dispatch-protocol.md
+--- OUTPUT (stdout) ---
+<empty>
+--- OUTPUT (stderr) ---
+<empty>
+EXIT_CODE: 0
+======================================================================
+KEY: P5_kernel_diff_wt
+COMMAND (逐字，经 agate-read-p5-commands.py 读回):
+git diff --exit-code HEAD -- agate/scripts/check-gate.py agate/rules/phases.yaml agate/rules/schema agate/scripts/pre-commit-gate.py agate/scripts/pre-commit-gate.sh agate/scripts/commit-msg-self-gate.py agate/scripts/commit-msg-self-gate.sh agate/scripts/pre-push-gate.py agate/scripts/pre-push-gate.sh agate/scripts/check-state-yaml.py agate/scripts/agate-state-yaml-check.py agate/scripts/check-state-transition.py agate/scripts/check-events.py agate/scripts/agate_common.py agate/scripts/check-p6-provenance.py agate/scripts/check-judge-verdict.py agate/scripts/agate-archive-stale-outputs.py agate/assets/review-roles/judge.md agate/scripts/agate-frontmatter-check.py agate/scripts/check-structure-consistency.py agate/scripts/agate-md-field-get.py agate/dispatch-protocol.md
+--- OUTPUT (stdout) ---
+<empty>
+--- OUTPUT (stderr) ---
+<empty>
+EXIT_CODE: 0
+======================================================================
+KEY: P5_roles_diff
+COMMAND (逐字，经 agate-read-p5-commands.py 读回):
+git diff --exit-code main...HEAD -- ':(exclude)agate/assets/execution-roles/architect.md' agate/assets/execution-roles
+--- OUTPUT (stdout) ---
+<empty>
+--- OUTPUT (stderr) ---
+<empty>
+EXIT_CODE: 0
+======================================================================
+KEY: P5_history_untouched
+COMMAND (逐字，经 agate-read-p5-commands.py 读回):
+git diff --exit-code main...HEAD -- agate-workspace/tasks/TAG00\[0-2\]\* agate-workspace/tasks/TAG003\[0-5\]\*
+--- OUTPUT (stdout) ---
+<empty>
+--- OUTPUT (stderr) ---
+<empty>
+EXIT_CODE: 0
+未执行的 key（应为空）: []
+git status --porcelain (含 wt 说明): 未提交改动仅限 gate-events.jsonl 与任务目录 P6 文件
+ M agate-workspace/tasks/TAG0036-mvwu-pilot/gate-events.jsonl
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-dispatch-context-verifier.md
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-evidence/
+?? agate-workspace/tasks/TAG0036-mvwu-pilot/P6-progress.md

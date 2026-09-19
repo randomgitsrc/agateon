@@ -1485,3 +1485,157 @@ created_at: 2026-09-18
 task_id: TAG0035   # 由 TAG0035 复盘派生（PR #334 修测试侧，本 PR 补实现侧）
 ```
 
+## DEBT0043
+
+```yaml
+id: DEBT0043
+category: technical
+title: "check-gate.py::_gate_p2_dispatch_plan 对解析失败 / 非 dict / 缺字段 return None 静默放行（fail-open），与 TAG0035 子批 A 同类"
+status: open
+priority: low
+evidence:
+  - path: agate/scripts/check-gate.py
+    note: "实测 _gate_p2_dispatch_plan（def 在 767 行，TAG0035 前为 743 行）三处 return None 静默放行：769-770 行 `if not raw: return None`（缺 dispatch_plan 字段/坏 frontmatter）；772-774 行 `except ValueError: return None`（json.loads 失败）；775-776 行 `if not isinstance(plan, dict): return None`。调用点 919-922 行仅在返回非空错误串时 exit 1，None 一律视为无问题——P2 声明了 dispatch_plan 但 JSON 写坏时 gate 不报错，校验被整体跳过"
+  - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P1-requirements.md
+    note: "BDD-5 / P0 发现：同类 fail-open 只此一处；其余 gate 函数的 fail-open 属 TAG0035 已处理范围。判断依据：`grep -n \"_gate_p2_dispatch_plan\\|dispatch_plan\" agate-workspace/debt/tech-debt.md` 在本条登记前无相关条目"
+  - ref: agate-workspace/tasks/TAG0035-gate-robustness/retrospective.md
+    note: "TAG0035 子批 A 收口的同类 fail-open（gate 解析失败静默放行）；该批未覆盖 _gate_p2_dispatch_plan，仅致其行号 743→767"
+impact: "dispatch_plan 是 P4 批编排的机器字段，写坏（如 JSON 语法错误、顶层非对象）时 P2 gate 不拒绝、也不告警，mode / parallel_limit / batches 校验形同虚设；MVWU 观测器（check-mvwu.py）读同一字段，坏字段下只能给 UNKNOWN 而非在 P2 就被拦下"
+recommendation: "本任务（TAG0036）只登记、不修——零内核硬约束。后续修复向：字段存在但 JSON 解析失败 / 非 dict 时返回错误串（fail-closed，exit 1）；仅「字段确实缺失」保持 return None（向后兼容不声明 dispatch_plan 的任务）；补对应红灯用例"
+closure_criteria:
+  - "dispatch_plan 字段存在但 json.loads 失败或非 dict 时，check-gate.py P2 返回非零并给出明确错误信息"
+  - "字段缺失（未声明 dispatch_plan）仍按向后兼容放行，并有回归用例锁定两种行为"
+  - "全量 pytest 全绿 + consistency 0 ERROR"
+source: review
+created_at: 2026-09-19
+task_id: null   # 待立项；由 TAG0036 P0/P1 发现并登记，不在本任务修复
+```
+
+## DEBT0044
+
+```yaml
+id: DEBT0044
+category: technical
+title: "check-judge-verdict.py::_two_sections 无终止符——objective_info 等非标题块被并入『输入文件/上游关联』两节，斜杠连写的阶段序列被白名单正则误报为任务路径"
+status: open
+priority: low
+evidence:
+  - path: agate/scripts/check-judge-verdict.py
+    note: "_two_sections（148-165 行）：节起点=含『输入文件』『上游关联』的标题行，终点=下一个 # 标题行；`</dispatch_guide>`、`<objective_info>` 等标签行不是标题，故其后的 objective_info 全文被并入扫描面"
+  - path: agate/scripts/check-judge-verdict.py
+    note: "_check_whitelist_outside（225-240 行）：正则 `[\\w./\\-]+/` 命中 `P0/P1/P2/P3/P4/P5/` 且 `re.match(r'^p[0-9]')` → 判白名单外任务路径；TAG0036 P6.5 实测 exit 1"
+  - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P6-gate-diagnosis.md
+    note: "误报根因与处置记录（仅改措辞，judge 未读到任何被隔离信息）"
+impact: "judge dispatch-context 的写作存在隐性陷阱：objective_info 里写『P0/P1/…/P6 各阶段』这类完全无害的描述会令 P6.5 门槛 exit 1；协议文档只说『两节』，未告知扫描面实际延伸到文件末尾（含 objective_info），主 Agent 只能事后从报错反推。"
+recommendation: "二选一或叠加：① `_two_sections` 在遇到 `</dispatch_guide>` / `<objective_info>` 标签行时终止当前节（与协议『两节』口径一致）；② 在 dispatch-protocol.md「Judge 信息隔离」节与 judge.md 注明『objective_info 也在扫描面内，避免斜杠连写阶段序列』。修脚本走 worktree + SELF-GATE（触 agate/scripts）。"
+closure_criteria:
+  - "含 `P0/P1/P2` 斜杠连写的 objective_info 不再误报（新增单测，tmp_path）"
+  - "含真黑名单路径的『输入文件』节仍被拦截（既有 BDD-4 用例不回退）"
+  - "全量 pytest 全绿 + consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-19
+task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+```
+
+## DEBT0045
+
+```yaml
+id: DEBT0045
+category: technical
+title: "check-p6-provenance.py 对『缺 agent 字段（协作规范，不阻塞）』返回 exit 2，而 agate-next.py 仅认 exit 0 推进 P6→P7——提示语与行为矛盾，且暂停时落盘未填充的 exit2-resolution 模板"
+status: open
+priority: medium
+evidence:
+  - path: agate/scripts/check-p6-provenance.py
+    note: "530/545 行 stderr 写『缺 agent 字段（协作规范，不阻塞）』并置 warning_found；572-573 行 `if warning_found == 1: sys.exit(2)`——『不阻塞』的警告使退出码由 0 变 2"
+  - path: agate/scripts/agate-next.py
+    note: "257-258 行 P6 前进特例要求 provenance exit 0；368-372 行 provenance 未过 → 真暂停并 _write_exit2_resolution（213-243 行）落盘占位模板（`<非空证据 / FAIL 计数等客观证据>` 等未填充）"
+  - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P6-exit2-resolution.md
+    note: "TAG0036 P6→P7 实测：P6.5 诊断文件缺 agent 字段致 agate-next 暂停；模板文件作为未跟踪文件被 `git add <任务目录>` 一并提交"
+impact: "P6→P7 推进被一条自称『不阻塞』的警告卡住；agate-next 只输出『验收异常』而不指出真正原因（需再手动跑 provenance 才能看到那一行提示）；暂停落盘的占位 resolution 文件易被批量 `git add` 带进提交，留下未填充的审计文件。"
+recommendation: "① provenance：『缺 agent 字段』类协作规范警告不应改变退出码（或统一改为 exit 1 并把提示语改为『阻塞』，二者择一，使提示与行为一致）；② agate-next 暂停时把 provenance 的 stderr 原因回显到 stdout；③ 占位 resolution 仅在用户确认暂停语义时才落盘，或落盘到 .gitignore 的暂存名。修脚本走 worktree + SELF-GATE。"
+closure_criteria:
+  - "provenance 仅有『不阻塞』警告时 exit 0（或提示语与 exit 1 一致），新增单测覆盖"
+  - "agate-next 暂停信息含 provenance 的具体原因行（单测断言 stdout）"
+  - "全量 pytest 全绿 + consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-19
+task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+```
+
+## DEBT0046
+
+```yaml
+id: DEBT0046
+category: technical
+title: "新增 agate/scripts/check-*.py 的登记面无清单——既有 test_sg_6 与 CHECK 9 反向覆盖会令新脚本红灯/告警，P1 同类扫描凭推理判『不处理』，直到 P2 评审实测才发现"
+status: open
+priority: medium
+evidence:
+  - path: agate/tests/integration/test_protocol_alignment_review.py
+    note: "SG.6（约 71-88 行）：`agate/scripts/check-*.py` 每个 basename 必须出现在 check-protocol-consistency.py 文本中；新增 check-mvwu.py 使其由绿转红（P2 评审 scratchpad 副本复现）"
+  - path: agate/scripts/check-protocol-consistency.py
+    note: "805 行起 GATE_SCRIPT_EXEMPT / check_anchor_coverage：新 check-*.py 未入锚点表且未入豁免集 → CHECK9-coverage WARNING；TAG0036 M18 加一行豁免"
+  - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P2-review.md
+    note: "B1：P1 §4.3『本次不处理』是推理未实测；P2 评审实测发现并由主 Agent 以 [BASELINE_CHANGE] 纠正"
+impact: "凡新增 check-*.py 的任务都会踩到同一坑；协议没有『新增脚本要同步哪些登记面』的权威清单（脚本 README、tests README 计数、CHANGELOG、CONTEXT、CHECK 9 锚点/豁免、CHECK 10 引用、SG.6），只能靠同类扫描人工回忆，且 P1/P2 卡要求的同类扫描没有强制『实测而非推理』。"
+recommendation: "在 architect.md / P2 卡「影响面梳理」处新增『新增脚本登记面清单』（含 SG.6 与 CHECK 9 两项，并要求在临时副本放空脚本实跑一次相关测试）；或在 scripts/README.md 头部维护登记面表。改协议文档走 worktree + SELF-GATE。"
+closure_criteria:
+  - "P2 卡或 architect.md 含『新增脚本登记面清单』并点名 SG.6 / CHECK 9 / CHECK 10"
+  - "同类扫描节要求对『既有测试是否被新增文件触发』做实测（grep 断言测试兜底）"
+  - "consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-19
+task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+```
+
+## DEBT0047
+
+```yaml
+id: DEBT0047
+category: technical
+title: "gate_commands 取值写法有隐性陷阱且无文档——agate-read-p5-commands.py 会剥离值首尾引号；未加引号的通配 pathspec 被 shell 先展开，对『删除』类变更漏检"
+status: open
+priority: medium
+evidence:
+  - path: agate/scripts/agate-read-p5-commands.py
+    note: "30-31 行 `val = line[1].strip().strip(chr(34)).strip(chr(39))`：值以单引号结尾时末尾引号被吞（命令语法破损）"
+  - path: agate/phase-cards/P2-design.md
+    note: "『gate_commands 声明』一节只讲 && 短路与 key 拆分，未提读取器的引号剥离与通配展开语义"
+  - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P2-review.md
+    note: "B2（末尾引号被吞，评审实跑复现）与 B3（去引号后通配由 bash 展开，`git diff -- TAG00[0-2]*` 对被删目录漏检 rc=0；反斜杠转义 `TAG00\\[0-2\\]\\*` 才正确 rc=1）"
+impact: "gate_commands 在 P2 固化、P4-P6 不可改，写错就没有第二次机会；两个陷阱都是『命令看起来对、实际验证力被悄悄削弱』的静默类缺陷，需要评审者恰好实跑读取器才能发现。"
+recommendation: "在 P2 卡『gate_commands 声明』节补一条：值的末 token 不得以引号结尾；含通配的 pathspec 须反斜杠转义使 git 而非 shell 展开；并建议 architect 用 agate-read-p5-commands.py 读回后 shlex.split 自证。或让读取器改为只剥离成对的外层引号。改文档/脚本走 worktree + SELF-GATE。"
+closure_criteria:
+  - "P2 卡含上述两条写法约束与自证建议"
+  - "（若改读取器）值末尾单引号不再被吞的单测"
+  - "consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-19
+task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+```
+
+## DEBT0048
+
+```yaml
+id: DEBT0048
+category: technical
+title: "P3 阶段无机械检查测试文件的平台假设——test 文件注释里的 `/tmp` 字面量直到 P4 全量 pytest 才被 check-platform-assumptions R4 检出"
+status: open
+priority: low
+evidence:
+  - path: agate/scripts/check-platform-assumptions.py
+    note: "R4：测试树中 `/tmp` 字面量（含注释）即命中；TAG0036 P3 提交的 test_mvwu_protocol_docs.py:11 注释命中，致 test_check_platform_assumptions.py::test_bdd_8_clean_tree_zero_detection 在 P4 转红"
+  - path: agate/phase-cards/P3-tdd.md
+    note: "P3 gate 只查 P3-test-cases.md 存在 + check-tdd-red 红灯，不跑平台假设扫描；派发 prompt 虽口头要求『无 /tmp 字面量』，无机械兜底"
+  - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P4-progress.md
+    note: "[testfix] 记录：仅改注释措辞，无断言变化"
+impact: "P3 交付的测试文件违反平台无关约定却通过 P3，缺陷延后到 P4 才暴露，需要额外的『收口前小修』回合。"
+recommendation: "P3 卡『推进条件』增加一条自查：新增测试文件后跑 `python3 agate/scripts/check-platform-assumptions.py`（0 命中）；test-designer.md 同步。改文档走 worktree + SELF-GATE。"
+closure_criteria:
+  - "P3 卡与 test-designer.md 含该自查步骤"
+  - "consistency 0 ERROR"
+source: retrospective
+created_at: 2026-09-19
+task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+```

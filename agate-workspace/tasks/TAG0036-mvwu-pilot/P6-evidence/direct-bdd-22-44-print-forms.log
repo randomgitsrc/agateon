@@ -1,0 +1,77 @@
+# direct evidence: BDD-22 (不安全批 id 打印形态) 与 BDD-44 (tests_filter 转义 / 7 列) ；另含 BDD-21 外部文件不读取
+
+##### BDD-22 #####
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "a b", "complexity": "low", "tests_filter": "python -m pytest tests/a -q"}, {"id": "x|y", "complexity": "low", "tests_filter": "python -m pytest tests/a -q"}, {"id": "../e", "complexity": "low", "tests_filter": "python -m pytest tests/a -q"}, {"id": "ok-1.2_3", "complexity": "low", "tests_filter": "python -m pytest tests/a -q"}, {"id": "", "complexity": "low", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/a b.log ---
+command: git status --short
+exit_code: 0
+git_head: 1d3ffe75d00793c9c08eaf8af937c51a0689dda3
+timestamp: 2026-09-19T10:00:00Z
+marker: OUTSIDE_SECRET_9f3
+--- INPUT: P4-evidence/ok-1.2_3.log ---
+command: git status --short
+exit_code: 0
+git_head: 1d3ffe75d00793c9c08eaf8af937c51a0689dda3
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/x|y.log ---
+command: git status --short
+exit_code: 0
+git_head: 1d3ffe75d00793c9c08eaf8af937c51a0689dda3
+timestamp: 2026-09-19T10:00:00Z
+marker: OUTSIDE_SECRET_9f3
+(注：a b.log / x|y.log 是 P4-evidence 内含不安全名的“同名合法候选”，e.log 位于 P4-evidence 之外——BDD-21 要求均不被读取)
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-fq73yzpv/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (5 lines) ---
+MVWU_RESULT: UNKNOWN batch=a\x20b reason=evidence
+MVWU_RESULT: UNKNOWN batch=x\x7cy reason=evidence
+MVWU_RESULT: UNKNOWN batch=..\x2fe reason=evidence
+MVWU_RESULT: PASS batch=ok-1.2_3
+MVWU_RESULT: UNKNOWN batch=? reason=evidence
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+--- 断言 ---
+stdout 恰 5 行且逐行等于期望: True
+  got='MVWU_RESULT: UNKNOWN batch=a\\x20b reason=evidence' exp='MVWU_RESULT: UNKNOWN batch=a\\x20b reason=evidence' OK
+  got='MVWU_RESULT: UNKNOWN batch=x\\x7cy reason=evidence' exp='MVWU_RESULT: UNKNOWN batch=x\\x7cy reason=evidence' OK
+  got='MVWU_RESULT: UNKNOWN batch=..\\x2fe reason=evidence' exp='MVWU_RESULT: UNKNOWN batch=..\\x2fe reason=evidence' OK
+  got='MVWU_RESULT: PASS batch=ok-1.2_3' exp='MVWU_RESULT: PASS batch=ok-1.2_3' OK
+  got='MVWU_RESULT: UNKNOWN batch=? reason=evidence' exp='MVWU_RESULT: UNKNOWN batch=? reason=evidence' OK
+  tokens(4): ['MVWU_RESULT:', 'UNKNOWN', 'batch=a\\x20b', 'reason=evidence']
+  tokens(4): ['MVWU_RESULT:', 'UNKNOWN', 'batch=x\\x7cy', 'reason=evidence']
+  tokens(4): ['MVWU_RESULT:', 'UNKNOWN', 'batch=..\\x2fe', 'reason=evidence']
+  tokens(3): ['MVWU_RESULT:', 'PASS', 'batch=ok-1.2_3']
+  tokens(4): ['MVWU_RESULT:', 'UNKNOWN', 'batch=?', 'reason=evidence']
+每行按空白切分词数均 3 或 4 (MVWU_RESULT:/VERDICT/batch=[/reason=]): True
+输出含 OUTSIDE_SECRET_9f3 (外部文件被读取的标志): False
+CONCLUSION BDD-22: PASS ; BDD-21(不读外部文件): PASS
+
+##### BDD-44 (--observe 转义与 7 列) #####
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "b1", "tests_filter": "python -m pytest tests/a -q | tail -n 5"}, {"id": "b2", "tests_filter": "python -m pytest -k `x` C:\\t"}, {"id": "b3", "tests_filter": "python -m pytest\ntests/a"}]}
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-bkl7m5lo/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (3 lines) ---
+| b1 | python -m pytest tests/a -q \| tail -n 5 | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+| b2 | python -m pytest -k \`x\` C:\\t | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+| b3 | python -m pytest\ntests/a | - | no | UNKNOWN | UNKNOWN | UNKNOWN |
+--- STDERR ---
+check-mvwu: baseline: empty range
+TRACEBACK_IN_OUTPUT: False
+--- 断言 ---
+stdout 恰 3 行 (换行未产生额外行): True
+  row='| b1 | python -m pytest tests/a -q \\| tail -n 5 | - | no | UNKNOWN | UNKNOWN | UNKNOWN |'
+  GFM 切分列数=7 ; 第2列='python -m pytest tests/a -q \\| tail -n 5' ; 期望='python -m pytest tests/a -q \\| tail -n 5' ; 相等=True
+  row='| b2 | python -m pytest -k \\`x\\` C:\\\\t | - | no | UNKNOWN | UNKNOWN | UNKNOWN |'
+  GFM 切分列数=7 ; 第2列='python -m pytest -k \\`x\\` C:\\\\t' ; 期望='python -m pytest -k \\`x\\` C:\\\\t' ; 相等=True
+  row='| b3 | python -m pytest\\ntests/a | - | no | UNKNOWN | UNKNOWN | UNKNOWN |'
+  GFM 切分列数=7 ; 第2列='python -m pytest\\ntests/a' ; 期望='python -m pytest\\ntests/a' ; 相等=True
+CONCLUSION BDD-44: PASS

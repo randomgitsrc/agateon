@@ -1,0 +1,14 @@
+# BDD-58：自身单测在 Windows 冒烟口径下可选中并通过（P6 阶段实跑）
+$ timeout 120 python3 -m pytest agate/tests/unit/test_check_mvwu.py -m windows_smoke -v -p no:cacheprovider
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon/.worktrees/agate-TAG0036
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 111 items / 110 deselected / 1 selected
+
+agate/tests/unit/test_check_mvwu.py::test_bdd_13_basic_contract_two_batches_in_declared_order PASSED [100%]
+
+====================== 1 passed, 110 deselected in 0.11s =======================
+EXIT_CODE: 0

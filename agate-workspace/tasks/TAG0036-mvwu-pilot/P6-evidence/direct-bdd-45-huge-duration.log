@@ -1,0 +1,37 @@
+# direct evidence: BDD-45 (耗时列) 含超长耗时（5000 位 9）不吞行
+(证据输入：d8=8; d85=8.5; dmissing=缺键; dnegative=-3; dtext=fast; dhuge5000=5000 个 '9'; dhugefrac400=400位.400位; dafter=12——放在超长行之后，检验后续行未被吞)
+--- INPUT 摘要 (超长值仅显示长度) ---
+  d8: duration_seconds=8
+  d85: duration_seconds=8.5
+  dmissing: duration_seconds=<absent>
+  dnegative: duration_seconds=-3
+  dtext: duration_seconds=fast
+  dhuge5000: duration_seconds=<5000 chars, e.g. 999999999999...>
+  dhugefrac400: duration_seconds=<801 chars, e.g. 999999999999...>
+  dafter: duration_seconds=12
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py --observe /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-hykcqhnp/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (8 lines) ---
+| d8 | python -m pytest tests/a -q | 8s | yes | UNKNOWN | UNKNOWN | PASS |
+| d85 | python -m pytest tests/a -q | 8.5s | yes | UNKNOWN | UNKNOWN | PASS |
+| dmissing | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| dnegative | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| dtext | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| dhuge5000 | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| dhugefrac400 | python -m pytest tests/a -q | - | yes | UNKNOWN | UNKNOWN | PASS |
+| dafter | python -m pytest tests/a -q | 12s | yes | UNKNOWN | UNKNOWN | PASS |
+--- STDERR ---
+check-mvwu: baseline: empty range
+TRACEBACK_IN_OUTPUT: False
+--- 断言 ---
+stdout 行数=8 (期望 8，不吞行): True
+  d8            列数=7 耗时列=8s verdict列=PASS
+  d85           列数=7 耗时列=8.5s verdict列=PASS
+  dmissing      列数=7 耗时列=- verdict列=PASS
+  dnegative     列数=7 耗时列=- verdict列=PASS
+  dtext         列数=7 耗时列=- verdict列=PASS
+  dhuge5000     列数=7 耗时列=- verdict列=PASS
+  dhugefrac400  列数=7 耗时列=- verdict列=PASS
+  dafter        列数=7 耗时列=12s verdict列=PASS
+超长值（5000 位）耗时列取值（诚实呈现，不吞行；具体值由实现决定）: '-'
+CONCLUSION BDD-45: PASS (8→8s, 缺/负/非数→-, 超长值行仍在且 7 列, 后续批 dafter 未被吞, 耗时不影响 verdict 均为 PASS)

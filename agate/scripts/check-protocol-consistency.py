@@ -805,6 +805,7 @@ def check_script_alignment(root: Path, rep: Report) -> None:
 GATE_SCRIPT_EXEMPT = {
     "agate/scripts/check-protocol-consistency.py",  # 自身无锚点，但命中 check-*.py glob，必须豁免（否则 CHECK9-coverage WARNING）
     "agate/scripts/pre-commit-gate.py",  # 调度编排脚本，不承载单一 gate 判定逻辑，不需要锚点
+    "agate/scripts/check-mvwu.py",  # 观测脚本，不挂 gate
 }
 
 

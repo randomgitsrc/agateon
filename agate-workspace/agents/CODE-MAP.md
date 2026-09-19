@@ -31,6 +31,7 @@ agate 协议本体划分为五大模块：
   judge 机制族（新增 TAG0020）：check-judge-verdict.py（judge verdict 门槛校验，P6.5 强门槛）、check-events.py（gate-events.jsonl 事件账本审计，append-only 哈希链）。
   推进侧状态机族（新增 TAG0027）：agate-next.py（推进 CLI——消费 phases.yaml next/retreat/gate_pass_exit + check-gate exit 三态判定推进/回退/真暂停）、agate-advance.py（多阶回退引导，委托 agate-retreat-to.py）、agate-dispatch.py（渲染时注入 CLI——单命令渲染 dispatch-context + 阶段卡片 Lazy Injection，CARD-SOURCE 块外来源标记）。
   命令流检测族（新增 TAG0028）：agate-cmdstream-ir.py（CommandRecord 统一 IR：十字段字段契约 + JSON 序列化）、agate-cmdstream-adapters.py（四平台命令流适配器：Claude Code JSONL / OpenCode SQLite / DSH JSONL.zstd / Codex rollout JSONL（`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`，CodexAdapter 于 TAG0033 补齐），显式注册表 ADAPTERS）、agate-cmdstream-detect.py（检测引擎 FROZEN/SPIN/NORMAL + 心跳 helper + CLI list-sessions/read-commands/detect）；检测/解析输出平台无关，阈值配置走 agate-workspace/maintainability.yaml cmdstream_detection 节。
+  MVWU 观测族（新增 TAG0036）：check-mvwu.py（批级证据只读观测器——六项检查 + 四态 verdict + --observe 观察行；不挂 gate/hook/CI、不写任何文件；单向依赖 agate_common 的 run_git / split_frontmatter / resolve_workspace）。
 - **templates**（`agate/assets/templates/`）：模板文件（`dispatch-prompt.md`、
   `dispatch-context.md`、`task-files.md`、`code-map-template.md`、`skeleton-template.md`、
   `tech-debt-template.md`、`retrospective-template.md`、`roadmap-template.md`、

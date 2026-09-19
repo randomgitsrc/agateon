@@ -66,6 +66,24 @@ UI/前端等需构建任务：单元测试全绿不代表可用，implementer �
 - 代码文件在声明的目录下
 - 遵守 P2-design.md 的方案设计 + 现有项目代码规范
 
+## 批级证据 P4-evidence（MVWU 阶段 1，不阻断，TAG0036）
+
+> 适用于 P2 声明了 `dispatch_plan.batches` 的任务：每批一个证据日志，回答"这一批的 `tests_filter` 跑出了什么"。**记录不阻断**——它不是 gate、hook 或 CI 的一部分，非零退出的批仍可 commit。
+
+- **路径**：任务目录下 `P4-evidence/{batch}.log`。`{batch}` = 该批在 `dispatch_plan` 中的 `id`，须 filename-safe（匹配 `[A-Za-z0-9._-]+`）。
+- **写入方**：主 Agent 在该批 commit 前运行该批 `tests_filter`，并把运行结果**机械转录**入日志（重定向/脚本落盘，不是撰写内容；内容只来自命令实际结果）。
+- **格式**：逐行 `key: value`，最小内容：
+  - `command`：实际运行的命令
+  - `exit_code`：命令退出码
+  - `git_head`：运行时的 HEAD，须为全长 commit 对象名
+  - `timestamp`：运行时间
+  - `expected_red`：预期为红的用例，默认 `[]`
+  - `duration_seconds`：耗时秒数
+  - `failed_tests`（可选）：实际失败的用例，默认 `[]`
+- **列表编码**：`expected_red` / `failed_tests` 的值为单行 flow 序列，元素为用双引号包裹的 pytest node id（如 `["tests/a.py::test_x[case 1]"]`）；元素相等按 node id 精确字符串相等比对，不可解析时观测器给 UNKNOWN。
+- **观测**：`python3 agate/scripts/check-mvwu.py <task_dir>`（默认每批一行契约行）或 `--observe`（每批一行观察表）。观测**不阻断**；UNKNOWN 不等价于 PASS——无法核对时不得当作通过。
+- **边界**：该目录不进 judge 白名单，也不登记进 rules / dispatch-protocol；P6.5 judge 不读取它。
+
 ## 新增文件核对表
 
 > 仅当项目已采用骨架（`P2-skeleton.md` 存在）或 CODE-MAP（`{AGATE_WORKSPACE}/agents/CODE-MAP.md`

@@ -1,0 +1,223 @@
+# direct evidence（补充）：BDD-16/17/18 首词语义与已知局限；BDD-35 --help 字面；BDD-24 git_head 变体；BDD-39 无可判定批；BDD-40 损坏证据
+
+=========== BDD-16 前导环境变量赋值被跳过 ===========
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q"}, {"id": "B", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/A.log ---
+command: FOO=1 git status --short
+exit_code: 0
+git_head: 5fc9be941df8c429132c8de5ba43b1c7132e2eef
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/B.log ---
+command: FOO=1 no-such-runner-xyz tests/b
+exit_code: 0
+git_head: 5fc9be941df8c429132c8de5ba43b1c7132e2eef
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (2 lines) ---
+MVWU_RESULT: PASS batch=A
+MVWU_RESULT: UNKNOWN batch=B reason=command
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+CONCLUSION BDD-16: PASS
+
+=========== BDD-17 复合命令只判首词 ===========
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/A.log ---
+command: cd sub && no-such-runner-xyz tests/
+exit_code: 0
+git_head: 5fc9be941df8c429132c8de5ba43b1c7132e2eef
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: PASS batch=A
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+
+$ python3 agate/scripts/check-mvwu.py --help | grep -n -E '仅检查首词|不比对 command 与 tests_filter|UNKNOWN 不等价于 PASS，不得作为放行依据'
+  help:39: - 检查 3 仅检查首词：跳过前导 NAME=value 环境变量赋值后，只判第一个词是否可解析；
+  help:41: - 不比对 command 与 tests_filter：证据里实际执行的命令与 P2 声明是否一致不在观测范围。
+  help:42: - UNKNOWN 不等价于 PASS，不得作为放行依据：UNKNOWN 只表示"证据不足以判定"。
+help 含 仅检查首词=True ; 含 不比对 command 与 tests_filter=True ; 含 UNKNOWN 不等价于 PASS，不得作为放行依据=True
+CONCLUSION BDD-17: PASS
+CONCLUSION BDD-35(--help 字面部分): PASS
+
+=========== BDD-18 不比对 command 与 tests_filter ===========
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "A", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/A.log ---
+command: git log -1 --oneline -- tests/other
+exit_code: 0
+git_head: 5fc9be941df8c429132c8de5ba43b1c7132e2eef
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: PASS batch=A
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+CONCLUSION BDD-18: PASS (tests_filter 与 command 不一致仍 PASS；--help 含不比对声明)
+
+=========== BDD-24 git_head 变体（exit_code: 0 全绿场景） ===========
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "nonexistent-40hex", "tests_filter": "python -m pytest tests/a -q"}, {"id": "short-sha", "tests_filter": "python -m pytest tests/a -q"}, {"id": "branch-name", "tests_filter": "python -m pytest tests/a -q"}, {"id": "HEAD", "tests_filter": "python -m pytest tests/a -q"}, {"id": "valid-full-lowercase", "tests_filter": "python -m pytest tests/a -q"}, {"id": "valid-full-UPPERCASE", "tests_filter": "python -m pytest tests/a -q"}, {"id": "missing-key", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/HEAD.log ---
+command: git status --short
+exit_code: 0
+git_head: HEAD
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/branch-name.log ---
+command: git status --short
+exit_code: 0
+git_head: main
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/missing-key.log ---
+command: git status --short
+exit_code: 0
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/nonexistent-40hex.log ---
+command: git status --short
+exit_code: 0
+git_head: 0000000000000000000000000000000000000001
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/short-sha.log ---
+command: git status --short
+exit_code: 0
+git_head: 5fc9be9
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/valid-full-UPPERCASE.log ---
+command: git status --short
+exit_code: 0
+git_head: 5FC9BE941DF8C429132C8DE5BA43B1C7132E2EEF
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/valid-full-lowercase.log ---
+command: git status --short
+exit_code: 0
+git_head: 5fc9be941df8c429132c8de5ba43b1c7132e2eef
+timestamp: 2026-09-19T10:00:00Z
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (7 lines) ---
+MVWU_RESULT: UNKNOWN batch=nonexistent-40hex reason=git_head
+MVWU_RESULT: UNKNOWN batch=short-sha reason=git_head
+MVWU_RESULT: UNKNOWN batch=branch-name reason=git_head
+MVWU_RESULT: UNKNOWN batch=HEAD reason=git_head
+MVWU_RESULT: PASS batch=valid-full-lowercase
+MVWU_RESULT: PASS batch=valid-full-UPPERCASE
+MVWU_RESULT: UNKNOWN batch=missing-key reason=git_head
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+got=['UNKNOWN reason=git_head', 'UNKNOWN reason=git_head', 'UNKNOWN reason=git_head', 'UNKNOWN reason=git_head', 'PASS', 'PASS', 'UNKNOWN reason=git_head']
+exp=['UNKNOWN reason=git_head', 'UNKNOWN reason=git_head', 'UNKNOWN reason=git_head', 'UNKNOWN reason=git_head', 'PASS', 'PASS', 'UNKNOWN reason=git_head']
+
+=========== BDD-24b 任务目录不在 git 仓库内 ===========
+(git rev-parse in dir → fatal: 不是 git 仓库（或者任何父目录）：.git)
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6nogit-5f9fu7ex/t
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: UNKNOWN batch=A reason=git_head
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+CONCLUSION BDD-24: PASS
+
+=========== BDD-39: P2-design.md 缺失 ===========
+INPUT P2-design.md: <不存在>
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T39
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: UNKNOWN batch=- reason=tests_filter
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+
+=========== BDD-39: frontmatter 坏 YAML ===========
+INPUT P2-design.md: '---\nphase: P2\ndispatch_plan: {mode: [unclosed\n  bad: : :\n---\nbody\n'
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T39
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: UNKNOWN batch=- reason=tests_filter
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+
+=========== BDD-39: 无 dispatch_plan ===========
+INPUT P2-design.md: '---\nphase: P2\n---\nbody\n'
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T39
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: UNKNOWN batch=- reason=tests_filter
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+
+=========== BDD-39: mode: single 且无 batches ===========
+INPUT P2-design.md: '---\nphase: P2\ndispatch_plan: {mode: single}\n---\nbody\n'
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T39
+EXIT_CODE: 0
+--- STDOUT (1 lines) ---
+MVWU_RESULT: UNKNOWN batch=- reason=tests_filter
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+CONCLUSION BDD-39: PASS
+
+=========== BDD-40 损坏证据：空文件 / 非 UTF-8 / 无 key:value 行；C 批正常 ===========
+--- INPUT: P2-design.md frontmatter (agate-workspace/tasks/T1/P2-design.md) ---
+
+phase: P2
+task_id: T1
+dispatch_plan: {"mode": "static-batch", "parallel_limit": 2, "batches": [{"id": "empty", "tests_filter": "python -m pytest tests/a -q"}, {"id": "nonutf8", "tests_filter": "python -m pytest tests/a -q"}, {"id": "nokv", "tests_filter": "python -m pytest tests/a -q"}, {"id": "good", "tests_filter": "python -m pytest tests/a -q"}]}
+--- INPUT: P4-evidence/empty.log ---
+
+--- INPUT: P4-evidence/good.log ---
+command: git status --short
+exit_code: 0
+git_head: 5fc9be941df8c429132c8de5ba43b1c7132e2eef
+timestamp: 2026-09-19T10:00:00Z
+--- INPUT: P4-evidence/nokv.log ---
+just some text
+without keys
+--- INPUT: P4-evidence/nonutf8.log ---
+command: git status
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (4 lines) ---
+MVWU_RESULT: UNKNOWN batch=empty reason=evidence
+MVWU_RESULT: UNKNOWN batch=nonutf8 reason=exit_code
+MVWU_RESULT: UNKNOWN batch=nokv reason=evidence
+MVWU_RESULT: PASS batch=good
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+$ (cd <tmp>) python3 agate/scripts/check-mvwu.py /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0036/88f8db0c-958d-41bc-bbad-e0c8225f4971/scratchpad/p6repo-rvtpm8bd/agate-workspace/tasks/T1
+EXIT_CODE: 0
+--- STDOUT (4 lines) ---
+MVWU_RESULT: UNKNOWN batch=empty reason=evidence
+MVWU_RESULT: UNKNOWN batch=nonutf8 reason=evidence
+MVWU_RESULT: UNKNOWN batch=nokv reason=evidence
+MVWU_RESULT: PASS batch=good
+--- STDERR ---
+<empty>
+TRACEBACK_IN_OUTPUT: False
+(注：nonutf8.log 已用二进制写入字节 \xff\xfe\x80，上方 INPUT 展示为替换字符)
+CONCLUSION BDD-40: PASS

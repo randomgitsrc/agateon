@@ -1,0 +1,323 @@
+# BDD 编号 → pytest 用例 → 逐用例结果（由 P6 证据 pytest-check-mvwu-verbose.log 与 pytest-mvwu-docs-verbose.log 机械提取，按用例名前缀 test_bdd_<N>_ 归属）
+# 说明：BDD-56 为 P6 真实证据（不写单测）；BDD-3/5/9/12/60/62/65/67/68 的 git-diff 类断言另见 diff-*.log / docs-*.log
+
+BDD-1 : PASSED=6
+    test_mvwu_protocol_docs.py::test_bdd_1_tests_filter_roundtrip_via_md_field_get -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_1_tests_filter_special_values_passthrough[spaces] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_1_tests_filter_special_values_passthrough[pipe] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_1_tests_filter_special_values_passthrough[escaped-quote] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_1_tests_filter_special_values_passthrough[param-id] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_1_tests_filter_special_values_passthrough[hash-cjk] -> PASSED
+
+BDD-2 : PASSED=2
+    test_mvwu_protocol_docs.py::test_bdd_2_gate_p2_accepts_tests_filter_same_as_without -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_2_gate_p2_still_rejects_invalid_plan_with_tests_filter -> PASSED
+
+BDD-3 : PASSED=3
+    test_mvwu_protocol_docs.py::test_bdd_3_existing_gate_test_files_present[agate/tests/unit/test_dispatch_orchestration.py] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_3_existing_gate_test_files_present[agate/tests/unit/test_check_gate.py] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_3_existing_gate_test_files_present[agate/tests/unit/test_agate_md_field_get.py] -> PASSED
+
+BDD-4 : PASSED=1
+    test_check_mvwu.py::test_bdd_4_mixed_tests_filter_batches_are_independent -> PASSED
+
+BDD-5 : PASSED=2
+    test_mvwu_protocol_docs.py::test_bdd_5_debt_entry_registers_gate_p2_fail_open -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_5_check_debt_passes_on_tech_debt -> PASSED
+
+BDD-6 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_6_p2_card_documents_tests_filter -> PASSED
+
+BDD-7 : PASSED=2
+    test_mvwu_protocol_docs.py::test_bdd_7_architect_documents_tests_filter_selection -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_7_architect_four_hard_rules_verbatim_and_adjacent -> PASSED
+
+BDD-8 : PASSED=3
+    test_mvwu_protocol_docs.py::test_bdd_8_no_bare_python3_inside_tests_filter_examples -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_8_docs_state_platform_neutral_constraint[p2_card] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_8_docs_state_platform_neutral_constraint[architect] -> PASSED
+
+BDD-9 : PASSED=2
+    test_mvwu_protocol_docs.py::test_bdd_9_output_optional_key_documented[p2_card] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_9_output_optional_key_documented[architect] -> PASSED
+
+BDD-10 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_10_p4_card_documents_evidence_landing -> PASSED
+
+BDD-11 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_11_task_files_registers_p4_evidence_and_tests_filter_comment -> PASSED
+
+BDD-12 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_12_no_p4_evidence_in_rules_dispatch_protocol_or_judge -> PASSED
+
+BDD-13 : PASSED=1
+    test_check_mvwu.py::test_bdd_13_basic_contract_two_batches_in_declared_order -> PASSED
+
+BDD-14 : PASSED=4
+    test_check_mvwu.py::test_bdd_14_check1_tests_filter_missing_or_invalid_is_unknown[missing] -> PASSED
+    test_check_mvwu.py::test_bdd_14_check1_tests_filter_missing_or_invalid_is_unknown[empty-string] -> PASSED
+    test_check_mvwu.py::test_bdd_14_check1_tests_filter_missing_or_invalid_is_unknown[non-string-int] -> PASSED
+    test_check_mvwu.py::test_bdd_14_check1_tests_filter_missing_or_invalid_is_unknown[non-string-list] -> PASSED
+
+BDD-15 : PASSED=5
+    test_check_mvwu.py::test_bdd_15_check2_command_first_word_unresolvable_or_missing_is_unknown[unresolvable-first-word] -> PASSED
+    test_check_mvwu.py::test_bdd_15_check2_command_first_word_unresolvable_or_missing_is_unknown[missing-key] -> PASSED
+    test_check_mvwu.py::test_bdd_15_check2_command_first_word_unresolvable_or_missing_is_unknown[empty] -> PASSED
+    test_check_mvwu.py::test_bdd_15_check2_command_first_word_unresolvable_or_missing_is_unknown[unbalanced-quote] -> PASSED
+    test_check_mvwu.py::test_bdd_15_check2_command_first_word_unresolvable_or_missing_is_unknown[only-env-assignment] -> PASSED
+
+BDD-16 : PASSED=1
+    test_check_mvwu.py::test_bdd_16_check2_leading_env_assignment_is_skipped -> PASSED
+
+BDD-17 : PASSED=1
+    test_check_mvwu.py::test_bdd_17_check2_compound_command_only_first_word_is_checked -> PASSED
+
+BDD-18 : PASSED=1
+    test_check_mvwu.py::test_bdd_18_command_is_not_compared_with_tests_filter -> PASSED
+
+BDD-19 : PASSED=2
+    test_check_mvwu.py::test_bdd_19_never_executes_command_or_tests_filter[default] -> PASSED
+    test_check_mvwu.py::test_bdd_19_never_executes_command_or_tests_filter[observe] -> PASSED
+
+BDD-20 : PASSED=1
+    test_check_mvwu.py::test_bdd_20_check3_evidence_missing_is_unknown -> PASSED
+
+BDD-21 : PASSED=4
+    test_check_mvwu.py::test_bdd_21_unsafe_batch_id_is_unknown_and_external_file_not_read[dotdot] -> PASSED
+    test_check_mvwu.py::test_bdd_21_unsafe_batch_id_is_unknown_and_external_file_not_read[space] -> PASSED
+    test_check_mvwu.py::test_bdd_21_unsafe_batch_id_is_unknown_and_external_file_not_read[slash] -> PASSED
+    test_check_mvwu.py::test_bdd_21_unsafe_batch_id_is_unknown_and_external_file_not_read[backslash] -> PASSED
+
+BDD-22 : PASSED=9
+    test_check_mvwu.py::test_bdd_22_unsafe_batch_id_print_form_is_machine_readable -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[space] -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[pipe] -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[dotdot-slash] -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[backslash] -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[non-ascii-utf8-bytes] -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[empty] -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[int-id] -> PASSED
+    test_check_mvwu.py::test_bdd_22_unsafe_id_encoding_equivalence_classes[null-id] -> PASSED
+
+BDD-23 : PASSED=4
+    test_check_mvwu.py::test_bdd_23_check4_exit_code_missing_or_non_integer_is_unknown[missing] -> PASSED
+    test_check_mvwu.py::test_bdd_23_check4_exit_code_missing_or_non_integer_is_unknown[non-integer-word] -> PASSED
+    test_check_mvwu.py::test_bdd_23_check4_exit_code_missing_or_non_integer_is_unknown[empty] -> PASSED
+    test_check_mvwu.py::test_bdd_23_check4_exit_code_missing_or_non_integer_is_unknown[float] -> PASSED
+
+BDD-24 : PASSED=7
+    test_check_mvwu.py::test_bdd_24_check5_git_head_invalid_is_unknown_even_when_green[nonexistent-full-sha] -> PASSED
+    test_check_mvwu.py::test_bdd_24_check5_git_head_invalid_is_unknown_even_when_green[short-sha] -> PASSED
+    test_check_mvwu.py::test_bdd_24_check5_git_head_invalid_is_unknown_even_when_green[branch-name] -> PASSED
+    test_check_mvwu.py::test_bdd_24_check5_git_head_invalid_is_unknown_even_when_green[HEAD] -> PASSED
+    test_check_mvwu.py::test_bdd_24_check5_git_head_invalid_is_unknown_even_when_green[missing-key] -> PASSED
+    test_check_mvwu.py::test_bdd_24_check5_task_dir_outside_git_repo_is_unknown -> PASSED
+    test_check_mvwu.py::test_bdd_24_check5_uppercase_full_sha_is_valid -> PASSED
+
+BDD-25 : PASSED=1
+    test_check_mvwu.py::test_bdd_25_verdict_pass -> PASSED
+
+BDD-26 : PASSED=1
+    test_check_mvwu.py::test_bdd_26_verdict_fail_nonzero_exit_without_expected_red -> PASSED
+
+BDD-27 : PASSED=1
+    test_check_mvwu.py::test_bdd_27_verdict_fail_unexpected_red -> PASSED
+
+BDD-28 : PASSED=1
+    test_check_mvwu.py::test_bdd_28_verdict_expected_red -> PASSED
+
+BDD-29 : PASSED=2
+    test_check_mvwu.py::test_bdd_29_expected_red_not_verifiable_is_unknown_not_guessed[failed-tests-missing] -> PASSED
+    test_check_mvwu.py::test_bdd_29_expected_red_not_verifiable_is_unknown_not_guessed[failed-tests-empty] -> PASSED
+
+BDD-30 : PASSED=3
+    test_check_mvwu.py::test_bdd_30_quoted_node_ids_with_commas_brackets_parse_correctly[comma-and-brackets-in-param-id] -> PASSED
+    test_check_mvwu.py::test_bdd_30_quoted_node_ids_with_commas_brackets_parse_correctly[escaped-double-quote] -> PASSED
+    test_check_mvwu.py::test_bdd_30_quoted_node_ids_with_commas_brackets_parse_correctly[escaped-backslash] -> PASSED
+
+BDD-31 : PASSED=1
+    test_check_mvwu.py::test_bdd_31_element_equality_is_exact_node_id -> PASSED
+
+BDD-32 : PASSED=6
+    test_check_mvwu.py::test_bdd_32_unparseable_expected_red_or_failed_tests_is_unknown[bare-scalar-exit1] -> PASSED
+    test_check_mvwu.py::test_bdd_32_unparseable_expected_red_or_failed_tests_is_unknown[bare-scalar-exit0] -> PASSED
+    test_check_mvwu.py::test_bdd_32_unparseable_expected_red_or_failed_tests_is_unknown[unclosed-flow-seq] -> PASSED
+    test_check_mvwu.py::test_bdd_32_unparseable_expected_red_or_failed_tests_is_unknown[non-string-elements-expected-red] -> PASSED
+    test_check_mvwu.py::test_bdd_32_unparseable_expected_red_or_failed_tests_is_unknown[bare-scalar-failed-tests] -> PASSED
+    test_check_mvwu.py::test_bdd_32_unparseable_expected_red_or_failed_tests_is_unknown[non-string-elements-failed-tests] -> PASSED
+
+BDD-33 : PASSED=1
+    test_check_mvwu.py::test_bdd_33_exit_zero_with_nonempty_failed_tests_is_unknown_exit_code -> PASSED
+
+BDD-34 : PASSED=1
+    test_check_mvwu.py::test_bdd_34_multi_fault_reason_uses_fixed_order -> PASSED
+
+BDD-35 : PASSED=1
+    test_check_mvwu.py::test_bdd_35_unknown_is_never_pass_and_documents_it -> PASSED
+
+BDD-36 : PASSED=1
+    test_check_mvwu.py::test_bdd_36_every_verdict_exits_zero_without_traceback -> PASSED
+
+BDD-37 : PASSED=4
+    test_check_mvwu.py::test_bdd_37_usage_or_target_error_exits_2[no-args] -> PASSED
+    test_check_mvwu.py::test_bdd_37_usage_or_target_error_exits_2[missing-dir] -> PASSED
+    test_check_mvwu.py::test_bdd_37_usage_or_target_error_exits_2[missing-dir-observe] -> PASSED
+    test_check_mvwu.py::test_bdd_37_usage_or_target_error_exits_2[observe-only] -> PASSED
+
+BDD-38 : PASSED=2
+    test_check_mvwu.py::test_bdd_38_read_only_no_state_written[default] -> PASSED
+    test_check_mvwu.py::test_bdd_38_read_only_no_state_written[observe] -> PASSED
+
+BDD-39 : PASSED=5
+    test_check_mvwu.py::test_bdd_39_no_judgeable_batch_gives_honest_unknown_line[p2-missing] -> PASSED
+    test_check_mvwu.py::test_bdd_39_no_judgeable_batch_gives_honest_unknown_line[bad-yaml] -> PASSED
+    test_check_mvwu.py::test_bdd_39_no_judgeable_batch_gives_honest_unknown_line[no-dispatch-plan] -> PASSED
+    test_check_mvwu.py::test_bdd_39_no_judgeable_batch_gives_honest_unknown_line[single-mode-no-batches] -> PASSED
+    test_check_mvwu.py::test_bdd_39_observe_no_judgeable_batch_gives_single_row_with_dash_first_column -> PASSED
+
+BDD-40 : PASSED=4
+    test_check_mvwu.py::test_bdd_40_corrupt_evidence_is_unknown_and_does_not_crash[empty-file] -> PASSED
+    test_check_mvwu.py::test_bdd_40_corrupt_evidence_is_unknown_and_does_not_crash[whitespace-only] -> PASSED
+    test_check_mvwu.py::test_bdd_40_corrupt_evidence_is_unknown_and_does_not_crash[non-utf8-bytes] -> PASSED
+    test_check_mvwu.py::test_bdd_40_corrupt_evidence_is_unknown_and_does_not_crash[no-key-value-lines] -> PASSED
+
+BDD-41 : PASSED=1
+    test_check_mvwu.py::test_bdd_41_batches_are_judged_independently -> PASSED
+
+BDD-42 : PASSED=1
+    test_check_mvwu.py::test_bdd_42_boundary_and_commit_form_do_not_affect_verdict -> PASSED
+
+BDD-43 : PASSED=1
+    test_check_mvwu.py::test_bdd_43_observe_seven_column_rows_one_per_batch -> PASSED
+
+BDD-44 : PASSED=1
+    test_check_mvwu.py::test_bdd_44_observe_escapes_pipe_backtick_backslash_newline -> PASSED
+
+BDD-45 : PASSED=9
+    test_check_mvwu.py::test_bdd_45_duration_column_from_duration_seconds[integer] -> PASSED
+    test_check_mvwu.py::test_bdd_45_duration_column_from_duration_seconds[fractional-one-decimal] -> PASSED
+    test_check_mvwu.py::test_bdd_45_duration_column_from_duration_seconds[zero] -> PASSED
+    test_check_mvwu.py::test_bdd_45_duration_column_from_duration_seconds[missing] -> PASSED
+    test_check_mvwu.py::test_bdd_45_duration_column_from_duration_seconds[not-a-number] -> PASSED
+    test_check_mvwu.py::test_bdd_45_duration_column_from_duration_seconds[negative] -> PASSED
+    test_check_mvwu.py::test_bdd_45_duration_column_from_duration_seconds[empty] -> PASSED
+    test_check_mvwu.py::test_bdd_45_observe_huge_duration_does_not_drop_rows[5000-digit-integer] -> PASSED
+    test_check_mvwu.py::test_bdd_45_observe_huge_duration_does_not_drop_rows[400-digit-fractional] -> PASSED
+
+BDD-46 : PASSED=1
+    test_check_mvwu.py::test_bdd_46_evidence_column_reflects_log_file_existence -> PASSED
+
+BDD-47 : PASSED=1
+    test_check_mvwu.py::test_bdd_47_commit_form_per_batch -> PASSED
+
+BDD-48 : PASSED=1
+    test_check_mvwu.py::test_bdd_48_commit_form_merged -> PASSED
+
+BDD-49 : PASSED=3
+    test_check_mvwu.py::test_bdd_49_commit_form_unattributable_is_unknown[no-output] -> PASSED
+    test_check_mvwu.py::test_bdd_49_commit_form_unattributable_is_unknown[never-modified-in-range] -> PASSED
+    test_check_mvwu.py::test_bdd_49_commit_form_unattributable_is_unknown[scattered-over-commits] -> PASSED
+
+BDD-50 : PASSED=2
+    test_check_mvwu.py::test_bdd_50_undeterminable_baseline_gives_unknown_and_diagnostic[no-default-branch] -> PASSED
+    test_check_mvwu.py::test_bdd_50_undeterminable_baseline_gives_unknown_and_diagnostic[head-is-default-tip] -> PASSED
+
+BDD-51 : PASSED=1
+    test_check_mvwu.py::test_bdd_51_boundary_exact_excludes_default_workspace_tasks_prefix -> PASSED
+
+BDD-52 : PASSED=1
+    test_check_mvwu.py::test_bdd_52_boundary_exclusion_prefix_follows_workspace_config -> PASSED
+
+BDD-53 : PASSED=2
+    test_check_mvwu.py::test_bdd_53_boundary_mismatch[undeclared-file-changed] -> PASSED
+    test_check_mvwu.py::test_bdd_53_boundary_mismatch[declared-file-not-changed] -> PASSED
+
+BDD-54 : PASSED=2
+    test_check_mvwu.py::test_bdd_54_boundary_unknown_for_merged_or_no_output[merged-commit-with-output] -> PASSED
+    test_check_mvwu.py::test_bdd_54_boundary_unknown_for_merged_or_no_output[no-output] -> PASSED
+
+BDD-55 : PASSED=1
+    test_check_mvwu.py::test_bdd_55_observe_verdicts_match_default_and_stay_read_only -> PASSED
+
+BDD-57 : PASSED=1
+    test_check_mvwu.py::test_bdd_57_test_file_covers_required_bdds_and_windows_smoke_first -> PASSED
+
+BDD-58 : PASSED=1
+    test_check_mvwu.py::test_bdd_58_windows_smoke_selects_and_passes -> PASSED
+
+BDD-59 : PASSED=3
+    test_mvwu_protocol_docs.py::test_bdd_59_context_five_new_terms_three_columns_with_literals -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_59_new_terms_in_order_and_locations_exist -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_59_baseline_28_term_rows_still_present -> PASSED
+
+BDD-60 : PASSED=2
+    test_mvwu_protocol_docs.py::test_bdd_60_role_system_review_anchor_section -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_60_new_section_has_no_bare_platform_tokens -> PASSED
+
+BDD-61 : PASSED=2
+    test_mvwu_protocol_docs.py::test_bdd_61_tracer_bullet_criterion[p2_card] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_61_tracer_bullet_criterion[architect] -> PASSED
+
+BDD-62 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_62_walking_skeleton_absorb_reject_record -> PASSED
+
+BDD-63 : PASSED=2
+    test_mvwu_protocol_docs.py::test_bdd_63_vertical_slice_criterion[p2_card] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_63_vertical_slice_criterion[architect] -> PASSED
+
+BDD-64 : PASSED=3
+    test_mvwu_protocol_docs.py::test_bdd_64_fitness_functions_criterion[p2_card_gate_commands] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_64_fitness_functions_criterion[architect] -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_64_no_mandatory_arch_tool_requirement_in_protocol_docs -> PASSED
+
+BDD-65 : PASSED=3
+    test_mvwu_protocol_docs.py::test_bdd_65_adr_header_recheck_triggers -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_65_adr_header_has_no_bare_platform_tokens -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_65_existing_adrs_still_present -> PASSED
+
+BDD-66 : PASSED=3
+    test_mvwu_protocol_docs.py::test_bdd_66_p2_card_decisions_landing_and_reading -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_66_write_timing_stated_in_p2_or_p7_card -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_66_check_gate_does_not_read_decisions_dir -> PASSED
+
+BDD-67 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_67_kernel_files_exist_for_p5_diff_gate -> PASSED
+
+BDD-68 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_68_check_mvwu_not_registered_in_gate_hook_ci_surfaces -> PASSED
+
+BDD-69 : PASSED=3
+    test_mvwu_protocol_docs.py::test_bdd_69_scripts_readme_row_for_check_mvwu -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_69_tests_readme_row_matches_collected_count -> PASSED
+    test_mvwu_protocol_docs.py::test_bdd_69_changelog_mentions_tag0036 -> PASSED
+
+BDD-70 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_70_gate_script_exempt_contains_check_mvwu -> PASSED
+
+BDD-71 : PASSED=1
+    test_mvwu_protocol_docs.py::test_bdd_71_p4_protocol_alignment_review_exists_with_conclusion -> PASSED
+
+SUPPLEMENT/GUARD : PASSED=20
+    test_check_mvwu.py::test_supplement_symlink_escape_evidence_is_not_read -> PASSED
+    test_check_mvwu.py::test_supplement_unreadable_evidence_falls_back_without_traceback -> PASSED
+    test_check_mvwu.py::test_supplement_duplicate_evidence_key_last_one_wins -> PASSED
+    test_check_mvwu.py::test_supplement_crlf_evidence_file_is_parsed -> PASSED
+    test_check_mvwu.py::test_supplement_batches_match_agate_md_field_get_source -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b1_sg6_exists_in_alignment_review_tests -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b2_p5_commands_shlex_split_and_no_quote_residue -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_pathspec_is_literal_glob -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[delete_TAG0010-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[delete_TAG0031-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[delete_two_TAG0010_TAG0031-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[delete_two_TAG0011_TAG0032-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[modify_TAG0011-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[modify_TAG0032-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[add_TAG0012-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[add_TAG0033-1] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[modify_TAG0036-0] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[add_TAG0037-0] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_b3_history_untouched_command_in_tmp_repo[modify_TAG0036_and_add_TAG0037-0] -> PASSED
+    test_mvwu_protocol_docs.py::test_guard_same_source_md_field_get_vs_split_frontmatter -> PASSED
+
+# 合计： {'PASSED': 176}
+# 有 test_bdd_<N>_ 用例的 BDD 编号数：70 ；无用例的编号：[56]
