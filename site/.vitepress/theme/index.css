@@ -30,6 +30,9 @@
 /* 整页 Paper 底，hero 顶部 teal 晕染淡出到同色——无水平接缝 */
 .VPHome {
   background: var(--agateon-paper);
+  /* VitePress 默认给 home 布局 128px/96px 底部 margin（scoped 属性选择器，
+     优先级高于 .VPHome 裸类）——footer 前的大空带来源；!important 压过 */
+  margin-bottom: 0 !important;
 }
 
 .dark .VPHome {
