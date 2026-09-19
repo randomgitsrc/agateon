@@ -29,6 +29,22 @@
 
 来源：TAG0036（RM-AG0063）。
 
+### 其他（随本版本发布的主线基线变更，非 TAG0036 交付）
+
+- **`AGATE_HOME` 版本根基址覆盖（DEBT0042）**：`agate_common._resolve_version_info`、`agate-install.py`、
+  `install.sh --versions` 支持以 `AGATE_HOME` 环境变量覆盖版本根基址（默认 `~/.agate`）；解析层序不变
+  （`AGATE_ROOT` > `AGATE_HOME` > 项目 `.agate-version` > `current` > legacy 软链），未设置时行为不变。
+  测试侧 `run_cli` 中和了外部环境里的 `AGATE_HOME`，避免"本机环境决定测试红绿"。
+- **修复**：
+  - `SETUP.md` 各平台接入命令写死单软链布局路径，版本管理布局下会创建断链（Claude Code / OpenCode / Windows 复制模式 /
+    DSH 共 9 处），改为按协议根路径书写；
+  - `UPGRADING.md` 回退指引歧义：`agate-install.py vX.Y.Z` 只装版本目录、不改 `latest`/`current` 指针，
+    回退说明拆为单项目与全局两个场景，并补 DEBT0034 文案漂移护栏；
+  - DSH 模板 persona 必填 key `text` → `prefix`（DSH ≥rc.8 起必填；旧版 DSH 用户注意该差异）；
+  - 多个测试补 HOME 隔离，消除对本机 `~/.agate` 状态的依赖。
+- **文档**：`UPGRADING.md` 新增「路径层次与解析优先级」节；`SELF-GATE.md` 触发条件改为以 hook 正则
+  `_SELF_GATE_RE` 为权威；`AGENTS.md` 新增 hotfix 通道与本机稳定版布局；worktree 指南补全发布/合并/收尾三节。
+
 ## [0.71.1] - 2026-09-16
 
 ### 修复（TAG0035：gate 健壮性批，RM-AG0062）

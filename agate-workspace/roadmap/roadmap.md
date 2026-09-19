@@ -72,6 +72,7 @@
 | RM-AG0064 | **【已并入 RM-AG0062】** gate 对未知阶段 fail-open：`check-gate.py` 的 `handlers.get(phase)` 返回 `None` 时 `exit 2`，而 exit 2 是 P0/P1/P2/P3/P5/P6/P8 的**通过码**——新增阶段若忘记注册 gate 函数会**静默通过**而非报错；应改为 fail-closed（未知阶段 → exit 1）并补回归测试 | cancelled | 编排模型演进分析 §5.3（2026-09-16 实测发现，与 DAG/MVWU 议题无关的独立缺陷） | — | 2026-09-16 | 2026-09-16 |
 | RM-AG0065 | **数据契约一致性批**（DEBT0040 + DEBT0041——TAG0035 独立评审判定与「gate 判据健壮性」不同簇、且 DEBT0040 含 CI 改动需用户许可，遂移出）：① 事件账本 `gate-events.jsonl` 写入测试无 `tmp_path` 隔离强制（单测真实写仓库内 committed 账本，TAG0034 P6.5 judge 跑全量 pytest 污染历史账本）② `agate-md-field-set` 支持字段集与 `check-p6-provenance.py` 必备 frontmatter 字段集**不同源**（`P3-test-cases.md` 的 `agent` 字段落在缝里，P6→P7 被 exit 2 挡住） | backlog | TAG0035 独立评审（2026-09-16 移出项，复盘措施 3 闭环） | — | 2026-09-16 | 2026-09-16 |
 | RM-AG0066 | **安装与多版本模型统一**（Release 发布 + 本体安装包 + 三路径结构统一 + 离线解析失效修复）：① 引入 GitHub Release（tag push 自动建，notes 取 CHANGELOG 段）+ 本体 tarball asset（**portable**，解压即用，无需 git）② 统一在线/离线/legacy 三条安装路径的**目录结构契约** ③ 修 **P0 离线安装解析失效**（pack 用 worktree 检出整仓 → `bundle/agate/agate/` 多一层嵌套 → `_protocol_root` 探测不到 scripts）④ 本体目录名**可扩展**（不硬编码 `agate/`，由 manifest 声明）⑤ 在线安装**只装本体**（现状 43M vs 本体 4.1M，冗余 91%）；**保留**「装任意历史 tag」能力（即 `repo/` 保留） | scheduled | 用户 2026-09-19 提出（安装机制审计后续）| TAG0037 | 2026-09-19 | 2026-09-19 |
+| RM-AG0067 | **MVWU 阶段 2：批级 gate**（RM-AG0063 阶段 1 的后续，**触协议内核**）：在 P4 批粒度上把 `check-mvwu.py` 的 verdict 接入 gate（设计依据 `docs/design-notes/design-mvwu-protocol.md` §7 阶段 2）。**前置（均未满足）**：① Q1（`tests_filter` 在多数批上稳定可执行）≥90% 的真实多批任务试点数据——TAG0036 只交付采集能力（`check-mvwu.py --observe`），Q1/Q3 未答；② **提交粒度决策由用户裁决**（合并 commit 保原子性 vs 逐批 commit 换 I1 可归属；实测 Q2 = 13%，原「≥90%」门槛已被证伪）；③ 触 `check-gate.py`，须走 SELF-GATE 与 TAG0035 fail-open 加固的同一约束。**不主动造样本、不回填历史任务** | backlog | TAG0036 P8（RM-AG0063 done 时另立承接项，防阶段 2 从规划层消失；2026-09-19 用户确认登记） | — | 2026-09-19 | 2026-09-19 |
 ## 状态标识
 
 | 状态 | 说明 | 何时进入 |
@@ -625,7 +626,7 @@
   **完成判据 ④⑤ 的口径**：Q2 结论（13%）在案；Q1/Q3 **仅交付采集能力**（`--observe` 已在真实任务 TAG0035 上跑通，得 4 行全 UNKNOWN 的诚实样本），
   **Q1/Q3 未答**——需真实多批任务的 `P4-evidence` 样本，不造样本、不回填。本任务顺手登记 **DEBT0043**（`_gate_p2_dispatch_plan` 同类 fail-open，只登记未修，
   状态 open）。**阶段 2（批级 gate，触及 `check-gate.py` 内核）不在本任务内**：前置 = ① Q1∧Q2 ≥90% 的试点数据 ② 提交粒度决策（用户裁决）——均未满足；
-  阶段 3 更依赖阶段 2。故本条 `done` **不等于**「MVWU 协议落地完成」。
+  阶段 3 更依赖阶段 2。故本条 `done` **不等于**「MVWU 协议落地完成」。阶段 2 已另立 **RM-AG0067**（backlog）承接，避免其从规划层消失。
 
 ---
 
