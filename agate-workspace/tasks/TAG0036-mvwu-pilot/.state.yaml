@@ -1,5 +1,5 @@
 task_id: TAG0036
-phase: P4
+phase: P5
 status: active
 retries:
   P1:
@@ -18,3 +18,4 @@ retries:
     adjustment: null
 judge:
   enabled: true
+p5_pass_commit: 4ee499ff46d3dd0c3ed5faa45ba44899da34b92d
