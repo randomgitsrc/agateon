@@ -213,8 +213,84 @@ def build_bare_repo(bare, specs):
     bare.mkdir(parents=True, exist_ok=True)
     run_git(bare, "init", "--bare", "-q")
     run_git(bare, "symbolic-ref", "HEAD", "refs/heads/main")
-    run_git(bare, "fast-import", "--quiet", input=_fast_import_stream(specs))
+    if any(_has_dangerous_component(path) for spec in specs for path in spec.files):
+        # 含 `.git` / `..` 等危险分量：新版 git（>= 2.4x 系列，CI runner 为 2.55）的 fast-import 写树时拒绝，
+        # 改用对象层 plumbing（hash-object --literally 不做 fsck 路径校验）直接落盘。
+        _plumbing_import(bare, specs)
+        return bare
+    try:
+        run_git(bare, "fast-import", "--quiet", input=_fast_import_stream(specs))
+    except RuntimeError:
+        # 兜底：fast-import 拒绝其它新版才校验的路径时，同样回落到 plumbing 构建（旧 git 上不会走到这里）。
+        _plumbing_import(bare, specs)
     return bare
+
+
+def _has_dangerous_component(path):
+    """路径含新版 git 会在写树阶段拒绝的分量：`.git`（大小写不敏感）/ `.` / `..` / 空分量。"""
+    return any(part.lower() in (b".git", b".", b"..", b"") for part in _b(path).split(b"/"))
+
+
+def _write_object(bare, kind, data):
+    """`git hash-object -w -t <kind> --literally --stdin`：原样写入对象字节（不经 fsck / 路径校验），返回 40 位十六进制 sha。"""
+    proc = run_git(bare, "hash-object", "-w", "-t", kind, "--literally", "--stdin", input=data)
+    return proc.stdout.decode("ascii").strip()
+
+
+def _tree_sort_key(item):
+    name, (mode, _sha) = item
+    return name + b"/" if mode == b"40000" else name
+
+
+def _write_tree(bare, node, blob_shas):
+    """node = {name(bytes): TreeEntry | dict(子目录)}；递归写 tree 对象，条目按 git 顺序（目录名视作带尾部 '/'）序列化。"""
+    items = {}
+    for name, child in node.items():
+        if isinstance(child, dict):
+            items[name] = (b"40000", _write_tree(bare, child, blob_shas))
+        else:
+            mode = child.mode.encode("ascii")
+            sha = child.data.decode("ascii") if mode == b"160000" else blob_shas[child.data]
+            items[name] = (mode, sha)
+    raw = b"".join(
+        mode + b" " + name + b"\0" + bytes.fromhex(sha) for name, (mode, sha) in sorted(items.items(), key=_tree_sort_key)
+    )
+    return _write_object(bare, "tree", raw)
+
+
+def _plumbing_import(bare, specs):
+    """与 _fast_import_stream 语义等价的对象层构建：每个 spec 一个 commit（线性历史），轻量 / 附注 tag，HEAD 指向 main。"""
+    blob_shas = {}
+    parent = None
+    for spec in specs:
+        root = {}
+        for path, entry in spec.entries().items():
+            if entry.mode != "160000" and entry.data not in blob_shas:
+                blob_shas[entry.data] = _write_object(bare, "blob", entry.data)
+            parts = _b(path).split(b"/")
+            node = root
+            for part in parts[:-1]:
+                node = node.setdefault(part, {})
+            node[parts[-1]] = entry
+        tree_sha = _write_tree(bare, root, blob_shas)
+        ident = b"%s %d +0000" % (_FIXTURE_IDENT.encode(), spec.time)
+        head = b"tree %s\n" % tree_sha.encode()
+        if parent:
+            head += b"parent %s\n" % parent.encode()
+        commit = head + b"author %s\ncommitter %s\n\nrelease %s\n" % (ident, ident, spec.name.encode())
+        parent = _write_object(bare, "commit", commit)
+        ref = f"refs/tags/{spec.name}"
+        if spec.annotated:
+            tag = b"object %s\ntype commit\ntag %s\ntagger %s\n\nannotated %s\n" % (
+                parent.encode(),
+                spec.name.encode(),
+                ident,
+                spec.name.encode(),
+            )
+            run_git(bare, "update-ref", ref, _write_object(bare, "tag", tag))
+        else:
+            run_git(bare, "update-ref", ref, parent)
+    run_git(bare, "update-ref", "refs/heads/main", parent)
 
 
 def clone_bare(src, dest, hardlinks=False):

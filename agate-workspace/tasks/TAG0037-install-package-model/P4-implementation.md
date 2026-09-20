@@ -155,3 +155,10 @@ P2-skeleton.md 未采用；`agate-workspace/agents/CODE-MAP.md` 存在（机制�
 | 新增文件路径 | 骨架归属 | CODE-MAP 处理 |
 |------------|---------|--------------|
 | agate/scripts/agate_package.py | within agate/scripts（P2 §3.2 指定目录；无骨架文件） | [CODE_MAP_EXEMPT: 本批"只改本批文件"约束未含 CODE-MAP.md；CODE-MAP 的 scripts 段为家族级描述、不逐文件登记，新增脚本的索引由 F2 批统一登记，请 P7 核对] |
+
+## 修复批 t17-fixture-fix
+
+- 缺陷：GitHub runner（git 2.55.0）上 `git fast-import` 写树时拒绝含 `.git` / `..` 分量的路径（`fatal: invalid path 'agate/.git/config'`），使 T-17 的 5 个用例（dot-git-dir / dot-GIT-uppercase / dot-GiT-mixed-file / dotdot-segment / outside-package-region）在夹具构造阶段失败；本机 git 2.43.0 不拒绝故本地全绿。
+- 改动（仅测试夹具）：`agate/tests/helpers_tag_repo.py` 的 `build_bare_repo` 在任一 spec 含危险分量（`.git` 大小写不敏感 / `.` / `..` / 空分量）时改走新增的 `_plumbing_import`（手工序列化 tree 字节 → `git hash-object -w -t tree --literally --stdin`，commit / annotated tag 同样 `hash-object --literally`，再 `update-ref`）；fast-import 失败时同样回落到该路径；其余用例仍走 fast-import。`agate_package.py` 与断言未改。
+- 论证：`hash-object --literally` 明确用于写入"可能不满足 fsck 的畸形对象"，不经路径校验，且 `update-ref` / `ls-tree` / `cat-file` 只处理对象字节，不校验树内路径分量，故对新版 git 同样可构造恶意树；在 2.43.0 上验证 plumbing 生成的 tree sha 与 fast-import 对默认 spec 逐 tag 完全一致。
+- 验证（本机 git 2.43.0）：test_agate_package.py 129 passed；引用 helpers_tag_repo 的全部测试文件 485 passed；ruff、check-platform-assumptions（0 命中）、test_agate_scripts_encoding 均通过。
