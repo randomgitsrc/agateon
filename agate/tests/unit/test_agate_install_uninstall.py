@@ -17,9 +17,12 @@
 # agate-install.py 模块 docstring 既有测试隔离约定），不触碰真实 ~/.agate。
 
 import importlib.util
+import os
 import sys
 
 import pytest
+
+import helpers_tag_repo as H
 
 
 def _load_script_module(agate_scripts, module_name, filename):
@@ -110,3 +113,147 @@ def test_bdd_5_find_references_no_warning_within_scan_bounds(
 
     err = capsys.readouterr().err
     assert "WARNING" not in err
+
+
+# ============================================================
+# TAG0037 P3 组 B（批 B1a）：BDD-25 卸载兼容新旧形态，repo/ 有无均可 [参数化 ①②③] + 引用保护 + 旧 worktree 登记清扫（eng m-4）
+#   上方两个 TAG0031 既有用例未改动（in-process、run_git 打桩）。本节用真实 CLI + 隔离 AGATE_HOME / HOME + 合成 file:// 上游。
+#   被测：agate-install.py --uninstall（P4：旧形态版本目录才 `git worktree remove`；只要 repo/ 存在即 `git worktree prune`；repo/ 缺失不报错）。
+# ============================================================
+
+_V_NEW, _V_OLD = "v0.73.0", "v0.72.5"
+
+
+@pytest.fixture(scope="module")
+def synth(tmp_path_factory):
+    return H.get_shared_synthetic_repo(tmp_path_factory)
+
+
+def _cli(agate_scripts, tmp_path, agate_home, *args, synth=None):
+    extra = {"AGATE_REPO_URL": synth.url} if synth is not None else None
+    return H.run_tool(
+        [sys.executable, agate_scripts / "agate-install.py", *args],
+        env=H.tool_env(tmp_path / "home", agate_home=agate_home, extra=extra),
+        cwd=tmp_path,
+    )
+
+
+def _ptr(agate_home):
+    out = {}
+    for name in ("latest", "current"):
+        p = agate_home / name
+        out[name] = ("link", os.readlink(str(p))) if p.is_symlink() else None
+    return out
+
+
+def _worktree_list(agate_home):
+    return H.run_git(agate_home / "repo", "worktree", "list", "--porcelain").stdout.decode("utf-8")
+
+
+def _hand_new_form(agate_home, version):
+    """手工搭新形态版本目录（uninstall 不校验契约，仅需目录存在）。"""
+    scripts = agate_home / version / "agate" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "README.md").write_text(f"# {version}\n", encoding="utf-8")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针 / 真实 worktree 断言仅 POSIX")
+def test_bdd_25_1a_uninstall_new_form_with_repo_unpointed_version(agate_scripts, tmp_path, synth):
+    """BDD-25 ①（新形态 + repo/ 存在）：卸载未被指针指向的版本 → exit 0，目录被移除，指针不变，repo/ 的 worktree list 无残留条目。"""
+    agate_home = tmp_path / "ah"
+    assert _cli(agate_scripts, tmp_path, agate_home, "latest", synth=synth).returncode == 0
+    assert _cli(agate_scripts, tmp_path, agate_home, _V_OLD, synth=synth).returncode == 0
+    assert not (agate_home / _V_OLD / ".git").exists(), "Given：新形态（无 .git）"
+    ptr = _ptr(agate_home)
+    proc = _cli(agate_scripts, tmp_path, agate_home, "--uninstall", _V_OLD)
+    assert proc.returncode == 0, proc.stderr
+    assert not (agate_home / _V_OLD).exists()
+    assert _ptr(agate_home) == ptr
+    assert str(agate_home / _V_OLD) not in _worktree_list(agate_home)
+    assert (agate_home / _V_NEW / "agate" / "scripts").is_dir(), "其它版本不受影响"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针 / 真实 worktree 断言仅 POSIX")
+def test_bdd_25_1b_uninstall_pointed_version_repoints_to_latest_valid(agate_scripts, tmp_path, synth):
+    """BDD-25 ①：卸载 latest/current 曾指向的版本 → 重指最新有效版本（不悬空），resolve 仍成功。"""
+    agate_home = tmp_path / "ah"
+    assert _cli(agate_scripts, tmp_path, agate_home, "latest", synth=synth).returncode == 0
+    assert _cli(agate_scripts, tmp_path, agate_home, _V_OLD, synth=synth).returncode == 0
+    assert not (agate_home / _V_NEW / ".git").exists(), "Given：新形态（无 .git）"
+    proc = _cli(agate_scripts, tmp_path, agate_home, "--uninstall", _V_NEW)
+    assert proc.returncode == 0, proc.stderr
+    assert not (agate_home / _V_NEW).exists()
+    assert os.readlink(str(agate_home / "latest")) == _V_OLD
+    assert os.readlink(str(agate_home / "current")) == "latest"
+    res = H.run_tool([sys.executable, agate_home / "scripts" / "agate-resolve.py"], env=H.tool_env(tmp_path / "home", agate_home=agate_home), cwd=tmp_path)
+    assert res.returncode == 0, res.stderr
+    assert f"AGATE_VERSION={_V_OLD}" in res.stdout
+    assert str(agate_home / _V_NEW) not in _worktree_list(agate_home)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针断言仅 POSIX")
+def test_bdd_25_2_uninstall_new_form_without_repo(agate_scripts, tmp_path):
+    """BDD-25 ②（offline / portable 安装：版本根无 repo/）：卸载 → exit 0，目录被移除，指针重指 / 清除不悬空，且不创建 repo/。"""
+    agate_home = tmp_path / "ah"
+    for v in (_V_OLD, _V_NEW):
+        _hand_new_form(agate_home, v)
+    os.symlink(_V_NEW, str(agate_home / "latest"))
+    os.symlink("latest", str(agate_home / "current"))
+    proc = _cli(agate_scripts, tmp_path, agate_home, "--uninstall", _V_NEW)
+    assert proc.returncode == 0, proc.stderr
+    assert "Traceback" not in proc.stderr
+    assert not (agate_home / _V_NEW).exists() and (agate_home / _V_OLD).is_dir()
+    assert os.readlink(str(agate_home / "latest")) == _V_OLD
+    assert not (agate_home / "repo").exists()
+    only = _cli(agate_scripts, tmp_path, agate_home, "--uninstall", _V_OLD)
+    assert only.returncode == 0, only.stderr
+    assert _ptr(agate_home) == {"latest": None, "current": None}, "最后一个版本卸载后指针应清除（不悬空）"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针 / 真实 worktree 断言仅 POSIX")
+def test_bdd_25_3_uninstall_old_worktree_form_leaves_no_registration(agate_scripts, tmp_path, synth):
+    """BDD-25 ③（旧形态 git worktree 整仓版本目录）：卸载 → exit 0，目录被移除，指针清除，repo/ 的 `git worktree list --porcelain` 无残留条目。
+    旧形态由「旧安装器同款方式」显式构造并保留在测试中（新安装器不再产出该形态）。"""
+    agate_home = tmp_path / "ah"
+    agate_home.mkdir()
+    H.run_git(tmp_path, "clone", "-q", "--", synth.url, str(agate_home / "repo"))
+    H.run_git(agate_home / "repo", "worktree", "add", "--detach", str(agate_home / _V_OLD), _V_OLD)
+    os.symlink(_V_OLD, str(agate_home / "latest"))
+    os.symlink("latest", str(agate_home / "current"))
+    assert (agate_home / _V_OLD / ".git").exists() and (agate_home / _V_OLD / "docs").is_dir(), "Given：旧整仓形态"
+    assert str(agate_home / _V_OLD) in _worktree_list(agate_home)
+    proc = _cli(agate_scripts, tmp_path, agate_home, "--uninstall", _V_OLD)
+    assert proc.returncode == 0, proc.stderr
+    assert not (agate_home / _V_OLD).exists()
+    assert _ptr(agate_home) == {"latest": None, "current": None}
+    assert str(agate_home / _V_OLD) not in _worktree_list(agate_home)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针 / 真实 worktree 断言仅 POSIX")
+def test_bdd_25_5_uninstall_prunes_stale_worktree_registration_of_replaced_dir(agate_scripts, tmp_path, synth):
+    """eng m-4：被替换的旧形态版本目录遗留 `repo/.git/worktrees/<vX>` 登记（目录被换成新形态后登记悬空）——卸载时只要 repo/ 存在即 `git worktree prune`，
+    `worktree list --porcelain` 不再含该路径。（构造：旧形态目录改名挪走 → 原位置放新形态目录；不删除任何内容。）"""
+    agate_home = tmp_path / "ah"
+    agate_home.mkdir()
+    H.run_git(tmp_path, "clone", "-q", "--", synth.url, str(agate_home / "repo"))
+    H.run_git(agate_home / "repo", "worktree", "add", "--detach", str(agate_home / _V_OLD), _V_OLD)
+    os.rename(str(agate_home / _V_OLD), str(tmp_path / "moved-away-old-form"))
+    _hand_new_form(agate_home, _V_OLD)
+    proc = _cli(agate_scripts, tmp_path, agate_home, "--uninstall", _V_OLD)
+    assert proc.returncode == 0, proc.stderr
+    assert not (agate_home / _V_OLD).exists()
+    assert str(agate_home / _V_OLD) not in _worktree_list(agate_home)
+
+
+def test_bdd_25_4_uninstall_reference_protection_unchanged(agate_scripts, tmp_path):
+    """BDD-25：引用保护语义不变——HOME 下某项目 .agate-version 引用该版本时 exit 1 拒绝，版本目录保留（新形态同样适用）。"""
+    agate_home = tmp_path / "ah"
+    _hand_new_form(agate_home, _V_OLD)
+    project = tmp_path / "home" / "myproject"
+    project.mkdir(parents=True)
+    (project / ".agate-version").write_text(f"agate: {_V_OLD}\n", encoding="utf-8")
+    before = H.snapshot_tree(agate_home / _V_OLD, ignore_bytecode=False)
+    proc = _cli(agate_scripts, tmp_path, agate_home, "--uninstall", _V_OLD)
+    assert proc.returncode == 1
+    assert "myproject" in proc.stderr or ".agate-version" in proc.stderr
+    assert H.snapshot_tree(agate_home / _V_OLD, ignore_bytecode=False) == before

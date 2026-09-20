@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+import helpers_tag_repo as H
+
 
 def _run_install(run_cli, python_exe, agate_scripts, home, *args, repo_url=None, extra_env=None):
     env = {"HOME": str(home), "USERPROFILE": str(home)}
@@ -42,8 +44,11 @@ def _tag_upstream(git_repo):
     scripts = git_repo.path / "agate" / "scripts"
     scripts.mkdir(parents=True)
     (scripts / "README.md").write_text("# agate upstream v0.43.0\n", encoding="utf-8")
-    for name in ("agate-install.py", "agate_common.py"):
-        shutil.copy2(str(_REAL_AGATE_SCRIPTS / name), str(scripts / name))
+    # TAG0037（P2 §6 T-10 / eng N-1）：agate_common / agate-install 现依赖 agate_package.py——夹具拷贝清单须同时含它
+    # （存在才拷：P4 落地前该文件尚不存在，夹具不得因此炸掉既有用例）。
+    for name in ("agate-install.py", "agate_common.py", "agate_package.py"):
+        if (_REAL_AGATE_SCRIPTS / name).is_file():
+            shutil.copy2(str(_REAL_AGATE_SCRIPTS / name), str(scripts / name))
     git_repo.commit("base v0.43.0")
     git_repo.git("tag", "v0.43.0")
     (scripts / "README.md").write_text("# agate upstream v0.48.0\n", encoding="utf-8")
@@ -113,9 +118,12 @@ def test_bdd_1_latest_pointer_after_noarg_install(
     assert target.name == "v0.48.0"
 
 
-def test_bdd_2_version_dir_worktree_of_tag(
+def test_bdd_2_version_dir_is_tag_body_not_worktree(
     git_repo, python_exe, run_cli, agate_scripts, tmp_path, py_path
 ):
+    """BDD-2（TAG0008）[DESIGN_GAP-B1，TAG0037 P3 组 B 改写，见 P3-test-cases.md §6]：原断言"版本目录是 tag 的 git worktree（登记在
+    repo/ 的 worktree list 且 HEAD == tag 提交）"与 TAG0037 新契约（BDD-22 只装本体、D-1 git plumbing 构建器取代 git worktree add）直接矛盾。
+    改写为等价的新契约断言：版本目录存在、**不是** worktree（无 .git、repo/ 的 worktree list 不含它）、其内容取自该 tag 的 blob。"""
     _tag_upstream(git_repo)
     home = tmp_path / "home"
 
@@ -124,13 +132,15 @@ def test_bdd_2_version_dir_worktree_of_tag(
 
     version_dir = home / ".agate" / "v0.48.0"
     assert version_dir.is_dir()
+    assert not (version_dir / ".git").exists()
 
     git_exe = shutil.which("git")
     assert git_exe
     repo_clone = home / ".agate" / "repo"
     wt = _worktree_porcelain(git_exe, repo_clone)
-    assert os.path.normcase(str(version_dir)) in os.path.normcase(wt)
-    assert _head_of(git_exe, version_dir) == _tag_commit_of(git_exe, repo_clone, "v0.48.0")
+    assert os.path.normcase(str(version_dir)) not in os.path.normcase(wt)
+    blob = _git(git_exe, "-C", str(repo_clone), "show", "v0.48.0:agate/scripts/README.md").stdout
+    assert (version_dir / "agate" / "scripts" / "README.md").read_text(encoding="utf-8") == blob
 
 
 def test_bdd_3_reinstall_idempotent(
@@ -143,15 +153,18 @@ def test_bdd_3_reinstall_idempotent(
     first = _run_install(run_cli, python_exe, agate_scripts, home, "v0.48.0", repo_url=url)
     assert first.returncode == 0
 
+    version_dir = home / ".agate" / "v0.48.0"
+    before = H.snapshot_tree(version_dir, ignore_bytecode=False)
+
     result = _run_install(run_cli, python_exe, agate_scripts, home, "v0.48.0", repo_url=url)
     assert result.returncode == 0
 
-    version_dir = home / ".agate" / "v0.48.0"
     assert version_dir.is_dir()
-    git_exe = shutil.which("git")
-    assert git_exe
-    wt = _worktree_porcelain(git_exe, home / ".agate" / "repo")
-    assert os.path.normcase(wt).count(os.path.normcase(str(version_dir))) == 1
+    # [DESIGN_GAP-B1，TAG0037 P3 组 B 改写]：原末尾断言"repo/ 的 worktree list 中该版本目录恰出现 1 次"是旧 git worktree 形态的幂等判据，
+    # 与新契约（版本目录不再是 worktree）矛盾。等价新判据：二次安装不改动版本目录（内容逐字节不变）、不重复建目录、不遗留工作容器。
+    assert H.snapshot_tree(version_dir, ignore_bytecode=False) == before
+    assert sorted(n for n in os.listdir(str(home / ".agate")) if n.startswith("v")) == ["v0.48.0"]
+    assert not [n for n in os.listdir(str(home / ".agate")) if n.startswith((".agate-tmp-", ".agate-bak-"))]
 
 
 def test_bdd_4_current_defaults_to_latest(
@@ -251,17 +264,16 @@ def test_bdd_6_uninstall_rejected_when_referenced(
     project = home / "myproject"
     project.mkdir(parents=True)
     (project / ".agate-version").write_text("agate: v0.43.0\n", encoding="utf-8")
+    before_uninstall = H.snapshot_tree(home / ".agate" / "v0.43.0", ignore_bytecode=False)
 
     result = _run_install(run_cli, python_exe, agate_scripts, home, "--uninstall", "v0.43.0")
     assert result.returncode != 0
     assert "v0.43.0" in result.output
     assert ("myproject" in result.output) or (".agate-version" in result.output)
     assert (home / ".agate" / "v0.43.0").is_dir()
-
-    git_exe = shutil.which("git")
-    assert git_exe
-    wt = _worktree_porcelain(git_exe, home / ".agate" / "repo")
-    assert os.path.normcase(str(home / ".agate" / "v0.43.0")) in os.path.normcase(wt)
+    # [DESIGN_GAP-B1，TAG0037 P3 组 B 改写]：原末尾断言"该版本目录仍登记在 repo/ 的 worktree list"是旧 worktree 形态的"未被卸载"判据，
+    # 新契约下版本目录不再是 worktree。等价新判据：被拒绝卸载的版本目录内容逐字节不变。
+    assert H.snapshot_tree(home / ".agate" / "v0.43.0", ignore_bytecode=False) == before_uninstall
 
 
 @pytest.mark.windows_smoke
@@ -460,11 +472,6 @@ def test_tag0032_bdd_5_install_sh_versions_bootstrap(
     home = tmp_path / "home"
     (home / ".agate").mkdir(parents=True)  # 普通目录（非软链）
 
-    # AGATE_REPO_DIR 指向预置 git 仓库，令 pre-P4 legacy 分支快速失败（不触网络 clone）
-    prep = git_repo.__class__(tmp_path / "prep-repo")
-    (prep.path / "README.md").write_text("x\n", encoding="utf-8")
-    prep.commit("prep")
-
     repo_root = _repo_root_from_scripts(agate_scripts)
     result = run_cli(
         bash, str(repo_root / "install.sh"), "--versions",
@@ -472,7 +479,6 @@ def test_tag0032_bdd_5_install_sh_versions_bootstrap(
             "HOME": str(home),
             "USERPROFILE": str(home),
             "AGATE_REPO_URL": str(py_path(git_repo.path)),
-            "AGATE_REPO_DIR": str(prep.path),
         },
     )
     assert result.returncode == 0, "install.sh --versions 应成功进入版本管理布局"
@@ -551,3 +557,223 @@ def test_debt0034_install_sh_heredoc_is_guarded(agate_scripts):
         "install.sh 的拒绝文案不再是 heredoc（引号形态变化会让变量被展开，"
         "进而与 Python 侧文案漂移）"
     )
+
+
+
+# ============================================================
+# TAG0037 P3 组 B（批 B1a）：在线安装只装本体（BDD-22 / 24）、幂等且不污染（BDD-26）、软链守卫 T-14（BDD-32 / 51②）、
+#   迁移文案跨入口一致（BDD-35）、版本号 fullmatch。
+#   被测：agate-install.py（P4 批 B1a：git plumbing 构建器取代 git worktree add；软链守卫规范化）。
+#   夹具：合成上游 file:// bare 仓库（helpers_tag_repo，多 tag：正常 / 老 tag / 畸形 tag），隔离 AGATE_HOME / HOME；
+#   上述既有 TAG0008 / TAG0032 / DEBT0034 用例的函数体未改（仅 `_tag_upstream` 夹具助手增拷 agate_package.py；
+#   test_tag0032_bdd_5 清理已废弃旧变量的引用，见 P3-test-cases.md §6 修改登记）。
+# ============================================================
+
+_T14_VARIANTS = ["L", "L/", "L//", "L/.", "L/.."]
+_T14_IDS = [f"t14-{i}-{v.replace('/', 's').replace('.', 'd')}" for i, v in enumerate(_T14_VARIANTS)]
+_STEP_REGEXES = {
+    "backup": re.compile(r"mv\s+~?/?\.agate\s+\S*\.bak"),
+    "mkdir": re.compile(r"mkdir\s+-p\s+~?/?\.agate"),
+    "install": re.compile(r"install\.sh\s+--versions"),
+}
+
+
+@pytest.fixture(scope="module")
+def synth(tmp_path_factory):
+    return H.get_shared_synthetic_repo(tmp_path_factory)
+
+
+def _online(agate_scripts, tmp_path, agate_home, synth, *args, extra_env=None):
+    env = H.tool_env(tmp_path / "home", agate_home=agate_home, extra={"AGATE_REPO_URL": synth.url, **(extra_env or {})})
+    return H.run_tool([sys.executable, agate_scripts / "agate-install.py", *args], env=env, cwd=tmp_path)
+
+
+def _ptr(agate_home):
+    out = {}
+    for name in ("latest", "current"):
+        p = Path(agate_home) / name
+        out[name] = ("link", os.readlink(str(p))) if p.is_symlink() else (("file", p.read_text(encoding="utf-8")) if p.is_file() else None)
+    return out
+
+
+def _shape(agate_home):
+    snap = H.snapshot_tree(agate_home)
+    return {k: v for k, v in snap.items() if k != "repo" and not k.startswith("repo/")}
+
+
+def _leftover_containers(agate_home):
+    return sorted(n for n in os.listdir(str(agate_home)) if n.startswith((".agate-tmp-", ".agate-bak-")))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针断言仅 POSIX")
+def test_bdd_22_online_install_latest_installs_body_only(agate_scripts, tmp_path, synth):
+    """BDD-22：`agate-install.py latest`——vX.Y.Z/ 文件集合 == F_pkg；agate-workspace / docs / site / archived / .github / HANDOFF-*.md 均不存在；
+    无 .git 指针；AGATE_ROOT 为 vX.Y.Z/agate；根 scripts/ 仍由 _sync_root_scripts 建立；不遗留临时容器。"""
+    agate_home = tmp_path / "ah"
+    proc = _online(agate_scripts, tmp_path, agate_home, synth, "latest")
+    assert proc.returncode == 0, proc.stderr
+    vdir = agate_home / H.MAIN_TAG
+    assert H.file_set(vdir) == synth.expected_package(H.MAIN_TAG)
+    for noise in ("agate-workspace", "docs", "site", "archived", ".github", "HANDOFF-X.md", ".git", "README.md", "install.sh"):
+        assert not (vdir / noise).exists(), f"{noise} 不应被安装"
+    assert not (vdir / "agate" / "tests").exists()
+    assert (agate_home / "repo" / ".git").exists(), "在线路径保留 repo/（用户决策 ②）"
+    assert (agate_home / "scripts" / "agate-install.py").is_file()
+    assert _leftover_containers(agate_home) == []
+    res = H.run_tool([sys.executable, agate_home / "scripts" / "agate-resolve.py"], env=H.tool_env(tmp_path / "home", agate_home=agate_home), cwd=tmp_path)
+    assert res.returncode == 0, res.stderr
+    assert f"AGATE_ROOT={(vdir / 'agate').resolve()}" in res.stdout
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针断言仅 POSIX")
+@pytest.mark.parametrize("tag", [H.OLD_TAG, H.NO_NOTICES_TAG], ids=["bdd24-1-old-tag-without-exclusion-config", "bdd24-2-old-tag-without-notices"])
+def test_bdd_24_1_install_historical_tag_gets_body_only_and_pointers_unchanged(tag, agate_scripts, tmp_path, synth):
+    """BDD-24 ①：版本根已有 repo/ 与 latest → vN；装更老的历史 tag（树内无任何排除机制文件 / 缺 NOTICES.md）——
+    vX.Y.Z/ 文件集合 == 对该 tag 应用边界得到的 F_pkg（不因缺配置退回全量）；latest / current 指针不变；项目 .agate-version 钉版后 resolve 得该版本；repo/ 仍在。"""
+    agate_home = tmp_path / "ah"
+    first = _online(agate_scripts, tmp_path, agate_home, synth, "latest")
+    assert first.returncode == 0, first.stderr
+    ptr_before = _ptr(agate_home)
+    proc = _online(agate_scripts, tmp_path, agate_home, synth, tag)
+    assert proc.returncode == 0, proc.stderr
+    assert H.file_set(agate_home / tag) == synth.expected_package(tag)
+    assert _ptr(agate_home) == ptr_before, "`vX.Y.Z` 只预装不改指针（既有契约）"
+    assert (agate_home / "repo" / ".git").exists()
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".agate-version").write_text(f"agate: {tag}\n", encoding="utf-8")
+    res = H.run_tool([sys.executable, agate_home / "scripts" / "agate-resolve.py"], env=H.tool_env(tmp_path / "home", agate_home=agate_home), cwd=project)
+    assert res.returncode == 0, res.stderr
+    assert f"AGATE_VERSION={tag}" in res.stdout
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针断言仅 POSIX")
+def test_bdd_24_2_malformed_tag_without_agate_scripts_fails_closed(agate_scripts, tmp_path, synth):
+    """BDD-24 ②：树内无 agate/scripts/ 的畸形 tag → exit 1，stderr 指明缺 agate/scripts，不留半装版本目录 / 临时容器，指针不变。"""
+    agate_home = tmp_path / "ah"
+    first = _online(agate_scripts, tmp_path, agate_home, synth, "latest")
+    assert first.returncode == 0, first.stderr
+    ptr_before = _ptr(agate_home)
+    versions_before = sorted(n for n in os.listdir(str(agate_home)) if n.startswith("v"))
+    proc = _online(agate_scripts, tmp_path, agate_home, synth, H.MALFORMED_TAG)
+    assert proc.returncode == 1, proc.stderr
+    assert "agate/scripts" in proc.stderr
+    assert not (agate_home / H.MALFORMED_TAG).exists()
+    assert sorted(n for n in os.listdir(str(agate_home)) if n.startswith("v")) == versions_before
+    assert _leftover_containers(agate_home) == []
+    assert _ptr(agate_home) == ptr_before
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链指针断言仅 POSIX")
+def test_bdd_26_online_reinstall_is_idempotent_and_does_not_pollute_source(agate_scripts, tmp_path, synth):
+    """BDD-26：同一 AGATE_HOME 连续两次 `agate-install.py latest`，再 `agate-install.py <同版本>`——第二次起不报错、不重复建版本目录、指针幂等；
+    源 checkout（脚本所在仓库）无 repo/ / vX.Y.Z/ / 临时容器产物。既有 test_bdd_3 / test_tag0032_bdd_3/4/5 / test_tag0032_bdd_13/14 保持通过（本文件其余用例）。"""
+    agate_home = tmp_path / "ah"
+    r1 = _online(agate_scripts, tmp_path, agate_home, synth, "latest")
+    assert r1.returncode == 0, r1.stderr
+    shape1, ptr1 = _shape(agate_home), _ptr(agate_home)
+    r2 = _online(agate_scripts, tmp_path, agate_home, synth, "latest")
+    assert r2.returncode == 0, r2.stderr
+    r3 = _online(agate_scripts, tmp_path, agate_home, synth, H.MAIN_TAG)
+    assert r3.returncode == 0, r3.stderr
+    assert "已安装" in r3.stdout or "跳过" in r3.stdout
+    assert _shape(agate_home) == shape1 and _ptr(agate_home) == ptr1
+    root = agate_scripts.parent.parent
+    porcelain = _git(shutil.which("git") or "git", "-C", str(root), "status", "--porcelain", "--untracked-files=all").stdout
+    pat = re.compile(r"(^|/)(repo|v[0-9]+\.[0-9]+\.[0-9]+|\.agate-(tmp|bak)-[^/]*)(/|$)")
+    assert not [ln for ln in porcelain.splitlines() if pat.search(ln[3:].strip())], "在线安装不得污染源仓库树"
+
+
+@pytest.mark.parametrize("bad", ["v0.73.0\n", "v1.2", "../evil", "v0.73.0-tagtest.1"], ids=["bad-newline", "bad-two-part", "bad-traversal", "bad-prerelease-as-version"])
+def test_online_install_rejects_invalid_version_strings(bad, agate_scripts, tmp_path, synth):
+    """P2 §3.3 / cso F-9：`_VERSION_RE` 改 fullmatch 口径——结尾换行 / 两段 / 路径穿越 / 预发布后缀均拒（exit 2，"非法版本号"），不建任何版本目录。"""
+    agate_home = tmp_path / "ah"
+    proc = _online(agate_scripts, tmp_path, agate_home, synth, bad)
+    assert proc.returncode == 2, proc.stderr
+    assert "非法版本号" in proc.stderr
+    if agate_home.exists():
+        assert not [n for n in os.listdir(str(agate_home)) if n.startswith("v")]
+    assert not (tmp_path / "evil").exists()
+
+
+def _symlink_home_fixture(tmp_path):
+    target = tmp_path / "src" / "agate"
+    (target / "scripts").mkdir(parents=True)
+    (target / "assets").mkdir()
+    (target / "canary.txt").write_text("canary\n", encoding="utf-8")
+    home = tmp_path / "home-link"
+    home.mkdir()
+    link = home / ".agate"
+    try:
+        os.symlink(str(target), str(link))
+    except (OSError, NotImplementedError):
+        pytest.skip("当前平台无法创建软链")
+    return link, target
+
+
+@pytest.mark.parametrize("variant", _T14_VARIANTS, ids=_T14_IDS)
+@pytest.mark.parametrize("args", [(), ("latest",), (H.MAIN_TAG,)], ids=["bdd32-1-no-args", "bdd32-2-latest", "bdd32-3-version"])
+def test_bdd_32_t14_agate_install_symlink_home_fail_closed(args, variant, agate_scripts, tmp_path, synth):
+    """BDD-32 + T-14（agate-install 入口）：AGATE_HOME 是软链（含 L/ L// L/. L/.. 变体）——无参 / latest / vX.Y.Z 三种调用均 exit 1，
+    stderr 含三步迁移片段，软链目标（金丝雀）不被穿透污染（无 repo/、无 vX.Y.Z/），物理父目录不新增条目。"""
+    link, target = _symlink_home_fixture(tmp_path)
+    before = H.snapshot_tree(target)
+    parent_listing = sorted(os.listdir(str(target.parent)))
+    proc = _online(agate_scripts, tmp_path, str(link) + variant[1:], synth, *args)
+    assert proc.returncode == 1, f"rc={proc.returncode}\n{proc.stderr}"
+    for key, rx in _STEP_REGEXES.items():
+        assert rx.search(proc.stderr), f"stderr 缺三步迁移片段 {key}: {proc.stderr}"
+    assert H.snapshot_tree(target) == before
+    assert not (target / "repo").exists()
+    assert sorted(os.listdir(str(target.parent))) == parent_listing
+
+
+def test_bdd_51_2_install_into_symlinked_full_version_root_is_refused_with_resolution_note(agate_scripts, tmp_path, synth):
+    """BDD-51 ②：AGATE_HOME 是软链 → 完整版本根（含 vX.Y.Z/agate、latest、current）——`agate-install.py latest` 一律拒绝（exit 1，按 BDD-32），
+    迁移文案同时说明"若 ~/.agate 是指向完整版本根的软链，解析仍可用，仅安装类命令需先改为实体目录或对软链目标直接执行安装"。"""
+    real = tmp_path / "bigdisk" / "agate-root"
+    (real / H.MAIN_TAG / "agate" / "scripts").mkdir(parents=True)
+    os.symlink(H.MAIN_TAG, str(real / "latest"))
+    os.symlink("latest", str(real / "current"))
+    home = tmp_path / "home-link"
+    home.mkdir()
+    try:
+        os.symlink(str(real), str(home / ".agate"))
+    except (OSError, NotImplementedError):
+        pytest.skip("当前平台无法创建软链")
+    before = H.snapshot_tree(real)
+    proc = _online(agate_scripts, tmp_path, home / ".agate", synth, "latest")
+    assert proc.returncode == 1, proc.stderr
+    assert "解析仍可用" in proc.stderr
+    assert H.snapshot_tree(real) == before
+
+
+def test_bdd_35_migration_steps_consistent_across_all_entries(agate_scripts):
+    """BDD-35（DEBT0034 守护延续）：迁移三步出现的全部入口——install.sh（heredoc）、agate-install.py、install-offline.py、agate_common.py（resolve 侧）、
+    UPGRADING 迁移小节——用 `_migration_steps` 同款正则抽取三片段，逐一相等（既有 test_debt0034_* 保留，本用例扩展到新增入口）。"""
+    root = _repo_root_from_scripts(agate_scripts)
+    texts = {
+        "install.sh": (root / "install.sh").read_text(encoding="utf-8"),
+        "agate-install.py": (agate_scripts / "agate-install.py").read_text(encoding="utf-8"),
+        "install-offline.py": (agate_scripts / "install-offline.py").read_text(encoding="utf-8"),
+        "agate_common.py": (agate_scripts / "agate_common.py").read_text(encoding="utf-8"),
+        "UPGRADING.md": (root / "agate" / "UPGRADING.md").read_text(encoding="utf-8"),
+    }
+    steps = {name: _migration_steps(text) for name, text in texts.items()}
+    for name, st in steps.items():
+        for key in ("backup", "mkdir", "install"):
+            assert st[key] is not None, f"{name} 缺三步迁移片段 {key}"
+    ref = steps["install.sh"]
+    for name, st in steps.items():
+        assert st == ref, f"三步迁移片段漂移（{name}）: {st} ≠ install.sh 侧 {ref}"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链断言仅 POSIX")
+def test_bdd_35_runtime_stderr_steps_identical_between_installer_and_resolver(agate_scripts, tmp_path, synth):
+    """BDD-35（运行时口径）：软链基址下 agate-install.py 的拒绝 stderr 与 agate-resolve.py 的迁移提示，抽出的三片段逐一相等。"""
+    link, _target = _symlink_home_fixture(tmp_path)
+    inst = _online(agate_scripts, tmp_path, link, synth, "latest")
+    res = H.run_tool([sys.executable, agate_scripts / "agate-resolve.py"], env=H.tool_env(tmp_path / "home", agate_home=link), cwd=tmp_path)
+    assert inst.returncode == 1 and res.returncode == 1
+    assert _migration_steps(inst.stderr) == _migration_steps(res.stderr)
+    assert all(v is not None for v in _migration_steps(res.stderr).values())

@@ -553,6 +553,7 @@ test -r "$AGATE_DIR/orchestrator-template.md" && echo "✅ 模板可读" || echo
 
 gate_commands:
   P3: "python3 -m pytest agate/tests/ -n auto"
+  P3_formatter: "pytest.sh"
   P5: "python3 -m pytest agate/tests/ --reruns 1 -n auto"
   P5_timeout_seconds: 300
   P5_consistency: "python3 agate/scripts/check-protocol-consistency.py --strict-errors-only"

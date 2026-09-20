@@ -352,6 +352,8 @@ agent: analyst
 - When 按 SETUP「OpenCode」节命令建 `.opencode/agents/orchestrator.md` 链接，再在项目目录跑 `opencode debug agent orchestrator`
 - Then 命令 exit 0；输出可解析为 JSON 且 `mode == "primary"`、`tools.task == true`
 
+[BASELINE_CHANGE: G-1 CI 例外（仅注解，不改 Given/When/Then）——BDD-43 仅在 GITHUB_ACTIONS=true 且 opencode 缺失时跳过；本地 / P5 / P6 运行缺 CLI 仍判 FAIL。原因：GitHub runner 未预装该 CLI，且改 workflow 属本任务 out-of-scope；主 Agent 裁决已采纳。]
+
 #### BDD-44: DSH 接入命令实跑（判据 11）
 - Given 【隔离】`HOME` + 版本管理布局；DSH 无需真实安装（`dsh` 不在本机 PATH：只验证 agate 侧命令）
 - When 按 SETUP「步骤 2-DSH」节命令：`mkdir -p ~/.dsh/.agent-presets/agate ~/.dsh/skills/agate-protocol` + 三条 `ln -sf "$AGATE_DIR/assets/templates/dsh/…"`（既有 `test_dsh_preset.py` 已锁字面命令，保持通过）
@@ -361,6 +363,8 @@ agent: analyst
 - Given 版本管理布局在隔离 `tmp_path`（`$AGATE_DIR` 按 BDD-41 取值）；`HOME` 保持真实**仅供 codex 读自身配置**，命令不读不写真实 `~/.agate`（前后内容哈希不变）；`codex` 在 PATH（**不在 PATH → 本 BDD 判 FAIL**：环境未就绪，走 verification_env 失败协议，不得记为通过或跳过）
 - When 读取 `$AGATE_DIR/orchestrator-template.md`，并跑 SETUP「步骤 2-Codex」的验证命令 `timeout 60s codex features list`
 - Then 模板可读；命令 exit 0 且输出含 `multi_agent` 行，该行状态值为 `stable` 或 `true`；（Codex 无 orchestrator 软链注册步骤，本 BDD 验证 legacy fallback 移除后协议根取值与 Codex 接入链路无回归；不执行需登录 / 联网的 `codex exec`）
+
+[BASELINE_CHANGE: G-1 CI 例外（仅注解，不改 Given/When/Then）——BDD-45 仅在 GITHUB_ACTIONS=true 且 codex 缺失时跳过；本地 / P5 / P6 运行缺 CLI 仍判 FAIL。原因：GitHub runner 未预装该 CLI，且改 workflow 属本任务 out-of-scope；主 Agent 裁决已采纳。]
 
 #### BDD-46: out-of-scope 文件零 diff（负向）
 - Given 本任务全部提交

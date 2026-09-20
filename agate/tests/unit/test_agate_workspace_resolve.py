@@ -6,9 +6,12 @@
 # 解析优先级：.agate.env 显式配置 > 环境变量 AGATE_TASKS_DIR > 默认 agate-workspace/
 
 import os
+import shutil
 from pathlib import Path
 
 import pytest
+
+import helpers_tag_repo as H
 
 
 def _ws_out(result):
@@ -149,3 +152,46 @@ def test_bdd_18_crlf_does_not_pollute_workspace(agate_scripts, python_exe, run_c
     result = _resolve(agate_scripts, python_exe, run_cli, project)
     assert result.returncode == 0
     assert _ws_out(result) == _realpath(project / "ws-crlf")
+
+
+# ============================================================
+# TAG0037 P3 组 B（批 E）：agate_common 现依赖 agate_package.py（from agate_package import agate_home）——
+#   BDD-47（hook / 解析入口不受影响）代码面：仅拷 agate_common.py + agate_package.py 的最小 scripts 目录（贴近"版本目录 / 拷贝复制模式"
+#   的真实形态）里，工作区解析执行模式照常工作；BDD-28：AGATE_HOME 指向软链不影响工作区解析（它只关心 PROJECT_ROOT，不是版本根）。
+# ============================================================
+
+
+def test_bdd_47_workspace_resolve_runs_from_minimal_scripts_dir_with_agate_package(agate_scripts, python_exe, run_cli, tmp_path):
+    """BDD-47：把 agate_common.py 与它的新依赖 agate_package.py 拷入一个最小目录后运行工作区解析——exit 0、两行输出照常。
+    （agate_package.py 不存在 = P4 前的 B 类红灯；拷贝漏带它则 agate_common 会 ModuleNotFoundError，eng N-1。）"""
+    minimal = tmp_path / "minimal-scripts"
+    minimal.mkdir()
+    for name in ("agate_common.py", "agate_package.py"):
+        src = agate_scripts / name
+        assert src.is_file(), f"{name} 缺失（被测模块未实现）"
+        shutil.copy2(str(src), str(minimal / name))
+    project = tmp_path / "ws"
+    project.mkdir()
+    result = run_cli(python_exe, str(minimal / "agate_common.py"), str(project))
+    assert result.returncode == 0, result.output
+    assert "ModuleNotFoundError" not in result.output
+    assert _ws_out(result) == _realpath(project / "agate-workspace")
+    assert _tasks_out(result) == _realpath(project / "agate-workspace" / "tasks")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="软链断言仅 POSIX")
+def test_bdd_28_workspace_resolve_unaffected_by_symlink_agate_home(agate_scripts, python_exe, run_cli, tmp_path):
+    """BDD-28：AGATE_HOME 指向软链（版本根基址概念）不影响工作区解析——工作区只随 PROJECT_ROOT / .agate.env（与解析链无关）。"""
+    real = tmp_path / "some-root"
+    real.mkdir()
+    link = tmp_path / "link-home"
+    try:
+        os.symlink(str(real), str(link))
+    except (OSError, NotImplementedError):
+        pytest.skip("当前平台无法创建软链")
+    project = tmp_path / "ws"
+    project.mkdir()
+    result = _resolve(agate_scripts, python_exe, run_cli, project, env={"AGATE_HOME": str(link)})
+    assert result.returncode == 0, result.output
+    assert _ws_out(result) == _realpath(project / "agate-workspace")
+    assert H.snapshot_tree(real) == {}, "不得往软链目标写任何内容"

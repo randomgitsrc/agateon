@@ -44,8 +44,11 @@ def _tag_meta_upstream(upstream, agate_scripts, marker="E2E-GATE-050"):
     # agate/scripts/ 内放真实版本工具（贴近真实元仓库形态：每个 tag 的 agate/scripts/
     # 本就含全套版本工具，P1-requirements §3.4）——令 install.sh --versions 走
     # $AGATE_HOME/repo/agate/scripts/agate-install.py 主路径、_sync_root_scripts 单源 copytree。
-    for name in ("agate_common.py", "resolve-entry.py", "agate-install.py"):
-        shutil.copy2(str(agate_scripts / name), str(ag / "scripts" / name))
+    # TAG0037（P2 §6 T-10 / eng N-1）：agate_common / agate-install 现依赖 agate_package.py——拷贝清单须同时含它
+    # （存在才拷：P4 落地前该文件尚不存在，夹具不得因此炸掉既有用例）。
+    for name in ("agate_common.py", "agate_package.py", "resolve-entry.py", "agate-install.py"):
+        if (agate_scripts / name).is_file():
+            shutil.copy2(str(agate_scripts / name), str(ag / "scripts" / name))
     (ag / "scripts" / "pre-commit-gate.py").write_text(
         _STUB_GATE.format(marker=marker), encoding="utf-8"
     )
@@ -67,8 +70,10 @@ def _git(*args):
     )
 
 
-def _enter_version_layout(run_cli, bash, agate_scripts, home, upstream_url, prep_dir):
-    """官方路径进入版本管理布局：install.sh --versions（AGATE_REPO_URL 注入本地元仓库）。"""
+def _enter_version_layout(run_cli, bash, agate_scripts, home, upstream_url, _unused=None):
+    """官方路径进入版本管理布局：install.sh --versions（AGATE_REPO_URL 注入本地元仓库）。
+
+    TAG0037 BDD-30：不再注入已废弃的旧变量；末位形参仅为保持受保护用例（test_tag0032_bdd_13/14）的调用点原样不变而保留。"""
     return run_cli(
         bash,
         str(_repo_root(agate_scripts) / "install.sh"),
@@ -77,17 +82,13 @@ def _enter_version_layout(run_cli, bash, agate_scripts, home, upstream_url, prep
             "HOME": str(home),
             "USERPROFILE": str(home),
             "AGATE_REPO_URL": str(upstream_url),
-            "AGATE_REPO_DIR": str(prep_dir),
         },
     )
 
 
 def _prep_fastfail_repo(tmp_path):
-    """预置 git 仓库，令 pre-P4 legacy 分支走 `git pull` 快速失败（不触网络 clone）。"""
-    prep = GitRepo(tmp_path / "prep-repo")
-    (prep.path / "README.md").write_text("x\n", encoding="utf-8")
-    prep.commit("prep")
-    return prep.path
+    """占位（受保护用例的调用点原样保留，见 _enter_version_layout）；不再预置任何仓库。"""
+    return None
 
 
 def test_tag0032_bdd_13_full_lifecycle_new_machine_to_update(

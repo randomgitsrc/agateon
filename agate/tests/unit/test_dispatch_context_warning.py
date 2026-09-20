@@ -15,6 +15,7 @@ _FAKE_SCRIPTS = [
     "resolve-entry.py",  # TAG0008：hook 薄壳经 resolve-entry 解析版本后 exec 对应 gate
     "pre-commit-gate.py",
     "agate_common.py",
+    "agate_package.py",  # TAG0037（eng N-1）：agate_common 现依赖它；P4 落地前不存在时下方拷贝循环跳过
     "agate-state-get.py",
     "agate-json-get.py",
     "agate-state-yaml-check.py",
@@ -60,6 +61,8 @@ def test_b3_warning_staged_missing_dispatch_context_warns(
     fake_scripts = fake / "scripts"
     fake_scripts.mkdir(parents=True)
     for name in _FAKE_SCRIPTS:
+        if name == "agate_package.py" and not (agate_root / "scripts" / name).is_file():
+            continue  # TAG0037：P4 落地前该文件尚不存在（仅它可缺；其余脚本缺失仍应炸）
         shutil.copy2(agate_root / "scripts" / name, fake_scripts / name)
     shutil.copytree(agate_root / "assets", fake / "assets")
 
