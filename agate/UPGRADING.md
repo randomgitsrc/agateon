@@ -292,6 +292,12 @@ git commit
 7. **升级说明（两步升级，仅文档）**：v0.72.x 用户**用旧安装器**（旧 `install.sh` / 旧根 `scripts/agate-install.py`）升级到 v0.73.0 时，装出的 v0.73.0 **自身仍是旧整仓形态**（旧安装器不认识本体包；该形态仍可解析、可用）。该次安装会把根 `scripts/` 同步为 v0.73.0 自带的新安装器，此后经根 `scripts/` 执行的安装（`agate-install.py latest` / `vX.Y.Z`）才只装本体、得到契约形态。既有整仓形态版本目录无需处理（见上条）。
 8. **钉老版本的副作用**：`agate-install.py vX.Y.Z` 预装老版本会把根 `scripts/` 同步为**该老版本的安装器**，其后再执行 `latest` 可能重走旧安装路径。须先 `python3 ~/.agate/scripts/agate-install.py latest`（用新版本重新同步根 `scripts/`）或直接用 `repo/` 里最新版的安装器。
 9. **仅仓库开发者可用的内容**：`agate/tests/` 不进本体包（包内对 `agate/tests/README.md` 的引用仅对 git 仓库开发者有效）。
+10. **离线路径行为收紧（使用 `agate-pack-offline.py` / `install-offline.py` 的用户注意）**：
+    - **旧格式 bundle 被拒绝**：v0.73.0 之前打出的 bundle（顶层含 `agate/agate/scripts` 双层嵌套）会被 `install-offline.py` 拒绝，报「bundle 为旧格式……请用新版 `agate-pack-offline.py` 重新打包」；须在外网机器用新版打包器重新打包，目标目录不会留下半装内容。新 bundle 顶层 = `agate/` + 登记根文件 + `wheels/` + `manifest.json`，manifest 新增 `files` 清单与 `source_ref`。
+    - **同版本重装 = 替换**：`vX.Y.Z/` 已存在时，`install-offline.py` 改为替换该目录（旧目录先移入带标记的备份容器，新版就位且指针写入成功后才删除；中途失败则还原旧目录与 `latest`/`current` 指针）。在线路径 `agate-install.py vX.Y.Z` 仍是"已存在即跳过"。
+    - **打包输出目录已存在则拒绝覆盖**：`agate-pack-offline.py` 不清空、不删除既有内容，须换新的 `--outdir` 或自行移走旧 bundle。
+    - **版本目录不再写额外文件**：离线安装不再写 `.installed-version` 与 `.agate-root`；`--include-python` 打入 bundle 的嵌入式 python 组件不再落入 `vX.Y.Z/`（安装时仅打印一行说明）；`AGATE_HOOK_COPY_MODE` 不再影响离线安装写出的 `current` 指针（POSIX 下为软链）。
+    - **废弃环境变量（`install.sh`）**：`AGATE_REPO_DIR` / `AGATE_SYMLINK` 见第 4 条，设置时仅 stderr 一行 WARNING 并被忽略。
 
 ### v0.72.0 — MVWU 阶段 1 观测（TAG0036：RM-AG0063 阶段 1）
 

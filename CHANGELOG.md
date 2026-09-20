@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+（暂无——下个版本的变更在此累积。）
+
+## [0.73.0] - 2026-09-20
+
 > **BREAKING（TAG0037，将随 v0.73.0 发布）**：删除旧单软链布局支持。迁移指引见 `agate/UPGRADING.md` 的 `### v0.73.0`（软链用户三步：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`）。
 
 ### BREAKING（TAG0037：安装与多版本模型统一，RM-AG0066）
@@ -27,6 +31,12 @@
 ### 变更
 
 - `agate_common.py`：`compute_sha256` 目录分支忽略字节码（`__pycache__` / `*.pyc` / `*.pyo`），安装态与运行后态哈希一致。
+- **离线路径行为收紧**（详见 `agate/UPGRADING.md` `### v0.73.0` 第 10 条）：
+  - 旧格式 offline bundle（顶层 `agate/agate/scripts` 双层嵌套）被 `install-offline.py` 拒绝，须用新版 `agate-pack-offline.py` 重新打包；新 bundle 顶层 = `agate/` + 登记根文件 + `wheels/` + `manifest.json`，manifest 新增 `files` 与 `source_ref`，`agate-pack-offline.py` 新增 `--ref`。
+  - `vX.Y.Z/` 已存在时，`install-offline.py` 改为替换语义（旧目录入带标记备份容器，成功后才删，失败则还原目录与指针）；在线安装仍"已存在即跳过"。
+  - `agate-pack-offline.py` 输出目录已存在时拒绝覆盖（不清空、不删除既有内容）。
+  - 离线安装不再写 `.installed-version` / `.agate-root`；嵌入式 python 组件不再落入 `vX.Y.Z/`；`AGATE_HOOK_COPY_MODE` 不再影响离线 `current` 指针。
+  - `install.sh` 设置已废弃的 `AGATE_REPO_DIR` / `AGATE_SYMLINK` 时 stderr 一行 WARNING 并忽略。
 
 来源：TAG0037（RM-AG0066）。版本段标题与日期在 P8 发版时重命名。
 
