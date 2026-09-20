@@ -15,7 +15,6 @@
 
 | 编号 | 任务名称 | 状态 | 阶段 | 优先级 | 依赖 | 创建日期 | 更新日期 |
 |------|----------|------|------|--------|------|----------|----------|
-| TAG0037 | 安装与多版本模型统一（RM-AG0066）：版本目录结构契约 + GitHub Release/本体安装包（portable）+ 三路径统一 + 修离线安装解析失效（P0 真 BUG）| ⬜ | P0 | 高 | — | 2026-09-19 | 2026-09-19 |
 
 ### 已完成（归档）
 
@@ -24,6 +23,7 @@
 
 | 编号 | 任务名称 | 状态 | 最终阶段 | 优先级 | 完成日期 |
 |------|----------|------|----------|--------|----------|
+| TAG0037 | 安装与多版本模型统一（RM-AG0066）：版本目录结构契约 + GitHub Release/本体安装包（portable）+ 三路径统一 + 修离线安装解析失效（P0 真 BUG） | ✅ | READY | 高 | 2026-09-20 |
 | TAG0036 | MVWU 阶段 1 试点（RM-AG0063）：`batches[].tests_filter` + `P4-evidence/{batch}.log` + 不阻断的 `check-mvwu.py`（四态 verdict）+ Q1/Q2/Q3 数据采集 | ✅ | READY | 中 | 2026-09-19 |
 | TAG0035 | gate 健壮性批（RM-AG0062 归并 + RM-AG0064 并入）：check-gate.py 未知阶段 fail-open→exit 1（BDD-1/2/3）+ 三处数字序号假设致非数字阶段名静默失效修复（check-gate.py 回退检测/check-state-transition.py phase_num/pre-commit-gate.py WARNING，BDD-4/5/6/7）+ _gate_p4 完整度判据放宽（DEBT0037，历史commit扫描，BDD-8/9/10）+ check-judge-verdict.py 黑白名单3处假阳性修复（DEBT0038，路径token化豁免，BDD-11/12/13/14）；DEBT0040/0041 已移出范围仍 open。4 子批 hunk 级精确 commit，14 BDD 全 PASS，P6.5 judge 两轮复核（首轮 needs-revision 因 BDD-3/7 缺全量证据→补证后 14/14 passed），P7 一致性 BLOCKER=0，2 条 DESIGN_GAP 均 REVIEWED → v0.71.1 | ✅✅ | READY | 中 | 2026-09-16 |
 | TAG0034 | 派发路由（配置驱动跨 CLI/model 派发 + tmux 观测，RM-AG0060 epic）：新增项目级 agate-workspace/dispatch-routing.yaml，按 (phase,role) 声明候选 {cli,model,effort?} 或引用命名档位——查表→直接派首选→仅基础设施失败（launch/infra/无可解析产出）才逐级回落→默认派发；无 probe（try-and-fall）。tier（bulk/standard/deep）+ effort 两正交轴。cli 可为 native（弱缓解）或另一 CLI 起子进程（强缓解）。新增 dispatch_route 事件带理由码（枚举无 gate_fail 值）——候选回落≠状态机 retry，gate FAIL 绝不换候选。gate/状态机/phases.yaml 全不动。P4a 核心+native / P4b 子进程 / P4c tmux 串行子批。DEBT0039 并入。53 BDD 全 PASS，P6.5 judge 53/53 passed，P7 一致性 BLOCKER=0，SELF-GATE alignment-review aligned → v0.71.0 | ✅✅ | READY | 高 | 2026-09-10 |

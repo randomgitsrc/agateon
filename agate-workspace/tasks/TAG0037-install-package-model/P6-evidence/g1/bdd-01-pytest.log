@@ -1,0 +1,31 @@
+# BDD-1 pytest evidence (verifier g1)
+# selected 9 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <9 node ids below>
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_exactly_one_contract_section_in_whole_document
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_a_version_root_tree_lists_all_entries
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_b_top_level_entry_set_and_violation_rule
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_c_body_directory_name_is_fixed
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_d_single_source_file_path
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_states_install_state_vs_post_run_state
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_protocol_root_sentence_corrected
+#   agate/tests/unit/test_agate_package.py::test_bdd_1_constants_and_boundary_lines
+#   agate/tests/unit/test_agate_release.py::test_boundary_subcommand_prints_library_lines
+# HEAD=043181d git version 2.43.0
+# elapsed 0.5s
+
+============================= test session starts ==============================
+collecting ... collected 9 items
+
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_exactly_one_contract_section_in_whole_document PASSED [ 11%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_a_version_root_tree_lists_all_entries PASSED [ 22%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_b_top_level_entry_set_and_violation_rule PASSED [ 33%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_c_body_directory_name_is_fixed PASSED [ 44%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_d_single_source_file_path PASSED [ 55%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_states_install_state_vs_post_run_state PASSED [ 66%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_1_protocol_root_sentence_corrected PASSED [ 77%]
+agate/tests/unit/test_agate_package.py::test_bdd_1_constants_and_boundary_lines PASSED [ 88%]
+agate/tests/unit/test_agate_release.py::test_boundary_subcommand_prints_library_lines PASSED [100%]
+
+============================== 9 passed in 0.22s ===============================
+
+EXIT_CODE: 0

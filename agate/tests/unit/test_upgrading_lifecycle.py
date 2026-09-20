@@ -59,13 +59,16 @@ def lifecycle_section(upgrading):
 
 
 def test_tag0032_bdd_10_update_commands_aligned_and_idempotent(upgrading, lifecycle_section):
-    """BDD-10：两种布局的更新指令在文档面对齐且各自幂等。"""
+    """BDD-10：版本管理布局的更新指令在文档面成文且幂等。
+
+    TAG0037 P2 §6 / P1 BDD-38 ④：旧软链布局已移除（v0.73.0 BREAKING），原"两布局对齐"断言中的
+    旧布局侧（git pull 更新指令）随对照表去旧布局列而删除；版本布局侧（agate-install latest + 幂等）与
+    hook 重装判定口径的断言保留。
+    """
     assert "版本管理生命周期" in upgrading, "UPGRADING.md 应新增「版本管理生命周期」节"
     sec = lifecycle_section
     assert sec, "「版本管理生命周期」节应可抽取"
-    # legacy 布局：git pull + hook 判定口径
-    assert "git pull" in sec, "legacy 布局更新指令应明确为 git pull"
-    assert "install-hook.py" in sec, "legacy 更新应含『是否需重跑 install-hook.py』判定口径"
+    assert "install-hook.py" in sec, "更新应含『是否需重跑 install-hook.py』判定口径"
     # 版本布局：agate-install latest + 幂等
     assert re.search(r"agate-install(\.py)?\s+latest", sec), "版本布局更新应为 agate-install latest"
     assert "幂等" in sec, "版本布局更新应声明幂等（重复执行不报错、不重复建版本目录）"

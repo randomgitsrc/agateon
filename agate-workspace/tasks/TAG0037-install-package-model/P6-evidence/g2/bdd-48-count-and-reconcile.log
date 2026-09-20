@@ -1,0 +1,39 @@
+# BDD-48 supplementary: count-tests.sh and A/D reconciliation, HEAD=043181d
+$ timeout 120s bash agate/tests/scripts/count-tests.sh
+=== pytest 用例覆盖度自检 ===
+总计：2294 个测试用例（pytest collect-only 口径）
+
+目标：≥ 749（TAG0011 迁移基线，BDD-1）；迁移期数值单调逼近 749。
+如果此数字与 docs/plans/agate-test-plan-2026-07-01.md 附录 A 的口径不一致
+→ 文档漂移，需要更新（附录 A 已归档，口径以 BDD-1 749 为准）。
+count-tests exit=0
+
+$ git diff 75a8102..HEAD -U0 -- agate/tests | grep -cE "^-(async )?def test_"  (D = removed def lines)
+D=12
+A=247
+A-D=235
+(P3 §7.5 form: strict line-start regexes ^-(async )?def test_ / ^\+(async )?def test_; class-method form with leading spaces counted above via [ ]*)
+strict: D=12 A=247
+
+removed test defs (names):
+def test_bdd_22_bundle_manifest(tmp_path, agate_scripts):
+def test_bdd_23_manifest_fields_checksum(tmp_path, agate_scripts):
+def test_bdd_24_fail_tag_missing(tmp_path, agate_scripts, capsys):
+def test_bdd_24_fail_pip_network(tmp_path, agate_scripts, capsys):
+def test_bdd_24_fail_wheel_missing(tmp_path, agate_scripts, capsys):
+def test_bdd_2_version_dir_worktree_of_tag(
+def test_bdd_30_legacy_symlink_direct_root(run_cli, python_exe, agate_scripts, tmp_path):
+def test_debt0042_agate_home_legacy_symlink(run_cli, python_exe, agate_scripts, tmp_path):
+def test_bdd_27_wheels_offline_install(tmp_path, agate_scripts):
+def test_bdd_28_version_dir_hook_verify(tmp_path, agate_scripts):
+def test_bdd_29_skip_flags(tmp_path, agate_scripts, capsys):
+def test_bdd_29b_no_pillow_bundle_installs_pyyaml_only(tmp_path, agate_scripts, capsys):
+
+AST-level exact count of test functions: baseline vs HEAD
+test functions baseline 75a8102: 1661  HEAD: 1896  net: 235
+removed (path,name) pairs: 3
+  - ('agate/tests/unit/test_agate_version_install.py', 'test_bdd_2_version_dir_worktree_of_tag')
+  - ('agate/tests/unit/test_agate_version_resolve.py', 'test_bdd_30_legacy_symlink_direct_root')
+  - ('agate/tests/unit/test_agate_version_resolve.py', 'test_debt0042_agate_home_legacy_symlink')
+added (path,name) pairs: 238
+EXIT_CODE: 0

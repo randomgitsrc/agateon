@@ -1,0 +1,17 @@
+# BDD-41 pytest evidence (verifier g2)
+# selected 2 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <2 node ids below>
+#   agate/tests/unit/test_setup_agate_dir.py::test_bdd_41_agate_dir_command_has_no_legacy_fallback
+#   agate/tests/unit/test_setup_agate_dir.py::test_bdd_41_agate_dir_command_resolves_current_and_fails_loudly_without_it
+# HEAD=043181d git version 2.43.0
+# elapsed 0.3s
+
+============================= test session starts ==============================
+collecting ... collected 2 items
+
+agate/tests/unit/test_setup_agate_dir.py::test_bdd_41_agate_dir_command_has_no_legacy_fallback PASSED [ 50%]
+agate/tests/unit/test_setup_agate_dir.py::test_bdd_41_agate_dir_command_resolves_current_and_fails_loudly_without_it PASSED [100%]
+
+============================== 2 passed in 0.07s ===============================
+
+EXIT_CODE: 0

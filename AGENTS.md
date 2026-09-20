@@ -59,7 +59,7 @@
 
 **安装 / 迁移 / 更新 / 回退 / hook 重装时机 / 根 `scripts/` 维护语义** → 权威源 `agate/UPGRADING.md`「版本管理生命周期」节（单一权威口径），本文件不重复。
 
-**历史**：本机原为 legacy 单软链布局（`~/.agate` → 开发 checkout 的 `agate/`），2026-09-18 迁移至版本管理布局。
+**历史**：本机 2026-09-18 起使用版本管理布局（稳定版与开发 checkout 解耦）；软链形态的 `~/.agate` 自 v0.73.0 起不再支持，迁移指引见 `agate/UPGRADING.md`「v0.73.0」节。
 
 ## 改脚本的工作流
 
@@ -120,7 +120,10 @@
 3. **更新 `agate/UPGRADING.md` 新增本版本章节**——无破坏性变更也写"（无破坏性变更）"（v0.62.0 教训：漏写章节）
 4. `git tag vN.N.0 && git push origin vN.N.0`——`git push` 不带 tag **默认不推送 tag**（v0.51.0 教训）；推送后 `git ls-remote --tags origin vN.N.0` 验证远端到达
 5. CHECK 7（version badge vs git tag）自动通过；CI ruff job 绿（`ruff==0.16.4`，与本地 `~/.venvs/agate-dev/bin/ruff` 对齐，RM-AG0037 required check）
-6. **release PR 合并后最终验证（G-5）**：`git fetch origin && git describe --tags origin/main` == vN.N.0；`git merge-base --is-ancestor vN.N.0 origin/main` 返回 0；合并后 push 的 CI 全绿
+5a. **Release 校验（tag 与 Release 双轨，TAG0037）**：推送 `vN.N.0` 后 `.github/workflows/release.yml` 自动构建并创建 GitHub Release；`gh release view vN.N.0` 须存在，且资产至少含 3 个 tarball——本体 `agateon-vN.N.0.tar.gz` 与两平台 offline 包（`agateon-vN.N.0-offline-linux-x86_64.tar.gz`、`agateon-vN.N.0-offline-windows-x86_64.tar.gz`），另有 `SHA256SUMS`（仅防下载损坏，不认证发布者）。
+   - **补救（tag 已推而 Release 缺失）**：release workflow 没有 `workflow_dispatch`，无法手动重跑——本地用同一打包脚本重建：`python3 agate/scripts/agate-release.py build --tag vN.N.0 --repo . --outdir <dist> --notes-out <notes.md> --expect-sha <tag 提交 SHA>`，再 `gh release create vN.N.0 <dist>/* --verify-tag --title vN.N.0 --notes-file <notes.md>`。Release 已存在时重跑会失败，须先确认其属本次创建再 `gh release delete`。
+   - **建议（非代码项）**：为 `v*` tag 启用 GitHub tag Ruleset / tag 保护，只允许维护者创建 tag（release workflow 以 tag push 为唯一触发器）。
+6. **release PR 合并后最终验证（G-5）**：`git fetch origin && git describe --tags origin/main` == vN.N.0；`git merge-base --is-ancestor vN.N.0 origin/main` 返回 0；合并后 push 的 CI 全绿；`gh release view vN.N.0` 显示 Release 存在且含上述资产
 
 **版本引用文件清单（Agateon 仓库特有，通用 P8 卡不覆盖）**：README badge / CHANGELOG / UPGRADING 章节 / 稳定版引用（文档优先写"稳定版"不写死版本号）。
 

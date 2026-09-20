@@ -1,0 +1,31 @@
+# BDD-38 ast.dump function-body comparison baseline 75a8102 vs HEAD. script: cmd-scripts/ast38.py
+# BDD-38 ③: functions whose name starts with test_bdd_30 (all agate/tests/**/*.py), 75a8102 vs HEAD
+  SAME    agate/tests/unit/test_agate_cmdstream_dispatch.py::test_bdd_30_write_subset_boundary
+  GONE    agate/tests/unit/test_agate_version_resolve.py::test_bdd_30_legacy_symlink_direct_root   (in baseline, not at HEAD)
+  SAME    agate/tests/unit/test_check_mvwu.py::test_bdd_30_quoted_node_ids_with_commas_brackets_parse_correctly
+  SAME    agate/tests/unit/test_check_tdd_red.py::test_bdd_30_no_formatter_compile_error_a_class
+  SAME    agate/tests/unit/test_codex_platform_docs.py::test_bdd_30_spawn_agent_schema_exhaustive_item_registered
+  NEW     agate/tests/unit/test_install_sh.py::test_bdd_30_deprecated_env_warns_and_creates_nothing   (not in baseline)
+  NEW     agate/tests/unit/test_install_sh.py::test_bdd_30_install_sh_header_and_usage_no_longer_reference_deprecated_names   (not in baseline)
+  NEW     agate/tests/unit/test_install_sh.py::test_bdd_30_no_warning_when_deprecated_env_unset   (not in baseline)
+  NEW     agate/tests/unit/test_install_sh.py::test_bdd_30_test_files_no_longer_reference_agate_repo_dir   (not in baseline)
+  SAME    agate/tests/unit/test_tag0034_events.py::test_bdd_30_check_events_knows_dispatch_route_as_valid_event_type
+identical=5; problems=[('agate/tests/unit/test_agate_version_resolve.py', 'test_bdd_30_legacy_symlink_direct_root', 'removed-or-renamed')]
+VERDICT BDD-38 ③: PASS (only the rewritten test_bdd_30_legacy_symlink_direct_root differs)
+
+# BDD-38 ①: the two rewritten legacy-direct tests: baseline vs HEAD names
+  75a8102: legacy-named: ['test_bdd_30_legacy_symlink_direct_root', 'test_debt0042_agate_home_legacy_symlink'] | symlink_fail_closed: []
+  HEAD: legacy-named: ['test_bdd_28_legacy_switch_param_is_gone_and_no_symlink_target_as_root_branch'] | symlink_fail_closed: ['test_bdd_27_symlink_home_fail_closed', 'test_bdd_27_t14_resolve_symlink_home_fail_closed_with_migration_hint', 'test_debt0042_agate_home_symlink_fail_closed']
+# BDD-38 ②: test_tag0032_bdd_1/2 assertions preserved? (compare ast bodies, names may differ)
+  test_tag0032_bdd_1_legacy_symlink_install_fail_closed: baseline=present HEAD=present body-identical=True
+  test_tag0032_bdd_2_legacy_symlink_rejection_migration_hint: baseline=present HEAD=present body-identical=True
+# BDD-38 ④ / P3 §6.6 T-10 protected: test_bdd_7 / test_bdd_8 / test_tag0032_bdd_3/4/13/14 / test_debt0034_* bodies (INST/E2E)
+  test_agate_version_install.py::test_bdd_7_env_check_all_present_exit_0: body-identical=True (baseline=y, HEAD=y)
+  test_agate_version_install.py::test_bdd_8_env_check_missing_pyyaml_guidance: body-identical=True (baseline=y, HEAD=y)
+  test_agate_version_install.py::test_debt0034_install_sh_heredoc_is_guarded: body-identical=True (baseline=y, HEAD=y)
+  test_agate_version_install.py::test_debt0034_migration_steps_consistent_across_entries: body-identical=True (baseline=y, HEAD=y)
+  test_agate_version_install.py::test_tag0032_bdd_3_plain_dir_not_falsely_rejected: body-identical=True (baseline=y, HEAD=y)
+  test_agate_version_install.py::test_tag0032_bdd_4_root_scripts_established_and_executable: body-identical=True (baseline=y, HEAD=y)
+  test_version_lifecycle_e2e.py::test_tag0032_bdd_13_full_lifecycle_new_machine_to_update: body-identical=True (baseline=y, HEAD=y)
+  test_version_lifecycle_e2e.py::test_tag0032_bdd_14_e2e_no_source_pollution: body-identical=True (baseline=y, HEAD=y)
+EXIT_CODE: 0

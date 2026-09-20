@@ -1,0 +1,21 @@
+# BDD-46 pytest evidence (verifier g2)
+# selected 4 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <4 node ids below>
+#   agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_task_commits_do_not_touch_out_of_scope_files
+#   agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_resolve_entry_semantics_unchanged_ignoring_comments_and_docstrings
+#   agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_resolve_hook_root_only_docstring_and_legacy_kwarg_may_change
+#   agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_norm_helpers_ignore_comments_docstrings_and_kwarg_but_catch_semantic_changes
+# HEAD=043181d git version 2.43.0
+# elapsed 0.3s
+
+============================= test session starts ==============================
+collecting ... collected 4 items
+
+agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_task_commits_do_not_touch_out_of_scope_files PASSED [ 25%]
+agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_resolve_entry_semantics_unchanged_ignoring_comments_and_docstrings PASSED [ 50%]
+agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_resolve_hook_root_only_docstring_and_legacy_kwarg_may_change PASSED [ 75%]
+agate/tests/regression/test_tag0037_out_of_scope_untouched.py::test_bdd_46_norm_helpers_ignore_comments_docstrings_and_kwarg_but_catch_semantic_changes PASSED [100%]
+
+============================== 4 passed in 0.09s ===============================
+
+EXIT_CODE: 0

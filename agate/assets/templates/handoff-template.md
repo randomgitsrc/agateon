@@ -34,7 +34,7 @@
 - 依赖齐全：bash / python / pyyaml / pytest / shellcheck
 - 基线验证：全量 pytest 全绿 + consistency 0 ERROR（--strict-errors-only；DEBT0012 教训：存量 300+ WARNING 下 --strict 会误导判 exit 2）
 - commit hook：指向 `~/.agate`（稳定版），worktree commit 自动触发
-- orchestrator 注册：`.opencode/agents/orchestrator.md` + `.claude/agents/orchestrator.md` → `~/.agate/orchestrator-template.md`（符号链接，不拷贝，双平台）
+- orchestrator 注册：`.opencode/agents/orchestrator.md` + `.claude/agents/orchestrator.md` → `$AGATE_DIR/orchestrator-template.md`（`$AGATE_DIR` = `~/.agate/current/agate`；符号链接，不拷贝，双平台）
 - 工作区解析：`agate_common.py` 输出 worktree 自己的 `agate-workspace/`
 - 任务数据：{Txxx} P0-brief + .state.yaml phase=P0 在 worktree 的 `agate-workspace/tasks/`
 

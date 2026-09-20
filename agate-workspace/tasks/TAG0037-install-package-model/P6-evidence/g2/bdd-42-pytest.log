@@ -1,0 +1,15 @@
+# BDD-42 pytest evidence (verifier g2)
+# selected 1 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <1 node ids below>
+#   agate/tests/unit/test_setup_agate_dir.py::test_bdd_42_claude_code_registration_commands_and_frontmatter
+# HEAD=043181d git version 2.43.0
+# elapsed 0.5s
+
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+agate/tests/unit/test_setup_agate_dir.py::test_bdd_42_claude_code_registration_commands_and_frontmatter PASSED [100%]
+
+============================== 1 passed in 0.21s ===============================
+
+EXIT_CODE: 0

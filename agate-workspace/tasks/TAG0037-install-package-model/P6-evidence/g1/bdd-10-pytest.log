@@ -1,0 +1,17 @@
+# BDD-10 pytest evidence (verifier g1)
+# selected 2 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <2 node ids below>
+#   agate/tests/unit/test_install_offline.py::test_bdd_10_dest_defaults_to_agate_home_and_fills_version_root_structure
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_10_default_repo_follows_agate_home
+# HEAD=043181d git version 2.43.0
+# elapsed 0.9s
+
+============================= test session starts ==============================
+collecting ... collected 2 items
+
+agate/tests/unit/test_install_offline.py::test_bdd_10_dest_defaults_to_agate_home_and_fills_version_root_structure PASSED [ 50%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_10_default_repo_follows_agate_home PASSED [100%]
+
+============================== 2 passed in 0.60s ===============================
+
+EXIT_CODE: 0

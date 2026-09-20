@@ -1,0 +1,25 @@
+# BDD-25 pytest evidence (verifier g1)
+# selected 6 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <6 node ids below>
+#   agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_1a_uninstall_new_form_with_repo_unpointed_version
+#   agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_1b_uninstall_pointed_version_repoints_to_latest_valid
+#   agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_2_uninstall_new_form_without_repo
+#   agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_3_uninstall_old_worktree_form_leaves_no_registration
+#   agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_5_uninstall_prunes_stale_worktree_registration_of_replaced_dir
+#   agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_4_uninstall_reference_protection_unchanged
+# HEAD=043181d git version 2.43.0
+# elapsed 1.2s
+
+============================= test session starts ==============================
+collecting ... collected 6 items
+
+agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_1a_uninstall_new_form_with_repo_unpointed_version PASSED [ 16%]
+agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_1b_uninstall_pointed_version_repoints_to_latest_valid PASSED [ 33%]
+agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_2_uninstall_new_form_without_repo PASSED [ 50%]
+agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_3_uninstall_old_worktree_form_leaves_no_registration PASSED [ 66%]
+agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_5_uninstall_prunes_stale_worktree_registration_of_replaced_dir PASSED [ 83%]
+agate/tests/unit/test_agate_install_uninstall.py::test_bdd_25_4_uninstall_reference_protection_unchanged PASSED [100%]
+
+============================== 6 passed in 0.92s ===============================
+
+EXIT_CODE: 0

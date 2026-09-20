@@ -1,0 +1,36 @@
+# BDD-12 real run (re-run at HEAD 043181d, 2026-09-20T18:54:52+08:00): old-format bundle (old packer layout: git worktree add whole repo into bundle/agate) -> new install-offline.py must reject
+old bundle: /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-07/tmp/legacy/legacy-out/agate-v0.73.0-linux-x86_64
+bundle/agate/agate/scripts exists: yes
+
+## 1. dest absent
+install-offline: bundle 为旧格式（`agate/agate/scripts` 双层嵌套），请用新版 `agate-pack-offline.py` 重新打包
+rc=1
+dest exists? no-OK
+
+## 2. dest empty dir
+install-offline: bundle 为旧格式（`agate/agate/scripts` 双层嵌套），请用新版 `agate-pack-offline.py` 重新打包
+rc=1
+dest-empty listing (expect nothing): []
+
+# BDD-16 real run: REAL Release asset agateon-v0.73.0-tagtest.1-offline-linux-x86_64.tar.gz (extracted to scratchpad) -> bundle-internal install-offline (pip = PATH shim, no network) -> resolve (2026-09-20T18:44:13+08:00)
+extracted dir top: agate CHANGELOG.md LICENSE manifest.json NOTICES.md wheels 
+已纳管 v0.73.0：latest → v0.73.0，current → latest
+已安装 v0.73.0（源 ref: v0.73.0-tagtest.1） → /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-05-legacy/ah16/v0.73.0
+install_offline_rc=0
+AGATE_HOME layout:
+drwxr-xr-x 4 kity kity 4096  9月 20 18:44 .
+drwxr-xr-x 7 kity kity 4096  9月 20 18:44 ..
+lrwxrwxrwx 1 kity kity    6  9月 20 18:44 current -> latest
+lrwxrwxrwx 1 kity kity    7  9月 20 18:44 latest -> v0.73.0
+drwxr-xr-x 2 kity kity 4096  9月 20 18:44 scripts
+drwxr-xr-x 3 kity kity 4096  9月 20 18:44 v0.73.0
+vdir top: agate CHANGELOG.md LICENSE NOTICES.md 
+AGATE_ROOT=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-05-legacy/ah16/v0.73.0/agate
+AGATE_VERSION=v0.73.0
+AGATE_REASON=全局 current
+resolve_rc=0
+
+## file set of installed vdir vs file set of the body tarball (BDD-4 style structure equality)
+installed files: 155 body tarball files: 155 equal: True
+diff: []
+EXIT_CODE: 0

@@ -1,0 +1,79 @@
+# BDD-41..45 real SETUP.md command runs (verbatim doc blocks). opencode/codex real; HOME real ONLY for their own config, AGATE_DIR isolated; claude CLI not invoked here (H-1 separate). script: cmd-scripts/platforms.sh
+# (an earlier run in SCRATCH/g2-07 had an export bug in my driver for BDD-42; this is the fixed rerun SCRATCH/g2-08)
+isolated layout: current latest v0.73.0   current -> latest -> v0.73.0
+--- SETUP block b41 (verbatim):
+AGATE_DIR="$HOME/.agate/current/agate"
+# 自检：应可读；不可读则 current 缺失或版本目录不完整
+test -r "$AGATE_DIR/orchestrator-template.md" && echo "✅ 模板可读" || echo "❌ 协议根不可用：$HOME/.agate/current 缺失或版本目录不完整，请先 bash install.sh"
+--- SETUP block b42 (verbatim):
+mkdir -p .claude/agents
+ln -sf "$AGATE_DIR/orchestrator-template.md" .claude/agents/orchestrator.md
+--- SETUP block b43 (verbatim):
+mkdir -p .opencode/agents
+ln -sf "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
+--- SETUP block b44 (verbatim):
+# 1. 注册 orchestrator 身份（DSH preset，等价 .claude/agents/orchestrator.md 软链）
+mkdir -p ~/.dsh/.agent-presets/agate ~/.dsh/skills/agate-protocol
+ln -sf "$AGATE_DIR/assets/templates/dsh/agent.cordis.yml" ~/.dsh/.agent-presets/agate/agent.cordis.yml
+ln -sf "$AGATE_DIR/assets/templates/dsh/preset.yml" ~/.dsh/.agent-presets/agate/preset.yml
+ln -sf "$AGATE_DIR/assets/templates/dsh/SKILL.md" ~/.dsh/skills/agate-protocol/SKILL.md
+
+# 2. 装 hook（与所有平台一致，唯一安装脚本）--- SETUP block b45 (verbatim):
+timeout 60s codex features list | grep -iE 'multi_agent'   # multi_agent 应为 stable / true（撑 spawn_agent 子派发）
+timeout 120s codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <<< 'print ok'
+
+== command availability ==
+opencode: /home/kity/.opencode/bin/opencode
+codex: /home/kity/.nvm/versions/node/v24.15.0/bin/codex
+claude: /home/kity/.nvm/versions/node/v24.15.0/bin/claude
+
+===== BDD-41 =====
+✅ 模板可读
+AGATE_DIR=SCRATCH/g2-08/w/home/.agate/current/agate
+[PASS] AGATE_DIR == $HOME/.agate/current/agate
+fallback pattern '|| echo "$HOME/.agate"' in SETUP first block: 0
+--- current missing (HOME without ~/.agate/current):
+❌ 协议根不可用：SCRATCH/g2-08/w/nocur/.agate/current 缺失或版本目录不完整，请先 bash install.sh
+AGATE_DIR after=SCRATCH/g2-08/w/nocur/.agate/current/agate
+
+===== BDD-42 (agate side only; claude CLI not invoked here) =====
+block exit=0
+.claude/agents/orchestrator.md -> SCRATCH/g2-08/w/home/.agate/current/agate/orchestrator-template.md
+[PASS] link target readable
+link target realpath: SCRATCH/g2-08/w/home/.agate/v0.73.0/agate/orchestrator-template.md
+[PASS] target inside isolated AGATE_HOME
+frontmatter keys: ['color', 'description', 'mode', 'name', 'permission']
+name = 'orchestrator'
+[PASS] frontmatter yaml.safe_load OK and name: orchestrator
+
+===== BDD-43 (real opencode; HOME real for its own config only; AGATE_DIR isolated) =====
+block (mkdir+ln) exit=0
+.opencode/agents/orchestrator.md -> SCRATCH/g2-08/w/home/.agate/current/agate/orchestrator-template.md
+1.18.11
+opencode --version exit=0
+opencode debug agent orchestrator exit=0
+mode = primary | tools.task = True | name = orchestrator
+[PASS] mode==primary and tools.task is true
+
+===== BDD-44 (isolated HOME; DSH CLI absent by design; install-hook line skipped) =====
+block exit=0
+home44/.dsh/.agent-presets/agate/agent.cordis.yml -> home/.agate/current/agate/assets/templates/dsh/agent.cordis.yml
+   [PASS] readable
+home44/.dsh/.agent-presets/agate/preset.yml -> home/.agate/current/agate/assets/templates/dsh/preset.yml
+   [PASS] readable
+home44/.dsh/skills/agate-protocol/SKILL.md -> home/.agate/current/agate/assets/templates/dsh/SKILL.md
+   [PASS] readable
+agate-summary.py exit=0
+(grep above: lines mentioning DSH/drift; none = no drift warning)
+[PASS] no DSH drift warning
+
+===== BDD-45 (real codex; HOME real for its own config only; AGATE_DIR isolated) =====
+[PASS] template readable: home/.agate/current/agate/orchestrator-template.md
+codex-cli 0.153.4
+codex --version exit=0
+timeout 60s codex features list exit=0
+multi_agent                              stable             true
+multi_agent_mode                         removed            false
+multi_agent_v2                           stable             false
+[PASS] multi_agent line status is stable/true
+EXIT_CODE: 0

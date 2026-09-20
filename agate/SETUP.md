@@ -2,7 +2,7 @@
 
 > 面向**第一次把 Agateon 接入某个项目**的人。`README.md`「快速上手」讲的是"装 Agateon 本体"，这份文档讲的是下一步——怎么让 OpenCode / Claude Code 真的能调起 orchestrator，这一步是平台相关的，容易卡住，所以单独写。
 >
-> 前置：已完成 `README.md`「快速上手」第 1 步——`~/.agate` 指向协议本体。两种形态均可：**单软链**（`~/.agate` → 仓库 `agate/` 子目录，`install.sh` 装法）或**版本管理目录**（`~/.agate/vX.Y.Z/` 版本目录 + `latest`/`current` 指针，`agate-install.py` 装法，见下方「环境准备」）。没做完先去做那一步。
+> 前置：已完成 `README.md`「快速上手」第 1 步——`~/.agate` 是**版本管理根目录**（`~/.agate/vX.Y.Z/` 版本目录 + `latest`/`current` 指针，`install.sh` / `agate-install.py` 装法，见下方「环境准备」）。没做完先去做那一步。
 >
 > 运行依赖：**Python 3.8+ 且 `pip install pyyaml`（强制）**——全部 gate 脚本已 Python 化（TAG0010），pyyaml 缺失时脚本 fail-closed 阻断。详见 `platform-notes.md`。
 
@@ -10,22 +10,17 @@
 
 ## 先取协议根路径（本指南后续命令都用它）
 
-**两种布局的协议根位置不同**，故下述各平台命令统一用变量 `$AGATE_DIR` 指代协议根（`orchestrator-template.md` 与 `assets/` 都在它下面）：
+协议根在版本管理布局的 `current` 指针之下（`~/.agate` 是版本管理根**实体目录**：`repo/` + `vX.Y.Z/` + `latest` / `current` 指针）。下述各平台命令统一用变量 `$AGATE_DIR` 指代协议根（`orchestrator-template.md` 与 `assets/` 都在它下面），取值为 `~/.agate/current/agate`。
 
-| 布局 | `~/.agate` 是什么 | 协议根在哪 |
-|------|-----------------|-----------|
-| **单软链**（`install.sh` 无参，README 首推的一键装法） | 软链 → `<repo>/agate/` | **`~/.agate` 本身** |
-| **版本管理**（`install.sh --versions`，多版本/钉版用） | 实体目录（`repo/` + `vX.Y.Z/` + 指针） | **`~/.agate/current/agate`** |
-
-**一行取到它**（两种布局通用）：
+**一行取到它**：
 
 ```bash
-AGATE_DIR="$([ -d "$HOME/.agate/current" ] && echo "$HOME/.agate/current/agate" || echo "$HOME/.agate")"
-# 自检：两条都应可读
-test -r "$AGATE_DIR/orchestrator-template.md" && echo "✅ 模板可读" || echo "❌ 协议根解析失败"
+AGATE_DIR="$HOME/.agate/current/agate"
+# 自检：应可读；不可读则 current 缺失或版本目录不完整
+test -r "$AGATE_DIR/orchestrator-template.md" && echo "✅ 模板可读" || echo "❌ 协议根不可用：$HOME/.agate/current 缺失或版本目录不完整，请先 bash install.sh"
 ```
 
-> 判据是 `current` 指针是否存在——版本管理布局有，单软链布局没有。`$AGATE_DIR` 是**当前 shell 变量**，下面各平台命令块在同一 shell 会话里执行即可（新开终端需重跑这一行）。
+> 没有 `current` 指针时不再有兜底取值——命令明确失败并提示先装。`$AGATE_DIR` 是**当前 shell 变量**，下面各平台命令块在同一 shell 会话里执行即可（新开终端需重跑这一行）。
 
 ---
 
@@ -92,7 +87,7 @@ cp {agate_root}/assets/templates/project.md {AGATE_WORKSPACE}/agents/project.md
 
 ## 步骤 2：把 orchestrator 注册到你的平台
 
-**先确认你的 `agate_root`**（默认 `~/.agate`，自定义过装哪的话按实际路径替换下面命令里的 `~/.agate`）。
+**先确认你的 `agate_root`**（默认 `~/.agate/current/agate`，即上面的 `$AGATE_DIR`；自定义过装哪的话按实际路径替换命令里的 `~/.agate`）。
 
 ### Claude Code（`.claude/agents/`）
 
@@ -182,7 +177,7 @@ python3 ~/.agate/scripts/install-hook.py
 **链接完整性校验**：`agate-summary.py` 每次运行会校验上面三个软链是否指向权威链（`{agate_root}/assets/templates/dsh/`）；漂移（如误指向非权威副本）会给出 WARNING + 一条命令的修复指引。升级后跑一次即可确认。
 
 **身份薄、协议厚**：preset 的 persona 只写"你是谁 + 会话开始步骤 + DSH 工具映射"，行为规范仍指向
-`{agate_root}/orchestrator-template.md`——模板随 `~/.agate`（→ 仓库软链）升级自动更新；
+`{agate_root}/orchestrator-template.md`——模板随协议根（`$AGATE_DIR`，即 `~/.agate/current/agate`）升级自动更新；
 符号链接方式升级后什么都不用做；**Windows 无符号链接权限时退复制模式，升级后需重跑上述 `ln` 命令对应的 `cp`**（复制模式代价：模板升级后不会自动同步，与既有平台小节一致）。
 
 **使用**：打开 DSH 会话，在会话选择器选「Agateon 编排者」（对应 `claude --agent orchestrator`），
@@ -351,4 +346,4 @@ AGATE_WORKSPACE=/srv/agate-ws/My Project   # 绝对路径（可含空格）→ �
 - 复制模式（Windows 无权限场景）：重跑步骤 2 的 `cp` 命令。
 - 两种方式都建议顺手跑一次 `python3 ~/.agate/scripts/agate-summary.py`，它会检测协议版本和本地脚本副本漂移（但目前不覆盖 orchestrator.md 复制模式的漂移，见上文已知限制）。
 
-**更新口径（与 `UPGRADING.md` 一致）**：legacy 软链布局更新 = `git pull`；版本管理布局（`~/.agate/` 为版本管理根目录）更新 = `python3 ~/.agate/scripts/agate-install.py latest`（幂等）。安装 / 迁移 / 更新 / 回退完整对照，以及 hook 重装时机、根 `~/.agate/scripts/` 副本维护语义，见 `UPGRADING.md` 的「版本管理生命周期」节。
+**更新口径（与 `UPGRADING.md` 一致）**：更新 = `python3 ~/.agate/scripts/agate-install.py latest`（幂等）。安装 / 迁移 / 更新 / 回退完整对照，以及 hook 重装时机、根 `~/.agate/scripts/` 副本维护语义，见 `UPGRADING.md` 的「版本管理生命周期」节。

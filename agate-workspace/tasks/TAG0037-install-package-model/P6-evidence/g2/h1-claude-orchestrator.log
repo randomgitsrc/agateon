@@ -1,0 +1,9 @@
+# H-1 (non-BDD manual item): claude --agent orchestrator -p 'echo test'
+# EXECUTED once. cwd = isolated project SCRATCH/g2-08/w/proj42 whose .claude/agents/orchestrator.md -> isolated layout template (SETUP Claude Code block). flags: --no-session-persistence --max-turns 2; timeout 100s; HOME real (credentials), no ~/.agate access requested.
+$ claude --agent orchestrator -p "echo test" --no-session-persistence --max-turns 2
+--- stdout:
+`echo test` 输出了 `test`。
+exit=0
+--- stderr (empty = no 'Failed to parse agent'):
+H-1 result: orchestrator selected and returned a reply, exit=0, no parse error. (Not counted in BDD totals.)
+EXIT_CODE: 0

@@ -13,7 +13,7 @@ agate 自身改造 = 用 agate 改造 agate（dogfooding）。涉及双工作区
 ## 前置条件
 
 - 开发 checkout（本仓库）在 main 且干净
-- `~/.agate` 是**版本管理根目录**（非软链）——稳定版来自 `~/.agate/current/`，与开发 checkout **解耦**（见 §「本机稳定版布局」；2026-09-18 前为 legacy 软链布局）
+- `~/.agate` 是**版本管理根目录**（非软链）——稳定版来自 `~/.agate/current/`，与开发 checkout **解耦**（见 §「本机稳定版布局」）
 - 任务已 P0 立项（P0-brief + .state.yaml 在 agate-workspace/tasks/）
 
 ## 流程（10 步）
@@ -73,8 +73,8 @@ ls -la /home/kity/oclab/agate/.git/hooks/ | grep -E 'pre-commit|commit-msg|pre-p
 ### Step 5：注册 orchestrator（SETUP）
 
 ```bash
-# 先取协议根（版本管理布局在 ~/.agate/current/agate；单软链布局就是 ~/.agate 本身）
-AGATE_DIR="$([ -d "$HOME/.agate/current" ] && echo "$HOME/.agate/current/agate" || echo "$HOME/.agate")"
+# 先取协议根（版本管理布局：~/.agate/current/agate；不再有兜底取值）
+AGATE_DIR="$HOME/.agate/current/agate"
 
 # OpenCode + Claude Code 双平台都注册（TAG0016/17 实际都双平台）
 mkdir -p .opencode/agents
@@ -86,7 +86,7 @@ ln -sf "$AGATE_DIR/orchestrator-template.md" .claude/agents/orchestrator.md
 test -r .claude/agents/orchestrator.md && echo "✅ 可读" || echo "❌ 断链——检查 $AGATE_DIR"
 ```
 
-> **为什么不能直接写 `~/.agate/orchestrator-template.md`**：该路径只在**单软链布局**下成立；**版本管理布局**下协议本体在 `~/.agate/vX.Y.Z/agate/`，直接写会得到断链（平台报 `--agent 'orchestrator' not found`）。细节见 `SETUP.md`「先取协议根路径」。
+> **为什么不能直接写 `~/.agate/orchestrator-template.md`**：版本管理布局下协议本体在 `~/.agate/vX.Y.Z/agate/`（经 `current` 指针即 `~/.agate/current/agate`），`~/.agate/` 根下没有该文件，直接写会得到断链（平台报 `--agent 'orchestrator' not found`）。细节见 `SETUP.md`「先取协议根路径」。
 
 `.opencode/` 与 `.claude/` 均已 gitignore（本地环境配置不入库），对应 setup 步骤见 `SETUP.md`（OpenCode 与 Claude Code 各一节）。
 
@@ -159,7 +159,7 @@ git log --oneline -3   # 确认交接单已提交
 >
 > 本节只写**dogfooding 需要知道的部分**（UPGRADING 不覆盖的 worktree 视角）。
 
-**背景**：2026-09-18 本机 `~/.agate` 从 legacy 单软链布局迁移到版本管理布局。
+**背景**：2026-09-18 本机 `~/.agate` 由软链迁移到版本管理布局（v0.73.0 起软链形态不再支持）。
 
 **三件必须知道的事**：
 
@@ -177,7 +177,7 @@ git log --oneline -3   # 确认交接单已提交
 ```bash
 python3 ~/.agate/scripts/agate-resolve.py
 # 输出三行：AGATE_ROOT=<版本目录> / AGATE_VERSION=<版本号> / AGATE_REASON=<解析原因>
-# REASON 取值：AGATE_ROOT 环境变量覆盖 > 引用 .agate-version > 全局 current > legacy 软链布局
+# REASON 取值：AGATE_ROOT 环境变量覆盖 > 引用 .agate-version > 全局 current（三层；均不可用则 exit 1）
 ```
 
 **注意**：`~/.agate/scripts/agate-summary.py` 显示**稳定版上下文**（`AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号），

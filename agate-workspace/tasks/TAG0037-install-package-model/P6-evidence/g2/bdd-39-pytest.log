@@ -1,0 +1,55 @@
+# BDD-39 pytest evidence (verifier g2)
+# selected 21 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <21 node ids below>
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_1_lifecycle_table_is_single_layout_with_migration_steps
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_2_resolution_priority_is_three_layers
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_3_legacy_no_behavior_change_promise_rewritten
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_4_v0730_section_content
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_5_section3_history_note_and_history_sections_preserved
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_39_6_readme_quick_start_enters_versioned_layout[README.md-^Quick start-[Vv]ersion]
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_39_6_readme_quick_start_enters_versioned_layout[README.zh-CN.md-^\u5feb\u901f\u5f00\u59cb-\u7248\u672c\u7ba1\u7406]
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_39_7_adr_009_marked_as_superseded_by_v0730
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_39_8_existing_tests_header_and_docstring_wording_updated
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[AGENTS.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.zh-CN.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/AGENTS.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/SETUP.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/WORKFLOW.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/orchestrator-template.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/platform-notes.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/scripts/README.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/tests/unit/test_dsh_preset.py]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/project-map.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/worktree-dogfooding-guide.md]
+# HEAD=043181d git version 2.43.0
+# elapsed 0.4s
+
+============================= test session starts ==============================
+collecting ... collected 21 items
+
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_1_lifecycle_table_is_single_layout_with_migration_steps PASSED [  4%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_2_resolution_priority_is_three_layers PASSED [  9%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_3_legacy_no_behavior_change_promise_rewritten PASSED [ 14%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_4_v0730_section_content PASSED [ 19%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_5_section3_history_note_and_history_sections_preserved PASSED [ 23%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_39_6_readme_quick_start_enters_versioned_layout[README.md-^Quick start-[Vv]ersion] PASSED [ 28%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_39_6_readme_quick_start_enters_versioned_layout[README.zh-CN.md-^\u5feb\u901f\u5f00\u59cb-\u7248\u672c\u7ba1\u7406] PASSED [ 33%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_39_7_adr_009_marked_as_superseded_by_v0730 PASSED [ 38%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_39_8_existing_tests_header_and_docstring_wording_updated PASSED [ 42%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[AGENTS.md] PASSED [ 47%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.md] PASSED [ 52%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.zh-CN.md] PASSED [ 57%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/AGENTS.md] PASSED [ 61%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/SETUP.md] PASSED [ 66%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/WORKFLOW.md] PASSED [ 71%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/orchestrator-template.md] PASSED [ 76%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/platform-notes.md] PASSED [ 80%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/scripts/README.md] PASSED [ 85%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/tests/unit/test_dsh_preset.py] PASSED [ 90%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/project-map.md] PASSED [ 95%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/worktree-dogfooding-guide.md] PASSED [100%]
+
+============================== 21 passed in 0.18s ==============================
+
+EXIT_CODE: 0

@@ -1,0 +1,21 @@
+# BDD-21 pytest evidence (verifier g1)
+# selected 4 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <4 node ids below>
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_21_checklist_verifies_release_and_its_assets
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_21_checklist_has_remediation_for_tag_pushed_but_release_missing
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_21_g5_final_verification_includes_release_existence
+#   agate/tests/unit/test_agate_release.py::test_bdd_13_5_build_produces_exactly_the_documented_assets
+# HEAD=043181d git version 2.43.0
+# elapsed 0.7s
+
+============================= test session starts ==============================
+collecting ... collected 4 items
+
+agate/tests/unit/test_doc_sweep.py::test_bdd_21_checklist_verifies_release_and_its_assets PASSED [ 25%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_21_checklist_has_remediation_for_tag_pushed_but_release_missing PASSED [ 50%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_21_g5_final_verification_includes_release_existence PASSED [ 75%]
+agate/tests/unit/test_agate_release.py::test_bdd_13_5_build_produces_exactly_the_documented_assets PASSED [100%]
+
+============================== 4 passed in 0.44s ===============================
+
+EXIT_CODE: 0

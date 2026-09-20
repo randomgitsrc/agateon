@@ -1,0 +1,56 @@
+name: Release
+
+# 仅 v* tag 推送触发；构建逻辑全在仓库脚本 agate/scripts/agate-release.py，本文件只做编排。
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      # 无第三方 action、无令牌；私有仓库时需另加 http.extraheader
+      - name: Clone tag
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$TAG" -- "https://github.com/${GITHUB_REPOSITORY}.git" src
+
+      - name: Python deps (pinned pyyaml)
+        working-directory: src
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          PIN="$(python3 -B agate/scripts/agate-release.py pyyaml-pin)"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet --only-binary=:all: "pyyaml==${PIN}"
+
+      # 只调用仓库脚本；workflow 内零打包逻辑；本步骤不持有令牌
+      - name: Build assets
+        working-directory: src
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" -B agate/scripts/agate-release.py build \
+            --tag "$TAG" --expect-sha "$GITHUB_SHA" --repo . \
+            --outdir "$RUNNER_TEMP/dist" --notes-out "$RUNNER_TEMP/notes.md"
+
+      - name: Publish
+        working-directory: src
+        env:
+          # 仅此步骤持有内置令牌
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rc=0; python3 -B agate/scripts/agate-release.py is-prerelease "$TAG" || rc=$?
+          PRE=()
+          case "$rc" in 0) PRE=(--prerelease);; 1) ;; *) exit "$rc";; esac
+          gh release create "$TAG" "$RUNNER_TEMP"/dist/* --verify-tag --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" "${PRE[@]}"

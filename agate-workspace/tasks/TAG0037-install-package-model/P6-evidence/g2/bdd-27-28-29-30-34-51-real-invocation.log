@@ -1,0 +1,120 @@
+# BDD-27/28/29/30/34/51 real invocations (isolated HOME, file:// upstream = this worktree HEAD). HEAD=043181d
+# NOTE: the BDD-36 section inside this log shows step3 exit=127 due to a bug in MY driver script (passed 'install.sh --versions' as one path); the correct BDD-36 walk-through is bdd-36-migration-walkthrough.log. Not a product issue.
+# script: cmd-scripts/cmdface.sh
+
+
+### Fixture: legacy-shaped symlink ~/.agate -> checkout-copy/agate (has scripts/ and assets/, no current)
+lrwxrwxrwx 1 kity kity 138  9月 20 19:00 SCRATCH/g2-04/w/h27/.agate -> SCRATCH/g2-04/w/h27/oldco/agate
+adr.md AGENTS.md assets CONTEXT.md dispatch-protocol.md git-integration.md LIMITATIONS.md loop-orchestration.md orchestrator-template.md phase-cards platform-notes.md role-system.md rules scripts SETUP.md state-machine.md tests UPGRADING.md WORKFLOW.md 
+
+### BDD-27: agate-resolve.py under symlink home (expect exit 1, no AGATE_ROOT= on stdout, three-step on stderr)
+exit=1
+--- stdout:
+--- stderr:
+agate-resolve: 无可用 AGATE_ROOT（无 current/latest 版本指针），exit 1
+检测到的软链：SCRATCH/g2-04/w/h27/.agate → SCRATCH/g2-04/w/h27/oldco/agate
+错误: ~/.agate 是旧软链布局，v0.73.0 起不再支持（fail-closed，不会把软链目标当协议根）。
+迁移到版本管理布局（三步）：
+  1. 备份软链:  mv ~/.agate ~/.agate.bak
+  2. 建目录根:  mkdir -p ~/.agate
+  3. 装版本:    install.sh --versions
+               # 迁移完成后亦可: python3 ~/.agate/scripts/agate-install.py latest
+[PASS] stdout has no AGATE_ROOT= line
+[PASS] stderr has: mv ~/.agate ~/.agate.bak
+[PASS] stderr has: mkdir -p ~/.agate
+[PASS] stderr has: install.sh
+[PASS] exit code == 1
+[PASS] symlink target contents unchanged
+
+### BDD-28: (a)(e) AGATE_ROOT env override still exit 0 (also with symlink AGATE_HOME); (d) terminal fail-closed; no 'legacy' in output
+AGATE_ROOT=SCRATCH/g2-04/w/envroot
+AGATE_VERSION=
+AGATE_REASON=AGATE_ROOT 环境变量覆盖
+(a) HOME symlink + AGATE_ROOT: exit=0
+AGATE_ROOT=SCRATCH/g2-04/w/envroot
+AGATE_VERSION=
+AGATE_REASON=AGATE_ROOT 环境变量覆盖
+(e) AGATE_HOME symlink + AGATE_ROOT: exit=0
+agate-resolve: 无可用 AGATE_ROOT（无 current/latest 版本指针），exit 1
+(d) nothing configured: exit=1
+signature: (start_dir=None)
+[PASS] no use_legacy param
+realpath(base) occurrences in agate_common.py: 0
+
+### Real online install into two isolated HOMEs: BDD-29 (no-args vs --versions), BDD-30 (deprecated env)
+install.sh <no args> : exit=0
+[PASS] ~/.agate is a real directory
+current latest repo scripts v0.72.0 
+lrwxrwxrwx 1 kity kity    6  9月 20 19:00 current -> latest
+lrwxrwxrwx 1 kity kity    7  9月 20 19:00 latest -> v0.72.0
+install.sh --versions : exit=0
+[PASS] ~/.agate is a real directory
+current latest repo scripts v0.72.0 
+lrwxrwxrwx 1 kity kity    6  9月 20 19:00 current -> latest
+lrwxrwxrwx 1 kity kity    7  9月 20 19:00 latest -> v0.72.0
+noargs version dir: v0.72.0; scripts/agate-install.py: SCRATCH/g2-04/w/h29-noargs/.agate/scripts/agate-install.py
+versions version dir: v0.72.0; scripts/agate-install.py: SCRATCH/g2-04/w/h29-versions/.agate/scripts/agate-install.py
+[PASS] version-root trees identical (path/type/size)
+[PASS] source checkout git status unchanged by install.sh
+install.sh ln -s / LINK_NAME occurrences: 0
+unknown arg: 用法: install.sh [--versions]   （无参与 --versions 等价）| exit=0
+
+### BDD-30: AGATE_SYMLINK / AGATE_REPO_DIR set
+exit=0
+1:WARNING: 环境变量 AGATE_REPO_DIR / AGATE_SYMLINK 已废弃且被忽略（v0.73.0 起不再有单软链安装路径；版本根用 AGATE_HOME 指定）。
+[PASS] AGATE_SYMLINK target not created
+[PASS] AGATE_REPO_DIR target not created
+install.sh refs to deprecated names outside the WARNING line:
+17:if [ -n "${AGATE_REPO_DIR+x}" ] || [ -n "${AGATE_SYMLINK+x}" ]; then
+18:    echo "WARNING: 环境变量 AGATE_REPO_DIR / AGATE_SYMLINK 已废弃且被忽略（v0.73.0 起不再有单软链安装路径；版本根用 AGATE_HOME 指定）。" >&2
+
+### BDD-34: agate-summary.py under symlink home
+exit=0
+4:原因：无可用 AGATE_ROOT
+5:AGATE_ROOT：（无可用 AGATE_ROOT）
+10:  1. 备份软链:  mv ~/.agate ~/.agate.bak
+34:2. 先按上方提示修复安装（无可用 AGATE_ROOT）
+[PASS] no Traceback
+[PASS] migration hint present
+
+### BDD-36: walk the three migration steps (extracted from install.sh's own refusal text) on symlink home
+refusal exit=1
+检测到的软链：SCRATCH/g2-04/w/h36/.agate → SCRATCH/g2-04/w/h36/oldco/agate
+错误: ~/.agate 是旧软链布局，v0.73.0 起不再支持；install.sh 会穿透软链把 repo/ 与 vX.Y.Z/ 静默建进源仓库，已拒绝（fail-closed）。
+迁移到版本管理布局（三步）：
+  1. 备份软链:  mv ~/.agate ~/.agate.bak
+  2. 建目录根:  mkdir -p ~/.agate
+  3. 装版本:    install.sh --versions
+               # 迁移完成后亦可: python3 ~/.agate/scripts/agate-install.py latest
+extracted: [1] mv ~/.agate ~/.agate.bak [2] mkdir -p ~/.agate [3] install.sh --versions
+step1 exit=0
+step2 exit=0
+step3 exit=127
+
+[PASS] ~/.agate is a real dir
+agate-resolve: 无可用 AGATE_ROOT（无 current/latest 版本指针），exit 1
+resolve exit=1
+[PASS] .agate.bak is still the original symlink -> SCRATCH/g2-04/w/h36/oldco/agate
+[PASS] .agate.bak target intact (scripts/ present)
+rollback via rename only (no deletion): mv ~/.agate ~/.agate.new36 && mv ~/.agate.bak ~/.agate
+[PASS] back to symlink state: lrwxrwxrwx 1 kity kity 138  9月 20 19:00 SCRATCH/g2-04/w/h36/.agate -> SCRATCH/g2-04/w/h36/oldco/agate
+post-rollback resolve exit=1 (expected 1: legacy shape no longer resolves)
+
+### BDD-51: symlink home -> COMPLETE version root (from step BDD-29 install): resolve exit 0 via current chain; install refused with resolution note
+lrwxrwxrwx 1 kity kity 140  9月 20 19:00 SCRATCH/g2-04/w/h51/.agate -> SCRATCH/g2-04/w/h29-noargs/.agate
+AGATE_ROOT=SCRATCH/g2-04/w/h29-noargs/.agate/v0.72.0/agate
+AGATE_VERSION=v0.72.0
+AGATE_REASON=全局 current
+resolve exit=0
+  检测到的软链：SCRATCH/g2-04/w/h51/.agate → SCRATCH/g2-04/w/h29-noargs/.agate；若它不是 ~/.agate，请把下列命令中的 ~/.agate 替换为它
+  错误: 版本根是软链，agate-install 会穿透软链把 repo/ 与 vX.Y.Z/ 静默建进软链目标，已拒绝（fail-closed）。
+  迁移到版本管理布局（三步）：
+    1. 备份软链:  mv ~/.agate ~/.agate.bak
+    2. 建目录根:  mkdir -p ~/.agate
+    3. 装版本:    install.sh --versions
+                 # 迁移完成后亦可: python3 ~/.agate/scripts/agate-install.py latest
+  若 ~/.agate 是指向完整版本根的软链，解析仍可用，仅安装类命令需先改为实体目录或对软链目标直接执行安装。
+  install latest exit=1
+5:AGATE_ROOT：SCRATCH/g2-04/w/h29-noargs/.agate/v0.72.0/agate
+[PASS] source checkout git status unchanged at end
+EXIT_CODE: 0

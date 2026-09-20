@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """agate-install.py — 安装 / 卸载 agate 版本 + 环境探测（TAG0008 批次 install）
 
-版本管理根布局（P2-design.md §2.1 候选方案 A）：
+版本管理根布局（TAG0037：在线安装只装本体，版本目录不再是 git worktree）：
   ~/.agate/
-  ├── repo/          # 唯一主仓库（首次 clone，之后只 worktree add tag）
-  ├── v0.43.0/       # worktree 检出 tag
+  ├── repo/          # 在线安装才有：唯一主仓库（git 对象库，装任意历史 tag 用）
+  ├── v0.43.0/       # 本体：agate/ + CHANGELOG.md LICENSE NOTICES.md（由 agate_package 从 tag 构建）
   ├── v0.48.0/
   ├── latest         # 纯指针 → v0.48.0（POSIX 软链 / Windows 复制模式文本指针）
   └── current        # 默认指针 → latest
 
 用法：
-  python3 agate-install.py                       # 无参 = 装 latest 指针（最新发布 tag 的 worktree）+ current → latest
+  python3 agate-install.py                       # 无参 = 装 latest 指针（最新发布 tag 的本体）+ current → latest
   python3 agate-install.py v0.48.0               # 装指定版本（幂等：版本目录已存在即跳过，BDD-3）
-  python3 agate-install.py --uninstall v0.43.0   # 卸载：引用保护扫描 + worktree remove + 指针清理（BDD-5/6）
+  python3 agate-install.py --uninstall v0.43.0   # 卸载：引用保护扫描 + 移除版本目录 + 指针清理（BDD-5/6）
+  python3 agate-install.py --adopt v0.48.0       # 纳管已就位的版本目录：写 latest/current 指针 + 同步根 scripts/，不碰 git（BDD-17）
   python3 agate-install.py --check               # 环境探测 python3/pyyaml/git/bash，全齐 exit 0（BDD-7/8）
+  python3 agate-install.py --check --portable    # opt-in：必需项仅 python3 + pyyaml，git/bash 缺失只提示（BDD-18）
 
 AGATE_REPO_URL 环境变量 = 版本源仓库（测试隔离用，指向本地临时 repo）；未设置时用默认
 上游仓库。HOME 环境变量重定向 ~（测试隔离防触碰真实 ~/.agate）。
@@ -29,6 +31,11 @@ import shutil
 import subprocess
 import sys
 import time
+
+# 安装器自身不产生字节码（TAG0037 D-13）：须先于 import agate_common / agate_package。
+sys.dont_write_bytecode = True
+
+import agate_package  # noqa: E402  stdlib-only，与 agate_common 不同不依赖 pyyaml
 
 try:
     from agate_common import _protocol_root, probe_python, run_git
@@ -63,7 +70,7 @@ except (ImportError, SystemExit):
 
 DEFAULT_REPO_URL = "https://github.com/randomgitsrc/agateon"
 AGATE_DIRNAME = ".agate"
-_VERSION_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+_VERSION_RE = agate_package.VERSION_RE  # 一律 fullmatch（拒结尾换行 / 两段 / 路径穿越 / 预发布后缀）
 _DECL_RE = re.compile(r"^\s*agate\s*:\s*(v[0-9]+\.[0-9]+\.[0-9]+)\s*$")
 
 # 卸载引用保护扫描的限流参数（P2 §4.5「限 ~ 深度，mtime 合理限流」）。
@@ -73,19 +80,18 @@ _SCAN_MTIME_WINDOW = 365 * 24 * 3600
 
 
 def _agate_home():
-    """版本根目录：`AGATE_HOME` env 覆盖优先，否则 `~/.agate`（DEBT0042）。
+    """版本根目录：`AGATE_HOME` env 覆盖优先，否则 `~/.agate`（DEBT0042）；返回规范化路径。
 
-    与 agate_common._resolve_version_info 的基址口径须同源——否则"装到哪"与
-    "解析到哪"会分叉。
-
-    ⚠ 同步义务（双向）：改动本函数的基址逻辑时，必须同步
-    agate_common._resolve_version_info（与 tests/unit/test_agate_version_resolve.py
-    的 test_debt0042_* 用例）；反之亦然。两处**未共享实现**（本文件不 import
-    agate_common，避免安装器依赖被安装对象），故靠此注释维持同源。
+    委托 `agate_package.agate_home()`——"装到哪"与"解析到哪"（agate_common）共用同一实现。
     """
+    return agate_package.agate_home()
+
+
+def _raw_home():
+    """未规范化的版本根路径（软链基址守卫需要原始文本：`L/..` 这类变体规范化后会丢失歧义信息）。"""
     env_home = os.environ.get("AGATE_HOME", "")
     if env_home:
-        return os.path.expanduser(env_home)
+        return env_home
     return os.path.join(os.path.expanduser("~"), AGATE_DIRNAME)
 
 
@@ -159,7 +165,7 @@ def _ensure_repo(agate_home, url):
     os.makedirs(agate_home, exist_ok=True)
     try:
         proc = subprocess.run(
-            ["git", "clone", url, repo], capture_output=True, text=True,
+            ["git", "clone", "--", url, repo], capture_output=True, text=True,
             encoding="utf-8", errors="replace",
         )
     except OSError:
@@ -179,33 +185,57 @@ def _latest_tag(repo):
         return None
     for line in out.splitlines():
         tag = line.strip()
-        if _VERSION_RE.match(tag):
+        if _VERSION_RE.fullmatch(tag):
             return tag
     return None
 
 
-def _worktree_add(repo, version_dir, tag):
-    try:
-        proc = subprocess.run(
-            ["git", "-C", repo, "worktree", "add", "--detach", version_dir, tag],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-        )
-    except OSError:
-        sys.stderr.write("错误: git 不可用（可先运行 --check 查看环境修复指引）\n")
-        sys.exit(1)
-    if proc.returncode != 0:
-        err = proc.stderr.strip() or proc.stdout.strip()
-        sys.stderr.write(f"错误: git worktree add {version_dir} {tag} 失败：{err}\n")
-        sys.exit(1)
+def _cleanup_container(home, container):
+    """只清理本次进程刚创建的工作容器（前缀 + 真实目录 + 直属版本根）；其余一律不碰。"""
+    if not container:
+        return
+    name = os.path.basename(container)
+    if (
+        name.startswith(agate_package.TMP_PREFIX)
+        and os.path.dirname(os.path.abspath(container)) == os.path.abspath(home)
+        and os.path.isdir(container)
+        and not os.path.islink(container)
+    ):
+        shutil.rmtree(container, ignore_errors=True)
 
 
 def _install_version(agate_home, repo, version):
-    """装指定版本。幂等（BDD-3）：程序先判版本目录/指针存在，存在即跳过，不依赖 git 报错。"""
+    """装指定版本本体（TAG0037：git plumbing 构建器取代 git worktree add，只装 agate/ + 登记根文件）。
+
+    幂等（BDD-3）：程序先判版本目录/指针存在，存在即跳过（含旧 worktree 整仓形态），不依赖 git 报错。
+    流程：sweep_stale / recover_backups → list_package（失败：未建任何目录）→ make_work_dir →
+    materialize 到 <容器>/pkg → swap_in（rename 到 vX.Y.Z、删空容器）。异常只清理本次进程创建的容器。
+    """
     version_dir = os.path.join(agate_home, version)
+    agate_package.sweep_stale(agate_home)
+    agate_package.recover_backups(agate_home)
     if os.path.lexists(version_dir):
         print(f"{version} 已安装，跳过（幂等）")
         return
-    _worktree_add(repo, version_dir, version)
+    try:
+        entries = agate_package.list_package(repo, version)
+    except agate_package.PackageError as exc:
+        sys.stderr.write(f"错误: 无法从 {version} 构建本体包：{exc}\n")
+        sys.exit(1)
+    container = None
+    try:
+        container = agate_package.make_work_dir(agate_home, version)
+        pkg = os.path.join(container, "pkg")
+        os.mkdir(pkg, 0o700)
+        agate_package.materialize(repo, version, pkg, entries)
+        agate_package.swap_in(container, version_dir)
+    except (agate_package.PackageError, OSError) as exc:
+        _cleanup_container(agate_home, container)
+        sys.stderr.write(f"错误: 安装 {version} 失败：{exc}\n")
+        sys.exit(1)
+    except BaseException:
+        _cleanup_container(agate_home, container)
+        raise
 
 
 def _newest_installed_version(agate_home):
@@ -216,7 +246,7 @@ def _newest_installed_version(agate_home):
     except OSError:
         return None
     for entry in entries:
-        if _VERSION_RE.match(entry) and os.path.isdir(os.path.join(agate_home, entry)):
+        if _VERSION_RE.fullmatch(entry) and os.path.isdir(os.path.join(agate_home, entry)):
             candidates.append(entry)
     if not candidates:
         return None
@@ -291,15 +321,36 @@ def _find_references(home, version):
     return refs, hit_limit
 
 
-_LEGACY_SYMLINK_MSG = (
-    "错误: ~/.agate 是 legacy 软链布局，agate-install 会穿透软链把 repo/ 与 vX.Y.Z/ "
-    "静默建进源仓库，已拒绝（fail-closed）。\n"
+_SYMLINK_HOME_MSG = (
+    "错误: 版本根是软链，agate-install 会穿透软链把 repo/ 与 vX.Y.Z/ 静默建进软链目标，已拒绝（fail-closed）。\n"
     "迁移到版本管理布局（三步）：\n"
     "  1. 备份软链:  mv ~/.agate ~/.agate.bak\n"
     "  2. 建目录根:  mkdir -p ~/.agate\n"
     "  3. 装版本:    install.sh --versions\n"
     "               # 迁移完成后亦可: python3 ~/.agate/scripts/agate-install.py latest\n"
+    "若 ~/.agate 是指向完整版本根的软链，解析仍可用，仅安装类命令需先改为实体目录或对软链目标直接执行安装。\n"
 )
+
+
+def _symlink_home_detail(raw):
+    """首行：检测到的软链（规范化路径 → readlink 目标；或含经软链 `..` 的歧义路径的物理位置）。"""
+    norm, _ambiguous = agate_package.normalize_home(raw)
+    if os.path.islink(norm):
+        with contextlib.suppress(OSError):
+            return f"{norm} → {os.readlink(norm)}"
+    return f"{norm}（原始路径 {raw} 含经软链解析的 '..'，物理位置 {os.path.realpath(raw)}）"
+
+
+def _reject_symlink_home(agate_home):
+    """软链基址守卫（BDD-32 / T-14）：规范化后是软链、或原始路径经软链的 `..` 解析歧义 → stderr + exit 1。"""
+    for candidate in (_raw_home(), agate_home):
+        if agate_package.is_symlink_base(candidate):
+            sys.stderr.write(
+                f"检测到的软链：{_symlink_home_detail(candidate)}；"
+                "若它不是 ~/.agate，请把下列命令中的 ~/.agate 替换为它\n"
+            )
+            sys.stderr.write(_SYMLINK_HOME_MSG)
+            sys.exit(1)
 
 
 def _sync_root_scripts(agate_home, version_dir):
@@ -310,7 +361,7 @@ def _sync_root_scripts(agate_home, version_dir):
     agate_common.py / resolve-entry.py 等，P1-requirements §3.4）——单次 copytree
     （dirs_exist_ok=True）即可让新机 ~/.agate/scripts/ 入口命令可直接调用（断点一
     「入口断链」修复），并随重跑 agate-install.py latest 跟随 current 版本刷新
-    （BDD-4 判据 2）。
+    （BDD-4 判据 2）。忽略 `__pycache__` / `*.pyc`；`symlinks=True` 复制链接自身而非目标。
 
     copytree 失败不静默吞掉（DEBT0-B）：写一行 stderr 诊断，便于用户定位根入口缺失，
     而非事后在「No such file」处才发现。
@@ -324,7 +375,10 @@ def _sync_root_scripts(agate_home, version_dir):
         )
         return
     try:
-        shutil.copytree(proto_scripts, dst, dirs_exist_ok=True)
+        shutil.copytree(
+            proto_scripts, dst, dirs_exist_ok=True, symlinks=True,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+        )
     except OSError as exc:
         sys.stderr.write(
             f"WARNING: 根入口副本同步失败（{proto_scripts} → {dst}）：{exc}；"
@@ -332,10 +386,27 @@ def _sync_root_scripts(agate_home, version_dir):
         )
 
 
+def _register(agate_home, version, move_pointers):
+    """登记已装版本：`move_pointers` 时写 latest → version、current → latest（失败还原快照，exit 1）；
+    恒调用 `_sync_root_scripts`（指针写入之后，失败仅 WARNING）。"""
+    if move_pointers:
+        snap = agate_package.snapshot_pointers(agate_home)
+        try:
+            _write_pointer(agate_home, "latest", version)
+            _write_pointer(agate_home, "current", "latest")
+        except OSError as exc:
+            with contextlib.suppress(OSError, agate_package.PackageError):
+                agate_package.restore_pointers(agate_home, snap)
+            sys.stderr.write(f"错误: 写 latest/current 指针失败（已还原）：{exc}\n")
+            sys.exit(1)
+    _sync_root_scripts(agate_home, os.path.join(agate_home, version))
+
+
 def _cmd_install(agate_home, version=None):
-    if os.path.islink(agate_home):
-        sys.stderr.write(_LEGACY_SYMLINK_MSG)
-        sys.exit(1)
+    if version is not None and not _VERSION_RE.fullmatch(version):
+        sys.stderr.write(f"错误: 非法版本号 {version!r}（应为 vX.Y.Z）\n")
+        sys.exit(2)
+    _reject_symlink_home(agate_home)
     url = os.environ.get("AGATE_REPO_URL", "") or DEFAULT_REPO_URL
     repo = _ensure_repo(agate_home, url)
     if version is None:
@@ -344,22 +415,48 @@ def _cmd_install(agate_home, version=None):
             sys.stderr.write("错误: 版本源仓库没有可用的 vX.Y.Z tag\n")
             sys.exit(1)
         _install_version(agate_home, repo, tag)
-        _write_pointer(agate_home, "latest", tag)
-        _write_pointer(agate_home, "current", "latest")
-        _sync_root_scripts(agate_home, os.path.join(agate_home, tag))
+        _register(agate_home, tag, move_pointers=True)
         print(f"已安装 latest → {tag}")
     else:
-        if not _VERSION_RE.match(version):
-            sys.stderr.write(f"错误: 非法版本号 {version!r}（应为 vX.Y.Z）\n")
-            sys.exit(2)
         _install_version(agate_home, repo, version)
-        _sync_root_scripts(agate_home, os.path.join(agate_home, version))
+        _register(agate_home, version, move_pointers=False)
         print(f"已安装 {version}")
     sys.exit(0)
 
 
+def _cmd_adopt(agate_home, version):
+    """纳管已就位的版本目录（TAG0037 §3.3 / BDD-17）：只写指针 + 同步根 scripts/，不碰 git、不改版本目录。
+
+    执行主体 = 调用方所在目录的 agate-install.py（同目录兄弟安装器语义，eng M-2）。
+    新形态目录（无 .git）先 verify_dir 契约校验（顶层多余条目 / tests / 软链 → exit 1）；
+    旧 worktree 形态（含 .git）跳过校验，保持兼容。指针写入失败由 `_register` 还原快照（eng N-2）。
+    """
+    if not _VERSION_RE.fullmatch(version):
+        sys.stderr.write(f"错误: 非法版本号 {version!r}（应为 vX.Y.Z）\n")
+        sys.exit(2)
+    _reject_symlink_home(agate_home)
+    version_dir = os.path.join(agate_home, version)
+    if not os.path.isdir(version_dir):
+        sys.stderr.write(f"错误: 版本目录不存在: {version_dir}（--adopt 只纳管已就位的 {version}，不下载不构建）\n")
+        sys.exit(1)
+    if not os.path.lexists(os.path.join(version_dir, ".git")):
+        problems = agate_package.verify_dir(version_dir)
+        if problems:
+            sys.stderr.write(f"错误: {version_dir} 不符合版本目录结构契约，拒绝纳管：\n")
+            for line in problems:
+                sys.stderr.write(f"  - {line}\n")
+            sys.exit(1)
+    proto_scripts = os.path.join(_protocol_root(version_dir), "scripts")
+    if not os.path.isdir(proto_scripts):
+        sys.stderr.write(f"错误: {version_dir} 缺协议 scripts/（{proto_scripts}），无法纳管\n")
+        sys.exit(1)
+    _register(agate_home, version, move_pointers=True)
+    print(f"已纳管 {version}：latest → {version}，current → latest")
+    sys.exit(0)
+
+
 def _cmd_uninstall(agate_home, version):
-    if not _VERSION_RE.match(version):
+    if not _VERSION_RE.fullmatch(version):
         sys.stderr.write(f"错误: 非法版本号 {version!r}（应为 vX.Y.Z）\n")
         sys.exit(2)
 
@@ -383,16 +480,24 @@ def _cmd_uninstall(agate_home, version):
 
     before = _pointer_targets(agate_home)
     repo = os.path.join(agate_home, "repo")
+    has_repo = os.path.isdir(repo)
 
-    rc, _out = run_git(["worktree", "remove", version_dir], cwd=repo)
-    if rc != 0:
-        run_git(["worktree", "remove", "--force", version_dir], cwd=repo)
-    if os.path.lexists(version_dir):
+    # 旧形态（git worktree 整仓，含 .git 指针）才走 `git worktree remove`；新形态本体目录直接移除。
+    if has_repo and os.path.lexists(os.path.join(version_dir, ".git")):
+        rc, _out = run_git(["worktree", "remove", version_dir], cwd=repo)
+        if rc != 0:
+            run_git(["worktree", "remove", "--force", version_dir], cwd=repo)
+    if os.path.islink(version_dir):
+        with contextlib.suppress(OSError):
+            os.unlink(version_dir)
+    elif os.path.lexists(version_dir):
         shutil.rmtree(version_dir, ignore_errors=True)
     if os.path.lexists(version_dir):
         sys.stderr.write(f"错误: 无法删除版本目录 {version_dir}\n")
         sys.exit(1)
-    run_git(["worktree", "prune"], cwd=repo)
+    if has_repo:
+        # 幂等：清掉被替换旧形态遗留的 repo/.git/worktrees/<vX.Y.Z> 登记（eng m-4）。
+        run_git(["worktree", "prune"], cwd=repo)
 
     _repair_pointers(agate_home, version, before)
     print(f"已卸载 {version}")
@@ -421,9 +526,20 @@ def _fix_guidance(item):
     return []
 
 
-def _cmd_check():
-    """环境探测：python3 / pyyaml / git / bash。全齐 exit 0；缺项非 0 + 分平台修复指引。"""
+_PORTABLE_HINTS = {
+    "git": "git 缺失（仅在线安装 / 装历史 tag / agate-changes.py 需要 git；portable 离线场景无需）",
+    "bash": "bash 缺失（仅安装 hook 需要 bash；portable 离线场景无需）",
+}
+
+
+def _cmd_check(portable=False):
+    """环境探测：python3 / pyyaml / git / bash。全齐 exit 0；缺项非 0 + 分平台修复指引。
+
+    `portable=True`（opt-in，BDD-18）：必需项仅 python3 + pyyaml；git / bash 缺失只打印提示行，不计入缺项。
+    默认口径不变（缺 git 仍 exit 1，BDD-7/8）。
+    """
     missing = []
+    hints = []
     items = []
 
     python_path = probe_python()
@@ -448,18 +564,24 @@ def _cmd_check():
     git_path = shutil.which("git")
     items.append(f"git: {git_path if git_path else '缺失'}")
     if not git_path:
-        missing.append("git")
+        (hints if portable else missing).append("git")
 
     bash_path = shutil.which("bash")
     items.append(f"bash: {bash_path if bash_path else '缺失'}")
     if not bash_path:
-        missing.append("bash")
+        (hints if portable else missing).append("bash")
 
     for line in items:
         print("✓ " + line)
 
+    for item in hints:
+        print("提示: " + _PORTABLE_HINTS[item])
+
     if not missing:
-        print("环境完整（python3 / pyyaml / git / bash 全部可用）")
+        if portable:
+            print("portable 环境满足（python3 / pyyaml 可用）")
+        else:
+            print("环境完整（python3 / pyyaml / git / bash 全部可用）")
         sys.exit(0)
 
     print("\n缺少: " + ", ".join(missing))
@@ -471,11 +593,13 @@ def _cmd_check():
 
 
 def _usage():
-    print("用法: agate-install.py [latest | vX.Y.Z | --uninstall vX.Y.Z | --check]")
-    print("  无参 / latest    装 latest 指针（最新发布 tag 的 worktree）+ current → latest")
+    print("用法: agate-install.py [latest | vX.Y.Z | --adopt vX.Y.Z | --uninstall vX.Y.Z | --check [--portable]]")
+    print("  无参 / latest    装 latest 指针（最新发布 tag 的本体）+ current → latest")
     print("  vX.Y.Z           装指定版本（幂等，已装则跳过）")
-    print("  --uninstall vX   卸载指定版本（引用保护扫描 + worktree remove + 指针清理）")
+    print("  --adopt vX.Y.Z   纳管已就位的版本目录：写 latest/current 指针 + 同步根 scripts/（不碰 git）")
+    print("  --uninstall vX   卸载指定版本（引用保护扫描 + 移除版本目录 + 指针清理）")
     print("  --check          环境探测 python3 / pyyaml / git / bash")
+    print("  --check --portable  portable 口径：仅 python3 + pyyaml 必需，git / bash 缺失只提示")
 
 
 def main():
@@ -486,7 +610,18 @@ def main():
         # `latest` = 无参安装的显式别名（装最新发布 tag + current→latest；幂等复跑）。
         _cmd_install(agate_home)
     elif args[0] == "--check":
-        _cmd_check()
+        if len(args) == 1:
+            _cmd_check()
+        elif args == ["--check", "--portable"]:
+            _cmd_check(portable=True)
+        else:
+            sys.stderr.write("用法: agate-install.py --check [--portable]\n")
+            sys.exit(2)
+    elif args[0] == "--adopt":
+        if len(args) != 2:
+            sys.stderr.write("用法: agate-install.py --adopt vX.Y.Z\n")
+            sys.exit(2)
+        _cmd_adopt(agate_home, args[1])
     elif args[0] == "--uninstall":
         if len(args) != 2:
             sys.stderr.write("用法: agate-install.py --uninstall vX.Y.Z\n")
@@ -498,7 +633,7 @@ def main():
     elif len(args) == 1:
         _cmd_install(agate_home, args[0])
     else:
-        sys.stderr.write("用法: agate-install.py [vX.Y.Z | --uninstall vX.Y.Z | --check]\n")
+        sys.stderr.write("用法: agate-install.py [vX.Y.Z | --adopt vX.Y.Z | --uninstall vX.Y.Z | --check [--portable]]\n")
         sys.exit(2)
 
 

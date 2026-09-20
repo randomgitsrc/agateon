@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 try:
-    from agate_common import resolve_version_root
+    from agate_common import resolve_version_root, symlink_migration_hint
 except (ImportError, SystemExit):
     sys.stderr.write("agate-summary: agate_common 不可用（缺 pyyaml？），版本解析不可用\n")
     sys.exit(1)
@@ -149,9 +149,8 @@ def main():
     reason = info["reason"] or "（无原因）"
     root = str(Path(info["root"]).resolve()) if info["root"] else "（无可用 AGATE_ROOT）"
 
-    # CHANGELOG 在仓库根，不在 agate/ 协议本体下（legacy 单软链 ~/.agate → <clone>/agate，
-    # CHANGELOG 是 <clone>/CHANGELOG.md；版本布局整仓形态下 <vdir>/CHANGELOG.md）。探测两处。
-    changelog_hint = "~/.agate/../CHANGELOG.md（仓库根）"
+    # CHANGELOG 在版本根 <vdir>/CHANGELOG.md（契约形态，root=<vdir>/agate 的上一层）或协议根内。探测两处。
+    changelog_hint = "<版本根>/CHANGELOG.md"
     if info["root"]:
         rp = Path(info["root"]).resolve()
         for cand in (rp.parent / "CHANGELOG.md", rp / "CHANGELOG.md"):
@@ -159,12 +158,20 @@ def main():
                 changelog_hint = str(cand)
                 break
 
+    # 软链迁移提示：仅在没有任何根可解析且基址是软链时打印（软链 → 完整版本根经 current 链正常解析，不算旧布局，eng N-4）
+    migration = []
+    if not info["root"] and info.get("symlink_base"):
+        migration = ["", *symlink_migration_hint().rstrip("\n").split("\n")]
+
+    entry = f"读 {root}/AGENTS.md（协议本体入口指引）" if info["root"] else "先按上方提示修复安装（无可用 AGATE_ROOT）"
+
     lines = [
         "=== agate 当前状态 ===",
         "",
         f"版本：{version}",
         f"原因：{reason}",
         f"AGATE_ROOT：{root}",
+        *migration,
         "",
         "防护机制（pre-commit + CI）：",
         guards,
@@ -176,7 +183,7 @@ def main():
         "=== 启动时建议 ===",
         "",
         "1. 第一行：上面这一段（确认协议版本 + 防护机制就位）",
-        "2. 读 ~/.agate/AGENTS.md（协议本体入口指引）",
+        f"2. {entry}",
         f"3. 读 {changelog_hint}（了解自上次会话以来发生了什么）",
         "4. 按 orchestrator-template.md mapping 表读当前阶段卡片，按需查阅 Fallback reference 节",
         "",

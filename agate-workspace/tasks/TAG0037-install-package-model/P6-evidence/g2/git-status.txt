@@ -1,0 +1,23 @@
+=== START ===
+ M agate-workspace/tasks/TAG0037-install-package-model/P1-requirements.md
+ M agate-workspace/tasks/TAG0037-install-package-model/gate-events.jsonl
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g1.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g2.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-merge.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-prompt-verifier.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-evidence/
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-progress.md
+
+=== END (2026-09-20T21:19:51+08:00) ===
+ M agate-workspace/tasks/TAG0037-install-package-model/P1-requirements.md
+ M agate-workspace/tasks/TAG0037-install-package-model/gate-events.jsonl
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g1.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g2.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-merge.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-prompt-verifier.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-evidence/
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-progress.md
+
+=== diff vs START: files differing (tracked-modified P1 BDD-50 BASELINE_CHANGE annotation authorized; new files only under P6-evidence/g2 and P6-progress) ===
+ 1 file changed, 4 insertions(+)
+(no other changes outside P6 files / P1 annotation / pre-existing gate-events)

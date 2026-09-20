@@ -1,0 +1,98 @@
+# BDD-17 portable install, real Release tarball, no git (2026-09-20T18:42:36+08:00)
+# isolated PATH=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/bin (python3 3.12 + pyyaml 6.0.1 + coreutils symlinks; NO git); AGATE_HOME=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/AGATE_HOME_dir; HOME=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/home
+$ env -i PATH=... command -v git
+git not on PATH (rc=1)
+--- doc block verbatim ---
+AGATE_HOME="${AGATE_HOME:-$HOME/.agate}"
+while [ "${AGATE_HOME%/}" != "$AGATE_HOME" ]; do AGATE_HOME="${AGATE_HOME%/}"; done
+[ ! -L "$AGATE_HOME" ] || { echo "AGATE_HOME 是软链，请先按迁移三步处理"; false; }
+sha256sum -c SHA256SUMS --ignore-missing          # macOS：shasum -a 256 -c SHA256SUMS
+mkdir -p "$AGATE_HOME" && mkdir "$AGATE_HOME/vX.Y.Z"   # 已存在则失败：先 --uninstall 该版本或换目录
+tar -xzf agateon-vX.Y.Z.tar.gz -C "$AGATE_HOME/vX.Y.Z"
+python3 -B "$AGATE_HOME/vX.Y.Z/agate/scripts/agate-install.py" --adopt vX.Y.Z
+python3 -B "$AGATE_HOME/scripts/agate-install.py" --check --portable
+--- substitutions: asset name agateon-vX.Y.Z.tar.gz -> agateon-v0.73.0-tagtest.1.tar.gz (real Release asset); remaining vX.Y.Z -> v0.73.0 (--adopt/_VERSION_RE require strict semver; manifest/prerelease-tag naming rule BDD-13 5) ---
+$ (cd dl && env -i PATH=<no-git> HOME=<iso> AGATE_HOME=<iso> /bin/bash run.sh)   # run.sh = "set -euo pipefail" + block (with substitutions)
+agateon-v0.73.0-tagtest.1.tar.gz: OK
+已纳管 v0.73.0：latest → v0.73.0，current → latest
+✓ python3: /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/bin/python3
+✓ pyyaml: 可用
+✓ git: 缺失
+✓ bash: /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/bin/bash
+提示: git 缺失（仅在线安装 / 装历史 tag / agate-changes.py 需要 git；portable 离线场景无需）
+portable 环境满足（python3 / pyyaml 可用）
+portable_block_rc=0
+
+--- resulting AGATE_HOME layout ---
+总计 16
+drwxr-xr-x 4 kity kity 4096  9月 20 18:42 .
+drwxr-xr-x 6 kity kity 4096  9月 20 18:42 ..
+lrwxrwxrwx 1 kity kity    6  9月 20 18:42 current -> latest
+lrwxrwxrwx 1 kity kity    7  9月 20 18:42 latest -> v0.73.0
+drwxr-xr-x 2 kity kity 4096  9月 20 18:42 scripts
+drwxr-xr-x 3 kity kity 4096  9月 20 18:42 v0.73.0
+agate
+CHANGELOG.md
+LICENSE
+NOTICES.md
+lrwxrwxrwx 1 kity kity 6  9月 20 18:42 current -> latest
+lrwxrwxrwx 1 kity kity 7  9月 20 18:42 latest -> v0.73.0
+agate-advance.py
+agate-archive-stale-outputs.py
+agate-capture-env-baseline.py
+
+$ env -i PATH=<no-git> AGATE_HOME=<iso> python3 -B $AGATE_HOME/scripts/agate-resolve.py   (cwd=empty project dir)
+AGATE_ROOT=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/AGATE_HOME_dir/v0.73.0/agate
+AGATE_VERSION=v0.73.0
+AGATE_REASON=全局 current
+resolve_rc=0
+
+$ ... agate-summary.py
+=== agate 当前状态 ===
+
+版本：v0.73.0
+原因：全局 current
+AGATE_ROOT：/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/AGATE_HOME_dir/v0.73.0/agate
+
+防护机制（pre-commit + CI）：
+  ✓ check-state-yaml.py
+  ✓ check-gate.py
+  ✓ check-changelog.py
+  ✓ check-p6-evidence.py
+  ✓ check-p6-provenance.py
+  ✓ check-state-transition.py
+  ✓ check-pruning.py
+  ✓ check-scope-resolved.py
+  ✓ check-retrospective.py
+  ✓ pre-commit-gate.sh（hook 入口）
+
+快速版本对比：python3 ~/.agate/scripts/agate-changes.py [since-tag]
+默认输出自上一个 tag 起的 commit + 受影响的协议文件。
+查远端更新：python3 ~/.agate/scripts/agate-changes.py --check-upstream
+
+=== 启动时建议 ===
+
+1. 第一行：上面这一段（确认协议版本 + 防护机制就位）
+summary_rc=0
+
+$ ... agate-install.py --check --portable
+✓ python3: /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/bin/python3
+✓ pyyaml: 可用
+✓ git: 缺失
+✓ bash: /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-03-portable/bin/bash
+提示: git 缺失（仅在线安装 / 装历史 tag / agate-changes.py 需要 git；portable 离线场景无需）
+portable 环境满足（python3 / pyyaml 可用）
+check_portable_rc=0
+
+--- git invocations: none possible (git absent from PATH); PATH entries:
+awk basename bash cat chmod cp cut date diff dirname echo env false find grep gzip head id ln ls mkdir mv printf pwd python3 readlink realpath rm sed sh sha256sum sleep sort tail tar tee test touch tr true uname wc xargs 
+
+--- __pycache__/*.pyc under AGATE_HOME (expect none, -B / PYTHONDONTWRITEBYTECODE):
+(end)
+
+--- installed top-level set of v0.73.0:
+agate
+CHANGELOG.md
+LICENSE
+NOTICES.md
+EXIT_CODE: 0

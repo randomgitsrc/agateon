@@ -9,7 +9,7 @@
 > **Agateon**（原名 agate）——本项目已改名，下方徽标与安装命令已指向新仓库。
 > 一种编排协议，用构建系统验证编译器的方式验证 AI Agent。
 
-[![version](https://img.shields.io/badge/version-v0.72.0-blue)](https://github.com/randomgitsrc/agateon)
+[![version](https://img.shields.io/badge/version-v0.73.0-blue)](https://github.com/randomgitsrc/agateon)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [English](README.md) | [中文](README.zh-CN.md)
@@ -31,11 +31,11 @@ LLM Agent 在长任务上强大但不可靠：上下文被污染、subagent 漂�
 
 ## 快速开始
 
-1. **安装 Agateon。** 克隆仓库并把 `~/.agate` 指向协议本体（`agate/`），或使用一键安装脚本：
+1. **安装 Agateon。** 使用一键安装脚本——它会进入**版本管理布局**（在 `~/.agate/vX.Y.Z/` 下安装版本目录，配 `latest` / `current` 指针；`~/.agate` 是版本管理根**实体目录**）：
    ```bash
    curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh | bash
    ```
-   需要**按项目锁定版本**时，用官方路径 `install.sh --versions` 进入版本管理布局（在 `~/.agate/vX.Y.Z/` 下安装版本目录；`~/.agate` 变为版本管理根**实体目录**——已是 legacy 软链时该命令会 fail-closed 拒绝，需按提示先备份软链再重跑），再用版本管理器更新或钉版。安装 / 迁移 / 更新 / 回退完整口径见 [`agate/UPGRADING.md`](agate/UPGRADING.md) 的「版本管理生命周期」节：
+   不带参数的 `install.sh` 等价于 `install.sh --versions`。若 `~/.agate` 仍是旧版本遗留的软链，该命令会 fail-closed 拒绝并给出三步迁移指引（先备份软链再重跑），详见 [`agate/UPGRADING.md`](agate/UPGRADING.md) 的「v0.73.0」节。之后用版本管理器按项目更新或钉版。安装 / 迁移 / 更新 / 回退完整口径见 [`agate/UPGRADING.md`](agate/UPGRADING.md) 的「版本管理生命周期」节：
    ```bash
    install.sh --versions                                  # 进入版本管理布局（repo/ + vX.Y.Z/ + 指针）
    python3 ~/.agate/scripts/agate-install.py latest       # 更新到最新版（幂等）

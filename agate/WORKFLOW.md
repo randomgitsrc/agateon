@@ -38,7 +38,7 @@ agate 建立在两条主线上：
 ## 目录结构
 
 ```
-~/.agate/                        # 标准安装根：单软链 → 仓库 agate/ 子目录（legacy，兼容）；或版本管理目录（TAG0008 起：vX.Y.Z/ + latest/current 指针，经 agate-resolve 解析）
+~/.agate/                        # 标准安装根：版本管理目录（vX.Y.Z/ + latest/current 指针，经 agate-resolve 解析；协议根为 current/agate）
 ├── AGENTS.md                    # 协议本体入口指引（角色清单 + 升级/卸载）—— Agent 找路从这里开始
 ├── WORKFLOW.md                  # 本文件：主流程（入口）
 ├── dispatch-protocol.md         # 派发协议、gate 表、特殊事件处理

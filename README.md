@@ -9,7 +9,7 @@
 > **Agateon (formerly agate)** — this project has a new name; the badge and install command below already point to the new repository.
 > An orchestration protocol that verifies AI agents the way a build system verifies a compiler.
 
-[![version](https://img.shields.io/badge/version-v0.72.0-blue)](https://github.com/randomgitsrc/agateon)
+[![version](https://img.shields.io/badge/version-v0.73.0-blue)](https://github.com/randomgitsrc/agateon)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [English](README.md) | [中文](README.zh-CN.md)
@@ -31,11 +31,11 @@ LLM agents are powerful but unreliable on long tasks: context gets polluted, sub
 
 ## Quick start
 
-1. **Install Agateon.** Clone the repository and point `~/.agate` at the protocol body (`agate/`), or use the one-shot installer:
+1. **Install Agateon.** Use the one-shot installer — it enters the **versioned layout** (versioned directories under `~/.agate/vX.Y.Z/`, with `latest` / `current` pointers; `~/.agate` is a version-root **directory**):
    ```bash
    curl -sSL https://raw.githubusercontent.com/randomgitsrc/agateon/main/install.sh | bash
    ```
-   For **per-project version pinning**, enter the versioned layout with `install.sh --versions` (the official path; installs versioned directories under `~/.agate/vX.Y.Z/`; `~/.agate` becomes a version-root **directory** — if it is still a legacy symlink the command fail-closes with instructions to back it up first), then use the version manager to update or pin. The full install / migrate / update / rollback matrix is the "版本管理生命周期" section of [`agate/UPGRADING.md`](agate/UPGRADING.md):
+   Running `install.sh` with no arguments is the same as `install.sh --versions`. If `~/.agate` is still a symlink from an older release, the command fail-closes with three migration steps (back the symlink up, then re-run) — see the "v0.73.0" section of [`agate/UPGRADING.md`](agate/UPGRADING.md). Use the version manager to update or pin per project. The full install / migrate / update / rollback matrix is the "版本管理生命周期" section of [`agate/UPGRADING.md`](agate/UPGRADING.md):
    ```bash
    install.sh --versions                                  # enter the versioned layout (repo/ + vX.Y.Z/ + pointers)
    python3 ~/.agate/scripts/agate-install.py latest       # update to the latest version (idempotent)

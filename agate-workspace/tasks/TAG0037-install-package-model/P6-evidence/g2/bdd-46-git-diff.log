@@ -1,0 +1,34 @@
+# BDD-46: P3 §7.5 command (HEAD=043181d, baseline 75a8102)
+$ git diff --stat 75a8102..HEAD -- agate/scripts/pre-commit-gate.sh agate/scripts/pre-commit-gate.py agate/scripts/commit-msg-self-gate.sh agate/scripts/commit-msg-self-gate.py agate/scripts/pre-push-gate.sh agate/scripts/pre-push-gate.py SELF-GATE.md agate/scripts/install-hook.py agate/scripts/check-state-yaml.py agate/scripts/agate-state-yaml-check.py agate/rules/
+exit=0
+--- output (empty expected) begins:
+--- output ends; bytes=0
+
+$ git ls-files -- <same paths> (prove the pathspec matches real tracked files, not vacuous)
+SELF-GATE.md
+agate/rules/dispatch-tiers.yaml
+agate/rules/dispatch.yaml
+agate/rules/phases.yaml
+agate/rules/review-mapping.md
+agate/rules/roles.yaml
+agate/rules/schema/dispatch.schema.json
+agate/rules/schema/phases.schema.json
+agate/rules/schema/roles.schema.json
+agate/rules/state-transitions.md
+agate/scripts/agate-state-yaml-check.py
+agate/scripts/check-state-yaml.py
+agate/scripts/commit-msg-self-gate.py
+agate/scripts/commit-msg-self-gate.sh
+agate/scripts/install-hook.py
+agate/scripts/pre-commit-gate.py
+agate/scripts/pre-commit-gate.sh
+agate/scripts/pre-push-gate.py
+agate/scripts/pre-push-gate.sh
+
+$ git diff --stat 75a8102..HEAD -- agate/scripts/resolve-entry.py  (only comments/docstrings allowed; AST-normalized verdict is in bdd-46-pytest.log)
+
+$ git log --oneline 75a8102..HEAD | wc -l => 7
+$ git diff --stat 75a8102..HEAD -- agate/scripts/agate_common.py | tail -1
+ 1 file changed, 55 insertions(+), 25 deletions(-)
+
+EXIT_CODE: 0

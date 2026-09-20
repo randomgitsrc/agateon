@@ -1,0 +1,34 @@
+# BDD-36 real walk-through of the three migration steps extracted from install.sh's own refusal text. HEAD=043181d
+# script: cmd-scripts/bdd36.sh
+
+### fixture: ~/.agate -> old checkout agate/ (symlink)
+.agate -> SCRATCH/g2-05/w/h36/oldco/agate
+refusal exit=1
+extracted from install.sh refusal text: [1] mv ~/.agate ~/.agate.bak | [2] mkdir -p ~/.agate | [3] install.sh --versions
+step1 exit=0
+step2 exit=0
+step3 (install.sh --versions) exit=0
+--- ~/.agate after step 3:
+current latest repo scripts v0.72.0 
+current -> latest
+latest -> v0.72.0
+[PASS] ~/.agate is a real directory
+version dir: v0.72.0
+agate CHANGELOG.md LICENSE NOTICES.md 
+[PASS] contract form: agate/scripts present, no agate/agate, no .git
+[PASS] current -> latest
+[PASS] scripts/agate-install.py present
+AGATE_ROOT=SCRATCH/g2-05/w/h36/.agate/v0.72.0/agate
+AGATE_VERSION=v0.72.0
+AGATE_REASON=全局 current
+agate-resolve exit=0
+[PASS] .agate.bak is still the original symlink -> w/h36/oldco/agate
+[PASS] .agate.bak target intact (agate/scripts present through the link)
+--- rollback by rename only (no deletion): mv ~/.agate ~/.agate.new36; mv ~/.agate.bak ~/.agate
+[PASS] back to symlink state (rollback works)
+post-rollback resolve exit=1 (1 = fail-closed on symlink shape, as designed)
+### BDD-29 unknown arg
+install.sh --bogus exit=2
+用法: install.sh [--versions]   （无参与 --versions 等价）
+[PASS] source checkout git status unchanged
+EXIT_CODE: 0

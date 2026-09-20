@@ -1,0 +1,25 @@
+# BDD-8 pytest evidence (verifier g1)
+# selected 6 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <6 node ids below>
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-1-only-vdir-scripts]
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-2-only-vdir-agate-scripts]
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-3-both]
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-4-neither]
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-5-new-contract-shape]
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_guard_catches_a_one_sided_probe_order_change
+# HEAD=043181d git version 2.43.0
+# elapsed 0.3s
+
+============================= test session starts ==============================
+collecting ... collected 6 items
+
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-1-only-vdir-scripts] PASSED [ 16%]
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-2-only-vdir-agate-scripts] PASSED [ 33%]
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-3-both] PASSED [ 50%]
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-4-neither] PASSED [ 66%]
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_both_impls_return_expected_and_equal[bdd8-5-new-contract-shape] PASSED [ 83%]
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_8_guard_catches_a_one_sided_probe_order_change PASSED [100%]
+
+============================== 6 passed in 0.06s ===============================
+
+EXIT_CODE: 0

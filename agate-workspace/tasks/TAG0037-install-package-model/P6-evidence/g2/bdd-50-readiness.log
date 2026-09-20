@@ -1,0 +1,124 @@
+# BDD-50 release-readiness evidence (P6 scope = pre-release readiness per BASELINE_CHANGE; items 2-6 final facts are P8), HEAD=043181d, 2026-09-20T19:05:43+08:00
+
+$ grep -n "^### v0.73.0" agate/UPGRADING.md
+279:### v0.73.0 — 安装与多版本模型统一（TAG0037：RM-AG0066；**BREAKING**）
+
+$ sed -n 279,294p agate/UPGRADING.md   (the ### v0.73.0 section: BREAKING + migration three steps)
+### v0.73.0 — 安装与多版本模型统一（TAG0037：RM-AG0066；**BREAKING**）
+
+> **BREAKING：v0.73.0 起删除旧单软链布局支持**（`~/.agate` 直接是指向仓库 `agate/` 子目录的软链）。
+> **影响面**：仅仍在使用软链布局的存量用户（`readlink ~/.agate` 有输出即是）；已在版本管理布局（`~/.agate/` 是含 `vX.Y.Z/` 与 `latest`/`current` 的实体目录）的用户**无需任何动作**。已知存量仅 1 个，且已迁移。
+
+1. **迁移三步（软链用户必做）**：软链基址下 `agate-install.py` / `agate-resolve.py` / `install-offline.py` / `install.sh` 一律 fail-closed 并打印同一段三步（文案同源）：
+   `mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`（迁移完成后亦可 `python3 ~/.agate/scripts/agate-install.py latest`）。
+   备份 `~/.agate.bak` 是旧软链本身，确认新布局可用后自行清理。软链若指向**完整版本根**（含 `vX.Y.Z/` 与 `current` 链），解析仍可用，仅安装类命令须先改为实体目录。
+2. **解析链由五层改三层**：`AGATE_ROOT` > `AGATE_HOME` → 项目 `.agate-version` → `current` 指针链；删除"软链目标即协议根"的兜底层。`AGATE_REASON` 不再出现 `legacy 软链布局（无版本指针）`。
+3. **`install.sh` 无参语义变更**：原无参 = 建软链单布局；现在**无参与 `--versions` 等价**，进入版本管理布局（其他参数 → 用法 + exit 2）。
+4. **废弃环境变量**：`AGATE_REPO_DIR`、`AGATE_SYMLINK` 已废弃且被忽略（设置任一则 `install.sh` 向 stderr 打一行 WARNING，不再创建其指向的路径）；版本根用 `AGATE_HOME` 指定，主克隆上游用 `AGATE_REPO_URL`。
+5. **版本目录改为"本体包"形态**：新装的 `vX.Y.Z/` 只含 `agate/` 与登记根文件（`CHANGELOG.md` / `LICENSE` / `NOTICES.md`），不再是整仓检出；契约与边界清单见「版本目录结构契约」。**已装的整仓形态版本目录继续可解析，不迁移、不归一化。**
+6. **新增 Release + portable 安装**：Release 资产 = 本体 tarball `agateon-vX.Y.Z.tar.gz` + 各平台离线包 + `SHA256SUMS`；无 git 环境按「portable 安装」小节命令即可安装（`--adopt` / `--check --portable`）。`SHA256SUMS` 只防下载损坏、不认证发布者。
+7. **升级说明（两步升级，仅文档）**：v0.72.x 用户**用旧安装器**（旧 `install.sh` / 旧根 `scripts/agate-install.py`）升级到 v0.73.0 时，装出的 v0.73.0 **自身仍是旧整仓形态**（旧安装器不认识本体包；该形态仍可解析、可用）。该次安装会把根 `scripts/` 同步为 v0.73.0 自带的新安装器，此后经根 `scripts/` 执行的安装（`agate-install.py latest` / `vX.Y.Z`）才只装本体、得到契约形态。既有整仓形态版本目录无需处理（见上条）。
+8. **钉老版本的副作用**：`agate-install.py vX.Y.Z` 预装老版本会把根 `scripts/` 同步为**该老版本的安装器**，其后再执行 `latest` 可能重走旧安装路径。须先 `python3 ~/.agate/scripts/agate-install.py latest`（用新版本重新同步根 `scripts/`）或直接用 `repo/` 里最新版的安装器。
+9. **仅仓库开发者可用的内容**：`agate/tests/` 不进本体包（包内对 `agate/tests/README.md` 的引用仅对 git 仓库开发者有效）。
+
+$ sed -n "/^## \[Unreleased\]/,/^## \[0.72.0\]/p" CHANGELOG.md
+## [Unreleased]
+
+> **BREAKING（TAG0037，将随 v0.73.0 发布）**：删除旧单软链布局支持。迁移指引见 `agate/UPGRADING.md` 的 `### v0.73.0`（软链用户三步：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`）。
+
+### BREAKING（TAG0037：安装与多版本模型统一，RM-AG0066）
+
+- **删除 legacy 软链布局支持**：`~/.agate` 是软链时，`agate-install.py` / `agate-resolve.py` / `install-offline.py` / `install.sh` 一律 fail-closed 并打印同一段迁移三步；版本解析链由五层收敛为三层（`AGATE_ROOT` > `AGATE_HOME` → `.agate-version` → `current`），移除"软链目标即协议根"兜底。仅影响仍使用软链布局的存量用户，已在版本管理布局的用户无需动作。
+- **`install.sh` 无参语义变更**：无参与 `--versions` 等价（进入版本管理布局），其他参数 → 用法 + exit 2；`AGATE_REPO_DIR` / `AGATE_SYMLINK` 已废弃且被忽略（设置时 stderr 一行 WARNING）。
+
+### 新增
+
+- **版本目录结构契约**：新装 `vX.Y.Z/` 为"本体包"形态（`agate/` + 登记根文件 `CHANGELOG.md` / `LICENSE` / `NOTICES.md`），不再是整仓检出；契约与边界清单成文于 `agate/UPGRADING.md`，边界清单单一来源 `agate/scripts/agate_package.py`（`boundary_lines()`）。已装的整仓形态版本目录继续可解析，不迁移。
+- **三条安装路径同构**：在线（`agate-install.py`）、离线（`agate-pack-offline.py` / `install-offline.py`）、portable（Release tarball + `agate-install.py --adopt`）产出同一结构；新增 `agate-install.py --adopt vX.Y.Z` 与 `--check --portable`（无需 git）。
+- **Release 流水线**：新增 `agate/scripts/agate-release.py`（确定性构建本体 tarball、各平台离线包、`SHA256SUMS` 与发布说明）与 `.github/workflows/release.yml`。`SHA256SUMS` 只防下载损坏、不认证发布者。
+- **文档**：`UPGRADING.md` 新增「版本目录结构契约」「portable 安装」小节与 `### v0.73.0` 节（BREAKING 标注、影响面、迁移三步、`install.sh` 无参语义、废弃 env、两步升级说明）；「安装 / 迁移 / 更新 / 回退对照表」去 legacy 列、解析优先级表改三层；历史版本节保留原文并在 §3 顶部加历史注记。
+
+### 变更
+
+- `agate_common.py`：`compute_sha256` 目录分支忽略字节码（`__pycache__` / `*.pyc` / `*.pyo`），安装态与运行后态哈希一致。
+
+来源：TAG0037（RM-AG0066）。版本段标题与日期在 P8 发版时重命名。
+
+## [0.72.0] - 2026-09-19
+
+$ grep -n "img.shields.io/badge/version" README.md README.zh-CN.md
+README.zh-CN.md:12:[![version](https://img.shields.io/badge/version-v0.72.0-blue)](https://github.com/randomgitsrc/agateon)
+README.md:12:[![version](https://img.shields.io/badge/version-v0.72.0-blue)](https://github.com/randomgitsrc/agateon)
+1.0 badge occurrences: README.md:0 README.zh-CN.md:0 
+
+$ cat .github/workflows/release.yml   (static facts: trigger / permissions)
+name: Release
+
+# 仅 v* tag 推送触发；构建逻辑全在仓库脚本 agate/scripts/agate-release.py，本文件只做编排。
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      # 无第三方 action、无令牌；私有仓库时需另加 http.extraheader
+      - name: Clone tag
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$TAG" -- "https://github.com/${GITHUB_REPOSITORY}.git" src
+
+      - name: Python deps (pinned pyyaml)
+        working-directory: src
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          PIN="$(python3 -B agate/scripts/agate-release.py pyyaml-pin)"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet --only-binary=:all: "pyyaml==${PIN}"
+
+      # 只调用仓库脚本；workflow 内零打包逻辑；本步骤不持有令牌
+      - name: Build assets
+        working-directory: src
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" -B agate/scripts/agate-release.py build \
+            --tag "$TAG" --expect-sha "$GITHUB_SHA" --repo . \
+            --outdir "$RUNNER_TEMP/dist" --notes-out "$RUNNER_TEMP/notes.md"
+
+      - name: Publish
+        working-directory: src
+        env:
+          # 仅此步骤持有内置令牌
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rc=0; python3 -B agate/scripts/agate-release.py is-prerelease "$TAG" || rc=$?
+          PRE=()
+          case "$rc" in 0) PRE=(--prerelease);; 1) ;; *) exit "$rc";; esac
+          gh release create "$TAG" "$RUNNER_TEMP"/dist/* --verify-tag --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" "${PRE[@]}"
+
+$ grep -nE "^on:|push:|tags:|permissions:|contents:" .github/workflows/release.yml
+4:on:
+5:  push:
+6:    tags: ['v*']
+8:permissions:
+9:  contents: write
+
+$ local tags matching v0.73*: 
+(none = no local v0.73.* tag; formal tag/CHANGELOG rename/roadmap/HANDOFF archive/Release assets are P8-time facts, not asserted here)
+
+# consistency CHECK 7 / CHECK 13 pass (exit 0, 0 ERROR) -> see bdd-49-commands.log
+# pytest: UC::test_bdd_50_1_changelog_marks_breaking_and_points_to_migration_guide -> see bdd-50-pytest.log
+EXIT_CODE: 0

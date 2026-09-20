@@ -17,7 +17,7 @@ permission:
 
 ## 会话开始时先解析这几个值（本文件其余部分——含下面这个警告框——出现的 `{agate_root}`/`{project_root}`/`{AGATE_WORKSPACE}` 都指这里解析出的实际路径——你的运行平台不会替你做这个替换，占位符要靠你自己认）
 
-- **`{agate_root}`**：优先用环境变量 `$AGATE_ROOT`（若已设置）。否则先跑 `python3 ~/.agate/scripts/agate-resolve.py`，从输出读取 `AGATE_ROOT=`（TAG0008 起解析项目 `.agate-version` → 版本目录；无声明回退全局 `current`；legacy 单软链直接落到软链目标）；若该脚本不可用则默认 `~/.agate`。跑一次确认实际路径。
+- **`{agate_root}`**：优先用环境变量 `$AGATE_ROOT`（若已设置）。否则先跑 `python3 ~/.agate/scripts/agate-resolve.py`，从输出读取 `AGATE_ROOT=`（解析项目 `.agate-version` → 版本目录；无声明回退全局 `current`）；若该脚本不可用则回退 `~/.agate/current/agate`。跑一次确认实际路径。
 - **`{project_root}`**：从当前工作目录向上找最近的、含 `.git` 的目录（worktree 场景下就是当前 worktree 自己的根，不是主 checkout）。如果 `{AGATE_WORKSPACE}/agents/project.md` 里显式声明了 `project_root:`，以声明值为准。
 - **`{AGATE_WORKSPACE}`（工作区根）**：跑一次 `python3 {agate_root}/scripts/agate_common.py`，从输出读取 `AGATE_WORKSPACE`（工作区根，默认 `{project_root}/agate-workspace`）。工作区是 agate 编排状态（tasks/agents/archived/reviews/decisions/plans/logs/roadmap）的统一落盘位置，不再散布在项目 `docs/` 下。**若解析失败（脚本不存在/报错）→ 输出错误并停止**，不要静默退回到 `docs/tasks/` 旧路径。
 

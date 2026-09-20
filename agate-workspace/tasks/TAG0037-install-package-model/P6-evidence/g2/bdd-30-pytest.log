@@ -1,0 +1,21 @@
+# BDD-30 pytest evidence (verifier g2)
+# selected 4 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <4 node ids below>
+#   agate/tests/unit/test_install_sh.py::test_bdd_30_deprecated_env_warns_and_creates_nothing
+#   agate/tests/unit/test_install_sh.py::test_bdd_30_no_warning_when_deprecated_env_unset
+#   agate/tests/unit/test_install_sh.py::test_bdd_30_install_sh_header_and_usage_no_longer_reference_deprecated_names
+#   agate/tests/unit/test_install_sh.py::test_bdd_30_test_files_no_longer_reference_agate_repo_dir
+# HEAD=043181d git version 2.43.0
+# elapsed 0.6s
+
+============================= test session starts ==============================
+collecting ... collected 4 items
+
+agate/tests/unit/test_install_sh.py::test_bdd_30_deprecated_env_warns_and_creates_nothing PASSED [ 25%]
+agate/tests/unit/test_install_sh.py::test_bdd_30_no_warning_when_deprecated_env_unset PASSED [ 50%]
+agate/tests/unit/test_install_sh.py::test_bdd_30_install_sh_header_and_usage_no_longer_reference_deprecated_names PASSED [ 75%]
+agate/tests/unit/test_install_sh.py::test_bdd_30_test_files_no_longer_reference_agate_repo_dir PASSED [100%]
+
+============================== 4 passed in 0.39s ===============================
+
+EXIT_CODE: 0

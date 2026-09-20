@@ -13,9 +13,13 @@
 #   gate-name→gate py 映射：pre-commit→pre-commit-gate.py / commit-msg→commit-msg-self-gate.py /
 #   pre-push→pre-push-gate.py（P2-review 决策点 2，薄壳保留、exec 目标变 resolve-entry）。
 
+import os
 import shutil
+import sys
 
 import pytest
+
+import helpers_tag_repo as H
 
 
 def _resolve_env(home):
@@ -56,7 +60,8 @@ def _make_fake_root(tmp_path, agate_scripts):
     """
     fake = tmp_path / "agate-fake"
     (fake / "scripts").mkdir(parents=True)
-    for name in ("pre-commit-gate.sh", "commit-msg-self-gate.sh", "pre-push-gate.sh", "agate_common.py"):
+    # TAG0037（P2 §6 T-10 / eng N-1）：agate_common 现依赖 agate_package.py——拷贝清单须同时含它（存在才拷）。
+    for name in ("pre-commit-gate.sh", "commit-msg-self-gate.sh", "pre-push-gate.sh", "agate_common.py", "agate_package.py"):
         src = agate_scripts / name
         if src.is_file():
             shutil.copy2(str(src), str(fake / "scripts" / name))
@@ -221,3 +226,100 @@ def test_tag0032_bdd_8_meta_repo_hook_gate_path_resolves(
         "元仓库形态下 gate 路径应命中 vX/agate/scripts/，不因『gate 脚本不存在』exit 1"
     )
     assert "GATE-META-050" in result.output, "解析出的版本 gate 应被 exec"
+
+
+# ============================================================
+# TAG0037 P3 组 B（批 E）：BDD-47 hook 解析路径不受 legacy 删除影响
+#   既有 test_hook_resolve_entry.py 全部用例 + test_pre_commit_hook.py::test_agate_root_self_locate_worktree 保持通过（夹具增拷 agate_package.py，见
+#   P3-test-cases.md §6 修改登记）；本节新增回归：
+#   * 新契约形态版本目录（vX.Y.Z/agate/scripts + 根 scripts/ 副本，均含 agate_package.py）下 resolve-entry → gate 链路照常（红灯：agate_package.py 未实现）；
+#   * `resolve_hook_root` 的「脚本路径上溯 + .agate-root 复制模式恢复」兜底保持（S-17：hook 自定位契约、dogfooding 依赖，不属 legacy，故不随 E 删除）；
+#   * 软链 AGATE_HOME 不再把软链目标当协议根（脚本路径上溯兜底照常命中脚本所在根）。
+#   后两条锁的是既有行为，P3 阶段即为绿（有意应绿的回归守卫）。
+# ============================================================
+
+
+def _probe_resolve_hook_root(tmp_path, agate_scripts, script_path):
+    probe = tmp_path / "probe-hook-root.py"
+    probe.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(agate_scripts)!r})\n"
+        "from agate_common import resolve_hook_root\n"
+        f"root, _w = resolve_hook_root({str(script_path)!r})\n"
+        "print('ROOT=' + str(root))\n",
+        encoding="utf-8",
+    )
+    return probe
+
+
+def test_bdd_47_new_form_version_dir_hook_chain_resolves_and_runs_gate(run_cli, python_exe, tmp_path):
+    """BDD-47：新契约形态（vX.Y.Z/{agate/（含 scripts/）, 登记根文件}）+ 根 scripts/ 副本——项目钉版后 resolve-entry pre-commit 解析出
+    <root>/scripts/pre-commit-gate.py（root = vX.Y.Z/agate）并 exec，不因 gate 缺失 exit 1。夹具里的 scripts/ 均含 agate_package.py（agate_common 的新依赖）。"""
+    agate_home = tmp_path / "ah"
+    vscripts = agate_home / "v0.73.0" / "agate" / "scripts"
+    H.copy_real_scripts(vscripts)
+    H.copy_real_scripts(agate_home / "scripts")  # 等价 _sync_root_scripts 的根入口副本
+    for name in H.ORACLE_ROOT_FILES:
+        (agate_home / "v0.73.0" / name).write_text(f"# {name}\n", encoding="utf-8")
+    (vscripts / "pre-commit-gate.py").write_text(_STUB_GATE.format(marker="GATE-NEWFORM-073"), encoding="utf-8")
+    (agate_home / "latest").write_text("v0.73.0\n", encoding="utf-8")  # 文本指针（Windows-safe）
+    (agate_home / "current").write_text("latest\n", encoding="utf-8")
+    assert (agate_home / "scripts" / "agate_package.py").is_file(), "根 scripts/ 副本应含 agate_package.py（agate_common 依赖它）"
+    assert (vscripts / "agate_package.py").is_file()
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_version_decl(project, "v0.73.0")
+    result = run_cli(
+        python_exe,
+        str(agate_home / "scripts" / "resolve-entry.py"),
+        "pre-commit",
+        cwd=str(project),
+        env={"AGATE_ROOT": "", "AGATE_HOME": str(agate_home), "HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home")},
+    )
+    assert result.returncode == 0, result.output
+    assert "GATE-NEWFORM-073" in result.output
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="软链断言仅 POSIX")
+def test_bdd_47_symlink_agate_home_does_not_make_the_link_target_the_hook_root(run_cli, python_exe, agate_scripts, tmp_path):
+    """BDD-47：AGATE_HOME 是软链（目标为协议本体、无 current）时，resolve_hook_root 不再把软链目标当协议根，而是走「脚本路径上溯」兜底——
+    返回 hook 脚本所在协议根（worktree dogfooding：hook 软链指向稳定版脚本、AGATE_ROOT 未设）。"""
+    target = tmp_path / "old-checkout" / "agate"
+    (target / "scripts").mkdir(parents=True)
+    (target / "assets").mkdir()
+    link = tmp_path / "home-link"
+    os.symlink(str(target), str(link))
+    wf = tmp_path / "workflow-root"
+    (wf / "scripts").mkdir(parents=True)
+    script = wf / "scripts" / "resolve-entry.py"
+    script.write_text("# placeholder\n", encoding="utf-8")
+    probe = _probe_resolve_hook_root(tmp_path, agate_scripts, script)
+    result = run_cli(
+        python_exe,
+        str(probe),
+        env={"AGATE_ROOT": "", "AGATE_HOME": str(link), "HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home")},
+    )
+    assert result.returncode == 0, result.output
+    root = next(ln for ln in result.stdout.splitlines() if ln.startswith("ROOT="))[5:]
+    assert os.path.realpath(root) == os.path.realpath(str(wf)), "应命中脚本所在协议根（脚本路径上溯），而非软链目标"
+    assert os.path.realpath(root) != os.path.realpath(str(target))
+
+
+def test_bdd_47_copy_mode_agate_root_marker_recovery_kept(run_cli, python_exe, agate_scripts, tmp_path):
+    """BDD-47：复制模式（脚本旁 .agate-root 标记文件）恢复兜底保持——hook 自定位契约，不属旧软链布局（已删除的兜底）支持，不随 E 删除。"""
+    recovered = tmp_path / "recovered-root"
+    (recovered / "scripts").mkdir(parents=True)
+    hook_dir = tmp_path / "copied-hook"
+    hook_dir.mkdir()
+    script = hook_dir / "resolve-entry.py"
+    script.write_text("# placeholder\n", encoding="utf-8")
+    (hook_dir / ".agate-root").write_text(str(recovered) + "\n", encoding="utf-8")
+    probe = _probe_resolve_hook_root(tmp_path, agate_scripts, script)
+    result = run_cli(
+        python_exe,
+        str(probe),
+        env={"AGATE_ROOT": "", "AGATE_HOME": str(tmp_path / "no-versions"), "HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home")},
+    )
+    assert result.returncode == 0, result.output
+    root = next(ln for ln in result.stdout.splitlines() if ln.startswith("ROOT="))[5:]
+    assert os.path.realpath(root) == os.path.realpath(str(recovered))

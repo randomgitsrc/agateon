@@ -1,0 +1,37 @@
+# BDD-6 / BDD-18(3) / BDD-26 protected-source checks per P3 6.6 (re-run at HEAD 043181d, 2026-09-20T18:55:23+08:00)
+# base = 75a8102 (P1 start HEAD); compare ast.dump(FunctionDef) old vs working tree (HEAD, clean)
+## BDD-6: existing two cases + _protocol_root body unchanged
+OK   BDD-6: agate/tests/unit/test_agate_version_resolve.py::test_tag0032_bdd_6_meta_repo_resolve_returns_agate_subdir ast identical to 75a8102
+OK   BDD-6: agate/tests/unit/test_agate_version_resolve.py::test_tag0032_bdd_7_rootproto_resolve_semantics_unchanged ast identical to 75a8102
+OK   BDD-6: agate/scripts/agate_common.py::_protocol_root ast identical to 75a8102
+## BDD-18 (3): existing test_bdd_7 / test_bdd_8 (env check) unchanged
+OK   BDD-18: agate/tests/unit/test_agate_version_install.py::test_bdd_7_env_check_all_present_exit_0 ast identical to 75a8102
+OK   BDD-18: agate/tests/unit/test_agate_version_install.py::test_bdd_8_env_check_missing_pyyaml_guidance ast identical to 75a8102
+## BDD-26: existing tests kept
+OK   BDD-26: agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_3_plain_dir_not_falsely_rejected ast identical to 75a8102
+OK   BDD-26: agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_4_root_scripts_established_and_executable ast identical to 75a8102
+OK   BDD-26: agate/tests/integration/test_version_lifecycle_e2e.py::test_tag0032_bdd_13_full_lifecycle_new_machine_to_update ast identical to 75a8102
+OK   BDD-26: agate/tests/integration/test_version_lifecycle_e2e.py::test_tag0032_bdd_14_e2e_no_source_pollution ast identical to 75a8102
+## BDD-26 known, P3-ruled exceptions (informational; not part of pass criterion):
+INFO test_bdd_3_reinstall_idempotent: changed (P3 8.2(a)/6.5 DESIGN_GAP-B1 / BDD-30 cleanup exception)
+INFO test_tag0032_bdd_5_install_sh_versions_bootstrap: changed (P3 8.2(a)/6.5 DESIGN_GAP-B1 / BDD-30 cleanup exception)
+RESULT ALL OK
+rc=0
+
+## BDD-13 (6): existing 4 workflows unchanged since 75a8102
+$ git diff --stat 75a8102..HEAD -- .github/workflows/deploy-pages.yml .github/workflows/docs-check.yml .github/workflows/protocol-tests.yml .github/workflows/site-check.yml
+(empty above = unchanged)
+.github/workflows/deploy-pages.yml
+.github/workflows/docs-check.yml
+.github/workflows/protocol-tests.yml
+.github/workflows/release.yml
+.github/workflows/site-check.yml
+
+## working tree of source files clean at HEAD:
+(empty = clean)
+
+## code delta since the first g1 run (d6dd3cb..HEAD), non-task files:
+ agate/tests/helpers_tag_repo.py | 78 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 77 insertions(+), 1 deletion(-)
+
+EXIT_CODE: 0

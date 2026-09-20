@@ -13,17 +13,17 @@ Agateon 的校验器（`agate-state-yaml-check.py` 等）**只在 .state.yaml �
 - **旧任务数据（已完成/归档）如果不动它，升级后零检测触发、零问题**
 - 只有"**要继续推进的进行中任务**"和"**新任务**"需要符合新版本规范
 
-**升级最小动作**：`git pull` 拉新版 Agateon + 重跑 `install-hook.py`（见下文），其余按需。
+**升级最小动作**：`python3 ~/.agate/scripts/agate-install.py latest` 装新版（幂等）+ 按需重跑 `install-hook.py`（见下文「hook 重装时机」），其余按需。
 
 ---
 
 ## 1. 通用升级步骤
 
 ```bash
-# 1. 升级 Agateon 本体（~/.agate 软链指向的仓库）
-cd <你克隆 Agateon 的目录> && git pull
+# 1. 升级 Agateon 本体（~/.agate 是版本管理根目录，装最新版并切 latest/current 指针；幂等）
+python3 ~/.agate/scripts/agate-install.py latest
 
-# 2. 重装 hook（推荐，pre-commit/commit-msg 软链自动跟随；pre-push 也是软链 v0.32+ 自动跟随）
+# 2. 重装 hook（通常无需：hook 经固定解析入口跟随版本；仅薄壳变更 / Windows 复制模式才重跑，见「hook 重装时机」）
 python3 ~/.agate/scripts/install-hook.py
 
 # 3. 验证版本
@@ -45,14 +45,15 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 ### 安装 / 迁移 / 更新 / 回退对照表
 
-| 动作 | legacy 软链布局 | 版本管理布局 |
-|------|-----------------|--------------|
-| 安装（新机）| `curl -sSL .../install.sh \| bash`（`~/.agate` → clone 出来的 `agate/` 子目录）| `install.sh --versions`（一键进入版本管理布局：建 `repo/` + 首个 `vX.Y.Z/` + `latest`/`current` 指针 + 根 `scripts/` 副本；`~/.agate` 已是软链则 fail-closed，提示下方迁移三步）|
-| 迁移（软链 → 版本管理）| — | 三步（与 `agate-install.py` fail-closed 文案同源）：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions` |
-| 更新 | `cd <你克隆 Agateon 的目录> && git pull`（是否需重跑 `install-hook.py` 见下方「hook 重装时机」；`git pull` 无新提交时是 no-op，**幂等**）| `python3 ~/.agate/scripts/agate-install.py latest`（**幂等**：重复执行不报错、不重复建版本目录、`latest`/`current` 指针幂等切换）|
-| 回退 | `git checkout <旧 tag>` | 见下方「回退（两种场景，不可混用）」 |
+| 动作 | 命令 / 行为 |
+|------|-------------|
+| 安装（新机，在线）| `curl -sSL .../install.sh \| bash`（无参与 `install.sh --versions` 等价：建 `repo/` 主克隆 + 首个 `vX.Y.Z/`（**本体包形态**，见「版本目录结构契约」）+ `latest`/`current` 指针 + 根 `scripts/` 副本；`~/.agate` 已是软链则 fail-closed，提示下方迁移三步）|
+| 安装（无 git / 内网）| 见「portable 安装」（Release 本体 tarball + `--adopt`）或离线 bundle（`agate-pack-offline.py` 打包 → `install-offline.py` 安装）|
+| 迁移（旧软链 → 版本管理）| 三步（与 `agate-install.py` fail-closed 文案同源）：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions` |
+| 更新 | `python3 ~/.agate/scripts/agate-install.py latest`（**幂等**：重复执行不报错、不重复建版本目录、`latest`/`current` 指针幂等切换；是否需重跑 `install-hook.py` 见下方「hook 重装时机」）|
+| 回退 | 见下方「回退（两种场景，不可混用）」 |
 
-两种布局的「更新」指令在文档面对齐、各自**幂等**：legacy 侧 = `git pull`（+ 按需重跑 hook），版本管理侧 = `agate-install.py latest`。
+**唯一布局**：v0.73.0 起只有版本管理布局（旧单软链安装形态已移除，见 §3 `v0.73.0`）。更新入口统一为 `agate-install.py latest`，**幂等**（+ 按需重跑 hook）。
 
 #### 回退（两种场景，不可混用）
 
@@ -73,6 +74,68 @@ python3 ~/.agate/scripts/agate-resolve.py     # 输出 AGATE_ROOT / AGATE_VERSIO
 
 **卸载旧版**：`python3 ~/.agate/scripts/agate-install.py --uninstall v<旧版本>`（含项目引用保护扫描——若仍有项目 `.agate-version` 引用它会拒绝）。
 
+
+### 版本目录结构契约
+
+> 本小节是 `vX.Y.Z/` 版本目录**应有内容**的权威口径（在线安装 / 离线安装 / portable 安装三条路径产出同一结构）。
+> 设计意图：版本目录只装"协议本体 + 少量登记根文件"，不再是整仓检出。
+
+**(a) 版本根结构**（`AGATE_HOME` 指向这一层，必须是**实体目录**，不能是软链）：
+
+```
+~/.agate/
+├── vX.Y.Z/                    # 一个已安装版本；顶层条目集合固定（见 (b)）
+│   ├── agate/                 # 本体，目录名固定 agate/；协议根 = <版本目录>/agate
+│   ├── CHANGELOG.md           # 登记根文件（agate-summary 会话启动探测 <root>/../CHANGELOG.md）
+│   ├── LICENSE                # 登记根文件（MIT 要求所有副本带许可声明）
+│   └── NOTICES.md             # 登记根文件（role-system.md 引用）
+├── latest  → vX.Y.Z           # 指针（POSIX 软链 / Windows 文本指针）
+├── current → latest           # 指针
+├── scripts/                   # 根入口副本（agate-install 从版本协议根 scripts/ 同步）
+└── repo/                      # 可选：仅在线安装存在（git 对象库，用于装任意历史 tag；离线 / portable 无）
+```
+
+**(b) `vX.Y.Z/` 顶层条目集合** = {`agate/`} ∪ {`CHANGELOG.md`、`LICENSE`、`NOTICES.md`} ∪ 已登记隐藏元数据（**当前为空**——没有任何隐藏条目获准）。**未登记的顶层条目 = 违约**（`verify_dir` 可机械判定）。README 系列、`pyproject.toml`、`SELF-GATE.md`、根 `AGENTS.md` / `CLAUDE.md`、`install.sh`、`.git*`、`HANDOFF-*.md`、`.github/`、`site/`、`docs/`、`archived/`、`agate-workspace/` 等**均不入包**。
+
+**(c) 本体目录名固定为 `agate/`**（无配置项、无扩展点）。既有整仓形态的版本目录（v0.73.0 之前经 `git worktree` 检出，顶层含 `agate/` 与 `agate-workspace/`、`docs/` 等）仍由 `_protocol_root` 命中 `<版本目录>/agate`，**不迁移、不归一化**；新旧形态共存靠项目 `.agate-version` 钉版或 `current` 指向。
+
+**(d) 边界清单单一来源**：`agate/scripts/agate_package.py`（`boundary_lines()`）。下面的块由它渲染，文档与来源不得各自维护（测试断言块内条目集合与来源逐行一致）：
+
+```
+include agate/
+exclude agate/tests/
+exclude **/__pycache__/
+exclude *.pyc
+exclude *.pyo
+root-file CHANGELOG.md
+root-file LICENSE
+root-file NOTICES.md
+```
+
+**安装态与运行后态**：契约约束的是"安装器交付的内容"。运行版本目录内 `agate/scripts/*.py`（含 hook 正常运行）时 Python 运行时会写入 `__pycache__/*.pyc`，这**不属违约**——`verify_dir` 与全部"文件集合比较"都忽略 `__pycache__` 目录与 `*.pyc` / `*.pyo`，安装器自身不产生字节码。
+
+**并发**：不支持对同一版本根并发安装同一版本（单用户工具，未实现文件锁）。
+
+### portable 安装（Release tarball，无需 git）
+
+适用：无 git、无法访问 GitHub 仓库、只想从 Release 拿一个包解压即用的机器。**依赖**：`python3`（≥ 3.8）与 `pyyaml`（`python3 -m pip install pyyaml`，内网可用离线 bundle 提供的 wheel）、`sha256sum`（macOS 用 `shasum -a 256`）与 `tar`。**无需 git**，但 `agate-changes.py` 等依赖 agate git 仓库的工具在该形态下不可用；安装 hook（`install-hook.py`）需要 bash。
+
+下载指引：从 GitHub Release 页面下载**推荐资产** `agateon-vX.Y.Z.tar.gz`（本体）与 `SHA256SUMS` 放到同一目录；GitHub 自动生成的 **Source code** 压缩包是**整仓**快照，不是安装包，请勿用它安装。下面的命令**在下载目录中执行**（把 `vX.Y.Z` 换成实际版本）：
+
+```bash
+AGATE_HOME="${AGATE_HOME:-$HOME/.agate}"
+while [ "${AGATE_HOME%/}" != "$AGATE_HOME" ]; do AGATE_HOME="${AGATE_HOME%/}"; done
+[ ! -L "$AGATE_HOME" ] || { echo "AGATE_HOME 是软链，请先按迁移三步处理"; false; }
+sha256sum -c SHA256SUMS --ignore-missing          # macOS：shasum -a 256 -c SHA256SUMS
+mkdir -p "$AGATE_HOME" && mkdir "$AGATE_HOME/vX.Y.Z"   # 已存在则失败：先 --uninstall 该版本或换目录
+tar -xzf agateon-vX.Y.Z.tar.gz -C "$AGATE_HOME/vX.Y.Z"
+python3 -B "$AGATE_HOME/vX.Y.Z/agate/scripts/agate-install.py" --adopt vX.Y.Z
+python3 -B "$AGATE_HOME/scripts/agate-install.py" --check --portable
+```
+
+- **`-B` 的原因**：避免从版本目录内运行脚本时留下 `__pycache__`（污染安装态，见上文契约）。前三行 shell 守卫在解压**之前**挡住软链基址（`--adopt` 内的软链守卫是第二道，晚于 `mkdir` / `tar`）。
+- **`--adopt vX.Y.Z`**：纳管已就位的版本目录——校验其符合契约、写 `latest` / `current` 指针并同步根 `scripts/`，**不碰 git、不联网**。`--check --portable` 是 portable 口径的环境探测：必需项仅 `python3` + `pyyaml`，`git` / `bash` 缺失只提示。
+- **完整性说明（如实）**：`SHA256SUMS` 与资产同处一个 Release，**只能发现下载损坏，不提供发布者身份认证**（发布者账号被攻破时无法防护）。需要更强保证请从 git tag 自行构建（`agate-release.py build`，产物可与资产逐成员比对）或经第二渠道核对哈希。离线 bundle（`agateon-vX.Y.Z-offline-<平台>.tar.gz`，含依赖 wheel，经 `install-offline.py` 安装）同此口径。
 
 ### 路径层次与解析优先级（易混淆点）
 
@@ -96,13 +159,13 @@ python3 ~/.agate/scripts/agate-resolve.py     # 输出 AGATE_ROOT / AGATE_VERSIO
 │   └── agate/               ← 协议根（AGATE_ROOT 指向这一层；scripts/ assets/ 在此）
 ├── latest  → vX.Y.Z         ← 指针
 ├── current → latest         ← 指针（可多级跳）
-├── repo/                    ← 从 origin clone 的主仓库
+├── repo/                    ← 可选：仅在线安装存在（从 origin clone 的 git 对象库，用于装任意历史 tag）
 └── scripts/                 ← 入口副本（hook 安装目标；随安装刷新，见下一节）
 ```
 
-> ⚠ **`~/.agate` ≠ 协议根**，多一层版本目录。整仓形态（GitHub 直装）下协议根为 `<版本目录>/`（无 `agate/` 子目录）——由 `_protocol_root` 两形态探测兼容。
+> ⚠ **`~/.agate` ≠ 协议根**，多一层版本目录。新契约形态（本体包）与 v0.73.0 之前已装的整仓形态（`git worktree` 检出，含 `agate-workspace/`、`docs/` 等）下，协议根**都是** `<版本目录>/agate`；仅当 `<版本目录>/scripts/` 直接存在（「根即协议」部署）时才以 `<版本目录>/` 本身为协议根，该探测优先——两者均由 `_protocol_root` 探测序兼容，已装的旧形态无需迁移。
 
-**③ 解析优先级（五层，自上而下，实测验证）**：
+**③ 解析优先级（三层，自上而下，实测验证）**：
 
 | # | 来源 | 指向的层次 | `AGATE_REASON` 字样 |
 |---|------|-----------|-------------------|
@@ -110,7 +173,6 @@ python3 ~/.agate/scripts/agate-resolve.py     # 输出 AGATE_ROOT / AGATE_VERSIO
 | 2 | `AGATE_HOME` env | **版本根基址**（换"版本仓库在哪"） | 其后各层的字样（如 `全局 current`） |
 | 3 | 项目 `.agate-version` | 版本号（在基址下找同名版本目录） | `引用 .agate-version` |
 | 4 | `current` 指针链 | 版本目录 → 协议根 | `全局 current` |
-| 5 | legacy 软链兜底 | 软链目标即协议根 | `legacy 软链布局（无版本指针）` |
 
 **`AGATE_ROOT` 与 `AGATE_HOME` 的关键差别**（最易混）：
 
@@ -129,7 +191,7 @@ python3 ~/.agate/scripts/agate-resolve.py     # 输出 AGATE_ROOT / AGATE_VERSIO
 git commit
   → .git/hooks/<hook>          （软链 → <版本管理根>/scripts/<hook>.sh）
   → resolve-entry.py           （固定入口，不随版本变）
-  → resolve_hook_root()        （与 resolve_agate_root 同一解析链，走上面五层）
+  → resolve_hook_root()        （与 resolve_agate_root 同一解析链，走上面三层）
   → exec <解析到的协议根>/scripts/<gate>.py
 ```
 
@@ -211,6 +273,31 @@ git commit
 ## 3. 已知破坏性变更（按版本）
 
 > 升级到新版本前，检查你的项目是否触及以下变更点。
+>
+> **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
+
+### v0.73.0 — 安装与多版本模型统一（TAG0037：RM-AG0066；**BREAKING**）
+
+> **BREAKING：v0.73.0 起删除旧单软链布局支持**（`~/.agate` 直接是指向仓库 `agate/` 子目录的软链）。
+> **影响面**：仅仍在使用软链布局的存量用户（`readlink ~/.agate` 有输出即是）；已在版本管理布局（`~/.agate/` 是含 `vX.Y.Z/` 与 `latest`/`current` 的实体目录）的用户**无需任何动作**。已知存量仅 1 个，且已迁移。
+
+1. **迁移三步（软链用户必做）**：软链基址下 `agate-install.py` / `agate-resolve.py` / `install-offline.py` / `install.sh` 一律 fail-closed 并打印同一段三步（文案同源）：
+   `mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`（迁移完成后亦可 `python3 ~/.agate/scripts/agate-install.py latest`）。
+   备份 `~/.agate.bak` 是旧软链本身，确认新布局可用后自行清理。软链若指向**完整版本根**（含 `vX.Y.Z/` 与 `current` 链），解析仍可用，仅安装类命令须先改为实体目录。
+2. **解析链由五层改三层**：`AGATE_ROOT` > `AGATE_HOME` → 项目 `.agate-version` → `current` 指针链；删除"软链目标即协议根"的兜底层。`AGATE_REASON` 不再出现 `legacy 软链布局（无版本指针）`。
+3. **`install.sh` 无参语义变更**：原无参 = 建软链单布局；现在**无参与 `--versions` 等价**，进入版本管理布局（其他参数 → 用法 + exit 2）。
+4. **废弃环境变量**：`AGATE_REPO_DIR`、`AGATE_SYMLINK` 已废弃且被忽略（设置任一则 `install.sh` 向 stderr 打一行 WARNING，不再创建其指向的路径）；版本根用 `AGATE_HOME` 指定，主克隆上游用 `AGATE_REPO_URL`。
+5. **版本目录改为"本体包"形态**：新装的 `vX.Y.Z/` 只含 `agate/` 与登记根文件（`CHANGELOG.md` / `LICENSE` / `NOTICES.md`），不再是整仓检出；契约与边界清单见「版本目录结构契约」。**已装的整仓形态版本目录继续可解析，不迁移、不归一化。**
+6. **新增 Release + portable 安装**：Release 资产 = 本体 tarball `agateon-vX.Y.Z.tar.gz` + 各平台离线包 + `SHA256SUMS`；无 git 环境按「portable 安装」小节命令即可安装（`--adopt` / `--check --portable`）。`SHA256SUMS` 只防下载损坏、不认证发布者。
+7. **升级说明（两步升级，仅文档）**：v0.72.x 用户**用旧安装器**（旧 `install.sh` / 旧根 `scripts/agate-install.py`）升级到 v0.73.0 时，装出的 v0.73.0 **自身仍是旧整仓形态**（旧安装器不认识本体包；该形态仍可解析、可用）。该次安装会把根 `scripts/` 同步为 v0.73.0 自带的新安装器，此后经根 `scripts/` 执行的安装（`agate-install.py latest` / `vX.Y.Z`）才只装本体、得到契约形态。既有整仓形态版本目录无需处理（见上条）。
+8. **钉老版本的副作用**：`agate-install.py vX.Y.Z` 预装老版本会把根 `scripts/` 同步为**该老版本的安装器**，其后再执行 `latest` 可能重走旧安装路径。须先 `python3 ~/.agate/scripts/agate-install.py latest`（用新版本重新同步根 `scripts/`）或直接用 `repo/` 里最新版的安装器。
+9. **仅仓库开发者可用的内容**：`agate/tests/` 不进本体包（包内对 `agate/tests/README.md` 的引用仅对 git 仓库开发者有效）。
+10. **离线路径行为收紧（使用 `agate-pack-offline.py` / `install-offline.py` 的用户注意）**：
+    - **旧格式 bundle 被拒绝**：v0.73.0 之前打出的 bundle（顶层含 `agate/agate/scripts` 双层嵌套）会被 `install-offline.py` 拒绝，报「bundle 为旧格式……请用新版 `agate-pack-offline.py` 重新打包」；须在外网机器用新版打包器重新打包，目标目录不会留下半装内容。新 bundle 顶层 = `agate/` + 登记根文件 + `wheels/` + `manifest.json`，manifest 新增 `files` 清单与 `source_ref`。
+    - **同版本重装 = 替换**：`vX.Y.Z/` 已存在时，`install-offline.py` 改为替换该目录（旧目录先移入带标记的备份容器，新版就位且指针写入成功后才删除；中途失败则还原旧目录与 `latest`/`current` 指针）。在线路径 `agate-install.py vX.Y.Z` 仍是"已存在即跳过"。
+    - **打包输出目录已存在则拒绝覆盖**：`agate-pack-offline.py` 不清空、不删除既有内容，须换新的 `--outdir` 或自行移走旧 bundle。
+    - **版本目录不再写额外文件**：离线安装不再写 `.installed-version` 与 `.agate-root`；`--include-python` 打入 bundle 的嵌入式 python 组件不再落入 `vX.Y.Z/`（安装时仅打印一行说明）；`AGATE_HOOK_COPY_MODE` 不再影响离线安装写出的 `current` 指针（POSIX 下为软链）。
+    - **废弃环境变量（`install.sh`）**：`AGATE_REPO_DIR` / `AGATE_SYMLINK` 见第 4 条，设置时仅 stderr 一行 WARNING 并被忽略。
 
 ### v0.72.0 — MVWU 阶段 1 观测（TAG0036：RM-AG0063 阶段 1）
 
@@ -806,8 +893,8 @@ python3 ~/.agate/scripts/install-hook.py
 > 重跑刷新、`repo/` 被删不影响可用性）、「升级 = `agate-install.py`」一行的幂等 `agate-install latest` 更新口径，
 > 均以本文件「版本管理生命周期」节为准。
 
-- **存量单软链用户不跑新工具时行为不变（红线，BDD-30）**：`~/.agate` 仍是软链 → 旧 checkout 的 `agate/` 子目录，无版本目录/无指针时，resolve 直接把软链目标解析为 AGATE_ROOT，hook 照常按既有语义运行——**无迁移动作即可继续用**，gate 不静默禁用。
-- **`install.sh` 兼容保留**：单软链场景仍可用，不破坏存量升级路径。
+- **（v0.73.0 已改写）旧软链布局支持已移除（BREAKING）**：本版本当时承诺的「`~/.agate` 仍是软链时 resolve 直接把软链目标解析为 AGATE_ROOT、无迁移动作即可继续用」**自 v0.73.0 起不再成立**——解析链只剩三层，软链基址且无 `current` 指针时解析 fail-closed 并给出迁移提示。影响面与迁移三步见本文件 §3 的 `### v0.73.0`。
+- **`install.sh`（v0.73.0 已改写）**：不再保留软链场景；无参与 `--versions` 等价，一律进入版本管理布局，见 `### v0.73.0`。
 
 **② `.agate-version` 项目级版本锁定（新机制，可选）**：
 
@@ -838,7 +925,7 @@ python3 ~/.agate/scripts/install-hook.py
 **⑤ agate-summary 语义变化（显示层，提示文案变更）**：`agate-summary.py` 不再显示仓库自身 tag，改为显示**当前项目解析到的版本 + 原因**（`.agate-version` 或全局 current）——排障时直接可见"项目用哪个版本、为什么"。
 
 **迁移动作小结**：
-- 存量单软链用户：无强制迁移（legacy 兜底，BDD-30）。
+- 存量软链用户：（v0.73.0 已改写）旧软链布局已不再支持，须按 `### v0.73.0` 的迁移三步迁到版本管理布局。
 - 想用版本隔离：跑 `python3 ~/.agate/scripts/agate-install.py` 装最新版 → 项目加 `.agate-version` → 重跑 `install-hook.py`（Windows 复制模式必须重跑）。
 - 已验证：31 条 BDD 全 PASS（含 BDD-30 存量软链不受破坏红线）。
 
