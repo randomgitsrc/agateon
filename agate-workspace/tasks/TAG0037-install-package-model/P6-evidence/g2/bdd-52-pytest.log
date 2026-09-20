@@ -1,0 +1,15 @@
+# BDD-52 pytest evidence (verifier g2)
+# selected 1 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <1 node ids below>
+#   agate/tests/unit/test_agate_summary.py::test_bdd_52_scripts_inside_the_body_package_without_agate_tests_have_no_traceback
+# HEAD=043181d git version 2.43.0
+# elapsed 0.6s
+
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+agate/tests/unit/test_agate_summary.py::test_bdd_52_scripts_inside_the_body_package_without_agate_tests_have_no_traceback PASSED [100%]
+
+============================== 1 passed in 0.33s ===============================
+
+EXIT_CODE: 0

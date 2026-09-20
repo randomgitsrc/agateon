@@ -1,0 +1,23 @@
+# BDD-40 pytest evidence (verifier g2)
+# selected 5 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <5 node ids below>
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_40_no_stale_protocol_root_paths_outside_history
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_40_handoff_template_uses_agate_dir_or_current_path
+#   agate/tests/unit/test_doc_sweep.py::test_bdd_40_orchestrator_template_fallback_is_current_agate
+#   agate/tests/unit/test_setup_agate_dir.py::test_bdd_40_summary_startup_advice_uses_resolved_root
+#   agate/tests/unit/test_agate_summary.py::test_bdd_40_summary_startup_suggestion_uses_resolved_root
+# HEAD=043181d git version 2.43.0
+# elapsed 0.4s
+
+============================= test session starts ==============================
+collecting ... collected 5 items
+
+agate/tests/unit/test_doc_sweep.py::test_bdd_40_no_stale_protocol_root_paths_outside_history PASSED [ 20%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_40_handoff_template_uses_agate_dir_or_current_path PASSED [ 40%]
+agate/tests/unit/test_doc_sweep.py::test_bdd_40_orchestrator_template_fallback_is_current_agate PASSED [ 60%]
+agate/tests/unit/test_setup_agate_dir.py::test_bdd_40_summary_startup_advice_uses_resolved_root PASSED [ 80%]
+agate/tests/unit/test_agate_summary.py::test_bdd_40_summary_startup_suggestion_uses_resolved_root PASSED [100%]
+
+============================== 5 passed in 0.20s ===============================
+
+EXIT_CODE: 0

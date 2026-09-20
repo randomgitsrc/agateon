@@ -1,0 +1,23 @@
+# BDD-18 pytest evidence (verifier g1)
+# selected 5 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <5 node ids below>
+#   agate/tests/unit/test_agate_install_adopt.py::test_bdd_18_1_portable_check_without_git_exit_0_with_hint
+#   agate/tests/unit/test_agate_install_adopt.py::test_bdd_18_2_portable_check_missing_pyyaml_fails_with_fix_guidance
+#   agate/tests/unit/test_agate_install_adopt.py::test_bdd_18_3_default_check_without_git_still_fails_listing_git
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_7_env_check_all_present_exit_0
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_8_env_check_missing_pyyaml_guidance
+# HEAD=043181d git version 2.43.0
+# elapsed 2.8s
+
+============================= test session starts ==============================
+collecting ... collected 5 items
+
+agate/tests/unit/test_agate_install_adopt.py::test_bdd_18_1_portable_check_without_git_exit_0_with_hint PASSED [ 20%]
+agate/tests/unit/test_agate_install_adopt.py::test_bdd_18_2_portable_check_missing_pyyaml_fails_with_fix_guidance PASSED [ 40%]
+agate/tests/unit/test_agate_install_adopt.py::test_bdd_18_3_default_check_without_git_still_fails_listing_git PASSED [ 60%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_7_env_check_all_present_exit_0 PASSED [ 80%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_8_env_check_missing_pyyaml_guidance PASSED [100%]
+
+============================== 5 passed in 2.49s ===============================
+
+EXIT_CODE: 0

@@ -1,0 +1,19 @@
+# BDD-16 pytest evidence (verifier g1)
+# selected 3 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <3 node ids below>
+#   agate/tests/unit/test_agate_release.py::test_bdd_16_offline_tarball_layout_and_manifest[linux-x86_64]
+#   agate/tests/unit/test_agate_release.py::test_bdd_16_offline_tarball_layout_and_manifest[windows-x86_64]
+#   agate/tests/unit/test_agate_release.py::test_bdd_16_offline_tarball_install_and_resolve_end_to_end
+# HEAD=043181d git version 2.43.0
+# elapsed 0.9s
+
+============================= test session starts ==============================
+collecting ... collected 3 items
+
+agate/tests/unit/test_agate_release.py::test_bdd_16_offline_tarball_layout_and_manifest[linux-x86_64] PASSED [ 33%]
+agate/tests/unit/test_agate_release.py::test_bdd_16_offline_tarball_layout_and_manifest[windows-x86_64] PASSED [ 66%]
+agate/tests/unit/test_agate_release.py::test_bdd_16_offline_tarball_install_and_resolve_end_to_end PASSED [100%]
+
+============================== 3 passed in 0.66s ===============================
+
+EXIT_CODE: 0

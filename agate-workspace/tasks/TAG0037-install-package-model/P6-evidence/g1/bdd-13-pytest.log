@@ -1,0 +1,41 @@
+# BDD-13 pytest evidence (verifier g1)
+# selected 14 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <14 node ids below>
+#   agate/tests/unit/test_release_workflow.py::test_bdd_13_1_trigger_is_only_push_tags_v_star
+#   agate/tests/unit/test_release_workflow.py::test_bdd_13_2_permissions_only_contents_write
+#   agate/tests/unit/test_release_workflow.py::test_bdd_13_3_no_secrets_reference_only_github_token
+#   agate/tests/unit/test_release_workflow.py::test_bdd_13_4_zero_third_party_actions
+#   agate/tests/unit/test_release_workflow.py::test_bdd_13_workflow_contains_no_packaging_logic_only_calls_repo_script
+#   agate/tests/unit/test_release_workflow.py::test_t8_no_expression_interpolation_in_run_scripts
+#   agate/tests/unit/test_release_workflow.py::test_t8_gh_token_only_in_publish_step_env
+#   agate/tests/unit/test_release_workflow.py::test_t8_multi_statement_run_blocks_start_with_strict_shell_flags
+#   agate/tests/unit/test_release_workflow.py::test_d15_publish_step_handles_is_prerelease_exit_codes_explicitly
+#   agate/tests/unit/test_release_workflow.py::test_d15_build_step_pins_source_pyyaml_and_expected_sha
+#   agate/tests/unit/test_release_workflow.py::test_bdd_13_release_job_shape
+#   agate/tests/unit/test_release_workflow.py::test_bdd_13_6_release_workflow_change_does_not_touch_existing_workflows
+#   agate/tests/unit/test_agate_release.py::test_bdd_13_5_build_produces_exactly_the_documented_assets
+#   agate/tests/unit/test_agate_release.py::test_bdd_13_5_and_20_prerelease_build_uses_tag_verbatim_and_strict_manifest_version
+# HEAD=043181d git version 2.43.0
+# elapsed 0.9s
+
+============================= test session starts ==============================
+collecting ... collected 14 items
+
+agate/tests/unit/test_release_workflow.py::test_bdd_13_1_trigger_is_only_push_tags_v_star PASSED [  7%]
+agate/tests/unit/test_release_workflow.py::test_bdd_13_2_permissions_only_contents_write PASSED [ 14%]
+agate/tests/unit/test_release_workflow.py::test_bdd_13_3_no_secrets_reference_only_github_token PASSED [ 21%]
+agate/tests/unit/test_release_workflow.py::test_bdd_13_4_zero_third_party_actions PASSED [ 28%]
+agate/tests/unit/test_release_workflow.py::test_bdd_13_workflow_contains_no_packaging_logic_only_calls_repo_script PASSED [ 35%]
+agate/tests/unit/test_release_workflow.py::test_t8_no_expression_interpolation_in_run_scripts PASSED [ 42%]
+agate/tests/unit/test_release_workflow.py::test_t8_gh_token_only_in_publish_step_env PASSED [ 50%]
+agate/tests/unit/test_release_workflow.py::test_t8_multi_statement_run_blocks_start_with_strict_shell_flags PASSED [ 57%]
+agate/tests/unit/test_release_workflow.py::test_d15_publish_step_handles_is_prerelease_exit_codes_explicitly PASSED [ 64%]
+agate/tests/unit/test_release_workflow.py::test_d15_build_step_pins_source_pyyaml_and_expected_sha PASSED [ 71%]
+agate/tests/unit/test_release_workflow.py::test_bdd_13_release_job_shape PASSED [ 78%]
+agate/tests/unit/test_release_workflow.py::test_bdd_13_6_release_workflow_change_does_not_touch_existing_workflows PASSED [ 85%]
+agate/tests/unit/test_agate_release.py::test_bdd_13_5_build_produces_exactly_the_documented_assets PASSED [ 92%]
+agate/tests/unit/test_agate_release.py::test_bdd_13_5_and_20_prerelease_build_uses_tag_verbatim_and_strict_manifest_version PASSED [100%]
+
+============================== 14 passed in 0.66s ==============================
+
+EXIT_CODE: 0

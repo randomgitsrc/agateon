@@ -1,0 +1,48 @@
+# BDD-31/32/33 real invocations: 5 base variants (L, L/, L//, L/., L/..) x entries; isolated dirs; git wrapper logs every git call (0 = no clone). HEAD=043181d
+# NOTE: an earlier run (SCRATCH/g2-02) had the regular --dest-root cases call the real pip (no shim); that failed harmlessly on placeholder wheels (no install performed) -> rerun with PATH pip shim below (SCRATCH/g2-03). Guard cases (rc=1) are identical in both runs.
+# script: cmd-scripts/symlink_guard.sh
+
+== BDD-31: install.sh ==
+[PASS] 31-noargs AGATE_HOME=<L>: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-noargs AGATE_HOME=<L>/: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-noargs AGATE_HOME=<L>//: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-noargs AGATE_HOME=<L>/.: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-noargs AGATE_HOME=<L>/..: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=NO (L/.. : stderr mentions '..' = 1 lines)
+[PASS] 31-versions AGATE_HOME=<L>: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-versions AGATE_HOME=<L>/: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-versions AGATE_HOME=<L>//: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-versions AGATE_HOME=<L>/.: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 31-versions AGATE_HOME=<L>/..: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=NO (L/.. : stderr mentions '..' = 1 lines)
+== BDD-32: agate-install.py ==
+[PASS] 32-noargs AGATE_HOME=<L>: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-noargs AGATE_HOME=<L>/: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-noargs AGATE_HOME=<L>//: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-noargs AGATE_HOME=<L>/.: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-noargs AGATE_HOME=<L>/..: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES (L/.. : stderr mentions '..' = 1 lines)
+[PASS] 32-latest AGATE_HOME=<L>: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-latest AGATE_HOME=<L>/: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-latest AGATE_HOME=<L>//: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-latest AGATE_HOME=<L>/.: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-latest AGATE_HOME=<L>/..: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES (L/.. : stderr mentions '..' = 1 lines)
+[PASS] 32-version AGATE_HOME=<L>: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-version AGATE_HOME=<L>/: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-version AGATE_HOME=<L>//: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-version AGATE_HOME=<L>/.: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 32-version AGATE_HOME=<L>/..: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES (L/.. : stderr mentions '..' = 1 lines)
+== BDD-33: install-offline.py (AGATE_HOME symlink) ==
+[PASS] 33-agatehome AGATE_HOME=<L>: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-agatehome AGATE_HOME=<L>/: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-agatehome AGATE_HOME=<L>//: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-agatehome AGATE_HOME=<L>/.: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-agatehome AGATE_HOME=<L>/..: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES (L/.. : stderr mentions '..' = 1 lines)
+== BDD-33: install-offline.py --dest-root symlink ==
+[PASS] 33-destroot AGATE_HOME=<L>: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-destroot AGATE_HOME=<L>/: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-destroot AGATE_HOME=<L>//: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-destroot AGATE_HOME=<L>/.: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES
+[PASS] 33-destroot AGATE_HOME=<L>/..: rc=1 target-and-parent-listing-unchanged=YES git-invocations=0 three-step-fragments=YES (L/.. : stderr mentions '..' = 1 lines)
+== BDD-33 not-misfire: regular --dest-root (existing dir / new dir) ==
+[PASS] regular dest-root (existing): rc=0; dest listing: current latest scripts v0.73.0 
+[PASS] regular dest-root (new): rc=0; dest listing: current latest scripts v0.73.0 
+OVERALL_FAIL=0
+EXIT_CODE: 0

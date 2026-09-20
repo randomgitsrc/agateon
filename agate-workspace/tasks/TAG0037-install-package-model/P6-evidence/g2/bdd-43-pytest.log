@@ -1,0 +1,15 @@
+# BDD-43 pytest evidence (verifier g2)
+# selected 1 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <1 node ids below>
+#   agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent
+# HEAD=043181d git version 2.43.0
+# elapsed 11.2s
+
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent PASSED [100%]
+
+============================== 1 passed in 10.96s ==============================
+
+EXIT_CODE: 0

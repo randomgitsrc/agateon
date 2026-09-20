@@ -1,0 +1,23 @@
+# BDD-29 pytest evidence (verifier g2)
+# selected 5 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <5 node ids below>
+#   agate/tests/unit/test_install_sh.py::test_bdd_29_install_sh_enters_version_layout[bdd29-1-no-args]
+#   agate/tests/unit/test_install_sh.py::test_bdd_29_install_sh_enters_version_layout[bdd29-2-versions-alias]
+#   agate/tests/unit/test_install_sh.py::test_bdd_29_both_entries_produce_identical_tree
+#   agate/tests/unit/test_install_sh.py::test_bdd_29_install_sh_has_no_symlink_logic
+#   agate/tests/unit/test_install_sh.py::test_bdd_29_unknown_argument_rejected_with_usage_exit_2
+# HEAD=043181d git version 2.43.0
+# elapsed 0.9s
+
+============================= test session starts ==============================
+collecting ... collected 5 items
+
+agate/tests/unit/test_install_sh.py::test_bdd_29_install_sh_enters_version_layout[bdd29-1-no-args] PASSED [ 20%]
+agate/tests/unit/test_install_sh.py::test_bdd_29_install_sh_enters_version_layout[bdd29-2-versions-alias] PASSED [ 40%]
+agate/tests/unit/test_install_sh.py::test_bdd_29_both_entries_produce_identical_tree PASSED [ 60%]
+agate/tests/unit/test_install_sh.py::test_bdd_29_install_sh_has_no_symlink_logic PASSED [ 80%]
+agate/tests/unit/test_install_sh.py::test_bdd_29_unknown_argument_rejected_with_usage_exit_2 PASSED [100%]
+
+============================== 5 passed in 0.67s ===============================
+
+EXIT_CODE: 0

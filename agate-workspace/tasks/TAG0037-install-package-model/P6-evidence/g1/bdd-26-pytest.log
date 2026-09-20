@@ -1,0 +1,29 @@
+# BDD-26 pytest evidence (verifier g1)
+# selected 8 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <8 node ids below>
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_3_reinstall_idempotent
+#   agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_3_plain_dir_not_falsely_rejected
+#   agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_4_root_scripts_established_and_executable
+#   agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_5_install_sh_versions_bootstrap
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_26_online_reinstall_is_idempotent_and_does_not_pollute_source
+#   agate/tests/unit/test_install_sh.py::test_bdd_26_install_sh_rerun_is_idempotent_and_does_not_pollute_source
+#   agate/tests/integration/test_version_lifecycle_e2e.py::test_tag0032_bdd_13_full_lifecycle_new_machine_to_update
+#   agate/tests/integration/test_version_lifecycle_e2e.py::test_tag0032_bdd_14_e2e_no_source_pollution
+# HEAD=043181d git version 2.43.0
+# elapsed 1.8s
+
+============================= test session starts ==============================
+collecting ... collected 8 items
+
+agate/tests/unit/test_agate_version_install.py::test_bdd_3_reinstall_idempotent PASSED [ 12%]
+agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_3_plain_dir_not_falsely_rejected PASSED [ 25%]
+agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_4_root_scripts_established_and_executable PASSED [ 37%]
+agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_5_install_sh_versions_bootstrap PASSED [ 50%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_26_online_reinstall_is_idempotent_and_does_not_pollute_source PASSED [ 62%]
+agate/tests/unit/test_install_sh.py::test_bdd_26_install_sh_rerun_is_idempotent_and_does_not_pollute_source PASSED [ 75%]
+agate/tests/integration/test_version_lifecycle_e2e.py::test_tag0032_bdd_13_full_lifecycle_new_machine_to_update PASSED [ 87%]
+agate/tests/integration/test_version_lifecycle_e2e.py::test_tag0032_bdd_14_e2e_no_source_pollution PASSED [100%]
+
+============================== 8 passed in 1.55s ===============================
+
+EXIT_CODE: 0

@@ -1,0 +1,35 @@
+# BDD-47 pytest evidence (verifier g2)
+# selected 11 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <11 node ids below>
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_15_install_fixed_resolve_entry
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_16_ab_isolated_versions
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_17_resolve_failure_fallback_not_silent
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_18_switch_version_no_reinstall
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_19_copy_mode_resolve_entry
+#   agate/tests/unit/test_hook_resolve_entry.py::test_tag0032_bdd_8_meta_repo_hook_gate_path_resolves
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_47_new_form_version_dir_hook_chain_resolves_and_runs_gate
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_47_symlink_agate_home_does_not_make_the_link_target_the_hook_root
+#   agate/tests/unit/test_hook_resolve_entry.py::test_bdd_47_copy_mode_agate_root_marker_recovery_kept
+#   agate/tests/integration/test_pre_commit_hook.py::test_agate_root_self_locate_worktree
+#   agate/tests/unit/test_agate_workspace_resolve.py::test_bdd_47_workspace_resolve_runs_from_minimal_scripts_dir_with_agate_package
+# HEAD=043181d git version 2.43.0
+# elapsed 1.2s
+
+============================= test session starts ==============================
+collecting ... collected 11 items
+
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_15_install_fixed_resolve_entry PASSED [  9%]
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_16_ab_isolated_versions PASSED [ 18%]
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_17_resolve_failure_fallback_not_silent PASSED [ 27%]
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_18_switch_version_no_reinstall PASSED [ 36%]
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_19_copy_mode_resolve_entry PASSED [ 45%]
+agate/tests/unit/test_hook_resolve_entry.py::test_tag0032_bdd_8_meta_repo_hook_gate_path_resolves PASSED [ 54%]
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_47_new_form_version_dir_hook_chain_resolves_and_runs_gate PASSED [ 63%]
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_47_symlink_agate_home_does_not_make_the_link_target_the_hook_root PASSED [ 72%]
+agate/tests/unit/test_hook_resolve_entry.py::test_bdd_47_copy_mode_agate_root_marker_recovery_kept PASSED [ 81%]
+agate/tests/integration/test_pre_commit_hook.py::test_agate_root_self_locate_worktree PASSED [ 90%]
+agate/tests/unit/test_agate_workspace_resolve.py::test_bdd_47_workspace_resolve_runs_from_minimal_scripts_dir_with_agate_package PASSED [100%]
+
+============================== 11 passed in 0.90s ==============================
+
+EXIT_CODE: 0

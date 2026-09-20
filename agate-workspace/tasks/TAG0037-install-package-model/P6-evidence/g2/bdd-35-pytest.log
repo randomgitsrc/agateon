@@ -1,0 +1,21 @@
+# BDD-35 pytest evidence (verifier g2)
+# selected 4 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <4 node ids below>
+#   agate/tests/unit/test_agate_version_install.py::test_debt0034_migration_steps_consistent_across_entries
+#   agate/tests/unit/test_agate_version_install.py::test_debt0034_install_sh_heredoc_is_guarded
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_35_migration_steps_consistent_across_all_entries
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_35_runtime_stderr_steps_identical_between_installer_and_resolver
+# HEAD=043181d git version 2.43.0
+# elapsed 0.5s
+
+============================= test session starts ==============================
+collecting ... collected 4 items
+
+agate/tests/unit/test_agate_version_install.py::test_debt0034_migration_steps_consistent_across_entries PASSED [ 25%]
+agate/tests/unit/test_agate_version_install.py::test_debt0034_install_sh_heredoc_is_guarded PASSED [ 50%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_35_migration_steps_consistent_across_all_entries PASSED [ 75%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_35_runtime_stderr_steps_identical_between_installer_and_resolver PASSED [100%]
+
+============================== 4 passed in 0.21s ===============================
+
+EXIT_CODE: 0

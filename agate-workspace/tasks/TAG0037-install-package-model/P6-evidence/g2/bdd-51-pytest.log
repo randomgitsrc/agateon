@@ -1,0 +1,19 @@
+# BDD-51 pytest evidence (verifier g2)
+# selected 3 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <3 node ids below>
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_51_1_symlink_to_full_version_root_resolves_via_current_chain
+#   agate/tests/unit/test_agate_summary.py::test_bdd_51_summary_symlink_to_full_version_root_prints_no_migration_hint
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_51_2_install_into_symlinked_full_version_root_is_refused_with_resolution_note
+# HEAD=043181d git version 2.43.0
+# elapsed 0.6s
+
+============================= test session starts ==============================
+collecting ... collected 3 items
+
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_51_1_symlink_to_full_version_root_resolves_via_current_chain PASSED [ 33%]
+agate/tests/unit/test_agate_summary.py::test_bdd_51_summary_symlink_to_full_version_root_prints_no_migration_hint PASSED [ 66%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_51_2_install_into_symlinked_full_version_root_is_refused_with_resolution_note PASSED [100%]
+
+============================== 3 passed in 0.33s ===============================
+
+EXIT_CODE: 0

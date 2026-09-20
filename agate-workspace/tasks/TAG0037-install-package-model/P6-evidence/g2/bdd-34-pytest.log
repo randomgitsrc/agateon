@@ -1,0 +1,15 @@
+# BDD-34 pytest evidence (verifier g2)
+# selected 1 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <1 node ids below>
+#   agate/tests/unit/test_agate_summary.py::test_bdd_34_summary_symlink_home_prints_migration_hint_instead_of_silent_failure
+# HEAD=043181d git version 2.43.0
+# elapsed 0.3s
+
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+agate/tests/unit/test_agate_summary.py::test_bdd_34_summary_symlink_home_prints_migration_hint_instead_of_silent_failure PASSED [100%]
+
+============================== 1 passed in 0.10s ===============================
+
+EXIT_CODE: 0

@@ -1,0 +1,35 @@
+# BDD-17 pytest evidence (verifier g1)
+# selected 11 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <11 node ids below>
+#   agate/tests/integration/test_portable_no_git.py::test_bdd_17_test_path_really_has_no_git
+#   agate/tests/integration/test_portable_no_git.py::test_bdd_17_documented_commands_run_without_git_and_produce_contract_layout
+#   agate/tests/integration/test_portable_no_git.py::test_bdd_17_resolve_and_summary_work_without_git
+#   agate/tests/integration/test_portable_no_git.py::test_bdd_17_check_portable_passes_without_git
+#   agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_registers_pointers_and_root_scripts_without_git[bdd17-1-git-tripwire]
+#   agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_registers_pointers_and_root_scripts_without_git[bdd17-2-no-git]
+#   agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_is_idempotent_and_does_not_modify_version_dir
+#   agate/tests/unit/test_agate_install_adopt.py::test_d13_adopt_from_version_dir_entry_writes_no_bytecode
+#   agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_old_worktree_form_dir_skips_contract_verification
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_17_portable_section_command_block_shape
+#   agate/tests/integration/test_install_three_paths.py::test_bdd_4_all_three_paths_produce_same_structure_including_portable
+# HEAD=043181d git version 2.43.0
+# elapsed 1.9s
+
+============================= test session starts ==============================
+collecting ... collected 11 items
+
+agate/tests/integration/test_portable_no_git.py::test_bdd_17_test_path_really_has_no_git PASSED [  9%]
+agate/tests/integration/test_portable_no_git.py::test_bdd_17_documented_commands_run_without_git_and_produce_contract_layout PASSED [ 18%]
+agate/tests/integration/test_portable_no_git.py::test_bdd_17_resolve_and_summary_work_without_git PASSED [ 27%]
+agate/tests/integration/test_portable_no_git.py::test_bdd_17_check_portable_passes_without_git PASSED [ 36%]
+agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_registers_pointers_and_root_scripts_without_git[bdd17-1-git-tripwire] PASSED [ 45%]
+agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_registers_pointers_and_root_scripts_without_git[bdd17-2-no-git] PASSED [ 54%]
+agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_is_idempotent_and_does_not_modify_version_dir PASSED [ 63%]
+agate/tests/unit/test_agate_install_adopt.py::test_d13_adopt_from_version_dir_entry_writes_no_bytecode PASSED [ 72%]
+agate/tests/unit/test_agate_install_adopt.py::test_bdd_17_adopt_old_worktree_form_dir_skips_contract_verification PASSED [ 81%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_17_portable_section_command_block_shape PASSED [ 90%]
+agate/tests/integration/test_install_three_paths.py::test_bdd_4_all_three_paths_produce_same_structure_including_portable PASSED [100%]
+
+============================== 11 passed in 1.68s ==============================
+
+EXIT_CODE: 0

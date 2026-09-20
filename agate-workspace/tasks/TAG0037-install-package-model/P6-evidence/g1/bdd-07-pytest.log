@@ -1,0 +1,17 @@
+# BDD-7 pytest evidence (verifier g1)
+# selected 2 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <2 node ids below>
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_7_old_and_new_form_versions_coexist[bdd7-1-current-is-new-form]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_7_old_and_new_form_versions_coexist[bdd7-2-pinned-old-form]
+# HEAD=043181d git version 2.43.0
+# elapsed 0.7s
+
+============================= test session starts ==============================
+collecting ... collected 2 items
+
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_7_old_and_new_form_versions_coexist[bdd7-1-current-is-new-form] PASSED [ 50%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_7_old_and_new_form_versions_coexist[bdd7-2-pinned-old-form] PASSED [100%]
+
+============================== 2 passed in 0.44s ===============================
+
+EXIT_CODE: 0

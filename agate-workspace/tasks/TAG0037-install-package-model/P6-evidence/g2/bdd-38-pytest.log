@@ -1,0 +1,25 @@
+# BDD-38 pytest evidence (verifier g2)
+# selected 6 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <6 node ids below>
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_27_symlink_home_fail_closed
+#   agate/tests/unit/test_agate_version_resolve.py::test_debt0042_agate_home_symlink_fail_closed
+#   agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_1_legacy_symlink_install_fail_closed
+#   agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_2_legacy_symlink_rejection_migration_hint
+#   agate/tests/unit/test_upgrading_lifecycle.py::test_tag0032_bdd_10_update_commands_aligned_and_idempotent
+#   agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_1_lifecycle_table_is_single_layout_with_migration_steps
+# HEAD=043181d git version 2.43.0
+# elapsed 0.6s
+
+============================= test session starts ==============================
+collecting ... collected 6 items
+
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_27_symlink_home_fail_closed PASSED [ 16%]
+agate/tests/unit/test_agate_version_resolve.py::test_debt0042_agate_home_symlink_fail_closed PASSED [ 33%]
+agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_1_legacy_symlink_install_fail_closed PASSED [ 50%]
+agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_2_legacy_symlink_rejection_migration_hint PASSED [ 66%]
+agate/tests/unit/test_upgrading_lifecycle.py::test_tag0032_bdd_10_update_commands_aligned_and_idempotent PASSED [ 83%]
+agate/tests/unit/test_upgrading_contract_doc.py::test_bdd_39_1_lifecycle_table_is_single_layout_with_migration_steps PASSED [100%]
+
+============================== 6 passed in 0.35s ===============================
+
+EXIT_CODE: 0

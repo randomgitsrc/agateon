@@ -1,0 +1,23 @@
+# BDD-22 pytest evidence (verifier g1)
+# selected 5 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <5 node ids below>
+#   agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-notices]
+#   agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-any-exclusion-config]
+#   agate/tests/unit/test_agate_package.py::test_bdd_22_library_set_equals_materialized_directory
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_22_online_install_latest_installs_body_only
+#   agate/tests/integration/test_install_three_paths.py::test_bdd_4_online_install_matches_library_package_set
+# HEAD=043181d git version 2.43.0
+# elapsed 1.2s
+
+============================= test session starts ==============================
+collecting ... collected 5 items
+
+agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-notices] PASSED [ 20%]
+agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-any-exclusion-config] PASSED [ 40%]
+agate/tests/unit/test_agate_package.py::test_bdd_22_library_set_equals_materialized_directory PASSED [ 60%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_22_online_install_latest_installs_body_only PASSED [ 80%]
+agate/tests/integration/test_install_three_paths.py::test_bdd_4_online_install_matches_library_package_set PASSED [100%]
+
+============================== 5 passed in 0.90s ===============================
+
+EXIT_CODE: 0

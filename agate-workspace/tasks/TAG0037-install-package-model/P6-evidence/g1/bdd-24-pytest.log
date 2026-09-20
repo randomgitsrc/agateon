@@ -1,0 +1,37 @@
+# BDD-24 pytest evidence (verifier g1)
+# selected 12 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <12 node ids below>
+#   agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-notices]
+#   agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-any-exclusion-config]
+#   agate/tests/unit/test_agate_package.py::test_bdd_24_malformed_tag_without_agate_scripts_is_rejected
+#   agate/tests/unit/test_agate_release.py::test_bdd_24_2_build_of_malformed_tag_fails_without_assets
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_24_1_install_historical_tag_gets_body_only_and_pointers_unchanged[bdd24-1-old-tag-without-exclusion-config]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_24_1_install_historical_tag_gets_body_only_and_pointers_unchanged[bdd24-2-old-tag-without-notices]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_24_2_malformed_tag_without_agate_scripts_fails_closed
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_fail_tag_missing
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_fail_pip_network
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_fail_wheel_missing
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_old_tag_missing_notices_is_tolerated
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_malformed_tag_without_agate_scripts_fails_without_manifest
+# HEAD=043181d git version 2.43.0
+# elapsed 1.4s
+
+============================= test session starts ==============================
+collecting ... collected 12 items
+
+agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-notices] PASSED [  8%]
+agate/tests/unit/test_agate_package.py::test_bdd_24_historical_tags_only_get_body[old-tag-without-any-exclusion-config] PASSED [ 16%]
+agate/tests/unit/test_agate_package.py::test_bdd_24_malformed_tag_without_agate_scripts_is_rejected PASSED [ 25%]
+agate/tests/unit/test_agate_release.py::test_bdd_24_2_build_of_malformed_tag_fails_without_assets PASSED [ 33%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_24_1_install_historical_tag_gets_body_only_and_pointers_unchanged[bdd24-1-old-tag-without-exclusion-config] PASSED [ 41%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_24_1_install_historical_tag_gets_body_only_and_pointers_unchanged[bdd24-2-old-tag-without-notices] PASSED [ 50%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_24_2_malformed_tag_without_agate_scripts_fails_closed PASSED [ 58%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_fail_tag_missing PASSED [ 66%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_fail_pip_network PASSED [ 75%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_fail_wheel_missing PASSED [ 83%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_old_tag_missing_notices_is_tolerated PASSED [ 91%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_24_malformed_tag_without_agate_scripts_fails_without_manifest PASSED [100%]
+
+============================== 12 passed in 1.19s ==============================
+
+EXIT_CODE: 0

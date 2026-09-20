@@ -231,6 +231,8 @@ agent: analyst
 - When 把该 tag 打在本分支 HEAD 并推送 → 等 release workflow 结束 → 取产物 → **清理**（`gh release delete <tag> --cleanup-tag --yes`，并 `git tag -d`）
 - Then ① `gh run list --workflow=<release>.yml` 该次运行 `conclusion == success`；② Release 存在且标为 prerelease，notes 首行为预发布测试标注（BDD-14 ④）；资产名 = `agateon-v0.73.0-tagtest.1.tar.gz` 与 `agateon-v0.73.0-tagtest.1-offline-<platform>.tar.gz`（**tag 名原样**，BDD-13 ⑤），`gh release download` 全部成功；③ 本体 asset 解包后成员内容与本地打包入口对同一 tag 的产物**逐成员字节一致**（BDD-15 ④ 的 CI/本地一致性）；offline asset 内 `manifest.json` 的 `version` 为严格 `v0.73.0` 且各组件 sha256 校验通过（**不**在真实环境跑 `pip install`）；④ 清理后 `gh release list` 无该 tag、`git ls-remote --tags origin v0.73.0-tagtest.1` 为空、本地无该 tag、`git describe --tags --abbrev=0` 不再返回它——**正式 Release 列表零污染**；⑤ 降级口径（用户不许可推 tag 时）：以 BDD-13~16 的本地全链路 + `actionlint` 静态校验替代，并把 v0.73.0 正式 tag 触发标为 P8 的首次真实运行验收（BDD-21 / 50），由主 Agent 提 `[BASELINE_CHANGE]` 显式记录
 
+[BASELINE_CHANGE: BDD-20 范围口径（仅注解，不改 Given/When/Then）——Then ④（清理）由用户按其自身决定**手动执行**；P6 对 BDD-20 的验收范围 = ①②③ + 一份精确的待清理清单（GitHub Release `v0.73.0-tagtest.1` 与远端 tag `refs/tags/v0.73.0-tagtest.1`）；④ 在 P8 开 PR 前以只读命令复核（`gh release list`、`git ls-remote --tags origin v0.73.0-tagtest.1`、`git tag -l 'v0.73.0*'`、`git describe --tags --abbrev=0`）。验收人不得自行删除该 tag / Release。CHECK 7 / BDD-49 须在清理完成后运行的先后顺序约束不变。依据：主 Agent 依用户裁决所作范围裁定。]
+
 #### BDD-21: tag 与 Release 双轨不失配（防"打了 tag 忘了 Release"）
 - Given AGENTS.md「版本发布清单」与 P8 阶段卡引用的版本引用文件清单
 - When 检索发布清单
@@ -390,6 +392,8 @@ agent: analyst
 - Given P8 发布清单（AGENTS.md「版本发布清单」）
 - When 检查发布相关文件
 - Then ① README version badge、`CHANGELOG.md`（`[Unreleased]` → `[0.73.0]`，含 **BREAKING** 标注与迁移指引指针）、`agate/UPGRADING.md`（`### v0.73.0` 节，BDD-39 ④）三处版本一致；CHECK 7（badge vs tag）与 CHECK 13（CHANGELOG 最新版本 ↔ UPGRADING 章节）通过；② **不 bump 1.0**（用户裁决）；③ PR 描述如实列出 release workflow 的触发条件（`on: push tags v*`）与权限（`permissions: contents: write`）（CI 改动许可范围），并列出 BDD-20 实测到的、被 tag push 连带触发的现有 workflow；④ 本任务 `roadmap.md` RM-AG0066 回写 `done`（P8 gate 硬校验 RM-AG0043）；⑤ HANDOFF-TAG0037.md 归档到 `agate-workspace/archived/plans/`（P8 收尾，已三次被漏）；⑥ P8 后验：v0.73.0 正式 tag 推送后 `gh release view v0.73.0` 含 3 个资产（本体 + 两平台 offline，BDD-21），首次真实运行成功
+
+[BASELINE_CHANGE: BDD-50 P6 验收范围口径（仅注解，不改 Given/When/Then）——② 版本号 bump、`[Unreleased]`→`[0.73.0]` 重命名、tag、④ roadmap 回写、⑤ HANDOFF 归档、⑥ 正式 Release 资产、③ PR 描述均属 P8/发布时事实，P6 阶段不可能已发生。故 BDD-50 在 P6 的验收范围 = 发布前就绪度：`agate/UPGRADING.md` 存在 `### v0.73.0` 节且标注 BREAKING 与迁移三步、`CHANGELOG.md [Unreleased]` 已含本任务条目与 BREAKING 标注及 UPGRADING 指针、README badge 不为 1.0、release workflow 触发（`on: push tags v*`）/权限（`contents: write`）可如实列出（引用 release.yml 静态事实）；②–⑥ 的最终事实在 P8 复验并写入 P8-release.md。依据：主 Agent 决策，验收人 P6 g2 verifier 据此判定。]
 
 ### 4.6.1 评审修订追加（retry #1；编号追加在末尾，不改既有编号）
 

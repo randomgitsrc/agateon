@@ -1,0 +1,23 @@
+# BDD-6 pytest evidence (verifier g1)
+# selected 5 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <5 node ids below>
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_6_scripts_at_vdir_wins_over_agate_scripts
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_6_new_contract_shape_hits_probe_order_2
+#   agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_6_neither_form_returns_vdir_unchanged
+#   agate/tests/unit/test_agate_version_resolve.py::test_tag0032_bdd_6_meta_repo_resolve_returns_agate_subdir
+#   agate/tests/unit/test_agate_version_resolve.py::test_tag0032_bdd_7_rootproto_resolve_semantics_unchanged
+# HEAD=043181d git version 2.43.0
+# elapsed 0.4s
+
+============================= test session starts ==============================
+collecting ... collected 5 items
+
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_6_scripts_at_vdir_wins_over_agate_scripts PASSED [ 20%]
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_6_new_contract_shape_hits_probe_order_2 PASSED [ 40%]
+agate/tests/regression/test_protocol_root_dual_impl.py::test_bdd_6_neither_form_returns_vdir_unchanged PASSED [ 60%]
+agate/tests/unit/test_agate_version_resolve.py::test_tag0032_bdd_6_meta_repo_resolve_returns_agate_subdir PASSED [ 80%]
+agate/tests/unit/test_agate_version_resolve.py::test_tag0032_bdd_7_rootproto_resolve_semantics_unchanged PASSED [100%]
+
+============================== 5 passed in 0.19s ===============================
+
+EXIT_CODE: 0

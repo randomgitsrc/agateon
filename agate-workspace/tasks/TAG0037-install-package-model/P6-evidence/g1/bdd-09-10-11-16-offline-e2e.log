@@ -1,0 +1,97 @@
+# Offline end-to-end (verifier g1, 2026-09-20T18:43:25+08:00); real git plumbing pack; pip = PATH shim (no network); isolated AGATE_HOME
+# scratch source repo: /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-02-release/src (clone of worktree, tag v0.73.0-tagtest.1 -> d6dd3cb, created in scratchpad clone only)
+
+## [BDD-9/11] 1. real pack: agate-pack-offline.py v0.73.0 --ref v0.73.0-tagtest.1 --repo <clone> --outdir out
+打包完成: /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-04-offline/out/agate-v0.73.0-linux-x86_64
+pack_rc=0
+
+## [BDD-9/11] 2. bundle layout (agate/ must be the body, not the whole repo; no agate/agate nesting)
+bundle top:
+agate
+CHANGELOG.md
+LICENSE
+manifest.json
+NOTICES.md
+wheels
+bundle/agate top:
+adr.md
+AGENTS.md
+assets
+CONTEXT.md
+dispatch-protocol.md
+git-integration.md
+LIMITATIONS.md
+loop-orchestration.md
+orchestrator-template.md
+phase-cards
+platform-notes.md
+role-system.md
+rules
+scripts
+SETUP.md
+state-machine.md
+UPGRADING.md
+WORKFLOW.md
+OK absent: bundle/agate/agate-workspace
+OK absent: bundle/agate/docs
+OK absent: bundle/agate/site
+OK absent: bundle/agate/archived
+OK absent: bundle/agate/.github
+OK absent: bundle/agate/tests
+OK absent: bundle/agate/agate
+OK bundle/agate has scripts/ and WORKFLOW.md
+(no .git/.pyc listed above = OK)
+manifest.json:
+{'version': 'v0.73.0', 'platform': 'linux-x86_64', 'source_ref': 'v0.73.0-tagtest.1'}
+components: ['agate', 'CHANGELOG.md', 'LICENSE', 'NOTICES.md', 'wheels', 'pyyaml']
+files: 155
+
+## [BDD-9/10] 3. bundle-internal entry: HOME=<empty tmp>, only AGATE_HOME set, NO --dest-root
+$ AGATE_HOME=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-04-offline/agate_home HOME=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-04-offline/home python3 -B <bundle>/agate/scripts/install-offline.py <bundle>
+已纳管 v0.73.0：latest → v0.73.0，current → latest
+已安装 v0.73.0（源 ref: v0.73.0-tagtest.1） → /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-04-offline/agate_home/v0.73.0
+install_offline_rc=0
+
+--- AGATE_HOME layout:
+总计 16
+drwxr-xr-x 4 kity kity 4096  9月 20 18:43 .
+drwxr-xr-x 6 kity kity 4096  9月 20 18:43 ..
+lrwxrwxrwx 1 kity kity    6  9月 20 18:43 current -> latest
+lrwxrwxrwx 1 kity kity    7  9月 20 18:43 latest -> v0.73.0
+drwxr-xr-x 2 kity kity 4096  9月 20 18:43 scripts
+drwxr-xr-x 3 kity kity 4096  9月 20 18:43 v0.73.0
+HOME/.agate exists? no-OK
+vdir top:
+agate
+CHANGELOG.md
+LICENSE
+NOTICES.md
+vdir/agate/agate exists? no-OK
+wheels/manifest.json in vdir? none-OK
+readlink current: latest ; latest: v0.73.0
+
+## [BDD-9] 4. resolve
+AGATE_ROOT=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-04-offline/agate_home/v0.73.0/agate
+AGATE_VERSION=v0.73.0
+AGATE_REASON=全局 current
+resolve_rc=0
+AGATE_ROOT=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-04-offline/agate_home/v0.73.0/agate
+AGATE_VERSION=v0.73.0
+AGATE_REASON=全局 current
+resolve(vdir entry)_rc=0
+
+## [BDD-10] 5. python3 <AGATE_HOME>/scripts/agate-install.py --check (root scripts copy)
+✓ python3: /usr/bin/python3
+✓ pyyaml: 可用
+✓ git: /usr/bin/git
+✓ bash: /usr/bin/bash
+环境完整（python3 / pyyaml / git / bash 全部可用）
+check_rc=0
+
+## [BDD-9] 6. _protocol_root(vdir) is not vdir itself
+_protocol_root = /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-04-offline/agate_home/v0.73.0/agate
+OK == vdir/agate
+__pycache__ under AGATE_HOME/bundle/source-repo-worktree scripts dirs created by this run:
+(none listed = OK)
+
+EXIT_CODE: 0

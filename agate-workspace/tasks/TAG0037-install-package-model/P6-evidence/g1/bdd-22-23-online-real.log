@@ -1,0 +1,74 @@
+# BDD-22/23 real online install (2026-09-20T18:44:53+08:00); isolated AGATE_HOME=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-06-online/ah; AGATE_REPO_URL=file:///home/kity/oclab/agateon/.worktrees/agate-TAG0037; tag v0.72.0 (local; highest strict semver so 'latest' selects it)
+$ AGATE_HOME=<iso> HOME=<iso> AGATE_REPO_URL=file://<worktree> python3 -B agate/scripts/agate-install.py latest   (already executed: "已安装 latest → v0.72.0", rc=0)
+
+AGATE_HOME top-level:
+drwxr-xr-x 5 kity kity 4096  9月 20 18:44 .
+drwxr-xr-x 5 kity kity 4096  9月 20 18:44 ..
+lrwxrwxrwx 1 kity kity    6  9月 20 18:44 current -> latest
+lrwxrwxrwx 1 kity kity    7  9月 20 18:44 latest -> v0.72.0
+drwxr-xr-x 9 kity kity 4096  9月 20 18:44 repo
+drwxr-xr-x 2 kity kity 4096  9月 20 18:44 scripts
+drwxr-xr-x 3 kity kity 4096  9月 20 18:44 v0.72.0
+
+## version dir top-level entries (ls -A):
+agate
+CHANGELOG.md
+LICENSE
+NOTICES.md
+
+## forbidden entries check (must all be absent):
+OK absent: agate-workspace
+OK absent: docs
+OK absent: site
+OK absent: archived
+OK absent: .github
+OK absent: tests
+OK absent: __pycache__
+OK absent: .git
+OK absent: HANDOFF-TAG0037.md
+OK absent: README.md
+OK absent: README.zh-CN.md
+OK absent: pyproject.toml
+OK absent: SELF-GATE.md
+OK absent: AGENTS.md
+OK absent: CLAUDE.md
+OK absent: install.sh
+OK absent: .gitignore
+OK absent: .gitattributes
+find pyc/__pycache__/tests/agate-workspace inside version dir:
+(none listed = OK)
+find symlinks/.git inside version dir:
+(none listed = OK)
+
+## S (bytes)
+S_files (sum of file sizes, P1 def: 忽略目录项开销) = 1864871
+du -sb (includes directory entries) : 1864871
+file count: 153
+
+## B (bytes): agate_package.list_package(repo, v0.72.0) blob sizes + independent T-1 oracle
+agate_package.list_package: files = 153 B = 1864871
+independent oracle: files = 153 B_oracle = 1864871  (P1 baseline B = 1,864,871)
+S = 1864871 ; 1.25*B = 2331088.75 ; S <= 1.25*B : True ; S/B = 1.0000
+limit from P1 (2,331,089): True
+du -sb value 1864871 <= 2,331,089: True ; redundancy vs old 35.6MB whole-repo form: reduction 94.8%
+installed file set == list_package set: True
+
+## post-install source pollution check (BDD-26-style): source worktree status excluding task dir
+(nothing listed = OK)
+
+## resolve from installed layout
+AGATE_ROOT=/tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/g1-06-online/ah/v0.72.0/agate
+AGATE_VERSION=v0.72.0
+AGATE_REASON=全局 current
+resolve_rc=0
+
+## idempotence: run 'latest' again
+v0.72.0 已安装，跳过（幂等）
+已安装 latest → v0.72.0
+rc=0
+current
+latest
+repo
+scripts
+v0.72.0
+EXIT_CODE: 0

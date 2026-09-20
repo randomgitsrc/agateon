@@ -1,0 +1,103 @@
+# BDD-15 pytest evidence (verifier g1)
+# selected 45 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <45 node ids below>
+#   agate/tests/unit/test_agate_release.py::test_d13_release_script_sets_dont_write_bytecode_before_agate_imports
+#   agate/tests/unit/test_agate_release.py::test_bdd_15_body_tarball_matches_tag_and_members_are_safe
+#   agate/tests/unit/test_agate_release.py::test_bdd_15_and_s11_tarball_metadata_is_deterministic
+#   agate/tests/unit/test_agate_release.py::test_t18_two_builds_of_same_tag_have_identical_hashes
+#   agate/tests/unit/test_agate_release.py::test_s11_sha256sums_is_verifiable_and_sorted
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_and_15_build_notes_for_formal_tag
+#   agate/tests/unit/test_agate_release.py::test_bdd_15_skip_offline_builds_only_body_and_sums
+#   agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[light-commit-sha-v0.73.0-commit-0]
+#   agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[annotated-tag-object-sha-v0.72.5-tagobj-0]
+#   agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[annotated-commit-sha-v0.72.5-commit-0]
+#   agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[light-wrong-sha-v0.73.0-other-1]
+#   agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[annotated-wrong-sha-v0.72.5-other-1]
+#   agate/tests/unit/test_agate_release.py::test_t17_build_rejects_invalid_tag_names[v1.2]
+#   agate/tests/unit/test_agate_release.py::test_t17_build_rejects_invalid_tag_names[vfoo]
+#   agate/tests/unit/test_agate_release.py::test_t17_build_rejects_invalid_tag_names[v1.2.3-a..b]
+#   agate/tests/unit/test_agate_release.py::test_d13_build_from_script_copy_never_writes_bytecode
+#   agate/tests/unit/test_agate_release.py::test_t18_real_tag_v0_72_0_body_tarball_matches_git_blobs
+#   agate/tests/unit/test_agate_package.py::test_bdd_15_materialize_blob_bytes_exact_and_exec_bit
+#   agate/tests/unit/test_agate_package.py::test_bdd_15_materialize_ignores_autocrlf_and_eol_attributes
+#   agate/tests/unit/test_agate_package.py::test_d16_materialize_refuses_existing_files_and_never_follows_symlinks
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dot-git-dir]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dot-GIT-uppercase]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dot-GiT-mixed-file]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[gitmodules]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[colon]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[trailing-space]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[trailing-dot]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[control-char]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[backslash]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dotdot-segment]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[case-collision]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[non-utf8-name]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[symlink-member]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[submodule-member]
+#   agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[root-file-is-symlink]
+#   agate/tests/unit/test_agate_package.py::test_t17_hostile_names_outside_package_region_are_ignored
+#   agate/tests/unit/test_agate_package.py::test_s11_commit_mtime_dereferences_tag[lightweight]
+#   agate/tests/unit/test_agate_package.py::test_s11_commit_mtime_dereferences_tag[annotated]
+#   agate/tests/unit/test_agate_package.py::test_t6_tarball_members_are_safe_regular_and_deterministic_metadata
+#   agate/tests/unit/test_agate_package.py::test_t6_tarball_extracts_to_contract_shape
+#   agate/tests/unit/test_agate_package.py::test_t6_tarball_arc_prefix_wraps_every_member
+#   agate/tests/unit/test_agate_package.py::test_s11_tarball_is_byte_deterministic_across_rebuilds_and_source_mtimes
+#   agate/tests/unit/test_agate_package.py::test_t6_gzip_header_leaks_neither_filename_nor_time
+#   agate/tests/unit/test_agate_package.py::test_t6_write_dir_tarball_refuses_symlink_before_writing
+#   agate/tests/unit/test_agate_package.py::test_t6_write_dir_tarball_refuses_special_files
+# HEAD=043181d git version 2.43.0
+# elapsed 2.7s
+
+============================= test session starts ==============================
+collecting ... collected 45 items
+
+agate/tests/unit/test_agate_release.py::test_d13_release_script_sets_dont_write_bytecode_before_agate_imports PASSED [  2%]
+agate/tests/unit/test_agate_release.py::test_bdd_15_body_tarball_matches_tag_and_members_are_safe PASSED [  4%]
+agate/tests/unit/test_agate_release.py::test_bdd_15_and_s11_tarball_metadata_is_deterministic PASSED [  6%]
+agate/tests/unit/test_agate_release.py::test_t18_two_builds_of_same_tag_have_identical_hashes PASSED [  8%]
+agate/tests/unit/test_agate_release.py::test_s11_sha256sums_is_verifiable_and_sorted PASSED [ 11%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_and_15_build_notes_for_formal_tag PASSED [ 13%]
+agate/tests/unit/test_agate_release.py::test_bdd_15_skip_offline_builds_only_body_and_sums PASSED [ 15%]
+agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[light-commit-sha-v0.73.0-commit-0] PASSED [ 17%]
+agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[annotated-tag-object-sha-v0.72.5-tagobj-0] PASSED [ 20%]
+agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[annotated-commit-sha-v0.72.5-commit-0] PASSED [ 22%]
+agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[light-wrong-sha-v0.73.0-other-1] PASSED [ 24%]
+agate/tests/unit/test_agate_release.py::test_t18_expect_sha_covers_lightweight_and_annotated_tags[annotated-wrong-sha-v0.72.5-other-1] PASSED [ 26%]
+agate/tests/unit/test_agate_release.py::test_t17_build_rejects_invalid_tag_names[v1.2] PASSED [ 28%]
+agate/tests/unit/test_agate_release.py::test_t17_build_rejects_invalid_tag_names[vfoo] PASSED [ 31%]
+agate/tests/unit/test_agate_release.py::test_t17_build_rejects_invalid_tag_names[v1.2.3-a..b] PASSED [ 33%]
+agate/tests/unit/test_agate_release.py::test_d13_build_from_script_copy_never_writes_bytecode PASSED [ 35%]
+agate/tests/unit/test_agate_release.py::test_t18_real_tag_v0_72_0_body_tarball_matches_git_blobs PASSED [ 37%]
+agate/tests/unit/test_agate_package.py::test_bdd_15_materialize_blob_bytes_exact_and_exec_bit PASSED [ 40%]
+agate/tests/unit/test_agate_package.py::test_bdd_15_materialize_ignores_autocrlf_and_eol_attributes PASSED [ 42%]
+agate/tests/unit/test_agate_package.py::test_d16_materialize_refuses_existing_files_and_never_follows_symlinks PASSED [ 44%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dot-git-dir] PASSED [ 46%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dot-GIT-uppercase] PASSED [ 48%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dot-GiT-mixed-file] PASSED [ 51%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[gitmodules] PASSED [ 53%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[colon] PASSED [ 55%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[trailing-space] PASSED [ 57%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[trailing-dot] PASSED [ 60%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[control-char] PASSED [ 62%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[backslash] PASSED [ 64%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[dotdot-segment] PASSED [ 66%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[case-collision] PASSED [ 68%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[non-utf8-name] PASSED [ 71%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[symlink-member] PASSED [ 73%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[submodule-member] PASSED [ 75%]
+agate/tests/unit/test_agate_package.py::test_t17_list_package_rejects_hostile_members[root-file-is-symlink] PASSED [ 77%]
+agate/tests/unit/test_agate_package.py::test_t17_hostile_names_outside_package_region_are_ignored PASSED [ 80%]
+agate/tests/unit/test_agate_package.py::test_s11_commit_mtime_dereferences_tag[lightweight] PASSED [ 82%]
+agate/tests/unit/test_agate_package.py::test_s11_commit_mtime_dereferences_tag[annotated] PASSED [ 84%]
+agate/tests/unit/test_agate_package.py::test_t6_tarball_members_are_safe_regular_and_deterministic_metadata PASSED [ 86%]
+agate/tests/unit/test_agate_package.py::test_t6_tarball_extracts_to_contract_shape PASSED [ 88%]
+agate/tests/unit/test_agate_package.py::test_t6_tarball_arc_prefix_wraps_every_member PASSED [ 91%]
+agate/tests/unit/test_agate_package.py::test_s11_tarball_is_byte_deterministic_across_rebuilds_and_source_mtimes PASSED [ 93%]
+agate/tests/unit/test_agate_package.py::test_t6_gzip_header_leaks_neither_filename_nor_time PASSED [ 95%]
+agate/tests/unit/test_agate_package.py::test_t6_write_dir_tarball_refuses_symlink_before_writing PASSED [ 97%]
+agate/tests/unit/test_agate_package.py::test_t6_write_dir_tarball_refuses_special_files PASSED [100%]
+
+============================== 45 passed in 2.46s ==============================
+
+EXIT_CODE: 0

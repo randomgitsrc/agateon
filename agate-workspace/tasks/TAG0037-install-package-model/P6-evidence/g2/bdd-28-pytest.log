@@ -1,0 +1,29 @@
+# BDD-28 pytest evidence (verifier g2)
+# selected 8 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <8 node ids below>
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-a]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-b]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-c]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-d]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-e]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_legacy_switch_param_is_gone_and_no_symlink_target_as_root_branch
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolve_info_reports_symlink_base_including_env_branch
+#   agate/tests/unit/test_agate_workspace_resolve.py::test_bdd_28_workspace_resolve_unaffected_by_symlink_agate_home
+# HEAD=043181d git version 2.43.0
+# elapsed 0.6s
+
+============================= test session starts ==============================
+collecting ... collected 8 items
+
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-a] PASSED [ 12%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-b] PASSED [ 25%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-c] PASSED [ 37%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-d] PASSED [ 50%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolution_chain_has_only_three_layers[bdd28-e] PASSED [ 62%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_legacy_switch_param_is_gone_and_no_symlink_target_as_root_branch PASSED [ 75%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_28_resolve_info_reports_symlink_base_including_env_branch PASSED [ 87%]
+agate/tests/unit/test_agate_workspace_resolve.py::test_bdd_28_workspace_resolve_unaffected_by_symlink_agate_home PASSED [100%]
+
+============================== 8 passed in 0.37s ===============================
+
+EXIT_CODE: 0

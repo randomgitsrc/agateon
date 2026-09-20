@@ -1,0 +1,45 @@
+# BDD-14 pytest evidence (verifier g1)
+# selected 16 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <16 node ids below>
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_extract_notes_is_directly_callable_without_ci
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_1_formal_tag_extracts_exactly_its_section
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_2_formal_tag_missing_section_fails_closed_without_output
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_2b_formal_tag_with_empty_section_body_also_fails_closed
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_3_real_changelog_v0_72_0
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_4_prerelease_tag_rule_and_fallback[bdd14-4-A-has-0.73.0-section]
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_4_prerelease_tag_rule_and_fallback[bdd14-4-B-only-unreleased-falls-back]
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_4_prerelease_without_any_usable_section_fails_closed
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_formal_tag_never_falls_back_to_unreleased
+#   agate/tests/unit/test_agate_release.py::test_t9_notes_header_states_integrity_limits[v0.73.0]
+#   agate/tests/unit/test_agate_release.py::test_t9_notes_header_states_integrity_limits[v0.73.0-tagtest.1]
+#   agate/tests/unit/test_agate_release.py::test_t17_notes_rejects_invalid_tag_without_output[v1.2]
+#   agate/tests/unit/test_agate_release.py::test_t17_notes_rejects_invalid_tag_without_output[vfoo]
+#   agate/tests/unit/test_agate_release.py::test_t17_notes_rejects_invalid_tag_without_output[v1.2.3-a..b]
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_and_15_build_notes_for_formal_tag
+#   agate/tests/unit/test_agate_release.py::test_bdd_14_2_build_fails_closed_for_formal_tag_without_changelog_section
+# HEAD=043181d git version 2.43.0
+# elapsed 1.2s
+
+============================= test session starts ==============================
+collecting ... collected 16 items
+
+agate/tests/unit/test_agate_release.py::test_bdd_14_extract_notes_is_directly_callable_without_ci PASSED [  6%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_1_formal_tag_extracts_exactly_its_section PASSED [ 12%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_2_formal_tag_missing_section_fails_closed_without_output PASSED [ 18%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_2b_formal_tag_with_empty_section_body_also_fails_closed PASSED [ 25%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_3_real_changelog_v0_72_0 PASSED [ 31%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_4_prerelease_tag_rule_and_fallback[bdd14-4-A-has-0.73.0-section] PASSED [ 37%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_4_prerelease_tag_rule_and_fallback[bdd14-4-B-only-unreleased-falls-back] PASSED [ 43%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_4_prerelease_without_any_usable_section_fails_closed PASSED [ 50%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_formal_tag_never_falls_back_to_unreleased PASSED [ 56%]
+agate/tests/unit/test_agate_release.py::test_t9_notes_header_states_integrity_limits[v0.73.0] PASSED [ 62%]
+agate/tests/unit/test_agate_release.py::test_t9_notes_header_states_integrity_limits[v0.73.0-tagtest.1] PASSED [ 68%]
+agate/tests/unit/test_agate_release.py::test_t17_notes_rejects_invalid_tag_without_output[v1.2] PASSED [ 75%]
+agate/tests/unit/test_agate_release.py::test_t17_notes_rejects_invalid_tag_without_output[vfoo] PASSED [ 81%]
+agate/tests/unit/test_agate_release.py::test_t17_notes_rejects_invalid_tag_without_output[v1.2.3-a..b] PASSED [ 87%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_and_15_build_notes_for_formal_tag PASSED [ 93%]
+agate/tests/unit/test_agate_release.py::test_bdd_14_2_build_fails_closed_for_formal_tag_without_changelog_section PASSED [100%]
+
+============================== 16 passed in 0.94s ==============================
+
+EXIT_CODE: 0

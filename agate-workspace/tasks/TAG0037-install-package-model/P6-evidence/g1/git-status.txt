@@ -1,0 +1,33 @@
+== START (before any verification action) ==
+ M agate-workspace/tasks/TAG0037-install-package-model/.state.yaml
+ M agate-workspace/tasks/TAG0037-install-package-model/gate-events.jsonl
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g1.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g2.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-merge.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-prompt-verifier.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-evidence/
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-progress.md
+== END (2026-09-20T18:45:45+08:00) ==
+ M agate-workspace/tasks/TAG0037-install-package-model/.state.yaml
+ M agate-workspace/tasks/TAG0037-install-package-model/gate-events.jsonl
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g1.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g2.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-merge.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-prompt-verifier.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-evidence/
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-progress.md
+== RE-VERIFY END at HEAD 043181d (2026-09-20T18:56:57+08:00) ==
+ M agate-workspace/tasks/TAG0037-install-package-model/P1-requirements.md
+ M agate-workspace/tasks/TAG0037-install-package-model/gate-events.jsonl
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g1.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-g2.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-context-verifier-merge.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-dispatch-prompt-verifier.md
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-evidence/
+?? agate-workspace/tasks/TAG0037-install-package-model/P6-progress.md
+== DIFF ANALYSIS (both runs) ==
+Tracked changes beyond main-agent files: agate-workspace/tasks/TAG0037-install-package-model/P1-requirements.md (annotation-only [BASELINE_CHANGE] on BDD-20, authorized by orchestrator; 2 inserted lines, Given/When/Then untouched).
+ 1 file changed, 2 insertions(+)
+No file under agate/, .github/, site/, docs/, README* modified:
+(empty above = none)
+local tags matching v0.73.0*: 0; nothing pushed; no GitHub tag/Release deleted.

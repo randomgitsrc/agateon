@@ -1,0 +1,15 @@
+# BDD-45 pytest evidence (verifier g2)
+# selected 1 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <1 node ids below>
+#   agate/tests/unit/test_setup_agate_dir.py::test_bdd_45_codex_template_readable_and_multi_agent_enabled
+# HEAD=043181d git version 2.43.0
+# elapsed 0.5s
+
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+agate/tests/unit/test_setup_agate_dir.py::test_bdd_45_codex_template_readable_and_multi_agent_enabled PASSED [100%]
+
+============================== 1 passed in 0.26s ===============================
+
+EXIT_CODE: 0

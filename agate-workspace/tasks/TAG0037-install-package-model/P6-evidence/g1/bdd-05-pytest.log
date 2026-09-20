@@ -1,0 +1,21 @@
+# BDD-5 pytest evidence (verifier g1)
+# selected 4 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <4 node ids below>
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-1-resolve]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-2-resolve-declared]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-3-hook-root]
+#   agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-4-summary]
+# HEAD=043181d git version 2.43.0
+# elapsed 0.7s
+
+============================= test session starts ==============================
+collecting ... collected 4 items
+
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-1-resolve] PASSED [ 25%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-2-resolve-declared] PASSED [ 50%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-3-hook-root] PASSED [ 75%]
+agate/tests/unit/test_agate_version_resolve.py::test_bdd_5_old_worktree_form_version_dir_still_resolves[bdd5-4-summary] PASSED [100%]
+
+============================== 4 passed in 0.39s ===============================
+
+EXIT_CODE: 0

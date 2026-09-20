@@ -1,0 +1,63 @@
+# BDD-9 pytest evidence (verifier g1)
+# selected 25 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <25 node ids below>
+#   agate/tests/unit/test_install_offline.py::test_bdd_9_offline_install_from_bundle_internal_entry_then_resolve
+#   agate/tests/unit/test_install_offline.py::test_t16_swap_failure_keeps_old_version_complete_and_pointers_unchanged[t16-1-step1-backup-rename]
+#   agate/tests/unit/test_install_offline.py::test_t16_swap_failure_keeps_old_version_complete_and_pointers_unchanged[t16-2-step2-final-rename]
+#   agate/tests/unit/test_install_offline.py::test_t16_fresh_install_final_rename_failure_leaves_no_half_install
+#   agate/tests/unit/test_install_offline.py::test_t16_adopt_failure_restores_old_directory_and_partially_written_pointers
+#   agate/tests/unit/test_install_offline.py::test_t16_pip_install_failure_leaves_dest_untouched
+#   agate/tests/unit/test_install_offline.py::test_replace_existing_version_dir_recovers_a_damaged_install
+#   agate/tests/unit/test_install_offline.py::test_t23_install_sweeps_only_own_expired_containers_and_keeps_everything_else
+#   agate/tests/unit/test_install_offline.py::test_lib_make_work_dir_creates_marked_private_container
+#   agate/tests/unit/test_install_offline.py::test_lib_sweep_stale_only_removes_marked_expired_tmp_containers
+#   agate/tests/unit/test_install_offline.py::test_lib_recover_backups_only_renames_and_never_deletes
+#   agate/tests/unit/test_install_offline.py::test_lib_swap_in_fresh_replace_rollback_and_discard
+#   agate/tests/unit/test_install_offline.py::test_lib_discard_backup_refuses_directories_it_did_not_create
+#   agate/tests/unit/test_install_offline.py::test_lib_snapshot_and_restore_pointers_roundtrip[ptr-symlink]
+#   agate/tests/unit/test_install_offline.py::test_lib_snapshot_and_restore_pointers_roundtrip[ptr-text-file]
+#   agate/tests/unit/test_install_offline.py::test_lib_snapshot_and_restore_pointers_roundtrip[ptr-absent]
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_9_and_11_real_pack_bundle_is_body_not_whole_repo
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_9_bundle_has_no_bytecode_no_worktree_metadata_and_source_repo_untouched
+#   agate/tests/unit/test_agate_pack_offline.py::test_bdd_9_manifest_files_lists_package_set_and_root_file_components
+#   agate/tests/integration/test_offline_real_pack_resolve.py::test_bdd_9_real_pack_then_offline_install_resolves
+#   agate/tests/integration/test_offline_real_pack_resolve.py::test_bdd_9_no_double_nesting_and_protocol_root_not_returned_verbatim
+#   agate/tests/integration/test_install_three_paths.py::test_bdd_4_h1_online_and_h2_offline_produce_same_structure
+#   agate/tests/integration/test_install_three_paths.py::test_t15_bundle_internal_entry_leaves_no_bytecode
+#   agate/tests/integration/test_install_three_paths.py::test_t15_pack_never_uses_worktree_metadata_in_bundle
+#   agate/tests/integration/test_install_three_paths.py::test_t15_real_tree_smoke_pack_install_resolve
+# HEAD=043181d git version 2.43.0
+# elapsed 2.9s
+
+============================= test session starts ==============================
+collecting ... collected 25 items
+
+agate/tests/unit/test_install_offline.py::test_bdd_9_offline_install_from_bundle_internal_entry_then_resolve PASSED [  4%]
+agate/tests/unit/test_install_offline.py::test_t16_swap_failure_keeps_old_version_complete_and_pointers_unchanged[t16-1-step1-backup-rename] PASSED [  8%]
+agate/tests/unit/test_install_offline.py::test_t16_swap_failure_keeps_old_version_complete_and_pointers_unchanged[t16-2-step2-final-rename] PASSED [ 12%]
+agate/tests/unit/test_install_offline.py::test_t16_fresh_install_final_rename_failure_leaves_no_half_install PASSED [ 16%]
+agate/tests/unit/test_install_offline.py::test_t16_adopt_failure_restores_old_directory_and_partially_written_pointers PASSED [ 20%]
+agate/tests/unit/test_install_offline.py::test_t16_pip_install_failure_leaves_dest_untouched PASSED [ 24%]
+agate/tests/unit/test_install_offline.py::test_replace_existing_version_dir_recovers_a_damaged_install PASSED [ 28%]
+agate/tests/unit/test_install_offline.py::test_t23_install_sweeps_only_own_expired_containers_and_keeps_everything_else PASSED [ 32%]
+agate/tests/unit/test_install_offline.py::test_lib_make_work_dir_creates_marked_private_container PASSED [ 36%]
+agate/tests/unit/test_install_offline.py::test_lib_sweep_stale_only_removes_marked_expired_tmp_containers PASSED [ 40%]
+agate/tests/unit/test_install_offline.py::test_lib_recover_backups_only_renames_and_never_deletes PASSED [ 44%]
+agate/tests/unit/test_install_offline.py::test_lib_swap_in_fresh_replace_rollback_and_discard PASSED [ 48%]
+agate/tests/unit/test_install_offline.py::test_lib_discard_backup_refuses_directories_it_did_not_create PASSED [ 52%]
+agate/tests/unit/test_install_offline.py::test_lib_snapshot_and_restore_pointers_roundtrip[ptr-symlink] PASSED [ 56%]
+agate/tests/unit/test_install_offline.py::test_lib_snapshot_and_restore_pointers_roundtrip[ptr-text-file] PASSED [ 60%]
+agate/tests/unit/test_install_offline.py::test_lib_snapshot_and_restore_pointers_roundtrip[ptr-absent] PASSED [ 64%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_9_and_11_real_pack_bundle_is_body_not_whole_repo PASSED [ 68%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_9_bundle_has_no_bytecode_no_worktree_metadata_and_source_repo_untouched PASSED [ 72%]
+agate/tests/unit/test_agate_pack_offline.py::test_bdd_9_manifest_files_lists_package_set_and_root_file_components PASSED [ 76%]
+agate/tests/integration/test_offline_real_pack_resolve.py::test_bdd_9_real_pack_then_offline_install_resolves PASSED [ 80%]
+agate/tests/integration/test_offline_real_pack_resolve.py::test_bdd_9_no_double_nesting_and_protocol_root_not_returned_verbatim PASSED [ 84%]
+agate/tests/integration/test_install_three_paths.py::test_bdd_4_h1_online_and_h2_offline_produce_same_structure PASSED [ 88%]
+agate/tests/integration/test_install_three_paths.py::test_t15_bundle_internal_entry_leaves_no_bytecode PASSED [ 92%]
+agate/tests/integration/test_install_three_paths.py::test_t15_pack_never_uses_worktree_metadata_in_bundle PASSED [ 96%]
+agate/tests/integration/test_install_three_paths.py::test_t15_real_tree_smoke_pack_install_resolve PASSED [100%]
+
+============================== 25 passed in 2.67s ==============================
+
+EXIT_CODE: 0

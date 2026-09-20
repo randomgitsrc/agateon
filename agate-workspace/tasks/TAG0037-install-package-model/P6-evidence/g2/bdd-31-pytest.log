@@ -1,0 +1,33 @@
+# BDD-31 pytest evidence (verifier g2)
+# selected 10 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <10 node ids below>
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-0-L]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-1-Ls]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-2-Lss]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-3-Lsd]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-4-Lsdd]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-0-L]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-1-Ls]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-2-Lss]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-3-Lsd]
+#   agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-4-Lsdd]
+# HEAD=043181d git version 2.43.0
+# elapsed 0.5s
+
+============================= test session starts ==============================
+collecting ... collected 10 items
+
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-0-L] PASSED [ 10%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-1-Ls] PASSED [ 20%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-2-Lss] PASSED [ 30%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-3-Lsd] PASSED [ 40%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-1-no-args-t14-4-Lsdd] PASSED [ 50%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-0-L] PASSED [ 60%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-1-Ls] PASSED [ 70%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-2-Lss] PASSED [ 80%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-3-Lsd] PASSED [ 90%]
+agate/tests/unit/test_install_sh.py::test_bdd_31_install_sh_symlink_home_fail_closed[bdd31-2-versions-t14-4-Lsdd] PASSED [100%]
+
+============================== 10 passed in 0.23s ==============================
+
+EXIT_CODE: 0

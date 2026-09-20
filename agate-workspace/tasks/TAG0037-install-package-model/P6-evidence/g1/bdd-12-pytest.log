@@ -1,0 +1,29 @@
+# BDD-12 pytest evidence (verifier g1)
+# selected 8 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <8 node ids below>
+#   agate/tests/unit/test_install_offline.py::test_bdd_12_old_format_bundle_rejected_and_nothing_written[bdd12-1-dest-absent]
+#   agate/tests/unit/test_install_offline.py::test_bdd_12_old_format_bundle_rejected_and_nothing_written[bdd12-2-dest-empty-dir]
+#   agate/tests/unit/test_install_offline.py::test_t19_p_set_reconciliation_rejects_and_leaves_dest_unchanged[t19-1-extra]
+#   agate/tests/unit/test_install_offline.py::test_t19_p_set_reconciliation_rejects_and_leaves_dest_unchanged[t19-2-missing]
+#   agate/tests/unit/test_install_offline.py::test_t19_p_set_reconciliation_rejects_and_leaves_dest_unchanged[t19-3-renamed]
+#   agate/tests/unit/test_install_offline.py::test_t19_bundle_top_level_file_outside_contract_is_not_copied
+#   agate/tests/unit/test_install_offline.py::test_t6_bundle_with_symlink_member_is_rejected[t6-1-agate-member-symlink]
+#   agate/tests/unit/test_install_offline.py::test_t6_bundle_with_symlink_member_is_rejected[t6-2-root-file-symlink]
+# HEAD=043181d git version 2.43.0
+# elapsed 1.0s
+
+============================= test session starts ==============================
+collecting ... collected 8 items
+
+agate/tests/unit/test_install_offline.py::test_bdd_12_old_format_bundle_rejected_and_nothing_written[bdd12-1-dest-absent] PASSED [ 12%]
+agate/tests/unit/test_install_offline.py::test_bdd_12_old_format_bundle_rejected_and_nothing_written[bdd12-2-dest-empty-dir] PASSED [ 25%]
+agate/tests/unit/test_install_offline.py::test_t19_p_set_reconciliation_rejects_and_leaves_dest_unchanged[t19-1-extra] PASSED [ 37%]
+agate/tests/unit/test_install_offline.py::test_t19_p_set_reconciliation_rejects_and_leaves_dest_unchanged[t19-2-missing] PASSED [ 50%]
+agate/tests/unit/test_install_offline.py::test_t19_p_set_reconciliation_rejects_and_leaves_dest_unchanged[t19-3-renamed] PASSED [ 62%]
+agate/tests/unit/test_install_offline.py::test_t19_bundle_top_level_file_outside_contract_is_not_copied PASSED [ 75%]
+agate/tests/unit/test_install_offline.py::test_t6_bundle_with_symlink_member_is_rejected[t6-1-agate-member-symlink] PASSED [ 87%]
+agate/tests/unit/test_install_offline.py::test_t6_bundle_with_symlink_member_is_rejected[t6-2-root-file-symlink] PASSED [100%]
+
+============================== 8 passed in 0.69s ===============================
+
+EXIT_CODE: 0

@@ -1,0 +1,57 @@
+# BDD-32 pytest evidence (verifier g2)
+# selected 22 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <22 node ids below>
+#   agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_1_legacy_symlink_install_fail_closed
+#   agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_2_legacy_symlink_rejection_migration_hint
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-0-L]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-1-Ls]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-2-Lss]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-3-Lsd]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-4-Lsdd]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-0-L]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-1-Ls]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-2-Lss]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-3-Lsd]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-4-Lsdd]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-0-L]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-1-Ls]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-2-Lss]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-3-Lsd]
+#   agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-4-Lsdd]
+#   agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-0-L]
+#   agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-1-Ls]
+#   agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-2-Lss]
+#   agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-3-Lsd]
+#   agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-4-Lsdd]
+# HEAD=043181d git version 2.43.0
+# elapsed 1.5s
+
+============================= test session starts ==============================
+collecting ... collected 22 items
+
+agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_1_legacy_symlink_install_fail_closed PASSED [  4%]
+agate/tests/unit/test_agate_version_install.py::test_tag0032_bdd_2_legacy_symlink_rejection_migration_hint PASSED [  9%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-0-L] PASSED [ 13%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-1-Ls] PASSED [ 18%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-2-Lss] PASSED [ 22%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-3-Lsd] PASSED [ 27%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-1-no-args-t14-4-Lsdd] PASSED [ 31%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-0-L] PASSED [ 36%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-1-Ls] PASSED [ 40%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-2-Lss] PASSED [ 45%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-3-Lsd] PASSED [ 50%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-2-latest-t14-4-Lsdd] PASSED [ 54%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-0-L] PASSED [ 59%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-1-Ls] PASSED [ 63%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-2-Lss] PASSED [ 68%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-3-Lsd] PASSED [ 72%]
+agate/tests/unit/test_agate_version_install.py::test_bdd_32_t14_agate_install_symlink_home_fail_closed[bdd32-3-version-t14-4-Lsdd] PASSED [ 77%]
+agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-0-L] PASSED [ 81%]
+agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-1-Ls] PASSED [ 86%]
+agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-2-Lss] PASSED [ 90%]
+agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-3-Lsd] PASSED [ 95%]
+agate/tests/unit/test_agate_install_adopt.py::test_t14_adopt_symlink_home_fail_closed[t14-4-Lsdd] PASSED [100%]
+
+============================== 22 passed in 1.24s ==============================
+
+EXIT_CODE: 0

@@ -1,0 +1,89 @@
+# BDD-37 pytest evidence (verifier g2)
+# selected 38 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <38 node ids below>
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/archived/x.md-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/archived/y.md-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/tasks/TAG0001-x/P1.md-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/reviews/r.md-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/design-notes/d.md-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[site/node_modules/a/b.md-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[site/package-lock.json-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate/tests/regression/test_no_legacy_residue.py-False]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate/scripts/agate_common.py-True]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[README.md-True]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/debt/tech-debt.md-True]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/roadmap/roadmap.md-True]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/guides/project-map.md-True]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[USE_LEGACY = 1-expected0]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[Legacy \u8f6f\u94fe\u5e03\u5c40-expected1]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[legacy-symlink-expected2]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[legacy_layout-expected3]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[LEGACY SYMLINK-expected4]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[\u5355\u8f6f\u94fe\u5e03\u5c40-expected5]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[\u8f6f\u94fe\u515c\u5e95-expected6]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[legacy fields / judge_verdict_legacy / legacy docs/tasks layout-expected7]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[\u6307\u9488\u662f\u8f6f\u94fe-expected8]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_whitelist_and_clear_set_shape
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_1_use_legacy_has_zero_hits_except_closed_debt_narrative
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_2_other_pattern_hits_are_subset_of_whitelist
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[AGENTS.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.zh-CN.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/AGENTS.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/SETUP.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/WORKFLOW.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/orchestrator-template.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/platform-notes.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/scripts/README.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/tests/unit/test_dsh_preset.py]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/project-map.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/worktree-dogfooding-guide.md]
+#   agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_4_original_p0_grep_has_no_residue_outside_whitelist
+# HEAD=043181d git version 2.43.0
+# elapsed 0.4s
+
+============================= test session starts ==============================
+collecting ... collected 38 items
+
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/archived/x.md-False] PASSED [  2%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/archived/y.md-False] PASSED [  5%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/tasks/TAG0001-x/P1.md-False] PASSED [  7%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/reviews/r.md-False] PASSED [ 10%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/design-notes/d.md-False] PASSED [ 13%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[site/node_modules/a/b.md-False] PASSED [ 15%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[site/package-lock.json-False] PASSED [ 18%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate/tests/regression/test_no_legacy_residue.py-False] PASSED [ 21%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate/scripts/agate_common.py-True] PASSED [ 23%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[README.md-True] PASSED [ 26%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/debt/tech-debt.md-True] PASSED [ 28%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[agate-workspace/roadmap/roadmap.md-True] PASSED [ 31%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_scan_scope_filter[docs/guides/project-map.md-True] PASSED [ 34%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[USE_LEGACY = 1-expected0] PASSED [ 36%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[Legacy \u8f6f\u94fe\u5e03\u5c40-expected1] PASSED [ 39%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[legacy-symlink-expected2] PASSED [ 42%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[legacy_layout-expected3] PASSED [ 44%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[LEGACY SYMLINK-expected4] PASSED [ 47%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[\u5355\u8f6f\u94fe\u5e03\u5c40-expected5] PASSED [ 50%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[\u8f6f\u94fe\u515c\u5e95-expected6] PASSED [ 52%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[legacy fields / judge_verdict_legacy / legacy docs/tasks layout-expected7] PASSED [ 55%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_pattern_semantics_case_insensitive_and_no_collateral[\u6307\u9488\u662f\u8f6f\u94fe-expected8] PASSED [ 57%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_whitelist_and_clear_set_shape PASSED [ 60%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_1_use_legacy_has_zero_hits_except_closed_debt_narrative PASSED [ 63%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_2_other_pattern_hits_are_subset_of_whitelist PASSED [ 65%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[AGENTS.md] PASSED [ 68%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.md] PASSED [ 71%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[README.zh-CN.md] PASSED [ 73%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/AGENTS.md] PASSED [ 76%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/SETUP.md] PASSED [ 78%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/WORKFLOW.md] PASSED [ 81%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/orchestrator-template.md] PASSED [ 84%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/platform-notes.md] PASSED [ 86%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/scripts/README.md] PASSED [ 89%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[agate/tests/unit/test_dsh_preset.py] PASSED [ 92%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/project-map.md] PASSED [ 94%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_3_clear_set_file_has_zero_hits[docs/guides/worktree-dogfooding-guide.md] PASSED [ 97%]
+agate/tests/regression/test_no_legacy_residue.py::test_bdd_37_4_original_p0_grep_has_no_residue_outside_whitelist PASSED [100%]
+
+============================== 38 passed in 0.17s ==============================
+
+EXIT_CODE: 0

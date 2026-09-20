@@ -1,0 +1,19 @@
+# BDD-23 pytest evidence (verifier g1)
+# selected 3 ids; cwd=/home/kity/oclab/agateon/.worktrees/agate-TAG0037
+# command: PYTHONDONTWRITEBYTECODE=1 timeout 280s python3 -m pytest -v -p no:cacheprovider --no-header <3 node ids below>
+#   agate/tests/unit/test_agate_package.py::test_bdd_23_real_head_package_is_small_and_clean
+#   agate/tests/unit/test_agate_package.py::test_bdd_23_v0_72_0_baseline_matches_p1_numbers
+#   agate/tests/unit/test_agate_package.py::test_bdd_23_synthetic_ratio_uses_same_formula
+# HEAD=043181d git version 2.43.0
+# elapsed 0.6s
+
+============================= test session starts ==============================
+collecting ... collected 3 items
+
+agate/tests/unit/test_agate_package.py::test_bdd_23_real_head_package_is_small_and_clean PASSED [ 33%]
+agate/tests/unit/test_agate_package.py::test_bdd_23_v0_72_0_baseline_matches_p1_numbers PASSED [ 66%]
+agate/tests/unit/test_agate_package.py::test_bdd_23_synthetic_ratio_uses_same_formula PASSED [100%]
+
+============================== 3 passed in 0.33s ===============================
+
+EXIT_CODE: 0
