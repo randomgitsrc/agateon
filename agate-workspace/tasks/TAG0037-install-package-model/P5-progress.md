@@ -3,3 +3,5 @@
 [18:18:02] running consistency/ruff/shellcheck/t15 serially
 [18:18:09] running release build to /tmp/claude-1000/-home-kity-oclab-agateon--worktrees-agate-TAG0037/9e4aedbc-aa1a-42f7-9d40-57703b1a2c96/scratchpad/p5-release-1 (timeout 600)
 [18:18:54] outputs written; done
+[18:52:01] RETRY1 at 895a10c: full pytest
+[18:52:50] retry1 other checks
