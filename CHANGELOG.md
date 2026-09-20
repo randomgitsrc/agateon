@@ -14,7 +14,7 @@
 
 ## [0.73.0] - 2026-09-20
 
-> **BREAKING（TAG0037，将随 v0.73.0 发布）**：删除旧单软链布局支持。迁移指引见 `agate/UPGRADING.md` 的 `### v0.73.0`（软链用户三步：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`）。
+> **BREAKING（TAG0037，v0.73.0）**：删除旧单软链布局支持。迁移指引见 `agate/UPGRADING.md` 的 `### v0.73.0`（软链用户三步：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`）。
 
 ### BREAKING（TAG0037：安装与多版本模型统一，RM-AG0066）
 
