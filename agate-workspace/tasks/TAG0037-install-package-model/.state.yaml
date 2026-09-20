@@ -1,5 +1,16 @@
 task_id: TAG0037
-phase: P1
+phase: P2
 status: active
 judge:
   enabled: true
+retries:
+  P1:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: "requirements-review 首轮 needs-revision（4 MAJOR：多场景未拆/BDD-14↔20 矛盾/BDD-37 白名单落地即红/BDD-42-45 不可二值）→ analyst 修订，复审 approved"
+  P2:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: "plan-eng-review(1 BLOCKER+5 MAJOR) 与 cso(1 HIGH+6 MEDIUM) 首轮均 rejected → architect 修订（§14 处置表）→ 双评审复审 approved → 收尾 6 项非阻塞项落 §14.4 → 组长汇总 approved"
