@@ -1,5 +1,5 @@
 task_id: TAG0037
-phase: P6
+phase: P7
 status: active
 p5_pass_commit: 895a10c5b31a26b66bef12c8d8a098142e0999d9
 judge:
@@ -16,3 +16,13 @@ retries:
     failure_mode: quality
     prompt_changed: true
     adjustment: "plan-eng-review(1 BLOCKER+5 MAJOR) 与 cso(1 HIGH+6 MEDIUM) 首轮均 rejected → architect 修订（§14 处置表）→ 双评审复审 approved → 收尾 6 项非阻塞项落 §14.4 → 组长汇总 approved"
+  P4:
+  - round: 1
+    failure_mode: environment
+    prompt_changed: true
+    adjustment: "真实 CI 实跑暴露 T-17 夹具在新版 git(2.55) 因 fast-import 拒绝危险路径失败；P6 前回到 P4 修复批 t17-fixture-fix（895a10c，改夹具用 hash-object --literally）"
+  P5:
+  - round: 1
+    failure_mode: environment
+    prompt_changed: true
+    adjustment: "P4 修复批后重跑 P5（p5_pass_commit=895a10c）：全量 2292 passed / 0 failed / 2 skipped"
