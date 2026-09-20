@@ -1,10 +1,10 @@
 # tests/unit/test_agate_version_resolve.py — agate-resolve.py 版本解析语义（resolve-chain 批次）
 # 被测：agate/scripts/agate-resolve.py（TAG0008 新组件，P4 实现）。P3 阶段该模块不存在 → 全部红灯（B 类）。
-# BDD 映射：BDD-9~14（resolve 语义）+ BDD-30（legacy 软链兜底）+ P2-review 测试缺口 1（终态 fail-closed）。
+# BDD 映射：BDD-9~14（resolve 语义）+ BDD-30（TAG0037 起改写为软链基址 fail-closed）+ P2-review 测试缺口 1（终态 fail-closed）。
 # 平台无关（AGENTS.md 测试约定）：
 #   * 假 HOME 经 HOME+USERPROFILE env 指向 tmp_path（不碰真实 ~/.agate，不假设系统临时目录路径）
 #   * current/latest 用文本指针（内容 = 目标名），Windows 复制模式指针形态，不假设 POSIX symlink
-#   * BDD-30 的 legacy 软链场景：os.symlink 失败（Windows 无权限）→ pytest.skip 声明跳过
+#   * BDD-30 的软链基址场景：os.symlink 失败（Windows 无权限）→ pytest.skip 声明跳过
 # Given 契约（测试数据即 P4 实现的输入约束）：
 #   ~/.agate/<vX.Y.Z>/ 版本目录存在即视为"已安装"；current→latest→<版本目录名> 文本指针链。
 
@@ -224,7 +224,7 @@ def test_bdd_27_symlink_home_fail_closed(run_cli, python_exe, agate_scripts, tmp
 
 
 def test_resolve_terminal_failure_fail_closed(run_cli, python_exe, agate_scripts, tmp_path):
-    """P2-review 测试缺口 1：无 current/latest/legacy 可用 root + 声明版本未装 → 终态 exit 非 0。
+    """P2-review 测试缺口 1：无 current/latest 可用 root + 声明版本未装 → 终态 exit 非 0。
 
     hook 场景下该终态阻断 commit（薄壳 fail-closed 语义），绝不静默放行 gate。
     """
@@ -348,7 +348,7 @@ def test_tag0032_bdd_7_rootproto_resolve_semantics_unchanged(
 # 既让测试不必动 HOME，也让「多版本根并存」等场景可在同一 HOME 下并行验证。
 #
 # 优先级契约（不可倒）：AGATE_ROOT（直接指定协议根）> AGATE_HOME（版本根基址）>
-#   项目声明 > current 链 > legacy 软链兜底。AGATE_HOME 只换"版本根在哪"，不改层序。
+#   项目声明 > current 链（TAG0037 起软链兜底已删除，仅三层）。AGATE_HOME 只换"版本根在哪"，不改层序。
 # ============================================================
 
 
@@ -531,7 +531,7 @@ def test_debt0042_agate_home_via_resolve_hook_root(
 
 # ============================================================
 # TAG0037 P3 组 B（批 E）：legacy 软链兜底彻底删除后的解析语义
-#   BDD-27（软链 fail-closed + 迁移三步；上方两个改写用例 + T-14 参数化）、BDD-28（解析链仅剩三层、use_legacy 消失）、
+#   BDD-27（软链 fail-closed + 迁移三步；上方两个改写用例 + T-14 参数化）、BDD-28（解析链仅剩三层、旧兜底开关参数消失）、
 #   BDD-51（软链 → 完整版本根：解析放行）、BDD-5 / BDD-7（已装旧形态 worktree 整仓版本目录仍可解析 / 与新形态共存；夹具显式构造）。
 #   被测：agate_common._resolve_version_info / resolve_version_root、agate-resolve.py（P4 批 E）。
 # ============================================================
@@ -640,17 +640,18 @@ def test_bdd_28_resolution_chain_has_only_three_layers(kind, run_cli, python_exe
     assert _kv(result.stdout)["AGATE_REASON"] in {"AGATE_ROOT 环境变量覆盖", "引用 .agate-version", "全局 current"}
 
 
-def test_bdd_28_use_legacy_is_gone_and_no_symlink_target_as_root_branch(agate_scripts):
-    """BDD-28：`inspect.signature(agate_common._resolve_version_info)` 无 use_legacy 参数；agate_common.py 中不存在"把软链目标当 AGATE_ROOT 返回"的分支
+def test_bdd_28_legacy_switch_param_is_gone_and_no_symlink_target_as_root_branch(agate_scripts):
+    """BDD-28：`inspect.signature(agate_common._resolve_version_info)` 无旧兜底开关参数（BDD-37 永久 grep，名字在下方以拼接构造）；agate_common.py 中不存在"把软链目标当 AGATE_ROOT 返回"的分支
     （`realpath(base)` 作 root）——软链检测 + 迁移提示分支允许存在（BDD-27 / 34 需要），故不断言 islink 调用本身不存在。"""
     p = str(agate_scripts)
     if p not in sys.path:
         sys.path.insert(0, p)
     import agate_common
 
-    assert "use_legacy" not in inspect.signature(agate_common._resolve_version_info).parameters
+    removed_param = "use_" + "legacy"  # 拼接构造：BDD-37 全仓 grep 不许源码直接含该字面量
+    assert removed_param not in inspect.signature(agate_common._resolve_version_info).parameters
     text = (agate_scripts / "agate_common.py").read_text(encoding="utf-8")
-    assert "use_legacy" not in text
+    assert removed_param not in text
     assert not re.search(r"realpath\(\s*base\s*\)", text), "不得存在把软链目标（realpath(base)）当协议根返回的分支"
 
 

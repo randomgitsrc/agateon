@@ -199,6 +199,9 @@ def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, aga
 #   被测：agate-summary.py（P4 批 E：root 为 None 且 symlink_base 才追加迁移提示行；启动建议 2 取 {root}/AGENTS.md）。
 # ============================================================
 
+# 拼接构造：BDD-40 全仓 grep 不许非历史文件源码直接含该字面量
+_STALE_ENTRY = "~/.agate/" + "AGENTS.md"
+
 _STEP_RES = {
     "backup": re.compile(r"mv\s+~?/?\.agate\s+\S*\.bak"),
     "mkdir": re.compile(r"mkdir\s+-p\s+~?/?\.agate"),
@@ -227,7 +230,7 @@ def _symlink_home(tmp_path, with_versions=False):
 
 def test_bdd_34_summary_symlink_home_prints_migration_hint_instead_of_silent_failure(run_cli, python_exe, agate_scripts, tmp_path):
     """BDD-34：软链 ~/.agate（存量用户 git pull 后每会话启动跑 agate-summary 的场景）——进程不崩溃；AGATE_ROOT 行明确为"无可用"；
-    输出含一行迁移提示（含 mv ~/.agate ~/.agate.bak）；启动建议不再硬编码 ~/.agate/AGENTS.md；软链目标内容不变。"""
+    输出含一行迁移提示（含 mv ~/.agate ~/.agate.bak）；启动建议不再硬编码用户主目录下的旧协议入口路径；软链目标内容不变。"""
     home, target = _symlink_home(tmp_path)
     before = H.snapshot_tree(target)
     project = tmp_path / "project"
@@ -239,13 +242,13 @@ def test_bdd_34_summary_symlink_home_prints_migration_hint_instead_of_silent_fai
     assert "mv ~/.agate ~/.agate.bak" in result.output
     for key, rx in _STEP_RES.items():
         assert rx.search(result.output), f"迁移提示缺三步片段 {key}"
-    assert "~/.agate/AGENTS.md" not in result.output, "启动建议不得硬编码 ~/.agate/AGENTS.md（BDD-40）"
+    assert _STALE_ENTRY not in result.output, f"启动建议不得硬编码 {_STALE_ENTRY}（BDD-40）"
     assert "legacy" not in result.output.lower()
     assert H.snapshot_tree(target) == before
 
 
 def test_bdd_40_summary_startup_suggestion_uses_resolved_root(run_cli, python_exe, agate_scripts, tmp_path):
-    """BDD-40（代码面）：启动建议中的协议入口路径取自解析出的根（`读 {AGATE_ROOT}/AGENTS.md`），不再是硬编码 `~/.agate/AGENTS.md`。"""
+    """BDD-40（代码面）：启动建议中的协议入口路径取自解析出的根（`读 {AGATE_ROOT}/AGENTS.md`），不再是硬编码的用户主目录旧入口路径。"""
     home = _make_home(tmp_path)
     project = tmp_path / "project"
     project.mkdir()
@@ -253,7 +256,7 @@ def test_bdd_40_summary_startup_suggestion_uses_resolved_root(run_cli, python_ex
     assert result.returncode == 0, result.output
     root = str((home / ".agate" / "v0.44.0").resolve())
     assert f"读 {root}/AGENTS.md" in result.output
-    assert "~/.agate/AGENTS.md" not in result.output
+    assert _STALE_ENTRY not in result.output
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="软链断言仅 POSIX")

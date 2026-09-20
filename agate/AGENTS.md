@@ -1,7 +1,7 @@
 # Agateon 协议本体
 
 > 本目录是 **Agateon 协议的运行时本体**。
-> 软链接 `~/.agate` 默认指向这里（你克隆 Agateon 时指定的仓库根下的 `agate/` 子目录）。TAG0008 起 `~/.agate` 可为**版本管理根目录**（`~/.agate/vX.Y.Z/` 版本目录 + `latest`/`current` 指针），本目录即某版本检出的协议本体；存量单软链布局（legacy）仍兼容，解析直接落到软链目标。
+> `~/.agate` 是**版本管理根目录**（`~/.agate/vX.Y.Z/` 版本目录 + `latest`/`current` 指针），本目录即某版本的协议本体（`~/.agate/current/agate`）。v0.73.0 起不再支持软链形态的 `~/.agate`，迁移指引见 `UPGRADING.md`「v0.73.0」节。
 > 路径表述：协议文档内写 `{agate_root}/WORKFLOW.md` 等于 `本目录/WORKFLOW.md`（`{agate_root}` 经项目版本解析得到，见 `agate-resolve.py`）。
 
 ---
@@ -32,7 +32,7 @@
 | 术语表 + 上下文 | `CONTEXT.md`（Ubiquitous Language） |
 | 架构决策记录 | `adr.md`（A7 审查锚点） |
 | 存量项目升级（破坏性变更）| `UPGRADING.md` |
-| 改 Agateon 协议本体并跑测试（maintainer）| `tests/README.md` |
+| 改 Agateon 协议本体并跑测试（maintainer；**仅仓库开发者可用**，安装包不含 `tests/`）| `tests/README.md` |
 
 ## 给 Agent 的快速指令
 
@@ -101,18 +101,14 @@ python3 ~/.agate/scripts/agate-resolve.py              # 查看当前项目解�
 ## 卸载
 
 ```bash
-# 单软链布局（legacy）：删软链接 + 删仓库
-rm ~/.agate                          # 删软链接
-rm -rf <你克隆 Agateon 的目录>          # 删仓库
-
-# 版本管理布局（TAG0008 起）：卸载具体版本目录 + 清理指针
+# 卸载具体版本目录 + 清理指针
 python3 ~/.agate/scripts/agate-install.py --uninstall vX.Y.Z
 rm -rf ~/.agate                       # 卸载整个版本管理根（已装版本全删）
 ```
 
 ## 更多
 
-仓库根的 `README.md`（英文）与 `README.zh-CN.md`（中文镜像）是面向**新用户**的接入门面；本目录是面向**深入使用者和 Agent** 的协议本体入口。维护 Agateon 本体：`python3 -m pytest agate/tests/`（详见 `tests/README.md`）。
+仓库根的 `README.md`（英文）与 `README.zh-CN.md`（中文镜像）是面向**新用户**的接入门面；本目录是面向**深入使用者和 Agent** 的协议本体入口。维护 Agateon 本体：`python3 -m pytest agate/tests/`（详见 `tests/README.md`；**仅仓库开发者可用**——安装包不含 `tests/` 与其文档，用户装到的 `~/.agate/current/agate` 下没有这份文件）。
 
 有问题看 `LIMITATIONS.md`，别在文档没覆盖的地方反复猜。
 

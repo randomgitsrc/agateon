@@ -10,7 +10,25 @@
 
 ## [Unreleased]
 
-（暂无——下个版本的变更在此累积。）
+> **BREAKING（TAG0037，将随 v0.73.0 发布）**：删除旧单软链布局支持。迁移指引见 `agate/UPGRADING.md` 的 `### v0.73.0`（软链用户三步：`mv ~/.agate ~/.agate.bak` → `mkdir -p ~/.agate` → `install.sh --versions`）。
+
+### BREAKING（TAG0037：安装与多版本模型统一，RM-AG0066）
+
+- **删除 legacy 软链布局支持**：`~/.agate` 是软链时，`agate-install.py` / `agate-resolve.py` / `install-offline.py` / `install.sh` 一律 fail-closed 并打印同一段迁移三步；版本解析链由五层收敛为三层（`AGATE_ROOT` > `AGATE_HOME` → `.agate-version` → `current`），移除"软链目标即协议根"兜底。仅影响仍使用软链布局的存量用户，已在版本管理布局的用户无需动作。
+- **`install.sh` 无参语义变更**：无参与 `--versions` 等价（进入版本管理布局），其他参数 → 用法 + exit 2；`AGATE_REPO_DIR` / `AGATE_SYMLINK` 已废弃且被忽略（设置时 stderr 一行 WARNING）。
+
+### 新增
+
+- **版本目录结构契约**：新装 `vX.Y.Z/` 为"本体包"形态（`agate/` + 登记根文件 `CHANGELOG.md` / `LICENSE` / `NOTICES.md`），不再是整仓检出；契约与边界清单成文于 `agate/UPGRADING.md`，边界清单单一来源 `agate/scripts/agate_package.py`（`boundary_lines()`）。已装的整仓形态版本目录继续可解析，不迁移。
+- **三条安装路径同构**：在线（`agate-install.py`）、离线（`agate-pack-offline.py` / `install-offline.py`）、portable（Release tarball + `agate-install.py --adopt`）产出同一结构；新增 `agate-install.py --adopt vX.Y.Z` 与 `--check --portable`（无需 git）。
+- **Release 流水线**：新增 `agate/scripts/agate-release.py`（确定性构建本体 tarball、各平台离线包、`SHA256SUMS` 与发布说明）与 `.github/workflows/release.yml`。`SHA256SUMS` 只防下载损坏、不认证发布者。
+- **文档**：`UPGRADING.md` 新增「版本目录结构契约」「portable 安装」小节与 `### v0.73.0` 节（BREAKING 标注、影响面、迁移三步、`install.sh` 无参语义、废弃 env、两步升级说明）；「安装 / 迁移 / 更新 / 回退对照表」去 legacy 列、解析优先级表改三层；历史版本节保留原文并在 §3 顶部加历史注记。
+
+### 变更
+
+- `agate_common.py`：`compute_sha256` 目录分支忽略字节码（`__pycache__` / `*.pyc` / `*.pyo`），安装态与运行后态哈希一致。
+
+来源：TAG0037（RM-AG0066）。版本段标题与日期在 P8 发版时重命名。
 
 ## [0.72.0] - 2026-09-19
 

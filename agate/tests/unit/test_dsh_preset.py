@@ -219,8 +219,8 @@ def test_dsh_setup_section_and_symlink_commands_present(agate_root):
         "SETUP.md DSH 章节缺 mkdir -p 命令"
     )
     # BDD-8：三条独立 ln -sf，源路径均指向模板目录下的三个文件。
-    # 源前缀用 $AGATE_DIR（2026-09-19 起）——协议根位置随布局而异（单软链 = ~/.agate；
-    # 版本管理 = ~/.agate/current/agate），写死 ~/.agate/... 在版本管理布局下会创建**断链**
+    # 源前缀用 $AGATE_DIR（2026-09-19 起）——协议根在版本管理布局下是 ~/.agate/current/agate，
+    # 不是 ~/.agate 本身，写死 ~/.agate/... 在版本管理布局下会创建**断链**
     # （实测 claude --agent orchestrator 报 not found）。BDD-8 的契约是"命令与模板文件名
     # 耦合在册"（见 P1-requirements coupling_checklist），故断言锚定**文件名 + 目标路径**，
     # 前缀统一为 "$AGATE_DIR/assets/templates/dsh/"。

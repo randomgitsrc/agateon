@@ -34,7 +34,7 @@
 | 派发路由 / tier | 可选机制（RM-AG0060）：`agate-workspace/dispatch-routing.yaml` 按 `(phase, role)` 查表把某角色的 subagent 派到不同 CLI+model（`tier` 能力档 bulk/standard/deep + `effort` 两正交轴，或直接 `candidates`）→ try-and-fall 逐级回落 → 全落空回落默认派发。**不配置 = 逐字节现状**；`dispatch_route` 事件留痕；gate 不认「谁生产的」 | dispatch-protocol.md §派发路由 / rules/dispatch-tiers.yaml |
 | pytest | agate 测试框架。开发者在 Linux 全量 `python3 -m pytest agate/tests/`，Windows 只跑冒烟；用例数以 `bash agate/tests/scripts/count-tests.sh` 为准 | AGENTS.md §测试约定 |
 | windows_smoke marker | `@pytest.mark.windows_smoke`，Windows CI 冒烟代表（每文件第 1 个用例 + 平台敏感关键词用例），Linux 全量覆盖、Windows 只验证平台敏感机制成立 | AGENTS.md §测试约定 |
-| conftest | agate/tests/conftest.py，全局 fixture（agate_root / task_dir / git_repo / run_cli / py_path），根目录自动加载，test_*.py 无需 load 语句 | tests/README.md |
+| conftest | agate/tests/conftest.py，全局 fixture（agate_root / task_dir / git_repo / run_cli / py_path），根目录自动加载，test_*.py 无需 load 语句 | tests/README.md（仅仓库开发者可用，安装包不含） |
 | MVWU | 最小可验证工作单元：P4 批内一次可独立验证的交付面，由批 `id`、该批 `tests_filter` 与 `P4-evidence/{batch}.log` 证据构成；MVWU 观测只记录、不阻断 | docs/design-notes/design-mvwu-protocol.md |
 | tests_filter | `dispatch_plan.batches[]` 的可选键，声明该批交付面的测试过滤命令（双引号包裹、只覆盖本批、禁止全量套件），供批级绿灯确认；缺省时 gate 行为不变 | phase-cards/P2-design.md |
 | P4-evidence | 任务目录下 `P4-evidence/{batch}.log`，主 Agent 在批 commit 前机械转录该批 `tests_filter` 的实际运行结果（命令 / exit_code / git_head / expected_red 等）；记录不阻断 | phase-cards/P4-implementation.md |

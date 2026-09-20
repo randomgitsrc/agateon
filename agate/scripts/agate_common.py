@@ -10,7 +10,7 @@
 - 工作区解析函数（迁移自 agate-workspace-resolve.sh）：resolve_workspace
   （执行模式 main 输出 AGATE_WORKSPACE=/AGATE_TASKS_DIR= 两行，bats 直调契约）
 - hook 公共工具：resolve_agate_root / probe_python / run_git
-- 版本解析（TAG0008）：resolve_version_root（四层，agate-resolve/summary 用）/
+- 版本解析（TAG0008）：resolve_version_root（三层，agate-resolve/summary 用）/
   resolve_hook_root（hook 入口用，返回 warnings）/ _find_project_declaration（.agate-version 向上查找）
 
 约定：所有文本读写显式 encoding="utf-8"；pyyaml 缺失时 fail-closed（同
@@ -26,6 +26,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from agate_package import _is_bytecode, agate_home, is_symlink_base
 
 try:
     import yaml
@@ -88,9 +90,9 @@ def is_gate_meta_key(key):
 
 
 # ---------- 版本解析（TAG0008，resolve-chain 批次） ----------
-# 四层解析语义（P2-design.md §4.1）：
+# 三层解析语义（P2-design.md §4.1，TAG0037 D-8 起 legacy 软链兜底已删除）：
 #   env 最高 → 项目声明（.agate-version，asdf 模式 cwd 向上）→ current/latest 指针链
-#   → legacy 软链兜底（或脚本路径上溯，视调用方）。current/latest 为文本指针
+#   （hook 入口另有脚本路径上溯兜底，见 resolve_hook_root）。current/latest 为文本指针
 #   （内容 = 目标名），Windows 复制模式指针形态；版本目录存在即视为已安装。
 
 _AGATE_VERSION_RE = re.compile(r"^\s*agate\s*:\s*(v[0-9]+\.[0-9]+\.[0-9]+)\s*$")
@@ -179,32 +181,60 @@ def _protocol_root(vdir):
     return vdir
 
 
-def _resolve_version_info(start_dir=None, use_legacy=True):
-    """版本解析核心：env → 项目声明 → current 链 → legacy 软链兜底。
+def symlink_migration_hint(base=None):
+    """软链基址的迁移提示文案（三步；含动态「检测到的软链」行）。
 
-    ⚠ 基址逻辑与 agate-install._agate_home 须同源（两处未共享实现）；改动其一须同步
-    另一处 + tests/unit/test_agate_version_resolve.py 的 test_debt0042_* 用例。
+    ⚠ 三步片段与 install.sh / agate-install.py / install-offline.py 手写同源（无法 import 共享），
+    由 test_agate_version_install.py 的 `_migration_steps` 跨入口比对锁定；动态行放在三步之前。
+    """
+    if base is None:
+        base = agate_home()
+    if os.path.islink(base):
+        try:
+            detected = f"检测到的软链：{base} → {os.readlink(base)}"
+        except OSError:
+            detected = f"检测到的软链：{base}"
+    else:
+        detected = f"检测到的软链基址：{base}（路径经软链解析）"
+    return (
+        f"{detected}\n"
+        "错误: ~/.agate 是旧软链布局，v0.73.0 起不再支持（fail-closed，不会把软链目标当协议根）。\n"
+        "迁移到版本管理布局（三步）：\n"
+        "  1. 备份软链:  mv ~/.agate ~/.agate.bak\n"
+        "  2. 建目录根:  mkdir -p ~/.agate\n"
+        "  3. 装版本:    install.sh --versions\n"
+        "               # 迁移完成后亦可: python3 ~/.agate/scripts/agate-install.py latest\n"
+    )
 
-    返回 dict {root, version, reason, warnings}。root 为 None = 终态失败（调用方须
-    fail-closed）。env 覆盖返回 env 原值（不 resolve，与既有契约一致，兼容字面盘符路径）。
+
+def _resolve_version_info(start_dir=None):
+    """版本解析核心：env → 项目声明 → current 链（三层）。
+
+    基址取 `agate_package.agate_home()`（规范化，单源；与 agate-install 同实现）。
+
+    返回 dict {root, version, reason, warnings, symlink_base}。root 为 None = 终态失败
+    （调用方须 fail-closed）。env 覆盖返回 env 原值（不 resolve，与既有契约一致，兼容字面盘符路径）。
     声明未安装 / 格式非法 → warnings 加警告 + 回退 current（绝不静默禁用，BDD-13/14）。
+    `symlink_base`：基址是否为软链（含尾斜杠 / `..` 等变体，D-14）；AGATE_ROOT env 早返回分支恒 False。
+    软链基址走普通链：软链指向完整版本根（current 链有效）正常放行；指向协议本体
+    （无 current）则落到终态失败，调用方据 `symlink_base` 附迁移提示。
 
     基址（版本根所在目录，默认 `~/.agate`）可经 `AGATE_HOME` 覆盖（DEBT0042）——只换
     "版本根在哪"，不改层序：`AGATE_ROOT`（直接指定协议根）> `AGATE_HOME`（版本根基址）
-    > 项目声明 > current 链 > legacy 软链兜底。
+    > 项目声明 > current 链。
     """
     env_root = os.environ.get("AGATE_ROOT", "")
     if env_root:
-        return {"root": env_root, "version": "", "reason": "AGATE_ROOT 环境变量覆盖", "warnings": []}
+        return {"root": env_root, "version": "", "reason": "AGATE_ROOT 环境变量覆盖", "warnings": [], "symlink_base": False}
 
-    env_home = os.environ.get("AGATE_HOME", "")
-    base = os.path.expanduser(env_home) if env_home else os.path.expanduser("~/.agate")
+    base = agate_home()
+    symlink_base = is_symlink_base(os.environ.get("AGATE_HOME", "") or "~/.agate")
     warnings = []
     status, declared = _find_project_declaration(start_dir)
     if status == "ok":
         vdir = os.path.join(base, declared)
         if os.path.isdir(vdir):
-            return {"root": _protocol_root(vdir), "version": declared, "reason": "引用 .agate-version", "warnings": warnings}
+            return {"root": _protocol_root(vdir), "version": declared, "reason": "引用 .agate-version", "warnings": warnings, "symlink_base": symlink_base}
         warnings.append(f"警告: .agate-version 声明的版本 {declared} 未安装，回退全局 current")
     elif status == "invalid":
         warnings.append("警告: .agate-version 格式非法（应为 agate: vX.Y.Z），回退全局 current")
@@ -214,21 +244,18 @@ def _resolve_version_info(start_dir=None, use_legacy=True):
         # 顺序不可倒（I-1 红线）：version 从 cur 取，root 从 _protocol_root(cur) 取——两条独立。
         version = os.path.basename(cur)
         root = _protocol_root(cur)
-        return {"root": root, "version": version, "reason": "全局 current", "warnings": warnings}
+        return {"root": root, "version": version, "reason": "全局 current", "warnings": warnings, "symlink_base": symlink_base}
 
-    if use_legacy and os.path.islink(base):
-        return {"root": os.path.realpath(base), "version": "", "reason": "legacy 软链布局（无版本指针）", "warnings": warnings}
-
-    return {"root": None, "version": None, "reason": "无可用 AGATE_ROOT", "warnings": warnings}
+    return {"root": None, "version": None, "reason": "无可用 AGATE_ROOT", "warnings": warnings, "symlink_base": symlink_base}
 
 
 def resolve_version_root(start_dir=None):
-    """版本解析四层（env → 项目声明 → current 链 → legacy 软链兜底）。
+    """版本解析三层（env → 项目声明 → current 链）。
 
     供 agate-resolve.py / agate-summary.py 复用（P2 §4.1/§4.6）。root 为 None =
-    终态失败（调用方 fail-closed，exit 非 0）。
+    终态失败（调用方 fail-closed，exit 非 0；`symlink_base` 为真时应附 `symlink_migration_hint()`）。
     """
-    return _resolve_version_info(start_dir=start_dir, use_legacy=True)
+    return _resolve_version_info(start_dir=start_dir)
 
 
 def resolve_hook_root(script_path):
@@ -240,7 +267,7 @@ def resolve_hook_root(script_path):
     env_root = os.environ.get("AGATE_ROOT", "")
     if env_root:
         return env_root, []
-    info = _resolve_version_info(use_legacy=False)
+    info = _resolve_version_info()
     if info["root"]:
         return info["root"], info["warnings"]
     real = str(Path(script_path).resolve())
@@ -257,7 +284,7 @@ def resolve_hook_root(script_path):
 
 def resolve_agate_root(script_path):
     """解析 AGATE_ROOT：env 优先 → 项目版本解析（.agate-version / current 链）→
-    软链 readlink 上溯 → 复制模式 .agate-root 标记恢复。
+    脚本路径上溯 → 复制模式 .agate-root 标记恢复。
 
     AGATE_ROOT 环境变量优先（返回原值）。项目声明命中已安装版本或全局 current 指针链
     命中时返回版本根；否则回退既有脚本路径上溯语义（做加法不改既有契约）。
@@ -610,11 +637,14 @@ def resolve_workspace(project_root):
 def compute_sha256(path):
     """sha256 hex：文件=内容哈希；目录=排序逐文件 hash 拼接再整体 hash（TAG0031 DEBT0002，
     从 agate-pack-offline.py / install-offline.py 迁移的共享单实现，逐字节保留现状排序键
-    `f.relative_to(p).as_posix()` 字典序约定，跨平台路径排序一致）。"""
+    `f.relative_to(p).as_posix()` 字典序约定，跨平台路径排序一致）。目录分支忽略字节码
+    （`__pycache__/`、`*.pyc`、`*.pyo`，与本体包边界同源，D-13）——运行一次脚本不应使目录哈希漂移。"""
     p = Path(path)
     if p.is_dir():
         digests = []
         for f in sorted(p.rglob("*"), key=lambda f: f.relative_to(p).as_posix()):
+            if _is_bytecode(f.relative_to(p).as_posix()):
+                continue
             if f.is_file():
                 digests.append(hashlib.sha256(f.read_bytes()).hexdigest())
         return hashlib.sha256("".join(digests).encode("utf-8")).hexdigest()

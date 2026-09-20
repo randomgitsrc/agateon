@@ -306,7 +306,7 @@ def test_bdd_47_symlink_agate_home_does_not_make_the_link_target_the_hook_root(r
 
 
 def test_bdd_47_copy_mode_agate_root_marker_recovery_kept(run_cli, python_exe, agate_scripts, tmp_path):
-    """BDD-47：复制模式（脚本旁 .agate-root 标记文件）恢复兜底保持——hook 自定位契约，不属 legacy 软链布局支持，不随 E 删除。"""
+    """BDD-47：复制模式（脚本旁 .agate-root 标记文件）恢复兜底保持——hook 自定位契约，不属旧软链布局（已删除的兜底）支持，不随 E 删除。"""
     recovered = tmp_path / "recovered-root"
     (recovered / "scripts").mkdir(parents=True)
     hook_dir = tmp_path / "copied-hook"

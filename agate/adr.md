@@ -274,6 +274,8 @@ agate 协议里散落在正文的机器读取字段（P1/P2/P6/P7 共约 40+ 个
 
 已接受
 
+> **v0.73.0 注记（部分被取代）**：本 ADR 中「legacy 单软链兜底」——第 4 层解析、理由 2 的向后兼容红线（BDD-30）与权衡 1、后果末条——**已被 v0.73.0 取代**：软链形态的 `~/.agate` 不再受支持（解析在无 `current` 时 fail-closed 并给出迁移三步）；解析优先级收敛为三层（env → 项目声明 → current）。版本管理根目录、`resolve-entry` 固定入口等其余决策继续有效；下文旧软链叙述保留作历史记录。
+
 ### 语境
 
 `~/.agate` 是单一软链 → 指向某 checkout 的 `agate/` 子目录。`git pull` 后所有用 `~/.agate` 的项目**全部被动升级**，进行中项目被打断；hook 通过软链自动跟随，无法按项目隔离版本。需求（TAG0008）：项目 A 锁旧版、项目 B 用新版互不干扰，切版本不用重装 hook，存量单软链用户不破坏。
@@ -428,7 +430,7 @@ ADR-009 落地的版本管理布局（`~/.agate` = `repo/` + `vX.Y.Z/` + `latest
 - `agate_common.py` 新增 `_protocol_root` helper（`_resolve_version_info` 前），`.agate-version` ok 分支与 current 链分支各一处调用；`resolve-entry.py` / `agate-resolve.py` / `agate-summary.py` 零改动（受益方）。
 - `agate-install.py` 新增 `_sync_root_scripts`（单源 copytree）+ `latest` 显式别名 + `_ensure_repo` 已有 repo 分支 `git fetch --tags --force --prune`（fail-open，令重跑发现上游更高 tag）；`install.sh` 新增 `--versions` bootstrap 分支（POSIX shell）。
 - `agate/UPGRADING.md`「版本管理生命周期」节为该两项语义的单一权威口径；`agate/scripts/README.md` / `agate/AGENTS.md` / `agate/platform-notes.md` 做框架 + 指针，不复制完整对照表。
-- 本 ADR 扩展 ADR-009（版本管理根 + resolve-entry 固定入口），不替代；ADR-009 的四层解析优先级与 legacy 兜底红线继续有效。
+- 本 ADR 扩展 ADR-009（版本管理根 + resolve-entry 固定入口），不替代；ADR-009 的解析优先级继续有效（其中 legacy 兜底红线已被 v0.73.0 取代，见 ADR-009 状态注记）。
 
 ---
 

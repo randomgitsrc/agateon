@@ -69,9 +69,11 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 | 脚本 | 用途 |
 |------|------|
 | `agate-install.py` | 安装/卸载 agate 版本 + 环境探测：无参 / `latest` = 装 latest 指针（最新发布版，幂等）；`vX.Y.Z` = 装指定版本（repo 单克隆 + worktree add tag，幂等）；`--uninstall vX` = 删版本目录 + worktree remove + 指针清理（含项目引用保护扫描）；`--check` = 环境探测（python3/pyyaml/git/bash，分平台修复指引）|
-| `agate-resolve.py` | 版本解析 CLI：cwd 向上找 `.agate-version` → 映射版本目录 → 输出 AGATE_ROOT/AGATE_VERSION/AGATE_REASON（优先级 AGATE_ROOT → AGATE_HOME → 项目声明 → current → legacy 软链兜底；AGATE_HOME 指定版本根基址，DEBT0042）|
-| `resolve-entry.py` | hook 固定解析入口：读项目 `.agate-version`（或 current/latest/legacy 兜底）→ 得 AGATE_ROOT → exec 对应版本 gate py。切版本不用重装 hook |
+| `agate-resolve.py` | 版本解析 CLI：cwd 向上找 `.agate-version` → 映射版本目录 → 输出 AGATE_ROOT/AGATE_VERSION/AGATE_REASON（优先级 AGATE_ROOT → AGATE_HOME → 项目声明 → current 三层；无可用根时 fail-closed，基址为软链时附迁移指引；AGATE_HOME 指定版本根基址，DEBT0042）|
+| `resolve-entry.py` | hook 固定解析入口：读项目 `.agate-version`（或 current / latest 指针）→ 得 AGATE_ROOT → exec 对应版本 gate py。切版本不用重装 hook |
 | `agate-pack-offline.py` | 外网离线打包器：`vX.Y.Z [--platform linux-x86_64|windows-x86_64] [--include-python] [--include-pillow]` → 平台标签 bundle + manifest.json（sha256 checksum）|
+| `agate_package.py` | **本体打包边界与构建的单一来源**（TAG0037，库模块，stdlib-only，无 CLI）：显式常量定义包边界（`agate/**` + 登记根文件，默认拒绝）、`boundary_lines()`（渲染进 `UPGRADING.md` 契约小节）、git plumbing 列包集合 / `materialize` / `verify_dir` / `write_dir_tarball`（确定性 tar.gz）。在线安装（`agate-install.py`）、离线打包（`agate-pack-offline.py`）与 Release 构建（`agate-release.py`）三条路径共用；`agate_common.py` 的 AGATE_HOME 基址也取自它。复制 `agate-install.py` / `install-offline.py` 到别处时须连带复制本文件 |
+| `agate-release.py` | Release 构建 CLI（TAG0037）：`boundary`（打印包边界规则）/ `pyyaml-pin` / `notes --tag T --out F`（从 `CHANGELOG.md` 提取发布说明）/ `is-prerelease T` / `build --tag T --repo R --outdir D --notes-out F [--expect-sha SHA] [--skip-offline]`（确定性构建 `agateon-<tag>.tar.gz` + 两平台 offline 包 + `SHA256SUMS`）。`.github/workflows/release.yml` 内零打包逻辑，全部调用本脚本，故本地可无 CI 复现产物（补救 tag 已推而 Release 缺失见根 `AGENTS.md` 版本发布清单）；`SHA256SUMS` 只防下载损坏、不认证发布者 |
 | `install-offline.py` | 内网离线安装器：读 manifest.json 平台核对（不匹配拒绝）+ checksum 校验（不匹配拒绝）→ `pip install --no-index --find-links wheels/` → 建 `~/.agate/vX.Y.Z/` + hook/orchestrator 指向 + 验证闭环 |
 
 **信任边界（TAG0031 DEBT0003）**：`install-offline.py` 的 checksum 校验只防损坏（传输/存储过程中的意外错误，如位翻转、截断），**不防**恶意构造的整包替换——若 bundle 提供者本身不可信，攻击者可同时替换 bundle 内容与 manifest 里对应的 sha256 值，使二者重新匹配，checksum 校验会照常通过。因此该机制的前提是 bundle 提供者需可信（内网分发渠道可控），checksum 校验通过不等于来源可信，只代表"文件内容与随包 manifest 一致"。

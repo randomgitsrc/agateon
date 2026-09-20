@@ -2,7 +2,7 @@
 # 覆盖：BDD-29（无参 = --versions 别名，进入版本管理布局）、BDD-30（废弃 env AGATE_REPO_DIR / AGATE_SYMLINK 打 WARNING、
 #       不创建其指向路径、脚本头注释不再引用）、BDD-31（遇软链 fail-closed；T-14 参数化 ["L","L/","L//","L/.","L/.."]）、
 #       BDD-36（迁移三步在隔离环境真实可走通）、BDD-26（install.sh 重跑幂等、不污染源仓库树）。
-# 被测：仓库根 install.sh（P4 批 E 重写）。P4 前：无参走"单软链"旧路径 → 断言失败 = B 类红灯。
+# 被测：仓库根 install.sh（P4 批 E 重写）。P4 前：无参走旧的软链安装路径 → 断言失败 = B 类红灯。
 # 隔离与安全：
 #   * HOME / AGATE_HOME 均在 tmp_path 下；上游 = 合成 file:// bare 仓库（AGATE_REPO_URL）；
 #   * PATH 前置一个 git 包装器：记录每次调用，并**拦截任何 http(s):// 克隆**（旧路径会去克隆真实 GitHub——红灯阶段也不许联网 / 落盘大仓库）；
@@ -160,11 +160,11 @@ def test_bdd_29_install_sh_has_no_symlink_logic():
     """BDD-29：install.sh 中不再含建软链逻辑（`ln -s` / `LINK_NAME` / `INSTALL_DIR` 不出现）。"""
     text = (H.REPO_ROOT / "install.sh").read_text(encoding="utf-8")
     for token in ("ln -s", "ln -sfn", "LINK_NAME", "LINK_TARGET", "INSTALL_DIR"):
-        assert token not in text, f"install.sh 仍含旧单软链逻辑: {token}"
+        assert token not in text, f"install.sh 仍含旧的建软链逻辑: {token}"
 
 
 def test_bdd_29_unknown_argument_rejected_with_usage_exit_2(agate_scripts, bash, run_cli, synth, tmp_path):
-    """BDD-29：无参或 --versions 之外的参数 → 用法 + exit 2（旧实现会当无参走单软链路径）。"""
+    """BDD-29：无参或 --versions 之外的参数 → 用法 + exit 2（旧实现会当无参走旧的建软链路径）。"""
     guard, log = _git_guard(tmp_path)
     home = tmp_path / "home"
     home.mkdir()

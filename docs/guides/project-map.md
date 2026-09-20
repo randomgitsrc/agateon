@@ -111,7 +111,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 
 ## 6. 环境事实（本机）
 
-- `~/.agate` → `/home/kity/oclab/agateon/agate`（legacy 单软链布局）
+- `~/.agate` 是版本管理根目录（`repo/` + `vX.Y.Z/` + `latest` / `current` 指针；协议根 `~/.agate/current/agate`），与开发 checkout `/home/kity/oclab/agateon` 解耦（2026-09-18 起）
 - 运行依赖：系统 `python3` + `pyyaml`（强制）+ `git`；Pillow 可选（P6 图像检测）
 - 开发 Agateon 本体另需 `ruff`（锁 0.16.4）；测试另需 `pytest`（+ `pytest-xdist` / `pytest-rerunfailures`）
 - 3 个 hook 薄壳（`pre-commit-gate.sh` / `commit-msg-self-gate.sh` / `pre-push-gate.sh`）需 sh（Git for Windows 自带）
