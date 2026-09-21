@@ -42,7 +42,7 @@ LLM Agent 在长任务上强大但不可靠：上下文被污染、subagent 漂�
    python3 ~/.agate/scripts/agate-install.py v0.49.0      # 钉指定版本
    python3 ~/.agate/scripts/agate-install.py --check      # 环境探测
    ```
-2. **注册编排 Agent。** 将 `orchestrator-template.md` 符号链接到你的平台 Agent 目录，并安装 git hooks（`python3 ~/.agate/scripts/install-hook.py`）。平台相关步骤——OpenCode、Claude Code、Windows 降级方案——见 [`agate/SETUP.md`](agate/SETUP.md)。
+2. **注册编排 Agent。** 一条命令完成：`python3 ~/.agate/scripts/agate-setup.py`——自动探测已装平台、注册 orchestrator 身份（默认全局）、安装 git hooks。平台差异与手工兜底（OpenCode、Claude Code、DSH、Codex、Windows 复制模式）见 [`agate/SETUP.md`](agate/SETUP.md)。
 3. **运行你的第一个任务。** 用编排 Agent 开启一个会话。工作区（`agate-workspace/`）在编排 Agent 首次运行时自动初始化；一次性接入步骤见 [`agate/SETUP.md`](agate/SETUP.md)。
 
 ## 工作原理

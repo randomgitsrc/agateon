@@ -55,16 +55,27 @@ def test_codex_skill_states_explicit_dispatch_requirement(agate_root):
     assert "显式" in text, "须写明「必须显式要求派发」这一约束"
 
 
-def test_codex_skill_points_to_template_not_duplicates(agate_root):
-    """适配层只指向模板，不复制协议正文（同 DSH persona 的薄身份约束）。"""
+def test_codex_skill_points_to_template_and_carries_mapping(agate_root):
+    """Codex 适配层：不复述协议规则，且**必须**自带工具映射（Codex 无 persona 层）。
+
+    与 DSH 的判据差异是**架构差异而非两套标准**（理由见 test_dsh_preset 模组级注释）：
+    DSH 有 persona 层 → 映射单一来源在 persona，其 SKILL.md **不得**再有映射表；
+    Codex 无 agent 注册机制（无 persona 层）→ 映射**必须**在本 skill 内，否则用户无映射可用。
+    故此处对映射是**正向**断言，对协议规则句才是否定断言。
+
+    锚点集与本仓 DSH 侧共享（`PROTOCOL_RULE_MARKERS` 同源词表），消除"同一原则两套标准"。
+    """
     text = _codex_skill(agate_root)
     assert "orchestrator-template.md" in text, "须指向 orchestrator-template.md"
-    # 只禁「协议过程」类内容（会话开始步骤 / 职责边界）——工具映射表里点名
-    # state 文件（如 active-tasks.md）是**平台差异**的合法表述，不算复制协议正文。
-    for forbidden in ("你永远不亲自写阶段产出物", "会话开始时", "{AGATE_WORKSPACE}"):
+    # 协议规则句：与 DSH 侧同一锚点集（模板中真实存在、旧适配层逐字复述过）
+    for forbidden in ("只有你能写的文件", "你不是 gate", "会话开始时"):
         assert forbidden not in text, (
-            f"Codex 适配层复制了协议内容「{forbidden}」——协议内容单一来源在模板"
+            f"Codex 适配层复述了协议规则「{forbidden}」——单一来源在模板"
         )
+    # 正向：Codex 无 persona 层，映射必须在 skill 内（点名 state 文件是映射的职责）
+    assert "active-tasks.md" in text, (
+        "Codex 无 persona 层，工具映射必须在本 skill 内（含状态文件）——否则用户无映射可用"
+    )
 
 
 # ── agate-setup.py：平台身份注册 ─────────────────────────────────────────────

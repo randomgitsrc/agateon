@@ -2,7 +2,7 @@
 #
 # 对应 Agateon 在 Claude Code / OpenCode 的接入方式（ln -sf orchestrator-template.md
 # 到平台 agent 目录，mode: primary）。本文件是同一份身份的 DSH 封装：
-#   persona.prefix = 薄身份（你是谁 + 会话开始步骤 + DSH 工具映射；DSH ≥rc.8 起必填 prefix）
+#   persona.prefix = 薄身份（指向模板 + DSH 工具映射 + 平台注意；DSH ≥rc.8 起必填 prefix）
 #   agent-instructions = 读项目 AGENTS.md/CLAUDE.md（同官方模板的「项目必读」）
 #   工具行         = orchestrator 需要的最小工具面（bash 跑 gate / fs 读状态 / subagent 派发）
 # 真正的行为规范在 {agate_root}/orchestrator-template.md —— persona 只做「指向 + 平台差异」，

@@ -154,7 +154,7 @@ def _install_hook(proto_root, dry_run):
         sys.stderr.write((proc.stderr or "") + "\n")
         sys.stderr.write(
             "错误: hook 安装失败（常见原因：当前目录不是 git 仓库）——"
-            "平台身份注册已完成，但 gate 兜底未生效\n"
+            "gate 兜底未生效；平台身份注册的结果见上方各行\n"
         )
         return proc.returncode
     return 0

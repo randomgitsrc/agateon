@@ -86,6 +86,45 @@ def _dsh_section(setup):
     return setup[dsh_pos:end]
 
 
+
+# ── 适配层去漂移：共享判据 + 分层豁免（2026-09-21 复审后重构）──────────────────
+#
+# **原则（统一）**：协议内容**单一来源**在 `orchestrator-template.md`；适配载体只做
+# 「指向 + 平台差异」。
+#
+# **但"平台差异"的落点随架构不同**（这是架构差异，不是两套标准——复审曾误判为后者）：
+#   - DSH **有 persona 层** → 工具映射的单一来源 = persona；SKILL.md 只放食谱与平台注意，
+#     **不得再有映射表**（否则两处维护必然漂移——本 PR 修的正是这个）。
+#   - Codex **无 persona 层**（无 agent 注册机制，见 SETUP.md 步骤 2-Codex）→ 工具映射
+#     **必须**在 SKILL.md 里，否则用户没有映射可用。故对 Codex 是**正向**断言。
+#
+# **判据锚点选取标准（硬要求）**：必须在被守护文件的**改动前版本**中真实出现过，
+# 否则是"死判据"——对旧文件不变红 = 不是回归测试。本集每个词都经 main 版本验证：
+#   `只有你能写的文件` persona(旧)=1 模板=1 ／ `会话开始时` persona(旧)=1 模板=2
+#   `你不是 gate` 模板=1（persona 旧=0，作为规则句仍保留：它一旦出现即为复述规则）
+# **已知限制（如实登记，勿高估本判据）**：这是**关键词**判据，不是语义判据——把协议规则
+# 做**同义改写**（例："你负责的产出文件只有这些；判定交给脚本，你不做判定"）即可绕过。
+# 真正防住复述靠**人工评审**（本仓协议改动本就须过 protocol-alignment-review）；本判据的
+# 价值是让**逐字复述 / 照抄表头**这类最常见的漂移形态在 CI 变红，而非穷尽语义等价。
+PROTOCOL_RULE_MARKERS = (
+    "只有你能写的文件",   # 模板「只有你能写的文件」表名
+    "你不是 gate",        # 模板规则段
+    "会话开始时",         # 模板步骤节标题（旧 persona 逐字复述过）
+)
+
+# persona 专属：**协议内部文件名/变量**——persona 的职责只是"指向模板"，点名协议内部
+# 文件即是在复述步骤（旧 persona 逐条列过 active-tasks.md / phase-cards / {AGATE_WORKSPACE}）。
+# SKILL/codex 不适用本集：它们的「验证清单」节职责就是点名命令与预期输出（见下豁免）。
+PERSONA_INTERNAL_NAME_MARKERS = ("active-tasks.md", "phase-cards", "{AGATE_WORKSPACE}")
+
+_VERIFY_SECTION_RE = re.compile(r"^## 验证清单", re.MULTILINE)
+
+
+def _strip_verification_section(text):
+    """去掉「验证清单」节——该节职责是"点名验证命令与预期输出"，出现文件名/变量名
+    属其正常工作方式，不是复述协议规则。三个载体共用同一豁免边界。"""
+    return _VERIFY_SECTION_RE.split(text, maxsplit=1)[0]
+
 def test_dsh_agent_cordis_rows_have_id_and_name(agate_root):
     """BDD-1：每行都有 id 与 name（DSH 装配器按 id/name 解析，缺字段会挂载失败）。"""
     for row in _load_rows(agate_root):
@@ -135,18 +174,16 @@ def test_dsh_persona_is_thin_identity(agate_root):
     # 后果实证：TAG0037 改了模板的协议根回退路径，persona 副本未跟 → 把版本根
     # `~/.agate` 当协议根（实测失实）。协议内容必须单一来源（模板），适配层只做
     # 「指向 + 平台差异」——下列关键词属模板的「你是谁」「会话开始时」两节，不得复制。
-    # 判据锚定**模板中真实存在**的短语（原判据用「你永远不亲自写阶段产出物」——该措辞
-    # 只存在于旧 persona 副本，模板 0 命中，故挡不住「改写式复制」；2026-09-21 修正）。
-    for forbidden, why in (
-        ("只有你能写的文件", "「只有你能写的文件」表（模板内容）"),
-        ("你不是 gate", "「你不是 gate」段（模板内容）"),
-        ("active-tasks.md", "会话开始步骤（模板「开始」节）"),
-        ("phase-cards", "阶段卡片映射（模板「开始」节）"),
-        ("AGATE_WORKSPACE", "工作区解析步骤（模板「会话开始时」节）"),
-    ):
+    # 判据（分层，理由见模组级注释）：
+    #   A. 协议规则句——三载体统一禁；
+    #   B. 协议内部文件名/变量——persona 专属禁（它的职责只是"指向模板"）。
+    # 锚点均经 main 版本验证：旧 persona 含 `只有你能写的文件`(1)/`会话开始时`(1)/
+    # `active-tasks.md`(1)/`{AGATE_WORKSPACE}`(3) → 本判据对旧文件**会变红**（回归可证）。
+    text = _strip_verification_section(text)  # persona 无该节，调用无害（统一边界）
+    for forbidden in (*PROTOCOL_RULE_MARKERS, *PERSONA_INTERNAL_NAME_MARKERS):
         assert forbidden not in text, (
-            f"persona 复制了协议内容「{forbidden}」（{why}）——协议内容单一来源在 "
-            f"orchestrator-template.md；适配层只留「指向 + 平台差异」，否则必然漂移"
+            f"persona 复述了协议内容「{forbidden}」——协议内容单一来源在 "
+            f"orchestrator-template.md；persona 只做「指向 + 平台工具映射」，否则必然漂移"
         )
 
 
@@ -291,26 +328,54 @@ def test_dsh_setup_section_has_install_hook_call(agate_root):
     )
 
 
-def test_dsh_skill_also_avoids_protocol_content(agate_root):
-    """BDD-3 同源加严：**SKILL.md 同样不得复制协议内容**（消灭守护旁路）。
+def test_dsh_skill_avoids_protocol_content_and_duplicate_mapping(agate_root):
+    """DSH SKILL.md：不复述协议规则，且**不再重复工具映射**（单一来源 = persona）。
 
-    2026-09-21 审查发现：加严判据此前只作用于 agent.cordis.yml 的 persona，而
-    SKILL.md 含 `active-tasks.md` / `phase-cards` / `AGATE_WORKSPACE` 却无人拦——
-    SKILL.md 按「何时加载」第 2 条正是"未用 preset 时"的身份载体（见其自身说明），
-    与 persona 同责。同一原则须同一标准。
+    2026-09-21 复审修正两处：
+      (1) 原判据锚点含 `AGATE_WORKSPACE`/`phase-cards`，而旧文件里这两词**都落在被豁免的
+          「验证清单」节内** → 判据对旧文件不变红（**死判据**，不是回归测试）。现改用
+          `PROTOCOL_RULE_MARKERS`（协议规则句）+ **映射单一来源**判据。
+      (2) 原判据漏了 `active-tasks.md`——它恰是旧文件里**唯一落在豁免区外**的旁路词。
 
-    SKILL.md 允许保留的：DSH 工具映射（平台差异）、平台注意、进阶食谱、验证清单。
-
-    **豁免「验证清单」节**（写明理由，非默认放行）：该节的职责就是"点名验证命令与预期
-    输出"——出现 `AGATE_WORKSPACE` / `phase-cards` 是它的正常工作方式（告诉用户跑什么、
-    看到什么算通过），不是复述协议规则。**判据 = 该节之外的正文零命中**。
+    回归可证：main 版 SKILL.md 含「| 更新状态 | … active-tasks.md |」映射行 → 映射判据变红。
     """
     skill = agate_root.joinpath("assets", "templates", "dsh", "SKILL.md")
     text = skill.read_text(encoding="utf-8")
-    # 截到「验证清单」标题前：该节豁免（理由见 docstring）
-    body = re.split(r"^## 验证清单", text, maxsplit=1, flags=re.MULTILINE)[0]
-    for forbidden in ("只有你能写的文件", "你不是 gate", "AGATE_WORKSPACE", "phase-cards"):
+    body = _strip_verification_section(text)  # 豁免「验证清单」节（理由见下）
+
+    for forbidden in PROTOCOL_RULE_MARKERS:
         assert forbidden not in body, (
-            f"DSH SKILL.md（「验证清单」节之外）复制了协议内容「{forbidden}」——"
-            f"协议内容单一来源在模板；适配层两处（persona + skill）须同一标准"
+            f"DSH SKILL.md 复述了协议规则「{forbidden}」——单一来源在模板"
         )
+    # 映射单一来源：DSH 有 persona 层，映射已在那里；SKILL.md 不得再有映射表。
+    # 判据用映射表的**行特征**（职责→工具 的表格行），不用文件名——因为文件名在
+    # 「验证清单」节里是合法的（该节职责即点名验证命令与预期输出）。
+    for row in ("| 读状态 |", "| 派发 subagent |", "| 跑 gate |", "| 更新状态 |"):
+        assert row not in body, (
+            f"DSH SKILL.md 仍含工具映射表行「{row}」——映射单一来源应为 "
+            f"agent.cordis.yml 的 persona（否则两处维护必然漂移）"
+        )
+    assert "单一来源" in text, "SKILL.md 应声明工具映射的单一来源（便于读者找到映射）"
+
+
+def test_dsh_skill_mapping_pointer_targets_exist(agate_root):
+    """SKILL.md 指向 `agent.cordis.yml` 取工具映射——该指针的**两个目标都必须存在**。
+
+    2026-09-21 复审发现：工具映射收敛到 persona 后，SKILL.md 的无-preset 入口指向
+    `agent.cordis.yml`，但既未给基路径、也无测试守护其目标存在（悬空指针风险）。
+    本用例锁定：① 正文确实声明了该指针；② 模板源路径存在且**含映射**（否则收敛是空的）。
+    """
+    skill = agate_root.joinpath("assets", "templates", "dsh", "SKILL.md")
+    text = skill.read_text(encoding="utf-8")
+    assert "persona.config.prefix" in text, "SKILL.md 应指明从 persona.config.prefix 取映射"
+    assert ".agent-presets/agate/agent.cordis.yml" in text, (
+        "应给出安装后的基路径（~/.dsh/.agent-presets/agate/），否则无-preset 环境找不到文件"
+    )
+    agent = agate_root.joinpath("assets", "templates", "dsh", "agent.cordis.yml")
+    assert agent.is_file(), "指针目标（模板源 agent.cordis.yml）必须存在"
+    # 目标里必须真有映射——否则"单一来源"指向的是空处
+    rows = _load_rows(agate_root)
+    persona = next((r for r in rows if r.get("id") == "persona"), None)
+    prefix = (persona or {}).get("config", {}).get("prefix", "")
+    for tool in ("subagent", "read", "bash"):
+        assert tool in prefix, f"persona 映射应含工具「{tool}」（SKILL.md 的指针指向它）"

@@ -42,7 +42,7 @@ LLM agents are powerful but unreliable on long tasks: context gets polluted, sub
    python3 ~/.agate/scripts/agate-install.py v0.49.0      # pin a specific version
    python3 ~/.agate/scripts/agate-install.py --check      # environment probe
    ```
-2. **Register the orchestrator.** Symbolically link `orchestrator-template.md` into your platform's agent directory and install the git hooks (`python3 ~/.agate/scripts/install-hook.py`). Platform-specific steps — OpenCode, Claude Code, and Windows fallbacks — are in [`agate/SETUP.md`](agate/SETUP.md).
+2. **Register the orchestrator.** One command does it: `python3 ~/.agate/scripts/agate-setup.py` — it detects the platforms you have, registers the orchestrator identity (global by default), and installs the git hooks. Platform specifics and manual fallbacks (OpenCode, Claude Code, DSH, Codex, Windows copy mode) are in [`agate/SETUP.md`](agate/SETUP.md).
 3. **Run your first task.** Start a session with the orchestrator agent. The workspace (`agate-workspace/`) is initialized automatically on the orchestrator's first run; see [`agate/SETUP.md`](agate/SETUP.md) for the one-time setup.
 
 ## How it works
