@@ -126,7 +126,9 @@ done
 
 **平台差异（命令内部做的事，供理解与手工兜底）**——各平台配置物形态不同，以下是细节：
 
-### Claude Code（`~/.claude/agents/`）
+### Claude Code（`.claude/agents/`）
+
+> 本小节命令块是 **`--scope project`** 的项目级形态（供理解与手工兜底）；**默认全局**形态见上方表格——`agate-setup.py` 会写到 `~/.claude/agents/`。
 
 ```bash
 mkdir -p .claude/agents

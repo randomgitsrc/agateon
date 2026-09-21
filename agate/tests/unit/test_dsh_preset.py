@@ -37,6 +37,12 @@ import re
 import pytest
 import yaml
 
+from conftest import (
+    MAPPING_ROW_RE,
+    PERSONA_INTERNAL_NAME_MARKERS,
+    PROTOCOL_RULE_MARKERS,
+)
+
 TEMPLATE_DIR = ("assets", "templates", "dsh")
 
 
@@ -87,35 +93,10 @@ def _dsh_section(setup):
 
 
 
-# ── 适配层去漂移：共享判据 + 分层豁免（2026-09-21 复审后重构）──────────────────
-#
-# **原则（统一）**：协议内容**单一来源**在 `orchestrator-template.md`；适配载体只做
-# 「指向 + 平台差异」。
-#
-# **但"平台差异"的落点随架构不同**（这是架构差异，不是两套标准——复审曾误判为后者）：
-#   - DSH **有 persona 层** → 工具映射的单一来源 = persona；SKILL.md 只放食谱与平台注意，
-#     **不得再有映射表**（否则两处维护必然漂移——本 PR 修的正是这个）。
-#   - Codex **无 persona 层**（无 agent 注册机制，见 SETUP.md 步骤 2-Codex）→ 工具映射
-#     **必须**在 SKILL.md 里，否则用户没有映射可用。故对 Codex 是**正向**断言。
-#
-# **判据锚点选取标准（硬要求）**：必须在被守护文件的**改动前版本**中真实出现过，
-# 否则是"死判据"——对旧文件不变红 = 不是回归测试。本集每个词都经 main 版本验证：
-#   `只有你能写的文件` persona(旧)=1 模板=1 ／ `会话开始时` persona(旧)=1 模板=2
-#   `你不是 gate` 模板=1（persona 旧=0，作为规则句仍保留：它一旦出现即为复述规则）
-# **已知限制（如实登记，勿高估本判据）**：这是**关键词**判据，不是语义判据——把协议规则
-# 做**同义改写**（例："你负责的产出文件只有这些；判定交给脚本，你不做判定"）即可绕过。
-# 真正防住复述靠**人工评审**（本仓协议改动本就须过 protocol-alignment-review）；本判据的
-# 价值是让**逐字复述 / 照抄表头**这类最常见的漂移形态在 CI 变红，而非穷尽语义等价。
-PROTOCOL_RULE_MARKERS = (
-    "只有你能写的文件",   # 模板「只有你能写的文件」表名
-    "你不是 gate",        # 模板规则段
-    "会话开始时",         # 模板步骤节标题（旧 persona 逐字复述过）
-)
+# 适配层去漂移判据的来源见 `agate/tests/conftest.py`（PROTOCOL_RULE_MARKERS /
+# PERSONA_INTERNAL_NAME_MARKERS / MAPPING_ROW_RE）——**单源**，多个测试文件 import，
+# 避免改一处词表另一处不跟随（那正是本 PR 要消的"两套标准"形态）。
 
-# persona 专属：**协议内部文件名/变量**——persona 的职责只是"指向模板"，点名协议内部
-# 文件即是在复述步骤（旧 persona 逐条列过 active-tasks.md / phase-cards / {AGATE_WORKSPACE}）。
-# SKILL/codex 不适用本集：它们的「验证清单」节职责就是点名命令与预期输出（见下豁免）。
-PERSONA_INTERNAL_NAME_MARKERS = ("active-tasks.md", "phase-cards", "{AGATE_WORKSPACE}")
 
 _VERIFY_SECTION_RE = re.compile(r"^## 验证清单", re.MULTILINE)
 
@@ -179,7 +160,9 @@ def test_dsh_persona_is_thin_identity(agate_root):
     #   B. 协议内部文件名/变量——persona 专属禁（它的职责只是"指向模板"）。
     # 锚点均经 main 版本验证：旧 persona 含 `只有你能写的文件`(1)/`会话开始时`(1)/
     # `active-tasks.md`(1)/`{AGATE_WORKSPACE}`(3) → 本判据对旧文件**会变红**（回归可证）。
-    text = _strip_verification_section(text)  # persona 无该节，调用无害（统一边界）
+    # ⚠ 不套用「验证清单」豁免：persona **没有**该节，豁免只会开旁路——复审实证
+    # （在 prefix 里插一行 `## 验证清单` + 全部禁词 → 判据放行）。「当前没有该节」不等于
+    # 「未来不会被加进来」；persona 用未截断原文。
     for forbidden in (*PROTOCOL_RULE_MARKERS, *PERSONA_INTERNAL_NAME_MARKERS):
         assert forbidden not in text, (
             f"persona 复述了协议内容「{forbidden}」——协议内容单一来源在 "
@@ -350,11 +333,14 @@ def test_dsh_skill_avoids_protocol_content_and_duplicate_mapping(agate_root):
     # 映射单一来源：DSH 有 persona 层，映射已在那里；SKILL.md 不得再有映射表。
     # 判据用映射表的**行特征**（职责→工具 的表格行），不用文件名——因为文件名在
     # 「验证清单」节里是合法的（该节职责即点名验证命令与预期输出）。
-    for row in ("| 读状态 |", "| 派发 subagent |", "| 跑 gate |", "| 更新状态 |"):
-        assert row not in body, (
-            f"DSH SKILL.md 仍含工具映射表行「{row}」——映射单一来源应为 "
-            f"agent.cordis.yml 的 persona（否则两处维护必然漂移）"
-        )
+    # 用正则（`MAPPING_ROW_RE`，单源在 conftest）而非字面量——复审实测字面量会被
+    # `|读状态|`（管道无空格）绕过。格式变体（bullet 形式、职责标签改名）仍无法穷尽，
+    # 属关键词判据上限，见 conftest 的已知限制登记。
+    hit = MAPPING_ROW_RE.search(body)
+    assert hit is None, (
+        f"DSH SKILL.md 仍含工具映射表行「{hit.group(0).strip() if hit else ''}」——"
+        f"映射单一来源应为 agent.cordis.yml 的 persona（否则两处维护必然漂移）"
+    )
     assert "单一来源" in text, "SKILL.md 应声明工具映射的单一来源（便于读者找到映射）"
 
 

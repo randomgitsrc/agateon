@@ -18,6 +18,8 @@
 
 import yaml
 
+from conftest import PROTOCOL_RULE_MARKERS
+
 SETUP_PY = ("scripts", "agate-setup.py")
 CODEX_TEMPLATE = ("assets", "templates", "codex", "SKILL.md")
 
@@ -68,7 +70,7 @@ def test_codex_skill_points_to_template_and_carries_mapping(agate_root):
     text = _codex_skill(agate_root)
     assert "orchestrator-template.md" in text, "须指向 orchestrator-template.md"
     # 协议规则句：与 DSH 侧同一锚点集（模板中真实存在、旧适配层逐字复述过）
-    for forbidden in ("只有你能写的文件", "你不是 gate", "会话开始时"):
+    for forbidden in PROTOCOL_RULE_MARKERS:
         assert forbidden not in text, (
             f"Codex 适配层复述了协议规则「{forbidden}」——单一来源在模板"
         )
