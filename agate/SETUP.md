@@ -185,7 +185,7 @@ ln -sf "$AGATE_DIR/assets/templates/dsh/SKILL.md" ~/.dsh/skills/agate-protocol/S
 python3 ~/.agate/scripts/install-hook.py
 ```
 
-**链接完整性校验**：`agate-summary.py` 每次运行会校验上面三个软链是否指向权威链（`{agate_root}/assets/templates/dsh/`）；漂移（如误指向非权威副本）会给出 WARNING + 一条命令的修复指引。升级后跑一次即可确认。
+**链接完整性校验**：`agate-summary.py` 每次运行会校验上面三个软链是否指向**某个已安装版本**里的同名模板（权威判据见「升级 Agateon 之后」节）；指向开发 checkout / 临时副本会给出 WARNING + 修复指引，指向已装但没有跟随 `current` 的版本则给信息级的「版本落后」提示。升级后跑一次即可确认。
 
 **身份薄、协议厚**：preset 的 persona **只做两件事**——指向 `{agate_root}/orchestrator-template.md`（唯一权威行为规范）+ 给 DSH 工具映射与平台注意；**不复制协议内容**（曾复制「会话开始步骤」，结果模板改了路径而副本未跟 → 实测失实）。模板随协议根升级自动更新；符号链接方式升级后什么都不用做；**Windows 无符号链接权限时退复制模式，升级后重跑一次 `agate-setup.py` 即可刷新**（复制不自动跟随源文件）。
 
@@ -360,6 +360,6 @@ AGATE_WORKSPACE=/srv/agate-ws/My Project   # 绝对路径（可含空格）→ �
 
 - **符号链接方式**（Linux / macOS 标准）：什么都不用做，orchestrator 提示词自动跟着新版本。
 - **复制模式**（Windows 无符号链接权限）：重跑一次 `python3 ~/.agate/scripts/agate-setup.py` 刷新（`cp` 是旧手工步骤，已被该命令取代）。
-- 两种方式都建议顺手跑一次 `python3 ~/.agate/scripts/agate-summary.py`——它会检测协议版本、根 `scripts/` 副本漂移，**以及四个平台接入产物的漂移**：产物须指向**某个已安装版本**的模板（这是"权威"的判据——项目用 `.agate-version` 钉版**不影响**该判定，全局产物本就与项目钉版无关）；指向开发 checkout / 临时副本、或复制形态内容已旧（模板升级未重跑接入命令），都会给出警告与修复命令。
+- 两种方式都建议顺手跑一次 `python3 ~/.agate/scripts/agate-summary.py`——它会检测协议版本、根 `scripts/` 副本漂移，**以及四个平台接入产物的漂移**：产物须指向**某个已安装版本**的模板（这是"权威"的判据——项目用 `.agate-version` 钉版**不影响**该判定，全局产物本就与项目钉版无关）；它给**两级信号**：指向开发 checkout / 临时副本（**不在任何已装版本树内**）→ 警告「漂移」+ 修复命令；指向**已装但没有跟随 `current` 的版本** → 信息级「版本落后」提示（`agate-install.py` 装新版不删旧版，且接入产物指向具体版本目录，故升级后"落后"是常见状态，需重跑 `agate-setup.py` 跟上）；复制形态内容与任何已装版本都不一致 → 警告「已过期」。
 
 **更新口径（与 `UPGRADING.md` 一致）**：更新 = `python3 ~/.agate/scripts/agate-install.py latest`（幂等）。安装 / 迁移 / 更新 / 回退完整对照，以及 hook 重装时机、根 `~/.agate/scripts/` 副本维护语义，见 `UPGRADING.md` 的「版本管理生命周期」节。

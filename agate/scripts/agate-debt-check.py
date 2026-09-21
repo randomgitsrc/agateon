@@ -13,7 +13,7 @@
   - 无任何 yaml 块 → no-op（BDD-10 向后兼容）
 
 schema 校验规则（P2-design.md §2.2）：
-  - 必填：id/category/title/status/priority/evidence(非空 list)/impact/recommendation/
+  - 必填：id/category/title/status/priority/evidence(非空 list；元素为 {path/ref, note} 映射)/impact/recommendation/
     closure_criteria(非空 list)/source/created_at
   - 枚举：category=technical|management|protocol；status=open|in_progress|closed；
     priority=high|medium|low；source=retreat|review|retrospective
@@ -121,6 +121,19 @@ def check_entry(basename, eid, data, errors):
                         f"（应为 {want.__name__}，实际含 {sorted(set(wrong))}）"
                         f"——evidence 放 {{path/ref, note}} 映射、closure_criteria 放字符串，勿混挂"
                     )
+                elif f == "evidence":
+                    # 键要求（2026-09-21 补，**最小收紧**）：上文文案把 evidence 描述为
+                    # 「{{path/ref, note}}」，而实现只校验"是 dict"——实测 `evidence: [{{}}]`
+                    # 可 rc=0 放行（**零信息量**证据）。此处只拒绝空/无已知键的条目；
+                    # 不改动既有可接受形态（如只有 `note` 的历史回填条目——
+                    # BDD-11「T001 回填」夹具即含此形态，收紧到"必须含 path/ref"会破坏它）。
+                    known = ("path", "ref", "note")
+                    for i, e in enumerate(data[f]):
+                        if not any(k in e for k in known):
+                            errors.append(
+                                f"{basename}:{eid}: evidence[{i}] 为空或无已知键"
+                                f"（期望 {{path/ref, note}}，至少含其一）"
+                            )
 
     task_id = data.get("task_id")
     if task_id is not None and not isinstance(task_id, str):

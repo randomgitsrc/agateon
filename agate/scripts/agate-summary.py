@@ -24,10 +24,11 @@ from pathlib import Path
 try:
     from agate_common import (
         _protocol_root,
+        _resolve_pointer_chain,
         resolve_version_root,
         symlink_migration_hint,
     )
-    from agate_package import agate_home
+    from agate_package import agate_home, is_strict_version
 except (ImportError, SystemExit):
     sys.stderr.write("agate-summary: agate_common 不可用（缺 pyyaml？），版本解析不可用\n")
     sys.exit(1)
@@ -137,16 +138,24 @@ def _installed_version_proto_roots():
     取镜像目录时不跟随软链（`latest`/`current` 是指针软链，不是版本目录）；Windows 下
     它们是文本文件，`isdir` 自然排除。
 
-    **有意保留的边界（已知，非疏漏）**：产物指向某个**已安装但不是 current** 的版本时
-    **不告警**。理由：(a) 本检测的职责是"防指向**非权威副本**"（异物 / 临时副本 / dev 树），
-    不是"强制跟随 current"；(b) 若按"是否等于机器 current"判定，则任何刻意钉版的用法都会被
-    持续告警且改不回去（改指 current 后钉版目录又告警 → 振荡）。"产物是否跟得上最新版"
-    属升级提醒，由 `UPGRADING.md` 的升级流程承担，不由本检测承担。
+    **两级信号（2026-09-21 定型）**：
+      - **漂移**（WARNING）：指向**不在任何已装版本树内**的目标——异物 / 临时副本 / dev
+        checkout。这是本检测的原始职责（历史上确有产物指向测试临时副本、静默穿过一次发布）。
+      - **版本落后**（INFO，见调用方）：指向**已装但非机器 current** 的版本。`agate-install.py`
+        装新版**不删旧版**，而接入产物指向的是**具体版本目录**（非 current 软链）→
+        "升级后产物落后"是**默认状态**，静默会让用户以为一直在用新版。
+        判据用**机器 current**（项目无关，不读 `.agate-version` / `AGATE_ROOT`）——
+        故项目钉版不会引起"落后"提示随 cwd 变化（此前误用项目解析根导致的振荡即源于此）。
     """
     base = agate_home()
     roots = []
     if os.path.isdir(base):
         for name in sorted(os.listdir(base)):
+            # 只认**版本目录名**（`vX.Y.Z`）——`agate_home()` 下还有 `repo/`（origin
+            # clone）与 `scripts/`（根级副本）等**非版本**目录；把它们算作权威会让
+            # "产物指向 dev clone"静默通过（对齐审查实测：真机 clone 已领先发布版 4 提交）。
+            if not is_strict_version(name):
+                continue
             vdir = os.path.join(base, name)
             if os.path.islink(vdir) or not os.path.isdir(vdir):
                 continue
@@ -154,7 +163,24 @@ def _installed_version_proto_roots():
     return roots
 
 
-def _check_platform_artifacts(script_dir):
+def _machine_current_proto_root():
+    """**机器级** `current` 指向的 (协议根, 版本名)（**项目无关**：不读 `.agate-version`、不读 `AGATE_ROOT`）。
+
+    用途：判定"产物是否**版本落后**"（信息级提示）。用机器级 current 而非
+    `resolve_version_root()`（后者层序含项目声明）——否则项目钉版会导致"落后"提示
+    随 cwd 变化，正是对齐审查实测的振荡来源。无 current 指针 / 指向非法名 → None（不提示）。
+    """
+    base = agate_home()
+    cur = _resolve_pointer_chain(base, "current")
+    if not cur or not os.path.isdir(cur) or os.path.islink(cur):
+        return None, None
+    ver = os.path.basename(cur)
+    if not is_strict_version(ver):
+        return None, None
+    return _protocol_root(cur), ver
+
+
+def _check_platform_artifacts():
     """校验各平台安装产物与权威模板一致（防静默漂移 / 防复制模式过期）。
 
     背景（2026-08-26）：~/.dsh/skills/agate-protocol/SKILL.md 曾被安装成指向测试用
@@ -171,7 +197,10 @@ def _check_platform_artifacts(script_dir):
     """
     home = os.path.expanduser("~")
     installed = _installed_version_proto_roots()
+    cur_root, cur_ver = _machine_current_proto_root()
+    cur_root = os.path.realpath(cur_root) if cur_root else None
     not_installed = []          # 聚合待报（见函数末：一行汇总，避免逐平台刷屏）
+    lagging = []                # 已装但**非机器 current** 的产物（信息级，非漂移）
     for name, platform_dir, artifacts, _setup_step in _PLATFORM_ARTIFACTS:
         if not os.path.isdir(os.path.join(home, platform_dir)):
             continue
@@ -190,16 +219,23 @@ def _check_platform_artifacts(script_dir):
                 continue
             if os.path.islink(link):
                 target = os.path.realpath(link)
-                if target not in {os.path.realpath(c) for c in candidates}:
+                cand_reals = {os.path.realpath(c) for c in candidates}
+                if target not in cand_reals:
                     sys.stderr.write(
                         f"⚠️  {name} 安装产物漂移: {link}\n"
                         f"    实指 {target}\n"
-                        f"    不在任何已安装版本树内（权威模板: {candidates[-1]}）\n"
+                        f"    不在任何已安装版本树内（权威模板之一: {candidates[-1]}）\n"
                         # 修复命令用**稳定入口**而非上面那行路径：本脚本可能正从
                         # worktree/开发 checkout 运行，此时候选路径指向未发布树，
                         # 照抄会把安装指到那里。
                         f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                     )
+                elif cur_root and os.path.dirname(target) != cur_root:
+                    # 指向**已装但非 current**：不是漂移（未指向异物），但是升级后常见的
+                    # 落后状态——`agate-install.py` 装新版不删旧版，而接入产物指向的是
+                    # **具体版本目录**（非 current 软链），故"升级后产物落后"是默认状态。
+                    # 仅信息级提示（措辞不含"漂移"），且用**机器 current** 判（项目钉版不影响）。
+                    lagging.append(name)
             elif not any(_files_identical(link, c) for c in candidates):
                 # 复制形态且内容与**所有**已安装版本都不一致 = 副本已旧或来自异物
                 sys.stderr.write(
@@ -207,6 +243,18 @@ def _check_platform_artifacts(script_dir):
                     f"（复制模式不自动同步）\n"
                     f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                 )
+            elif cur_root and not any(
+                os.path.dirname(os.path.realpath(c)) == cur_root
+                for c in candidates if _files_identical(link, c)
+            ):
+                lagging.append(name)
+    if lagging:
+        names = list(dict.fromkeys(lagging))
+        sys.stderr.write(
+            f"ℹ️  平台接入产物版本落后（当前 {cur_ver}）: {' / '.join(names)}"
+            f"——升级后接入产物指向的是具体版本目录，需重跑以跟上："
+            f"python3 ~/.agate/scripts/agate-setup.py\n"
+        )
     if not_installed:
         # 去重保序（DSH 三产物只报一次平台名）。措辞保留「未安装」与 SETUP.md 指引
         # （既有 BDD 断言锚定这两个子串），只是把 N 行合并为 1 行。
@@ -232,7 +280,7 @@ def main():
 
     guards = _build_guards(script_dir)
     _check_copy_drift(script_dir)
-    _check_platform_artifacts(script_dir)
+    _check_platform_artifacts()
 
     version = info["version"] or "（未解析到版本）"
     reason = info["reason"] or "（无原因）"

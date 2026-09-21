@@ -655,6 +655,7 @@ def test_not_installed_hint_aggregated_single_line(run_cli, python_exe, agate_sc
         assert name in lines[0], f"聚合行应含 {name}"
 
 
+@pytest.mark.windows_smoke
 def test_pinned_project_does_not_flag_global_artifact(run_cli, python_exe, agate_scripts, tmp_path):
     """E3 回归：项目 `.agate-version` 钉旧版时，**全局**产物指向 current 版**不得**报漂移。
 
@@ -694,4 +695,66 @@ def test_artifact_pointing_outside_installed_versions_is_flagged(run_cli, python
     assert result.returncode == 0
     assert "OpenCode 安装产物漂移" in result.output, (
         f"指向已安装版本树之外的产物应报漂移:\n{result.output}"
+    )
+
+
+@pytest.mark.windows_smoke
+def test_artifact_pointing_into_repo_clone_is_flagged(run_cli, python_exe, agate_scripts, tmp_path):
+    """应修1 回归：产物指向 `~/.agate/repo`（origin clone，**非版本目录**）→ 报漂移。
+
+    `agate_home()` 下有 `repo/`（clone）与 `scripts/`（根副本）等非版本目录；把它们算作
+    "已安装版本"会让"产物指向 dev clone"静默通过——而 clone 可能领先发布版（真机实测领先
+    4 提交）。权威集须只认 `vX.Y.Z`（`is_strict_version`）。
+    """
+    home = _make_home(tmp_path)
+    # 造一个 **真实形态**的 repo clone：`repo/agate/scripts/` 存在（故 `_protocol_root(repo)`
+    # 会正确识别 `repo/agate` 为协议根——夹具若缺这层，候选会被 `isfile` 过滤掉，
+    # 测试就会"因错误的原因通过"，失去判别力）。
+    clone_proto = home / ".agate" / "repo" / "agate"
+    (clone_proto / "scripts").mkdir(parents=True, exist_ok=True)
+    clone_tpl = clone_proto / "assets" / "templates" / "codex" / "SKILL.md"
+    clone_tpl.parent.mkdir(parents=True, exist_ok=True)
+    clone_tpl.write_text("# from clone\n", encoding="utf-8")
+    link = home / ".agents" / "skills" / "agate-protocol" / "SKILL.md"
+    link.parent.mkdir(parents=True)
+    _symlink_or_skip(clone_tpl, link)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物漂移" in result.output, (
+        f"指向 repo clone（非版本目录）应报漂移——否则 dev clone 静默通过:\n{result.output}"
+    )
+
+
+@pytest.mark.windows_smoke
+def test_artifact_pointing_to_installed_but_not_current_reports_lagging(
+        run_cli, python_exe, agate_scripts, tmp_path):
+    """应修2 回归：产物指向**已装但非 current** 的版本 → 报「落后」（信息级，非漂移）。
+
+    为什么必须有信号：`agate-install.py` 装新版**不删旧版**，而接入产物指向的是**具体版本
+    目录**（非 current 软链）→ "升级后产物落后"是**默认状态**，静默会让用户以为一直在用新版。
+    用**机器 current** 判（项目钉版不影响），故不会振荡。
+    """
+    home = _make_home(tmp_path, versions=("v1.0.0", "v2.0.0"), latest="v2.0.0")
+    link = home / ".config" / "opencode" / "agents" / "orchestrator.md"
+    link.parent.mkdir(parents=True)
+    # 指向已装的旧版 v1.0.0（current = v2.0.0）
+    _symlink_or_skip(_installed_tpl(home, "orchestrator-template.md", version="v1.0.0"), link)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "版本落后" in result.output, f"指向已装旧版应报「落后」:\n{result.output}"
+    assert "漂移" not in result.output, (
+        f"落后**不是**漂移（未指向异物），措辞须区分（否则与 E3 的钉版用例冲突）:\n{result.output}"
+    )
+
+
+def test_artifact_on_current_version_reports_nothing(run_cli, python_exe, agate_scripts, tmp_path):
+    """对照：产物指向**机器 current 版** → 既不报漂移也不报落后（避免误报）。"""
+    home = _make_home(tmp_path, versions=("v1.0.0", "v2.0.0"), latest="v2.0.0")
+    link = home / ".config" / "opencode" / "agents" / "orchestrator.md"
+    link.parent.mkdir(parents=True)
+    _symlink_or_skip(_installed_tpl(home, "orchestrator-template.md", version="v2.0.0"), link)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "漂移" not in result.output and "版本落后" not in result.output, (
+        f"指向 current 版应完全静默:\n{result.output}"
     )

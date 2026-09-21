@@ -683,3 +683,34 @@ def test_evidence_element_type_enforced(agate_scripts, python_exe, run_cli, tmp_
     result = _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body)
     assert result.returncode != 0, f"evidence 含 str 应报错:\n{result.output}"
     assert "evidence 元素类型错误" in result.output
+
+
+def test_evidence_empty_entry_rejected(agate_scripts, python_exe, run_cli, tmp_path):
+    """evidence 元素为**空 dict** → 拒绝（零信息量证据；原实现 rc=0 放行）。
+
+    同时锁定**最小收紧**：只拒绝空/无已知键的条目，不改动既有可接受形态
+    （如只有 `note` 的历史回填条目，见 BDD-11 夹具）。
+    """
+    body = (
+        "evidence:\n  - {}\n"
+        "impact: i\nrecommendation: r\n"
+        "closure_criteria:\n  - c\n"
+        "source: review\ncreated_at: 2026-09-21\n"
+    )
+    result = _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body)
+    assert result.returncode != 0, f"空 evidence 应被拒:\n{result.output}"
+    assert "为空或无已知键" in result.output
+
+
+def test_evidence_note_only_entry_accepted(agate_scripts, python_exe, run_cli, tmp_path):
+    """evidence 元素**只含 note**（无 path/ref）→ 仍接受（最小收紧的边界，勿过度收紧）。"""
+    body = (
+        "evidence:\n  - note: 根因说明\n"
+        "impact: i\nrecommendation: r\n"
+        "closure_criteria:\n  - c\n"
+        "source: review\ncreated_at: 2026-09-21\n"
+    )
+    result = _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body)
+    assert result.returncode == 0, (
+        f"只含 note 的 evidence 属既有可接受形态（BDD-11 夹具同形），不应被拒:\n{result.output}"
+    )

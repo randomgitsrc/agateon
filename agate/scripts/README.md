@@ -83,7 +83,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 
 | 脚本 | 用途 |
 |------|------|
-| `agate-summary.py` | 输出当前项目解析到的 agate 版本 + 原因（`.agate-version` 声明或全局 current）+ 防护机制状态 + 启动建议 |
+| `agate-summary.py` | 输出当前项目解析到的 agate 版本 + 原因（`.agate-version` 声明或全局 current）+ 防护机制状态 + 启动建议 ；另检测根 `scripts/` 副本与**四个平台接入产物**的漂移（软链指向非权威 / 复制内容已旧）与「版本落后」（指向已装但非 current 的版本）|
 | `agate-changes.py` | 显示与指定 tag 之间的变更（commits + 受影响文件 + 重要性分类）|
 
 **典型场景**：agent 上次会话用 v0.4.0，现在 agate 升到 v0.5.0——跑 `python3 ~/.agate/scripts/agate-changes.py v0.4.0` 快速看变化，决定重读哪些必读文件。
