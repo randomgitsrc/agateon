@@ -196,6 +196,14 @@ def symlink_migration_hint(base=None):
             detected = f"检测到的软链：{base}"
     else:
         detected = f"检测到的软链基址：{base}（路径经软链解析）"
+    # 路径**刻意保持字面 `~/.agate`**（2026-09-21 决策，见下）：
+    #   · 三步片段与 `install.sh` / `agate-install.py` / `install-offline.py` **手写同源**
+    #     （无法 import 共享），由 BDD-34/35 机械校验"跨侧逐字一致"——在解析器侧单方面
+    #     插入 `AGATE_HOME` 真实路径会立刻破坏该契约（实测 4 个用例转红）。
+    #   · 真实基址**已在上面 `detected` 行打印**（`检测到的软链：<base> → …`），
+    #     用户不会误判；`agate-install.py` 另有"若它不是 ~/.agate 请替换"的说明。
+    #   · 四处动态化需**同时改测试契约**（`_migration_steps` 的正则要求含 `.agate`），
+    #     属独立改动，不在本次范围。
     return (
         f"{detected}\n"
         "错误: ~/.agate 是旧软链布局，v0.73.0 起不再支持（fail-closed，不会把软链目标当协议根）。\n"

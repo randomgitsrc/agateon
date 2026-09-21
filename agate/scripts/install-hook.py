@@ -10,12 +10,12 @@ TAG0008：hook 薄壳是固定解析入口（运行时经 resolve-entry.py 解�
 安装时校验 resolve-entry.py 存在（缺失仅 WARNING，不阻断——复制模式 fake 根可无它）。
 
 用法：
-  python3 install-hook.py                       # 默认 ~/.agate
+  python3 install-hook.py                       # 默认 agate_home()（尊重 AGATE_HOME 覆盖）
   python3 install-hook.py /path/to/agate_root   # 或环境变量 AGATE_ROOT
 
 AGATE_ROOT 解析保持 sh 原优先级：argv[1] > 环境变量 AGATE_ROOT > ~/.agate。
 （不用 agate_common.resolve_agate_root——其 env 优先 + 脚本路径上溯语义与本安装器
-「默认 ~/.agate 稳定版」契约不同，此处逐行保留 sh 语义。）
+「默认 agate_home()（尊重 AGATE_HOME 覆盖） 稳定版」契约不同，此处逐行保留 sh 语义。）
 
 CLI 契约：可选 1 个参数；非 git 仓库 / AGATE_ROOT 缺脚本 → stderr + exit 1；提示写
 stdout；成功 exit 0。Python 3.8+（无 match / str.removeprefix）；所有文本读写显式

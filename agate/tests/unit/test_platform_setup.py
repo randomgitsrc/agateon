@@ -561,3 +561,126 @@ def test_uninstall_never_removes_platform_root(run_cli, python_exe, agate_script
         assert (home / rel).is_dir(), f"平台自有目录不得被删: {rel}\n{result.output}"
     # agateon 在平台下的专属目录可以清（那是它的命名空间）
     assert not (home / ".dsh/.agent-presets/agate").exists(), "agateon 专属目录应清掉"
+
+
+def test_all_projects_clears_project_scoped_artifacts(run_cli, python_exe, agate_scripts,
+                                                      agate_root, tmp_path):
+    """**BLK-1 回归**：`--all-projects` 必须清掉项目侧**平台接入物**（不只 hook）。
+
+    审查实测的缺陷：`_uninstall_project` 未把 `project_root` 传给 `_uninstall_platforms`，
+    后者按**进程 cwd** 解析 project 侧相对路径 → 从第三个目录执行时**0 项被删却报告成功**，
+    每个项目留下断链 orchestrator 软链（平台静默找不到 orchestrator）。
+    """
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    from conftest import GitRepo
+    repos = [GitRepo(tmp_path / f"pp{i}") for i in (1, 2)]
+    for r in repos:
+        res = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                     "--scope", "project", "--platform", "claude-code", cwd=str(r.path))
+        assert res.returncode == 0, res.output
+    arts = [r.path / ".claude/agents/orchestrator.md" for r in repos]
+    assert all(os.path.lexists(a) for a in arts), "前置：两个项目都应有项目侧接入物"
+
+    # 在**第三个目录**执行——证明路径解析以 project_root 为基准，而非 cwd
+    result = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                    "--uninstall", "--all-projects", cwd=str(tmp_path))
+    assert result.returncode == 0, result.output
+    for a in arts:
+        assert not os.path.lexists(a), (
+            f"项目侧平台接入物应被清（BLK-1：按 cwd 解析会漏掉）: {a}\n{result.output}"
+        )
+    assert "已删除 0 项" not in result.output, f"计数不得为 0:\n{result.output}"
+
+
+@pytest.mark.windows_smoke
+def test_hook_with_marker_but_not_agate_is_kept(run_cli, python_exe, agate_scripts,
+                                                agate_root, git_repo, tmp_path):
+    """**BLK-2 回归**：`.agate-root` 标记存在，但 hook 内容不是 agate 的 → **必须保留**。
+
+    审查实测的 fail-open：用户后来把自己的 hook 写回该路径，标记仍在 → 原实现照删且无备份。
+    修复后标记只作**报告级**证据，不授予删除权。
+    """
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    proj = git_repo.path
+    hook_dir = proj / ".git" / "hooks"
+    hook_dir.mkdir(parents=True, exist_ok=True)
+    (hook_dir / ".agate-root").write_text(str(iroot) + "\n", encoding="utf-8")
+    hook = hook_dir / "pre-commit"
+    hook.write_text("#!/bin/sh\necho 用户自己的东西\n", encoding="utf-8")
+
+    # 用 --scope project（按 cwd 的 git 根定位）——**不能**用 --all-projects：
+    # 未先安装则台账为空、项目根本不被处理，测试会"因错误的原因通过"（2026-09-21 自查）。
+    result = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                    "--uninstall", "--scope", "project", cwd=str(proj))
+    assert result.returncode == 0, result.output
+    assert hook.is_file(), f"仅凭 marker 不得删用户 hook:\n{result.output}"
+    assert "用户自己的东西" in hook.read_text(encoding="utf-8"), "内容须原样"
+
+
+@pytest.mark.windows_smoke
+def test_hook_mentioning_agate_only_in_comment_is_kept(run_cli, python_exe, agate_scripts,
+                                                      agate_root, git_repo, tmp_path):
+    """**BLK-2 回归**：内容仅在**注释**里提到 agate 字样 → 不得据此删除。
+
+    审查实测：项目从未装过 agate，用户的 pre-commit 注释里写了 `pre-commit-gate`，
+    原实现（子串指纹一票通行）把它删了。
+    """
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    proj = git_repo.path
+    hook = proj / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text(
+        "#!/bin/sh\n# 参考过 pre-commit-gate 与 resolve-entry.py 的思路\necho 我的检查\n",
+        encoding="utf-8",
+    )
+
+    # 同上：必须走 --scope project（按 cwd 定位），否则台账为空 → 假绿
+    result = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                    "--uninstall", "--scope", "project", cwd=str(proj))
+    assert result.returncode == 0, result.output
+    assert hook.is_file(), f"仅凭注释里的字样不得删用户 hook:\n{result.output}"
+    assert "我的检查" in hook.read_text(encoding="utf-8"), "内容须原样"
+
+
+def test_artifact_backup_restored_on_uninstall(run_cli, python_exe, agate_scripts,
+                                               agate_root, tmp_path):
+    """**OPT-2 回归**：安装时备份的用户原产物（`*.bak.<epoch>`）卸载时应**还原**。"""
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    target = home / ".claude/agents/orchestrator.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("# 我原来的 orchestrator 配置\n", encoding="utf-8")
+
+    assert _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                  "--scope", "global").returncode == 0
+    assert list(target.parent.glob("orchestrator.md.bak.*")), "前置：安装时应备份"
+
+    result = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                    "--uninstall", "--scope", "global")
+    assert result.returncode == 0, result.output
+    assert target.is_file(), f"应还原为实体文件:\n{result.output}"
+    assert "我原来的 orchestrator 配置" in target.read_text(encoding="utf-8"), \
+        f"应还原用户原内容:\n{result.output}"
+
+
+def test_purge_refuses_lookalike_dir(run_cli, python_exe, agate_scripts,
+                                     agate_root, tmp_path):
+    """**OPT-1 回归**：把入口脚本复制进无关目录**不足以**骗过 purge 守卫。
+
+    审查实测：原守卫只判 `scripts/agate-install.py` 存在 → 复制该脚本进 lookalike/
+    即被放行并 rmtree 掉整个目录（含其中无关文件）。
+    """
+    home = _fake_homes(tmp_path)
+    _fake_install_root(tmp_path, agate_root)
+    look = tmp_path / "lookalike"
+    (look / "scripts").mkdir(parents=True)
+    shutil.copyfile(agate_root / "scripts" / "agate-install.py", look / "scripts" / "agate-install.py")
+    (look / "重要文件.txt").write_text("别删我\n", encoding="utf-8")
+
+    result = _setup(run_cli, python_exe, agate_scripts, home, look,
+                    "--uninstall", "--purge")
+    assert result.returncode == 1, f"仅凭入口脚本不应放行:\n{result.output}"
+    assert (look / "重要文件.txt").is_file(), "拒绝后不得删任何东西"

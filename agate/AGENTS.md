@@ -112,8 +112,9 @@ python3 ~/.agate/scripts/agate-install.py --uninstall vX.Y.Z
 ```
 
 **为什么要走 `--uninstall` 而不是直接 `rm -rf ~/.agate`**：本体之外还有两类产物——
-平台接入物（各平台全局配置目录）+ **项目侧 git hook**。直接删本体它们会变成**断链**
-（**断链的 hook 会让 `git commit` 直接失败**，2026-09-21 实测）。`--uninstall` 按序清完再删本体。
+平台接入物（各平台全局配置目录）+ **项目侧 git hook**。直接删本体它们会留下**断链或陈旧副本**；
+其中**复制模式（含 Windows）下的陈旧 hook 仍可执行，会让 `git commit` 直接失败**
+（软链模式下的断链则被 git 静默忽略——2026-09-21 实测）。`--uninstall` 按序清完再删本体。
 
 **三条安全约束**：① 删前**按事实验证归属**（软链是否指向本安装 / 复制内容是否等于权威模板），
 证不出就保留并报告；② `agate-workspace/`、`.agate-version`、`AGENTS.md` 等**用户数据只报告不删**；
