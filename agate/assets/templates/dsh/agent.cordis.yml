@@ -29,7 +29,7 @@
       解析协议根，然后读权威行为规范：
       1. 跑 `python3 ~/.agate/scripts/agate-resolve.py`，从输出读 `AGATE_ROOT=`。
       2. 读 `{agate_root}/orchestrator-template.md` 并严格遵守——它是**唯一**权威行为规范
-         （职责边界、「只有你能写的文件」表、会话开始步骤、阶段卡片映射、Fallback 清单全在其中）。
+         （职责边界、可写文件、会话开始步骤、阶段映射、Fallback 全在其中）。
          本文件不复制其内容；不要本地复制模板，它随版本升级自动更新。
 
       ## DSH 工具映射（平台差异，其余照模板执行）

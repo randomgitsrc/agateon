@@ -100,7 +100,17 @@ python3 ~/.agate/scripts/agate-setup.py
 | **平台身份**（全局） | 按探测到的平台建配置物：Claude Code / OpenCode → `~/.claude/agents/` · `~/.config/opencode/agents/`；DSH → `~/.dsh/.agent-presets/agate/` + `~/.dsh/skills/`；Codex → `~/.agents/skills/agate-protocol/` |
 | **项目侧** | 装 git hook（等价于下面的步骤 4） |
 
-常用参数：`--platform dsh,codex`（显式指定）· `--scope global`（只注册身份）· `--scope project`（注册到项目内目录，适合按项目钉不同版本）· `--dry-run`（只看将做什么）。
+常用参数：
+
+| 参数 | 作用 |
+|------|------|
+| `--platform dsh,codex` | 显式指定平台（默认 `auto` 探测已装者） |
+| `--scope global` | **只注册全局身份，不装 hook** |
+| `--scope project` | 注册到**项目内**目录（`.claude/` / `.opencode/`）+ 装 hook——适合按项目钉不同版本 |
+| `--scope all`（默认） | 注册全局身份 + 装 hook |
+| `--dry-run` | 只显示将做什么 |
+
+**退出码**：`0` = 全部成功；`1` = 有步骤失败（如不在 git 仓库导致 hook 装不上，或协议根无效）；`2` = 用法错误（未知平台）。
 
 > **为什么默认全局**：`orchestrator-template.md` 对**所有项目内容完全一致**（`adr.md` ADR-008），且其 `{agate_root}` 是**运行时按 cwd 解析**的——一个全局注册在项目 A 里跑就解析 A 钉的版本。故一次注册即可服务所有项目。
 > **何时用 `--scope project`**：项目用 `.agate-version` 钉了**非 current** 的版本，且你希望身份文件也随该项目版本走。
@@ -186,26 +196,25 @@ cp "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
 
 ### 步骤 2-DSH：deepseek-harness（DSH）接入
 
-DSH 的接入方式与 OpenCode/Claude Code **完全同构**——注册 orchestrator 身份就是**符号链接**：
-DSH 的身份注册机制是 **agent-preset**（`agent.cordis.yml` + `preset.yml`，声明式 agent 组合），
-协议模板文件在 `{agate_root}/assets/templates/dsh/`（与 `assets/templates/` 下其他模板同属模板目录）：
+DSH 的身份注册机制是 **agent-preset**（`agent.cordis.yml` + `preset.yml`，声明式 agent 组合）+ **skill**（`SKILL.md`），
+与 Claude Code / OpenCode 的「单个 agent md 软链」**形态不同**（同一目的、三种载体）。模板源在 `{agate_root}/assets/templates/dsh/`。
+
+**推荐**：用步骤 2 的命令（`agate-setup.py` 会写入下面三处）；下面是它内部做的事，供理解与手工兜底：
 
 ```bash
-# 1. 注册 orchestrator 身份（DSH preset，等价 .claude/agents/orchestrator.md 软链）
+# 注册全局身份（DSH preset 三件套）
 mkdir -p ~/.dsh/.agent-presets/agate ~/.dsh/skills/agate-protocol
 ln -sf "$AGATE_DIR/assets/templates/dsh/agent.cordis.yml" ~/.dsh/.agent-presets/agate/agent.cordis.yml
 ln -sf "$AGATE_DIR/assets/templates/dsh/preset.yml" ~/.dsh/.agent-presets/agate/preset.yml
 ln -sf "$AGATE_DIR/assets/templates/dsh/SKILL.md" ~/.dsh/skills/agate-protocol/SKILL.md
 
-# 2. 装 hook（与所有平台一致，唯一安装脚本）
+# 装 hook（与所有平台一致，唯一安装脚本；agate-setup.py 内部即调用它）
 python3 ~/.agate/scripts/install-hook.py
 ```
 
 **链接完整性校验**：`agate-summary.py` 每次运行会校验上面三个软链是否指向权威链（`{agate_root}/assets/templates/dsh/`）；漂移（如误指向非权威副本）会给出 WARNING + 一条命令的修复指引。升级后跑一次即可确认。
 
-**身份薄、协议厚**：preset 的 persona 只写"你是谁 + 会话开始步骤 + DSH 工具映射"，行为规范仍指向
-`{agate_root}/orchestrator-template.md`——模板随协议根（`$AGATE_DIR`，即 `~/.agate/current/agate`）升级自动更新；
-符号链接方式升级后什么都不用做；**Windows 无符号链接权限时退复制模式，升级后需重跑上述 `ln` 命令对应的 `cp`**（复制模式代价：模板升级后不会自动同步，与既有平台小节一致）。
+**身份薄、协议厚**：preset 的 persona **只做两件事**——指向 `{agate_root}/orchestrator-template.md`（唯一权威行为规范）+ 给 DSH 工具映射与平台注意；**不复制协议内容**（曾复制「会话开始步骤」，结果模板改了路径而副本未跟 → 实测失实）。模板随协议根升级自动更新；符号链接方式升级后什么都不用做；**Windows 无符号链接权限时退复制模式，升级后重跑一次 `agate-setup.py` 即可刷新**（复制不自动跟随源文件）。
 
 **使用**：打开 DSH 会话，在会话选择器选「Agateon 编排者」（对应 `claude --agent orchestrator`），
 然后执行 orchestrator-template.md 的「开始」几步验证。

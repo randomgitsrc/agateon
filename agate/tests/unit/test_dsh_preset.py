@@ -135,11 +135,14 @@ def test_dsh_persona_is_thin_identity(agate_root):
     # 后果实证：TAG0037 改了模板的协议根回退路径，persona 副本未跟 → 把版本根
     # `~/.agate` 当协议根（实测失实）。协议内容必须单一来源（模板），适配层只做
     # 「指向 + 平台差异」——下列关键词属模板的「你是谁」「会话开始时」两节，不得复制。
+    # 判据锚定**模板中真实存在**的短语（原判据用「你永远不亲自写阶段产出物」——该措辞
+    # 只存在于旧 persona 副本，模板 0 命中，故挡不住「改写式复制」；2026-09-21 修正）。
     for forbidden, why in (
-        ("你永远不亲自写阶段产出物", "职责边界（模板「你是谁」节）"),
-        ("active-tasks.md", "会话开始步骤（模板第 5 步）"),
-        ("phase-cards", "阶段卡片映射（模板内容）"),
-        ("AGATE_WORKSPACE", "工作区解析步骤（模板第 3 步）"),
+        ("只有你能写的文件", "「只有你能写的文件」表（模板内容）"),
+        ("你不是 gate", "「你不是 gate」段（模板内容）"),
+        ("active-tasks.md", "会话开始步骤（模板「开始」节）"),
+        ("phase-cards", "阶段卡片映射（模板「开始」节）"),
+        ("AGATE_WORKSPACE", "工作区解析步骤（模板「会话开始时」节）"),
     ):
         assert forbidden not in text, (
             f"persona 复制了协议内容「{forbidden}」（{why}）——协议内容单一来源在 "
@@ -286,3 +289,28 @@ def test_dsh_setup_section_has_install_hook_call(agate_root):
     assert "~/.agate/scripts/install-hook.py" in section, (
         "SETUP.md DSH 章节缺 install-hook.py 调用（唯一安装脚本；不引入 per-platform installer）"
     )
+
+
+def test_dsh_skill_also_avoids_protocol_content(agate_root):
+    """BDD-3 同源加严：**SKILL.md 同样不得复制协议内容**（消灭守护旁路）。
+
+    2026-09-21 审查发现：加严判据此前只作用于 agent.cordis.yml 的 persona，而
+    SKILL.md 含 `active-tasks.md` / `phase-cards` / `AGATE_WORKSPACE` 却无人拦——
+    SKILL.md 按「何时加载」第 2 条正是"未用 preset 时"的身份载体（见其自身说明），
+    与 persona 同责。同一原则须同一标准。
+
+    SKILL.md 允许保留的：DSH 工具映射（平台差异）、平台注意、进阶食谱、验证清单。
+
+    **豁免「验证清单」节**（写明理由，非默认放行）：该节的职责就是"点名验证命令与预期
+    输出"——出现 `AGATE_WORKSPACE` / `phase-cards` 是它的正常工作方式（告诉用户跑什么、
+    看到什么算通过），不是复述协议规则。**判据 = 该节之外的正文零命中**。
+    """
+    skill = agate_root.joinpath("assets", "templates", "dsh", "SKILL.md")
+    text = skill.read_text(encoding="utf-8")
+    # 截到「验证清单」标题前：该节豁免（理由见 docstring）
+    body = re.split(r"^## 验证清单", text, maxsplit=1, flags=re.MULTILINE)[0]
+    for forbidden in ("只有你能写的文件", "你不是 gate", "AGATE_WORKSPACE", "phase-cards"):
+        assert forbidden not in body, (
+            f"DSH SKILL.md（「验证清单」节之外）复制了协议内容「{forbidden}」——"
+            f"协议内容单一来源在模板；适配层两处（persona + skill）须同一标准"
+        )

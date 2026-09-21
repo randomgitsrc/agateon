@@ -15,6 +15,8 @@ description: Agateon 协议的 Codex 适配层——Codex 工具映射、「必�
 2. 读 `{agate_root}/orchestrator-template.md` 并严格遵守——它是**唯一**权威行为规范（职责边界、「只有你能写的文件」表、会话开始步骤、阶段卡片映射、Fallback 清单全在其中）
 3. 本 skill **不复制**模板内容；模板随版本升级自动更新
 
+> **接入步骤**见 `{agate_root}/SETUP.md`「步骤 2-Codex」；日常接入用 `python3 ~/.agate/scripts/agate-setup.py`（本 skill 会装到 `~/.agents/skills/agate-protocol/`）。
+
 ## 何时加载
 
 - 你要在 Codex 上跑 Agateon 任务（P0-P8）→ 加载本 skill

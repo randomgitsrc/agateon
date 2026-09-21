@@ -171,3 +171,24 @@ def test_setup_unresolvable_root_fail_closed(run_cli, python_exe, agate_scripts,
                 env={"HOME": str(home), "USERPROFILE": str(home),
                      "AGATE_ROOT": str(tmp_path / "nonexistent")})
     assert r.returncode == 1, f"协议根解析失败应 exit 1，实际 {r.returncode}"
+
+
+def test_setup_hook_failure_propagates_nonzero(run_cli, python_exe, agate_scripts,
+                                               agate_root, tmp_path):
+    """hook 安装失败须冒泡为非 0（回归：曾漏，硬失败被报成"完成"+exit 0）。
+
+    hook 是 gate 的兜底层（adr.md ADR-004）——静默失败会让用户以为"已接入"而实际无兜底。
+    构造：在**非 git 仓库**目录跑 `--scope project`（身份注册到项目侧 + 装 hook）→ hook 必失败。
+    """
+    home = _fake_homes(tmp_path)
+    notgit = tmp_path / "not-a-repo"
+    notgit.mkdir()
+    # cwd 指向非 git 目录 → install-hook.py 必然失败
+    r = run_cli(python_exe, str(agate_scripts / "agate-setup.py"),
+                "--platform", "claude-code", "--scope", "project",
+                cwd=str(notgit),
+                env={"HOME": str(home), "USERPROFILE": str(home), "AGATE_ROOT": str(agate_root)})
+    assert r.returncode != 0, (
+        f"非 git 目录下 hook 装不上，命令须 exit != 0（曾静默 exit 0）；实际 {r.returncode}"
+    )
+    assert "未完成" in (r.stdout + r.stderr), "失败时不应打印「完成」，须给出明确失败收尾语"

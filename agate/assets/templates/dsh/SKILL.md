@@ -13,14 +13,11 @@ description: Agateon 协议的 DSH 适配层——工具映射、平台注意、
 - 你是 Agateon 编排者（preset persona 已要求你执行 orchestrator-template.md）→ 已自动获得工具映射，本 skill 补充进阶食谱
 - 你想在 DSH 上手动跑 Agateon 任务（未用 preset）→ 加载本 skill，按「编排者四项职责」执行
 
-## 编排者四项职责 × DSH 工具（工具映射，其他平台用各自原生工具）
+## 工具映射
 
-| Agateon 职责 | DSH 工具 | 注意 |
-|------------|----------|------|
-| 读状态 | `read` / `grep` / `glob` | 不占 bash 通道，优先用 |
-| 派发 subagent | `subagent`（spawn）/ `subagent_fork`（fork）| 后台默认；prompt 只传路径不传内容（铁律 2）|
-| 跑 gate | `bash` 跑 `{agate_root}/scripts/check-gate.py P{N}` | 以 `[exit code: N]` 标记判定；长 gate 用后台 job |
-| 更新状态 | `write` / `edit` 改 `.state.yaml` + `active-tasks.md` | 先写 dispatch-context 再派发（模板铁律）|
+**单一来源在 `agent.cordis.yml` 的 persona**（会话开始即加载，保证"未加载本 skill 也有映射"）——本 skill **不再复述**，避免两处维护漂移。本 skill 只补充 persona 没有的**进阶食谱**与平台注意。
+
+> 若你是在**没有 preset** 的环境下手动加载本 skill：先读 `agent.cordis.yml` 的 `persona.config.prefix` 取工具映射，再按 `{agate_root}/orchestrator-template.md` 执行。
 
 ## DSH 原生进阶食谱（其他平台没有的能力）
 

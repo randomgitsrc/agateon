@@ -268,6 +268,31 @@ agate 协议里散落在正文的机器读取字段（P1/P2/P6/P7 共约 40+ 个
 
 ---
 
+### 增补（2026-09-21）：注册 scope——默认全局，项目侧为可选
+
+> 实现注记：本增补属平台接入细节的决策记录（同本 ADR 原「决策」节的注记性质），非协议语义定义——协议语义层不感知具体平台的配置目录与工具名。
+
+**决策**：平台身份注册默认落**全局**配置目录（Claude Code `~/.claude/agents/` · OpenCode `~/.config/opencode/agents/` · DSH `~/.dsh/` · Codex `~/.agents/skills/`），由 `agate-setup.py` 执行；项目内目录（`.claude/` / `.opencode/`）降为 `--scope project` 可选项。
+
+**语境**：本 ADR 原记载的接入路径是**项目级**（`.claude/agents/orchestrator.md` / `.opencode/agents/orchestrator.md`）。用户 2026-09-21 提出「四个平台各有全局与工作区配置，安装时直接全局配好不就可以了」——理由是各平台都支持全局，逐项目手写 `ln -sf` 是重复劳动且易漏。
+
+**理由（为何全局可行且更合适）**：
+
+1. **模板跨项目一致**——本 ADR 决策第 1 条已保证 `orchestrator-template.md` 对所有项目内容完全一致，故不存在"每项目一份"的内在需要。
+2. **按项目钉版不依赖注册文件位置**——`{agate_root}` 由 `orchestrator-template.md` 在会话开始时**按 cwd 向上解析**（`agate-resolve.py` → `.agate-version` → `current`）。实测：同一全局注册在带 `.agate-version` 的项目里解析到该项目钉的版本，在无声明的项目里回退全局 `current`。故"全局注册"与"项目钉版"不冲突。
+3. **消除重复与漏装**——四平台配置物形态各异（agent md / preset+skill / skill），逐项目手工执行易漏（本仓 TAG0018 起多次踩）。
+
+**权衡**：
+
+- 全局注册使 orchestrator 出现在**每个**项目/会话的 agent 列表（含与 Agateon 无关的项目）。本 ADR 原「理由」曾关切"把无关文件暴露给 agent 发现机制"——方向相反。**缓解**：注册物是**单个具名文件**（`orchestrator.md` / `agate-protocol`），不链目录（原决策"文件级链接，不链目录"继续有效）；且由用户显式跑 `agate-setup.py` 触发，非静默注入。
+- 需要按项目钉**身份文件本身**（而非仅协议解析）的场景，用 `--scope project`：项目内目录优先于全局，可覆盖。
+
+**后果**：
+
+- `SETUP.md` 步骤 2 以 `agate-setup.py` 为主路径（默认 `--scope all` = 全局身份 + 装 hook）。
+- 原项目级路径保留为 `--scope project`，文档保留手工兜底命令。
+- 新增测试守护：四平台注册物可读性、幂等、复制模式、备份、失败退出码（`agate/tests/unit/test_platform_setup.py`）。
+
 ## ADR-009: ~/.agate 版本管理根目录 + resolve-entry 固定解析入口（v0.50.0）
 
 ### 状态

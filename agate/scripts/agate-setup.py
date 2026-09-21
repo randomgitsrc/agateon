@@ -140,7 +140,7 @@ def _install_hook(proto_root, dry_run):
         sys.exit(1)
     if dry_run:
         print("  [dry-run] 将执行: python3 <协议根>/scripts/install-hook.py")
-        return
+        return 0
     # 不传 agate_root：install-hook.py 默认 ~/.agate（根 scripts/ 副本，稳定入口）
     proc = subprocess.run(
         [sys.executable, installer],
@@ -149,8 +149,15 @@ def _install_hook(proto_root, dry_run):
     for line in (proc.stdout or "").splitlines():
         print(f"  {line}")
     if proc.returncode != 0:
+        # 必须冒泡为命令失败：hook 是 gate 的兜底层（ADR-004），静默失败会让用户
+        # 以为"已接入"而实际无 gate 兜底——与模板「不要静默失败」相悖。
         sys.stderr.write((proc.stderr or "") + "\n")
-        sys.stderr.write("⚠️  hook 安装失败（不在 git 仓库？）——平台身份注册不受影响\n")
+        sys.stderr.write(
+            "错误: hook 安装失败（常见原因：当前目录不是 git 仓库）——"
+            "平台身份注册已完成，但 gate 兜底未生效\n"
+        )
+        return proc.returncode
+    return 0
 
 
 def _register_platform(name, proto_root, scope, dry_run, copy_mode):
@@ -228,14 +235,17 @@ def main():
     # ── L3 项目侧：git hook ───────────────────────────────────────────────
     if args.scope in ("all", "project"):
         print("项目侧 git hook:")
-        _install_hook(proto_root, args.dry_run)
+        if _install_hook(proto_root, args.dry_run) != 0:
+            rc = 1
         print()
 
     if args.dry_run:
         print("（dry-run：未做任何改动）")
-    else:
+    elif rc == 0:
         print("完成。新开平台会话即可用「Agateon 编排者」身份启动。")
         print("项目侧还需（按需）：.agate-version 钉版本；协议文档见 <协议根>/SETUP.md")
+    else:
+        print("⚠️  部分步骤失败（见上方 stderr）——未完成，修复后重跑本命令（幂等）。")
     return rc
 
 

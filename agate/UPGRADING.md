@@ -32,8 +32,8 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 **符号链接 vs 复制模式**：
 - **符号链接**（Linux/macOS 标准）：协议本体升级后自动生效，无需额外操作
-- **复制模式**（Windows 无符号链接权限）：协议本体的**修改不会自动同步**到项目副本，需重跑 `cp` 命令（见 SETUP.md 步骤 2 的 Windows 段）
-- **orchestrator 注册**：软链方式自动跟随；复制方式需重跑 SETUP.md 步骤 2 的 `cp`
+- **复制模式**（Windows 无符号链接权限）：协议本体与平台身份文件的**修改不会自动同步**到项目副本，需重跑对应安装/接入命令刷新（协议本体重跑 `install.sh`；平台身份重跑 `agate-setup.py`——见 SETUP.md 步骤 2）
+- **orchestrator 注册**：软链方式自动跟随；复制方式需**重跑 `python3 ~/.agate/scripts/agate-setup.py`** 刷新（`cp` 是旧手工步骤，已被该命令取代）
 
 ---
 
@@ -1082,4 +1082,4 @@ A: 不会——只要不暂存它的 `.state.yaml`。consistency 不查 .state.y
 A: 只有"继续进行中的"必须改。已完成/归档的保留旧编号即可。
 
 **Q: 复制模式（Windows）升级后 orchestrator 提示词是旧的？**
-A: 是——复制模式不自动同步，需重跑 SETUP.md 步骤 2 的 `cp`。软链模式无此问题。
+A: 是——复制模式不自动同步，需**重跑 `python3 ~/.agate/scripts/agate-setup.py`** 刷新。软链模式无此问题。
