@@ -165,7 +165,12 @@ def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_script
     assert result.returncode == 0
     assert "DSH 安装产物" in result.output
     assert "SKILL.md" in result.output
-    assert "ln -sf" in result.output  # 附带一条命令即可修复
+    # BDD 意图 = 「附带一条可修复的命令」。2026-09-21 起该命令统一为**稳定入口**
+    # `agate-setup.py`（原为 `ln -sf <expected>`）——因为本脚本可能正从 worktree /
+    # 开发 checkout 运行，那时 expected 指向未发布树，照抄会把安装指错。权威模板路径
+    # 仍单独打印（上一行断言 SKILL.md 即其一部分）。
+    assert "agate-setup.py" in result.output, "应给出可执行的修复命令"
+    assert "当前权威模板" in result.output, "应告知当前权威模板位置（信息不丢）"
 
 
 def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
@@ -280,7 +285,7 @@ def test_codex_links_stale_target_warns_with_fix(run_cli, python_exe, agate_scri
     assert result.returncode == 0
     assert "Codex 安装产物" in result.output
     assert "SKILL.md" in result.output
-    assert "ln -sf" in result.output
+    assert "agate-setup.py" in result.output, "应给出可执行的修复命令（稳定入口）"
 
 
 def test_codex_links_missing_artifact_warns_not_installed(run_cli, python_exe, agate_scripts, tmp_path):
@@ -301,6 +306,7 @@ def test_codex_links_missing_artifact_warns_not_installed(run_cli, python_exe, a
 # **内容一致**，且它恰好也是"模板升级后副本变旧"这一固有风险的唯一检出方式。
 
 
+@pytest.mark.windows_smoke
 def test_copy_mode_identical_content_no_warning(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
     """复制形态且内容与权威模板一致 → 无警告（回归：旧实现必然误报漂移）。"""
     home = _make_home(tmp_path)
@@ -312,6 +318,7 @@ def test_copy_mode_identical_content_no_warning(run_cli, python_exe, agate_scrip
     )
 
 
+@pytest.mark.windows_smoke
 def test_copy_mode_stale_content_warns_outdated(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
     """复制形态但内容已旧（模板升级未重跑 setup）→ 警告"已过期" + 修复命令。"""
     home = _make_home(tmp_path)
@@ -436,3 +443,70 @@ def test_bdd_52_scripts_inside_the_body_package_without_agate_tests_have_no_trac
         r = run(name)
         assert "Traceback" not in r.stdout + r.stderr, r.stderr
         assert r.returncode == 0, r.stdout + r.stderr
+
+
+# --- 两表同步守护（2026-09-21，对齐审查 A4 应修①）---
+#
+# 为什么需要：本 PR 的立项理由正是「平台遗漏无人发现」（Codex 曾缺席检测表）。
+# 而修复把**第二张全平台表**（`agate-summary.py` 的 `_PLATFORM_ARTIFACTS`）引入后，
+# 若只靠一句注释「清单与 PLATFORMS 表须同步」，下次加平台忘一处 → CI 全绿、缺口复发
+# ——正是本 PR 要消灭的形态。故加机械核对：两表的**全局产物集合必须严格全等**。
+
+
+def _load_setup_platforms(agate_scripts):
+    """importlib 加载 agate-setup.py（文件名含连字符，不能常规 import）取 PLATFORMS。"""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("agate_setup_mod", agate_scripts / "agate-setup.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.PLATFORMS
+
+
+def _load_artifact_table(agate_scripts):
+    """取 agate-summary.py 的 _PLATFORM_ARTIFACTS（同法加载，避免执行 main）。"""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("agate_summary_mod", agate_scripts / "agate-summary.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod._PLATFORM_ARTIFACTS
+
+
+def test_platform_tables_cover_identical_global_artifacts(agate_scripts):
+    """`_PLATFORM_ARTIFACTS` 与 `agate-setup.py` 的 `PLATFORMS` 全局产物**严格全等**。
+
+    严格 = 数量相同 + 每个 (平台目录, 产物相对路径, 权威模板路径) 三元组成对匹配。
+    0 缺（漏检测）也 0 多（检测了不存在的产物）。
+    """
+    platforms = _load_setup_platforms(agate_scripts)
+    artifacts = _load_artifact_table(agate_scripts)
+
+    # 注意：**不能拿 probe 当产物目录**——probe 只回答"该平台装没装"，产物可能落在
+    # 别的共享目录（Codex：probe=~/.codex 仅探测 CLI，产物装到 ~/.agents 共享 skill 根）；
+    # 也不能按平台名配对（PLATFORMS 用 `claude-code`，检测表用 `Claude Code`）。
+    # 故按**产物的实际目标目录**归组：取每个 PLATFORMS 全局目标的前两级目录作 key，
+    # 与检测表同 key 的项集合比对。key 不匹配本身即"漏检测/多登记"。
+    def _key(path):
+        parts = path.replace("~/", "").split("/")
+        return "/".join(parts[:2]) if len(parts) > 1 else parts[0]
+
+    want_by_key = {}
+    for _name, cfg in platforms.items():
+        for src_rel, dst_spec in cfg["global"]:
+            dst = dst_spec.replace("~/", "").lstrip("/")
+            want_by_key.setdefault(_key(dst), set()).add((dst, src_rel))
+
+    got_by_key = {}
+    for _name, platform_dir, items, _step in artifacts:
+        for rel, tpl_rel in items:
+            full = f"{platform_dir}/{rel}"
+            got_by_key.setdefault(_key(full), set()).add((full, tpl_rel))
+
+    assert set(want_by_key) == set(got_by_key), (
+        f"平台目录集合不一致——PLATFORMS: {sorted(want_by_key)} / "
+        f"检测表: {sorted(got_by_key)}（差集即漏检测或多登记）"
+    )
+    for key in sorted(want_by_key):
+        missing = want_by_key[key] - got_by_key[key]
+        extra = got_by_key[key] - want_by_key[key]
+        assert not missing, f"{key}: 检测表漏了这些产物（漂移将无人发现）: {sorted(missing)}"
+        assert not extra, f"{key}: 检测表多出这些不在 PLATFORMS 的项: {sorted(extra)}"

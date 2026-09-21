@@ -115,15 +115,6 @@ _PLATFORM_ARTIFACTS = (
 )
 
 
-def _same_content(a, b):
-    """两文件内容是否逐字节相同（复制形态的判据；产物均为几 KB 的模板文件）。"""
-    try:
-        with open(a, "rb") as fa, open(b, "rb") as fb:
-            return fa.read() == fb.read()
-    except OSError:
-        return False
-
-
 def _check_platform_artifacts(script_dir):
     """校验各平台安装产物与权威模板一致（防静默漂移 / 防复制模式过期）。
 
@@ -160,9 +151,13 @@ def _check_platform_artifacts(script_dir):
                     sys.stderr.write(
                         f"⚠️  {name} 安装产物漂移: {link} 指向非权威副本"
                         f"（{os.path.realpath(link)}）\n"
-                        f"    修复: ln -sf {expected} {link}\n"
+                        f"    当前权威模板: {expected}\n"
+                        # 修复命令用**稳定入口**而非上面那行路径：本脚本可能正从
+                        # worktree/开发 checkout 运行，此时 `expected` 指向未发布树，
+                        # 照抄会把安装指到那里。setup 命令经 resolve 取**安装态**协议根。
+                        f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                     )
-            elif not _same_content(link, expected):
+            elif not _files_identical(link, expected):
                 # 复制形态且内容不一致 = 模板已升级但副本未刷新（复制不自动同步）
                 sys.stderr.write(
                     f"⚠️  {name} 安装产物已过期: {link} 内容与权威模板不一致"
