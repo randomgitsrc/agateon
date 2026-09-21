@@ -103,7 +103,8 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 | 结构一致性 | `python3 agate/scripts/check-structure-consistency.py` | rules/*.yaml ↔ md 双向（S-1~S-6）|
 | ruff 静态检查 | `ruff check agate/` | CI 锁 `ruff==0.16.4`，与本地 `~/.venvs/agate-dev` 对齐 |
 | 装 / 查协议版本 | `python3 ~/.agate/scripts/agate-install.py` / `agate-resolve.py` | `~/.agate` 版本管理根 |
-| 装 git hooks | `python3 ~/.agate/scripts/install-hook.py` | 3 个 hook 薄壳指向 `resolve-entry.py` |
+| 接入平台（推荐） | `python3 ~/.agate/scripts/agate-setup.py` | 探测已装平台 → 注册 orchestrator 身份（默认全局）+ 装 hook；幂等，`--dry-run` 可预演 |
+| 只装 git hooks | `python3 ~/.agate/scripts/install-hook.py` | 3 个 hook 薄壳指向 `resolve-entry.py`（`agate-setup.py` 内部调用它）|
 | 推进状态机一步 | `python3 ~/.agate/scripts/agate-next.py [TASK_DIR]` | 查表推进（消费 `phases.yaml`）；`agate-advance.py` 同族 |
 | 站点构建 | `cd site && npm run build` | site 唯一硬校验 |
 | 发博客 | 照 `site/guides/publish-checklist.md` 打勾 | 硬 gate = 独立评审 PASS |
@@ -116,6 +117,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 - 开发 Agateon 本体另需 `ruff`（锁 0.16.4）；测试另需 `pytest`（+ `pytest-xdist` / `pytest-rerunfailures`）
 - 3 个 hook 薄壳（`pre-commit-gate.sh` / `commit-msg-self-gate.sh` / `pre-push-gate.sh`）需 sh（Git for Windows 自带）
 - `~/.dsh`：DSH 平台接入三件套（`.agent-presets/agate/preset.yml` / `agent.cordis.yml` / `skills/agate-protocol/SKILL.md`，软链指向 `agate/assets/templates/dsh/` 权威副本，`agate-summary.py` 可查漂移）
+- `~/.agents/skills/agate-protocol/`：Codex 平台接入（skill 形态，指向 `agate/assets/templates/codex/`）——Codex 无 agent 注册机制，身份靠 skill
 
 ## 7. 维护约定
 
