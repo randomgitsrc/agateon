@@ -193,6 +193,94 @@ def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, aga
     assert "SETUP.md" in result.output
 
 
+# --- Codex 安装产物校验（2026-09-21：Codex 此前不在检测表内，产物漂移无人发现）---
+
+_CODEX_ARTIFACTS = (("skills/agate-protocol/SKILL.md", "SKILL.md"),)
+
+
+def _install_codex(home, tpl_dir, *, symlink, content=None):
+    """按指定形态安装 Codex 产物：symlink=True 建软链，False 复制（可指定内容）。"""
+    for rel, name in _CODEX_ARTIFACTS:
+        link = home / ".agents" / rel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        if symlink:
+            _symlink_or_skip(tpl_dir / name, link)
+        else:
+            link.write_bytes(content if content is not None else (tpl_dir / name).read_bytes())
+
+
+def _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path):
+    project = tmp_path / "project"
+    project.mkdir(exist_ok=True)
+    return run_cli(
+        python_exe, str(agate_scripts / "agate-summary.py"),
+        cwd=str(project), env=_resolve_env(home),
+    )
+
+
+def test_codex_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
+    """Codex 产物软链指向权威模板 → 无警告（回归：Codex 此前不在检测表内）。"""
+    home = _make_home(tmp_path)
+    _install_codex(home, agate_assets / "templates" / "codex", symlink=True)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物" not in result.output
+
+
+def test_codex_links_stale_target_warns_with_fix(run_cli, python_exe, agate_scripts, tmp_path):
+    """Codex 产物软链指向非权威副本 → 警告 + `ln -sf` 修复命令。"""
+    home = _make_home(tmp_path)
+    stale = tmp_path / "stale-codex"
+    stale.mkdir()
+    (stale / "SKILL.md").write_text("stale\n", encoding="utf-8")
+    _install_codex(home, stale, symlink=True)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物" in result.output
+    assert "SKILL.md" in result.output
+    assert "ln -sf" in result.output
+
+
+def test_codex_links_missing_artifact_warns_not_installed(run_cli, python_exe, agate_scripts, tmp_path):
+    """`~/.agents` 存在但产物缺失 → 提示未安装（含 SETUP.md 指引），不误报为漂移。"""
+    home = _make_home(tmp_path)
+    (home / ".agents").mkdir(parents=True, exist_ok=True)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物未安装" in result.output
+    assert "SETUP.md" in result.output
+
+
+# --- 复制形态判定（2026-09-21 修：原实现只比 realpath，对复制产物必然误报）---
+#
+# 为什么必须测：Windows 无符号链接权限 / AGATE_HOOK_COPY_MODE=1 时产物是**复制**，
+# 其 realpath 天然不等于模板路径 → 旧实现会把正常安装报成"漂移"。此前靠
+# `os.name == "nt"` 整体跳过掩盖（Linux 复制模式则会误报）。复制模式的正确判据是
+# **内容一致**，且它恰好也是"模板升级后副本变旧"这一固有风险的唯一检出方式。
+
+
+def test_copy_mode_identical_content_no_warning(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
+    """复制形态且内容与权威模板一致 → 无警告（回归：旧实现必然误报漂移）。"""
+    home = _make_home(tmp_path)
+    _install_codex(home, agate_assets / "templates" / "codex", symlink=False)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物" not in result.output, (
+        f"复制形态内容一致时不得报警（旧实现比 realpath 会误报漂移）:\n{result.output}"
+    )
+
+
+def test_copy_mode_stale_content_warns_outdated(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
+    """复制形态但内容已旧（模板升级未重跑 setup）→ 警告"已过期" + 修复命令。"""
+    home = _make_home(tmp_path)
+    _install_codex(home, agate_assets / "templates" / "codex", symlink=False,
+                   content=b"# outdated copy\n")
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物已过期" in result.output
+    assert "agate-setup.py" in result.output  # 修复命令是重跑接入命令，不是 ln -sf
+
+
 # ============================================================
 # TAG0037 P3 组 B（批 E）：软链基址迁移提示（BDD-34）、协议入口路径取自解析出的根（BDD-40 代码面）、
 #   软链 → 完整版本根不打印迁移提示（BDD-51 / eng N-4）、包内脚本冒烟（BDD-52，排除 agate/tests/ 后缺目录无 Traceback）。
