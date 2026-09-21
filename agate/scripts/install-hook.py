@@ -88,7 +88,15 @@ def _chmod_x(path):
 
 
 def main():
-    agate_root = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("AGATE_ROOT") or os.path.expanduser("~/.agate")
+    # 默认根用 agate_home()（尊重 AGATE_HOME 覆盖）——此前写死 ~/.agate，
+    # 覆盖安装时会指错（2026-09-21 修）。
+    if len(sys.argv) > 1:
+        agate_root = sys.argv[1]
+    elif os.environ.get("AGATE_ROOT"):
+        agate_root = os.environ["AGATE_ROOT"]
+    else:
+        import agate_package
+        agate_root = agate_package.agate_home()
 
     rc, out = run_git(["rev-parse", "--show-toplevel"])
     if rc != 0 or not out.strip():
@@ -171,6 +179,16 @@ def main():
             print("⚠️  .gitignore 中忽略了 .state.yaml")
             print("    agate 需要 git add -f 强制暂存 .state.yaml（否则 git add agate-workspace/tasks/ 不会暂存它）")
             print("    建议：从 .gitignore 移除 .state.yaml，或在每次 git add 时记得加 -f")
+    # 项目台账登记（2026-09-21）：供 `agate-setup.py --uninstall --all-projects` 定位
+    # 装了 hook 的项目。本脚本是 hook 的唯一安装者，直接调它的场景（见 agate/AGENTS.md）
+    # 也要能被卸载发现。登记失败不阻断安装（台账是辅助索引，非 gate）。
+    try:
+        import agate_common
+        agate_common.record_project(repo_root)
+    except Exception as exc:  # 台账非关键路径，任何失败都不应让装 hook 失败
+        print(f"提示: 项目台账登记跳过（{exc}）")
+
+
 
 
 if __name__ == "__main__":

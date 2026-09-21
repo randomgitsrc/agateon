@@ -123,6 +123,15 @@ _PLATFORM_ARTIFACTS = (
 )
 
 
+def _home_entry(script_name):
+    """安装根下入口脚本的**真实**路径。
+
+    为什么不能写死 `~/.agate`（2026-09-21）：安装根基址可经 `AGATE_HOME` 覆盖
+    （DEBT0042），此时 `~/.agate` 是错的——提示会让用户跑一条不存在的命令。
+    """
+    return os.path.join(agate_home(), "scripts", script_name)
+
+
 def _installed_version_proto_roots():
     """**已安装版本**的协议根集合（机器级；**不**含项目 `.agate-version` 钉版的影响）。
 
@@ -245,7 +254,7 @@ def _check_platform_artifacts():
                         # 修复命令用**稳定入口**而非上面那行路径：本脚本可能正从
                         # worktree/开发 checkout 运行，此时候选路径指向未发布树，
                         # 照抄会把安装指到那里。
-                        f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
+                        f"    修复: python3 {_home_entry('agate-setup.py')}\n"
                     )
                 elif cur_root and all(root != cur_root for root, c in cand_pairs if c == target):
                     # 指向**已装但非 current**：不是漂移（未指向异物），但是升级后常见的
@@ -258,7 +267,7 @@ def _check_platform_artifacts():
                 sys.stderr.write(
                     f"⚠️  {name} 安装产物已过期: {link} 内容与任何已安装版本的模板都不一致"
                     f"（复制模式不自动同步）\n"
-                    f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
+                    f"    修复: python3 {_home_entry('agate-setup.py')}\n"
                 )
             elif cur_root and not any(
                 root == cur_root for root, c in cand_pairs if _files_identical(link, c)
@@ -270,7 +279,7 @@ def _check_platform_artifacts():
         sys.stderr.write(
             f"ℹ️  平台接入产物版本落后（当前 {cur_ver}）: {' / '.join(names)}"
             f"——升级后接入产物指向的是具体版本目录，需重跑以跟上："
-            f"python3 ~/.agate/scripts/agate-setup.py\n"
+            f"python3 {_home_entry('agate-setup.py')}\n"
         )
     if not_installed:
         # 去重保序（DSH 三产物只报一次平台名）。措辞保留「未安装」与 SETUP.md 指引
@@ -279,7 +288,7 @@ def _check_platform_artifacts():
         sys.stderr.write(
             # 措辞覆盖两种情形：完全未接入 / 部分产物缺失（后者不应说"未安装"）
             f"ℹ️  平台接入产物未安装或不完整: {' / '.join(names)}"
-            f"（接入: python3 ~/.agate/scripts/agate-setup.py；"
+            f"（接入: python3 {_home_entry('agate-setup.py')}；"
             f"平台差异见 agate/SETUP.md 步骤 2）\n"
         )
 
@@ -330,9 +339,9 @@ def main():
         "防护机制（pre-commit + CI）：",
         guards,
         "",
-        "快速版本对比：python3 ~/.agate/scripts/agate-changes.py [since-tag]",
+        f"快速版本对比：python3 {_home_entry('agate-changes.py')} [since-tag]",
         "默认输出自上一个 tag 起的 commit + 受影响的协议文件。",
-        "查远端更新：python3 ~/.agate/scripts/agate-changes.py --check-upstream",
+        f"查远端更新：python3 {_home_entry('agate-changes.py')} --check-upstream",
         "",
         "=== 启动时建议 ===",
         "",

@@ -21,6 +21,10 @@ Codex = skill），用户须逐条执行、跨平台易漏、Windows 需自行�
 
 用法：
     python3 agate-setup.py                      # 自动探测已装平台：全局注册 + 装 hook
+    python3 agate-setup.py --list               # 查看已装内容（全局 + 台账登记的项目）
+    python3 agate-setup.py --uninstall          # 卸载：全局接入物 + 当前项目（含 hook）
+    python3 agate-setup.py --uninstall --all-projects   # 卸载：全局 + 台账里**每个**项目
+    python3 agate-setup.py --uninstall --purge  # 再删版本根本体（收尾，命令自删）
     python3 agate-setup.py --platform dsh,codex # 指定平台
     python3 agate-setup.py --scope global       # 只注册平台身份（不装 hook）
     python3 agate-setup.py --scope project      # 只装 hook（不注册平台身份）
@@ -42,6 +46,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
 import agate_common  # noqa: E402  （同目录公共库，与 agate-resolve.py 同惯例）
+import agate_package  # noqa: E402  （安装根解析 agate_home()，与安装侧同源）
 
 # 各平台配置物：{平台名: {"probe": 探测路径, "global": [...], "project": [...]}}
 #   源相对协议根；目标 `~` 展开（global）或相对项目根（project）。
@@ -141,9 +146,11 @@ def _install_hook(proto_root, dry_run):
     if dry_run:
         print("  [dry-run] 将执行: python3 <协议根>/scripts/install-hook.py")
         return 0
-    # 不传 agate_root：install-hook.py 默认 ~/.agate（根 scripts/ 副本，稳定入口）
+    # 显式传**安装根**（而非协议根）：hook 脚本住在 `<安装根>/scripts/`（单源副本，
+    # 稳定入口）。**必须显式传**——install-hook.py 的默认值是 `~/.agate`，AGATE_HOME
+    # 覆盖时会指错（2026-09-21 修）。
     proc = subprocess.run(
-        [sys.executable, installer],
+        [sys.executable, installer, agate_package.agate_home()],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     for line in (proc.stdout or "").splitlines():
@@ -187,6 +194,340 @@ def _register_platform(name, proto_root, scope, dry_run, copy_mode):
     return ok, fail
 
 
+# ── 卸载（2026-09-21）────────────────────────────────────────────────────────
+#
+# **对称性**：本命令装了「平台身份 + git hook」，卸载就负责清掉这两类。
+# **归属验证**：删任何文件前先按**事实**证明"这是本安装装的"——台账只说"去哪找"。
+#   · 软链 → realpath 落在本安装根内
+#   · 复制 → 内容与权威模板一致；hook 另有 `.agate-root` 标记与指纹兜底（旧版副本）
+# **用户数据红线**：`agate-workspace/`（用户的任务/复盘成果）、`.agate-version`、
+#   `.agate.env`、`AGENTS.md` 等**一律不删**，只报告——删它们等于删用户的活。
+# **对称回滚**：安装时把用户原有 hook 备份为 `*.bak.<epoch>`，卸载时**还原最新的那个**。
+
+HOOK_MAP = {                       # hook 名 → 安装根 scripts/ 下的权威脚本
+    "pre-commit": "pre-commit-gate.sh",
+    "commit-msg": "commit-msg-self-gate.sh",
+    "pre-push": "pre-push-gate.sh",
+}
+
+# 用户工作数据：只报告不删（红线）
+USER_DATA = (
+    ("agate-workspace", "任务 / roadmap / 技术债 / 复盘——**你的工作成果**"),
+    (".agate-version", "项目钉版本声明"),
+    (".agate.env", "工作区位置配置"),
+    (".claude/settings.json", "可能含 orchestrator 选择，由你/团队决定"),
+    ("AGENTS.md", "项目文档"),
+    ("CLAUDE.md", "项目文档"),
+)
+
+
+def _under(path, root):
+    """path 是否位于 root 之内（都按 realpath 归一；防前缀误判 /a 与 /ab）。"""
+    p, r = os.path.realpath(path), os.path.realpath(root)
+    return p == r or p.startswith(r + os.sep)
+
+
+def _same_content(a, b):
+    try:
+        with open(a, "rb") as f1, open(b, "rb") as f2:
+            return f1.read() == f2.read()
+    except OSError:
+        return False
+
+
+def _read_text(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def _installed_template_matches(home, src_rel, dst):
+    """复制形态：内容与**任一已装版本**的权威模板一致 → 本安装所装。
+
+    为什么要遍历各版本（而非只比 current）：产物是**装的时候**那一版的副本，升级后
+    内容自然与新版不同——只比 current 会把"旧版副本"误判为"非本安装所有"而不敢删。
+    """
+    if not os.path.isdir(home):
+        return False
+    for name in sorted(os.listdir(home)):
+        cand = os.path.join(home, name, "agate", *src_rel.split("/"))
+        if os.path.isfile(cand) and _same_content(dst, cand):
+            return True
+    return False
+
+
+def _owned_artifact(dst, home, src_rel):
+    """平台接入产物归属判定 → (是否本安装所有, 形态说明)。"""
+    if os.path.islink(dst):
+        target = os.path.realpath(dst)
+        if _under(target, home):
+            return True, f"软链 → {target}"
+        return False, f"软链指向本安装之外（{target}）"
+    if _installed_template_matches(home, src_rel, dst):
+        return True, "复制（内容与已装版本模板一致）"
+    return False, "实体文件（内容与任何已装版本模板都不一致，可能已被你改作他用）"
+
+
+def _hook_owned(hook_file, home, marker_ok):
+    """hook 归属判定 → (是否本安装所有, 形态说明)。
+
+    四级判据（从强到弱）——复制模式在 Windows 无软链语义，故不能只看 islink：
+      ① 软链 → 目标落在本安装根内
+      ② `.agate-root` 标记存在且指向本安装根（复制模式安装时写的兜底标记）
+      ③ 内容与安装根 `scripts/` 下同名脚本一致
+      ④ 内容含 agate 指纹（旧版副本，升级后内容已不同）——**保守但必要**，
+         否则升级后旧副本会被判为"非本安装"，卸载就漏掉它。
+    """
+    if os.path.islink(hook_file):
+        target = os.path.realpath(hook_file)
+        if _under(target, home):
+            return True, f"软链 → {target}"
+        return False, f"软链指向本安装之外（{target}）"
+    name = os.path.basename(hook_file)
+    src = os.path.join(home, "scripts", HOOK_MAP.get(name, ""))
+    if os.path.isfile(src) and _same_content(hook_file, src):
+        return True, "复制（与安装根脚本一致）"
+    text = _read_text(hook_file)
+    if marker_ok or "resolve-entry.py" in text or "pre-commit-gate" in text:
+        return True, "复制（agate 指纹 / .agate-root 标记）"
+    return False, "实体文件（无 agate 指纹，是你自己的 hook）"
+
+
+def _restore_backup(hook_file, dry_run):
+    """还原 agateon 安装时备份的**最新**用户原 hook（`*.bak.<epoch>`）。返回说明或 None。"""
+    parent = os.path.dirname(hook_file)
+    base = os.path.basename(hook_file) + ".bak."
+    try:
+        cands = [e for e in os.listdir(parent) if e.startswith(base) and e[len(base):].isdigit()]
+    except OSError:
+        return None
+    if not cands:
+        return None
+    newest = max(cands, key=lambda e: int(e[len(base):]))
+    src = os.path.join(parent, newest)
+    if dry_run:
+        return f"将还原你原有的 hook: {newest}"
+    try:
+        os.replace(src, hook_file)
+        return f"已还原你原有的 hook（来自 {newest}）"
+    except OSError as exc:
+        return f"⚠️ 还原备份失败: {exc}"
+
+
+def _uninstall_platforms(home, scope, dry_run):
+    """卸载平台接入物。scope ∈ {global, project}。返回 (删除数, 保留数)。"""
+    removed = kept = 0
+    for name, cfg in PLATFORMS.items():
+        for src_rel, dst_spec in cfg.get(scope) or []:
+            dst = (os.path.expanduser(dst_spec) if dst_spec.startswith("~")
+                   else os.path.abspath(dst_spec))
+            if not os.path.lexists(dst):
+                continue
+            owned, why = _owned_artifact(dst, home, src_rel)
+            if not owned:
+                # 不删——可能已被用户改作他用；如实报告并交给人判断
+                print(f"  ⏭️  [{name}] 保留 {dst}\n      理由: {why}")
+                kept += 1
+                continue
+            if dry_run:
+                print(f"  [dry-run] [{name}] 将删除 {dst}（{why}）")
+            else:
+                try:
+                    os.unlink(dst)
+                    print(f"  ✅ [{name}] 已删除 {dst}（{why}）")
+                except OSError as exc:
+                    sys.stderr.write(f"  ⚠️  [{name}] 删除失败 {dst}: {exc}\n")
+                    kept += 1
+                    continue
+            removed += 1
+            _prune_empty_dirs(os.path.dirname(dst), home, dry_run)
+    return removed, kept
+
+
+def _prune_empty_dirs(path, home, dry_run):
+    """清掉卸载后变空的 agateon 专属目录（如 `~/.dsh/.agent-presets/agate`）。
+
+    只清**空目录**，且不越过 home（Windows 下 `~/.dsh` 可能是 home 之外的路径，
+    故这里以"到 home 或到用户家目录为止"为界，绝不删非空目录）。
+    """
+    stop = os.path.expanduser("~")
+    cur = path
+    while cur and cur not in (stop, os.path.dirname(cur), "/"):
+        try:
+            if os.listdir(cur):
+                return
+        except OSError:
+            return
+        if dry_run:
+            print(f"  [dry-run] 将删除空目录 {cur}")
+            return
+        try:
+            os.rmdir(cur)
+            print(f"  ✅ 已删除空目录 {cur}")
+        except OSError:
+            return
+        cur = os.path.dirname(cur)
+
+
+def _uninstall_project(project_root, home, dry_run):
+    """卸载单个项目侧接入物（平台产物 + hook）。**不碰用户数据。**"""
+    print(f"\n项目 {project_root}:")
+    _uninstall_platforms(home, "project", dry_run)
+
+    hook_dir = os.path.join(project_root, ".git", "hooks")
+    marker = os.path.join(hook_dir, ".agate-root")
+    marker_ok = os.path.isfile(marker) and _under(_read_text(marker).strip(), home)
+    touched_hook = False
+    for hook_name in HOOK_MAP:
+        hook_file = os.path.join(hook_dir, hook_name)
+        if not os.path.lexists(hook_file):
+            continue
+        owned, why = _hook_owned(hook_file, home, marker_ok)
+        if not owned:
+            print(f"  ⏭️  保留 {hook_file}\n      理由: {why}")
+            continue
+        if dry_run:
+            print(f"  [dry-run] 将删除 {hook_file}（{why}）")
+        else:
+            try:
+                os.unlink(hook_file)
+                print(f"  ✅ 已删除 {hook_file}（{why}）")
+            except OSError as exc:
+                sys.stderr.write(f"  ⚠️  删除失败 {hook_file}: {exc}\n")
+                continue
+        touched_hook = True
+        restored = _restore_backup(hook_file, dry_run)
+        if restored:
+            print(f"      {restored}")
+    if touched_hook and os.path.lexists(marker) and marker_ok and not dry_run:
+        with contextlib.suppress(OSError):
+            os.unlink(marker)
+            print(f"  ✅ 已删除 {marker}（复制模式标记）")
+
+    # 用户数据：只报告（红线——删这些等于删用户的活）
+    present = [f"{rel}（{desc}）" for rel, desc in USER_DATA
+               if os.path.lexists(os.path.join(project_root, rel))]
+    if present:
+        print("  ℹ️  以下属于**你的工作数据**，卸载不删（如需清理请自行处理）:")
+        for item in present:
+            print(f"      · {item}")
+
+
+def _list_installed(home):
+    """列出已装内容：全局接入物 + 台账登记的项目。"""
+    print(f"安装根: {home}\n")
+    print("全局接入物:")
+    found = False
+    for name, cfg in PLATFORMS.items():
+        for src_rel, dst_spec in cfg.get("global") or []:
+            dst = os.path.expanduser(dst_spec)
+            if not os.path.lexists(dst):
+                continue
+            owned, why = _owned_artifact(dst, home, src_rel)
+            mark = "✅" if owned else "⚠️ 非本安装"
+            print(f"  {mark} [{name}] {dst}  ({why})")
+            found = True
+    if not found:
+        print("  （无）")
+
+    entries = agate_common.read_projects()
+    print(f"\n台账登记的项目（{len(entries)} 个，位于 {agate_common.project_ledger_path()}）:")
+    if not entries:
+        print("  （无——用 --scope project 安装时会自动登记）")
+    for e in entries:
+        state = "存在" if os.path.isdir(e["path"]) else "⚠️ 目录已不存在"
+        plats = ", ".join(e.get("platforms") or []) or "-"
+        print(f"  · {e['path']}  [{state}] 平台: {plats}  最近: {e.get('last_seen', '-')}")
+
+
+def _git_root():
+    """当前目录所在 git 仓库根（不在仓库返回 None）。"""
+    rc, out = agate_common.run_git(["rev-parse", "--show-toplevel"])
+    return out.strip() if rc == 0 and out.strip() else None
+
+
+def _run_uninstall(args):
+    """卸载入口。返回进程退出码。"""
+    home = agate_package.agate_home()
+    if not os.path.isdir(home):
+        sys.stderr.write(f"错误: 安装根不存在: {home}\n")
+        return 1
+    print(f"安装根: {home}")
+    if args.dry_run:
+        print("（dry-run：不会真的删除）")
+    print()
+
+    removed = kept = 0
+    # ── 全局接入物 ──
+    if args.scope in ("all", "global"):
+        print("全局接入物:")
+        r, k = _uninstall_platforms(home, "global", args.dry_run)
+        removed += r
+        kept += k
+        if not (r or k):
+            print("  （无）")
+
+    # ── 项目侧 ──
+    projects = []
+    if args.all_projects:
+        projects = [e["path"] for e in agate_common.read_projects()]
+        missing = [p for p in projects if not os.path.isdir(p)]
+        projects = [p for p in projects if os.path.isdir(p)]
+        if not projects and not missing:
+            print("\n台账为空（无项目侧安装记录）")
+        for p in missing:
+            print(f"\n项目 {p}: ⚠️ 目录已不存在，从台账移除")
+            if not args.dry_run:
+                agate_common.forget_project(p)
+    elif args.scope in ("all", "project"):
+        root = _git_root()
+        if root:
+            projects = [root]
+        else:
+            print("\n当前目录不是 git 仓库——项目侧跳过（要清全部项目用 --all-projects）")
+
+    for proj in projects:
+        _uninstall_project(proj, home, args.dry_run)
+        if not args.dry_run:
+            agate_common.forget_project(proj)
+
+    # ── 汇总 + 本体收尾 ──
+    print()
+    if kept:
+        print(f"⚠️  有 {kept} 项**未删除**（无法证明归属本安装，见上方理由）——请人工确认。")
+    verb = "将删除" if args.dry_run else "已删除"
+    print(f"接入物：{verb} {removed} 项，保留 {kept} 项。")
+
+    if args.purge:
+        # 守卫：只在"确实像 agate 安装根"时才删（防 AGATE_HOME 指错而清掉无关目录）
+        looks_like_root = os.path.isfile(os.path.join(home, "scripts", "agate-install.py"))
+        if not looks_like_root:
+            sys.stderr.write(
+                f"⚠️  拒绝 --purge：{home} 不像 agate 安装根"
+                f"（缺 scripts/agate-install.py）——请检查 AGATE_HOME\n"
+            )
+            return 1
+        if args.dry_run:
+            print(f"[dry-run] 将删除安装根 {home}（含 repo/ 与各版本目录）")
+        else:
+            print(f"删除安装根 {home}（含 repo/ 与各版本目录）…")
+            try:
+                shutil.rmtree(home)
+                print("✅ 安装根已删除——agateon 已完全卸载。")
+            except OSError as exc:
+                sys.stderr.write(f"⚠️  安装根删除失败: {exc}（可手动: rm -rf {home}）\n")
+                return 1
+    else:
+        print(f"如需连本体一起删（收尾）: python3 {home}/scripts/agate-setup.py --uninstall --purge")
+        print(f"  或手动: rm -rf {home}")
+
+    # 退出码恒 0：「保留」是**安全拒绝**（无法证明归属就不删），不是失败；
+    # 真失败（rmtree 出错 / 安装根不存在）已在上面各自 return 1。
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Agateon 接入：平台身份注册（全局）+ git hook（项目侧）",
@@ -197,7 +538,22 @@ def main():
     ap.add_argument("--scope", choices=("all", "global", "project"), default="all",
                     help="all=平台身份+hook（默认）；global=只注册全局身份；project=只注册项目侧+hook")
     ap.add_argument("--dry-run", action="store_true", help="只显示将做什么，不落盘")
+    ap.add_argument("--list", action="store_true", help="列出已装内容（全局 + 台账项目），不落盘")
+    ap.add_argument("--uninstall", action="store_true", help="卸载：清本命令装过的接入物")
+    ap.add_argument("--all-projects", action="store_true",
+                    help="配合 --uninstall：卸载台账里**每个**项目的接入物（解决多项目散落）")
+    ap.add_argument("--purge", action="store_true",
+                    help="配合 --uninstall：清完接入物后再删版本根本体（收尾；命令会自删）")
     args = ap.parse_args()
+
+    # ── 只读模式：--list ──────────────────────────────────────────────────
+    if args.list:
+        _list_installed(agate_package.agate_home())
+        return 0
+
+    # ── 卸载模式 ──────────────────────────────────────────────────────────
+    if args.uninstall:
+        return _run_uninstall(args)
 
     proto_root, version, reason = _protocol_root()
     print(f"协议根: {proto_root}")
@@ -239,11 +595,27 @@ def main():
             rc = 1
         print()
 
+    # ── 台账登记（项目侧安装才需要：卸载时要知道项目在哪）──────────────────
+    if not args.dry_run and args.scope in ("all", "project"):
+        project_root = _git_root()
+        if project_root:
+            if agate_common.record_project(project_root, targets, scope="project"):
+                print(f"已登记到安装台账: {project_root}")
+            else:
+                print(f"⚠️  台账登记失败（不影响本次安装）: {agate_common.project_ledger_path()}")
+        else:
+            print("提示: 当前目录不是 git 仓库，hook 未装、台账未登记")
+
     if args.dry_run:
         print("（dry-run：未做任何改动）")
     elif rc == 0:
+        home = agate_package.agate_home()
         print("完成。新开平台会话即可用「Agateon 编排者」身份启动。")
         print("项目侧还需（按需）：.agate-version 钉版本；协议文档见 <协议根>/SETUP.md")
+        # 打印**真实**路径（AGATE_HOME 覆盖时 ~/.agate 是错的）+ 卸载入口，
+        # 免用户装完不知装到哪、也不知怎么卸（2026-09-21）。
+        print(f"安装根: {home}")
+        print(f"卸载:   python3 {home}/scripts/agate-setup.py --uninstall --all-projects")
     else:
         print("⚠️  部分步骤失败（见上方 stderr）——未完成，修复后重跑本命令（幂等）。")
     return rc

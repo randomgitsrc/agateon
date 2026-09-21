@@ -634,6 +634,96 @@ def resolve_workspace(project_root):
     return workspace, tasks_dir
 
 
+# ── 项目侧安装台账（2026-09-21）──────────────────────────────────────────────
+#
+# **为什么需要**：全局装一次 + 在 N 个项目里 `agate-setup.py --scope project` 后，接入物
+# 散落在各项目的 `.claude/agents/` 与 `.git/hooks/`。卸载时**无从知道项目在哪** → 那些项目
+# 会留下断链（hook 断链会让 `git commit` 直接失败）。台账记录"哪些项目装过"，供
+# `agate-setup.py --uninstall --all-projects` 定位。
+#
+# **台账只做索引，不做删除依据**：删任何文件前都要**按事实验证归属**（软链 realpath 落在
+# 本安装根内 / 复制内容与权威模板一致）——台账可能过期或指向已被用户改作他用的文件。
+#
+# **位置跟随 `agate_home()`**（`AGATE_HOME` 可覆盖）——装在 `/opt/agate` 时台账就在
+# `/opt/agate/installed-projects.json`，与本体同生共死（本体删了台账自然消失）。
+
+_LEDGER_NAME = "installed-projects.json"
+_LEDGER_SCHEMA = 1
+
+
+def project_ledger_path():
+    """台账路径：`<版本根基址>/installed-projects.json`。"""
+    return os.path.join(agate_home(), _LEDGER_NAME)
+
+
+def read_projects():
+    """读台账 → list[dict]。**文件损坏/格式非法不抛异常**（返回 []），避免台账问题
+    让卸载整体不可用——卸载宁可少删（漏删的项目会由 `--all-projects` 的扫描兜底），
+    不可崩在半路留下不一致状态。
+    """
+    path = project_ledger_path()
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict) or data.get("schema") != _LEDGER_SCHEMA:
+        return []
+    projects = data.get("projects")
+    if not isinstance(projects, list):
+        return []
+    return [e for e in projects if isinstance(e, dict) and isinstance(e.get("path"), str)]
+
+
+def record_project(project_root, platforms=None, scope="project"):
+    """登记/更新一个项目（按 realpath 归一化后 upsert，幂等）。
+
+    在**安装成功之后**调用——记录失败不应让安装失败（台账是辅助索引，非 gate），
+    故内部吞掉 OSError 并返回 False，由调用方决定是否提示。
+    """
+    root = os.path.realpath(os.path.abspath(project_root))
+    path = project_ledger_path()
+    entries = read_projects()
+    entry = next((e for e in entries if os.path.realpath(e["path"]) == root), None)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if entry is None:
+        entry = {"path": root, "first_seen": now, "platforms": [], "scope": scope}
+        entries.append(entry)
+    entry["last_seen"] = now
+    entry["scope"] = scope
+    if platforms:
+        entry["platforms"] = sorted(set(entry.get("platforms") or []) | set(platforms))
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"schema": _LEDGER_SCHEMA, "projects": entries},
+                      f, ensure_ascii=False, indent=2, sort_keys=True)
+            f.write("\n")
+    except OSError:
+        return False
+    return True
+
+
+def forget_project(project_root):
+    """从台账移除一个项目（卸载该项目之后调用）。返回是否确有移除。"""
+    root = os.path.realpath(os.path.abspath(project_root))
+    entries = read_projects()
+    kept = [e for e in entries if os.path.realpath(e["path"]) != root]
+    if len(kept) == len(entries):
+        return False
+    path = project_ledger_path()
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"schema": _LEDGER_SCHEMA, "projects": kept},
+                      f, ensure_ascii=False, indent=2, sort_keys=True)
+            f.write("\n")
+    except OSError:
+        return False
+    return True
+
+
 def compute_sha256(path):
     """sha256 hex：文件=内容哈希；目录=排序逐文件 hash 拼接再整体 hash（TAG0031 DEBT0002，
     从 agate-pack-offline.py / install-offline.py 迁移的共享单实现，逐字节保留现状排序键
