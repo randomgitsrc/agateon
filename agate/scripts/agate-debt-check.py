@@ -108,6 +108,19 @@ def check_entry(basename, eid, data, errors):
                 errors.append(f"{basename}:{eid}: 类型错误（{f} 应为 list，实际 {type(data[f]).__name__}）")
             elif not data[f]:
                 errors.append(f"{basename}:{eid}: {f} 不能为空")
+            else:
+                # 元素类型校验（2026-09-21 补）：只看"是 list"会放过**挂错清单**的条目
+                # ——实测一条 DEBT 的 closure_criteria 里混进了 evidence 形态的
+                # `{path, note}` 字典而校验通过（"决策已记录"的证据没进 evidence）。
+                # evidence 元素须为 {path/ref, note} 映射；closure_criteria 元素须为字符串。
+                want = dict if f == "evidence" else str
+                wrong = [type(e).__name__ for e in data[f] if not isinstance(e, want)]
+                if wrong:
+                    errors.append(
+                        f"{basename}:{eid}: {f} 元素类型错误"
+                        f"（应为 {want.__name__}，实际含 {sorted(set(wrong))}）"
+                        f"——evidence 放 {{path/ref, note}} 映射、closure_criteria 放字符串，勿混挂"
+                    )
 
     task_id = data.get("task_id")
     if task_id is not None and not isinstance(task_id, str):

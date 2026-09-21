@@ -22,7 +22,12 @@ import sys
 from pathlib import Path
 
 try:
-    from agate_common import resolve_version_root, symlink_migration_hint
+    from agate_common import (
+        _protocol_root,
+        resolve_version_root,
+        symlink_migration_hint,
+    )
+    from agate_package import agate_home
 except (ImportError, SystemExit):
     sys.stderr.write("agate-summary: agate_common 不可用（缺 pyyaml？），版本解析不可用\n")
     sys.exit(1)
@@ -117,30 +122,30 @@ _PLATFORM_ARTIFACTS = (
 )
 
 
-def _candidate_proto_roots(script_dir):
-    """候选权威协议根，**按优先级**返回（调用方取第一个确实含模板的）：
+def _installed_version_proto_roots():
+    """**已安装版本**的协议根集合（机器级；**不**含项目 `.agate-version` 钉版的影响）。
 
-      ① **本次运行解析到的协议根**（`resolve_version_root`）——安装态。接入产物应指向它，
-         故它必须优先：从 dev checkout / worktree 跑时，运行树是开发态而产物指向安装态，
-         拿运行树比对会**误报漂移**（2026-09-21 实测）。
-      ② **运行脚本所在的树**（`script_dir` 上溯一层）——version 目录直接调用、以及测试
-         夹具（隔离 HOME 内无真实版本目录）走这条。
-
-    为什么不能只用 ②：`~/.agate/scripts/`（SETUP 文档规定的调用方式）是**根级副本**，
-    其上溯一层是 `~/.agate` 而**不是**协议根，其下没有 `assets/templates/` → 检测会
-    全部 `continue` **静默失效**（2026-09-21 实测）。加入 ① 后三条调用路径都正确。
+    为什么权威判据是"已安装版本集合"而非"当前解析根或 current"（2026-09-21 修正）：
+      本函数服务的 `_PLATFORM_ARTIFACTS` 全是 **HOME 级全局产物**。它们的正当性标准是
+      "**指向某个已安装版本**"，而不是"跟随项目钉的版本"或"跟随 current"——
+      - 用 `resolve_version_root()`（层序含**项目声明**）当权威：在钉了旧版的项目里，
+        指向 current 的全局产物会被误报漂移；按建议"修复"后，非钉版目录又报漂移
+        → **双向振荡**（对齐审查实测，2026-09-21）。
+      - 用"已安装版本集合"当权威：dev checkout / 测试临时副本（**不在任何已装版本树内**）
+        仍被报出——这正是本检测的原始缺陷类（历史上 SKILL.md 曾指向测试临时副本、
+        静默穿过一次发布）。
+    取镜像目录时不跟随软链（`latest`/`current` 是指针软链，不是版本目录）；Windows 下
+    它们是文本文件，`isdir` 自然排除。
     """
+    base = agate_home()
     roots = []
-    try:
-        info = resolve_version_root()
-        if info and info.get("root"):
-            roots.append(info["root"])
-    except Exception:  # 解析失败不应影响 summary 其余输出（降级为只用运行树）
-        pass
-    roots.append(os.path.dirname(script_dir))
-    # 去重保序
-    seen = set()
-    return [r for r in roots if not (r in seen or seen.add(r))]
+    if os.path.isdir(base):
+        for name in sorted(os.listdir(base)):
+            vdir = os.path.join(base, name)
+            if os.path.islink(vdir) or not os.path.isdir(vdir):
+                continue
+            roots.append(_protocol_root(vdir))
+    return roots
 
 
 def _check_platform_artifacts(script_dir):
@@ -159,21 +164,18 @@ def _check_platform_artifacts(script_dir):
     无该平台目录（未装该平台）或本版本无对应权威模板 → 跳过，不误报。
     """
     home = os.path.expanduser("~")
-    roots = _candidate_proto_roots(script_dir)
+    installed = _installed_version_proto_roots()
     not_installed = []          # 聚合待报（见函数末：一行汇总，避免逐平台刷屏）
     for name, platform_dir, artifacts, _setup_step in _PLATFORM_ARTIFACTS:
         if not os.path.isdir(os.path.join(home, platform_dir)):
             continue
         for rel, tpl_rel in artifacts:
             link = os.path.join(home, platform_dir, *rel.split("/"))
-            # 取第一个确实含该模板的候选根（见 _candidate_proto_roots 的理由）
-            expected = next(
-                (p for p in (os.path.join(r, *tpl_rel.split("/")) for r in roots)
-                 if os.path.isfile(p)),
-                None,
-            )
-            if expected is None:
-                continue  # 本版本无该权威模板 → 无从校验
+            # 权威候选 = **任一已安装版本**里的同名模板（见 _installed_version_proto_roots）
+            candidates = [os.path.join(r, *tpl_rel.split("/")) for r in installed]
+            candidates = [c for c in candidates if os.path.isfile(c)]
+            if not candidates:
+                continue  # 无任何已安装版本含该模板 → 无从校验
             if not os.path.lexists(link):
                 # 「已装该平台但未接入 agate」是**正常状态**（用户可能不需要），
                 # 故只做**一行汇总**提示，不逐产物刷屏——本机四平台目录都在时，
@@ -181,20 +183,21 @@ def _check_platform_artifacts(script_dir):
                 not_installed.append(name)
                 continue
             if os.path.islink(link):
-                if os.path.realpath(link) != os.path.realpath(expected):
+                target = os.path.realpath(link)
+                if target not in {os.path.realpath(c) for c in candidates}:
                     sys.stderr.write(
-                        f"⚠️  {name} 安装产物漂移: {link} 指向非权威副本"
-                        f"（{os.path.realpath(link)}）\n"
-                        f"    当前权威模板: {expected}\n"
+                        f"⚠️  {name} 安装产物漂移: {link}\n"
+                        f"    实指 {target}\n"
+                        f"    不在任何已安装版本树内（权威模板: {candidates[-1]}）\n"
                         # 修复命令用**稳定入口**而非上面那行路径：本脚本可能正从
-                        # worktree/开发 checkout 运行，此时 `expected` 指向未发布树，
-                        # 照抄会把安装指到那里。setup 命令经 resolve 取**安装态**协议根。
+                        # worktree/开发 checkout 运行，此时候选路径指向未发布树，
+                        # 照抄会把安装指到那里。
                         f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                     )
-            elif not _files_identical(link, expected):
-                # 复制形态且内容不一致 = 模板已升级但副本未刷新（复制不自动同步）
+            elif not any(_files_identical(link, c) for c in candidates):
+                # 复制形态且内容与**所有**已安装版本都不一致 = 副本已旧或来自异物
                 sys.stderr.write(
-                    f"⚠️  {name} 安装产物已过期: {link} 内容与权威模板不一致"
+                    f"⚠️  {name} 安装产物已过期: {link} 内容与任何已安装版本的模板都不一致"
                     f"（复制模式不自动同步）\n"
                     f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                 )
@@ -203,7 +206,8 @@ def _check_platform_artifacts(script_dir):
         # （既有 BDD 断言锚定这两个子串），只是把 N 行合并为 1 行。
         names = list(dict.fromkeys(not_installed))
         sys.stderr.write(
-            f"ℹ️  平台接入产物未安装: {' / '.join(names)}"
+            # 措辞覆盖两种情形：完全未接入 / 部分产物缺失（后者不应说"未安装"）
+            f"ℹ️  平台接入产物未安装或不完整: {' / '.join(names)}"
             f"（接入: python3 ~/.agate/scripts/agate-setup.py；"
             f"平台差异见 agate/SETUP.md 步骤 2）\n"
         )
