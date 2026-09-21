@@ -538,3 +538,26 @@ def test_install_hook_direct_call_follows_agate_home(run_cli, python_exe, agate_
         assert marker.is_file(), "复制模式应写 .agate-root 标记"
         assert str(iroot) in marker.read_text(encoding="utf-8"), \
             "标记应记自定义安装根（写死 ~/.agate 会暴露）"
+
+
+def test_uninstall_never_removes_platform_root(run_cli, python_exe, agate_scripts,
+                                               agate_root, tmp_path):
+    """**平台自有目录绝不被删**：`~/.dsh` 等即使清空后也不能动。
+
+    2026-09-21 自查发现的越界：原 `_prune_empty_dirs` 只以 `$HOME` 为界，会把
+    `~/.dsh`（DSH 自己的目录，agateon 只是在其下放了文件）在空掉后一并删除。
+    所有权边界应到**平台根**为止。
+    """
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    assert _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                  "--scope", "global").returncode == 0
+    assert (home / ".dsh").is_dir(), "前置：平台目录存在"
+
+    result = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                    "--uninstall", "--scope", "global")
+    assert result.returncode == 0, result.output
+    for rel in (".dsh", ".claude", ".agents", ".config/opencode"):
+        assert (home / rel).is_dir(), f"平台自有目录不得被删: {rel}\n{result.output}"
+    # agateon 在平台下的专属目录可以清（那是它的命名空间）
+    assert not (home / ".dsh/.agent-presets/agate").exists(), "agateon 专属目录应清掉"

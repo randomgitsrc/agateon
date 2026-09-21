@@ -346,29 +346,33 @@ def _uninstall_platforms(home, scope, dry_run):
     return removed, kept
 
 
-def _prune_empty_dirs(path, home, dry_run):
-    """清掉卸载后变空的 agateon 专属目录（如 `~/.dsh/.agent-presets/agate`）。
+# agateon 在平台目录下的**专属命名空间**——只有这些目录（空了才）可被清。
+# 为什么不向上递归清理：所有权边界不可靠——`~/.agents`（Codex 的共享 skill 根）
+# 与 `~/.dsh/.agent-presets`（DSH 的 preset 命名空间）都不是 agateon 的目录，
+# "清空后顺手删掉"属于越界（2026-09-21 自查 + 测试双重确认）。留一个空目录无害，
+# 删掉用户/平台的目录有害。
+_OWNED_DIR_NAMES = frozenset({"agate", "agate-protocol"})
 
-    只清**空目录**，且不越过 home（Windows 下 `~/.dsh` 可能是 home 之外的路径，
-    故这里以"到 home 或到用户家目录为止"为界，绝不删非空目录）。
+
+def _prune_empty_dirs(path, home, dry_run):
+    """仅清理**空掉的 agateon 专属目录**（`…/agate` / `…/agate-protocol`），不向上递归。
+
+    保守取向：宁留空目录，不越界删平台/用户目录（见 `_OWNED_DIR_NAMES` 的理由）。
     """
-    stop = os.path.expanduser("~")
-    cur = path
-    while cur and cur not in (stop, os.path.dirname(cur), "/"):
-        try:
-            if os.listdir(cur):
-                return
-        except OSError:
+    if os.path.basename(os.path.realpath(path)) not in _OWNED_DIR_NAMES:
+        return
+    cur = os.path.realpath(path)
+    try:
+        if os.listdir(cur):
             return
-        if dry_run:
-            print(f"  [dry-run] 将删除空目录 {cur}")
-            return
-        try:
-            os.rmdir(cur)
-            print(f"  ✅ 已删除空目录 {cur}")
-        except OSError:
-            return
-        cur = os.path.dirname(cur)
+    except OSError:
+        return
+    if dry_run:
+        print(f"  [dry-run] 将删除空目录 {cur}")
+        return
+    with contextlib.suppress(OSError):
+        os.rmdir(cur)
+        print(f"  ✅ 已删除空目录 {cur}")
 
 
 def _uninstall_project(project_root, home, dry_run):
