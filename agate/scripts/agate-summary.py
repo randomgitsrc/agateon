@@ -92,42 +92,78 @@ def _check_copy_drift(script_dir):
             )
 
 
-_DSH_LINK_ARTIFACTS = (
-    (".agent-presets/agate/preset.yml", "preset.yml"),
-    (".agent-presets/agate/agent.cordis.yml", "agent.cordis.yml"),
-    ("skills/agate-protocol/SKILL.md", "SKILL.md"),
+# 平台安装产物清单：{平台名: (平台 home 目录, ((产物相对路径, 模板相对协议根路径), ...), SETUP 步骤)}
+#   覆盖 `agate-setup.py` 支持的**全部四个平台**——清单与 PLATFORMS 表须同步：漏一个，
+#   该平台的产物漂移就无人检测（Codex 曾缺席；Claude Code / OpenCode 亦曾缺席，2026-09-21 补齐）。
+#   仅覆盖**全局**形态（`--scope project` 的项目内产物不在此列：它随项目走、且项目目录各异，
+#   其一致性由项目自身的版本控制保证）。
+_PLATFORM_ARTIFACTS = (
+    ("Claude Code", ".claude", (
+        ("agents/orchestrator.md", "orchestrator-template.md"),
+    ), "2"),
+    ("OpenCode", ".config/opencode", (
+        ("agents/orchestrator.md", "orchestrator-template.md"),
+    ), "2"),
+    ("DSH", ".dsh", (
+        (".agent-presets/agate/preset.yml", "assets/templates/dsh/preset.yml"),
+        (".agent-presets/agate/agent.cordis.yml", "assets/templates/dsh/agent.cordis.yml"),
+        ("skills/agate-protocol/SKILL.md", "assets/templates/dsh/SKILL.md"),
+    ), "2-DSH"),
+    ("Codex", ".agents", (
+        ("skills/agate-protocol/SKILL.md", "assets/templates/codex/SKILL.md"),
+    ), "2-Codex"),
 )
 
 
-def _check_dsh_links(script_dir):
-    """校验 DSH 安装产物软链指向权威链（防指向非权威副本的静默漂移）。
+def _check_platform_artifacts(script_dir):
+    """校验各平台安装产物与权威模板一致（防静默漂移 / 防复制模式过期）。
 
     背景（2026-08-26）：~/.dsh/skills/agate-protocol/SKILL.md 曾被安装成指向测试用
     临时副本而非 ~/.agate 权威链，静默存活穿过一次发布——安装后无校验所致。
-    权威目标 = {agate_root}/assets/templates/dsh/ 下同名文件（script_dir 上溯一层）。
-    无 ~/.dsh（未装 DSH）或 Windows（无 DSH 部署）→ 整体跳过。
+
+    **两种安装形态都要正确判定**（2026-09-21 补，随 Codex 检测一并修）：
+      - **软链**（Linux/macOS 标准）：目标须指向权威模板 → 比对 `realpath`。
+      - **复制**（Windows 无符号链接权限 / `AGATE_HOOK_COPY_MODE=1`）：内容须与权威模板
+        一致 → **比对内容**。复制模式的固有风险是"模板升级后副本变旧"，只有比内容才检得出；
+        且此前的 `realpath` 比对对复制产物**必然不等**，会把正常安装误报为漂移
+        （此前靠 Windows 整体跳过掩盖，Linux 复制模式则会误报）。
+
+    无该平台目录（未装该平台）或本版本无对应权威模板 → 跳过，不误报。
     """
-    if os.name == "nt":
-        return
-    dsh_home = os.path.join(os.path.expanduser("~"), ".dsh")
-    if not os.path.isdir(dsh_home):
-        return
-    tpl_dir = os.path.join(os.path.dirname(script_dir), "assets", "templates", "dsh")
-    for rel, name in _DSH_LINK_ARTIFACTS:
-        link = os.path.join(dsh_home, *rel.split("/"))
-        expected = os.path.join(tpl_dir, name)
-        if not os.path.isfile(expected):
-            continue  # 本版本无该权威模板 → 无从校验
-        if not os.path.lexists(link):
-            sys.stderr.write(
-                f"⚠️  DSH 安装产物未安装: {link}（如需 DSH 接入见 agate/SETUP.md 步骤 2-DSH）\n"
-            )
+    home = os.path.expanduser("~")
+    proto_root = os.path.dirname(script_dir)
+    for name, platform_dir, artifacts, setup_step in _PLATFORM_ARTIFACTS:
+        if not os.path.isdir(os.path.join(home, platform_dir)):
             continue
-        if os.path.realpath(link) != os.path.realpath(expected):
-            sys.stderr.write(
-                f"⚠️  DSH 安装产物漂移: {link} 指向非权威副本（{os.path.realpath(link)}）\n"
-                f"    修复: ln -sf {expected} {link}\n"
-            )
+        for rel, tpl_rel in artifacts:
+            link = os.path.join(home, platform_dir, *rel.split("/"))
+            expected = os.path.join(proto_root, *tpl_rel.split("/"))
+            if not os.path.isfile(expected):
+                continue  # 本版本无该权威模板 → 无从校验
+            if not os.path.lexists(link):
+                sys.stderr.write(
+                    f"⚠️  {name} 安装产物未安装: {link}"
+                    f"（如需 {name} 接入见 agate/SETUP.md 步骤 {setup_step}）\n"
+                )
+                continue
+            if os.path.islink(link):
+                if os.path.realpath(link) != os.path.realpath(expected):
+                    sys.stderr.write(
+                        f"⚠️  {name} 安装产物漂移: {link} 指向非权威副本"
+                        f"（{os.path.realpath(link)}）\n"
+                        f"    当前权威模板: {expected}\n"
+                        # 修复命令用**稳定入口**而非上面那行路径：本脚本可能正从
+                        # worktree/开发 checkout 运行，此时 `expected` 指向未发布树，
+                        # 照抄会把安装指到那里。setup 命令经 resolve 取**安装态**协议根。
+                        f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
+                    )
+            elif not _files_identical(link, expected):
+                # 复制形态且内容不一致 = 模板已升级但副本未刷新（复制不自动同步）
+                sys.stderr.write(
+                    f"⚠️  {name} 安装产物已过期: {link} 内容与权威模板不一致"
+                    f"（复制模式不自动同步）\n"
+                    f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
+                )
 
 
 def main():
@@ -143,7 +179,7 @@ def main():
 
     guards = _build_guards(script_dir)
     _check_copy_drift(script_dir)
-    _check_dsh_links(script_dir)
+    _check_platform_artifacts(script_dir)
 
     version = info["version"] or "（未解析到版本）"
     reason = info["reason"] or "（无原因）"

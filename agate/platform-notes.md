@@ -228,7 +228,7 @@ python3 ~/.agate/scripts/agate-summary.py
 
 | 限制 | 影响 | 规避 |
 |------|------|------|
-| 符号链接退化为复制 | 身份配置物与 hook 不随 agate 升级自动更新 | 升级 agate 后重跑 `python3 ~/.agate/scripts/agate-setup.py`（该命令内含 hook 安装）；或开 Windows「开发者模式」启用真符号链接 |
+| 符号链接退化为复制 | 身份配置物与 hook 不随 agate 升级自动更新 | 升级 agate 后重跑 `python3 ~/.agate/scripts/agate-setup.py`（该命令内含 hook 安装）；或开 Windows「开发者模式」启用真符号链接。**身份配置物的漂移会被告警**：`agate-summary.py` 对复制形态比对内容，副本已旧时提示「已过期」+ 修复命令（hook 走另一路 `.agate-root` / resolve-entry，不在该检测内）|
 | `core.autocrlf` CRLF 污染 | 3 个 hook 薄壳 `.sh` 报 `\r` 语法错；py 文件已显式 `encoding="utf-8"` 读写（免疫），仅卡片 sha256 校验受 hash 影响 | 仓库已含 `.gitattributes` 强制 LF；若 clone 旧版本无此文件，手动 `git config core.autocrlf false`。已 clone 且已物化 CRLF 的工作区需 `git add --renormalize .` 重规范化 |
 | pytest 需安装 | 开发者无法跑 `python3 -m pytest` 测试 | `pip install pytest`（Windows 原生 python 直接可用）；或用 WSL 跑测试（使用不受影响） |
 | CI 仅 ubuntu | Windows 本地行为无 CI 兜底 | 靠本地验证；protocol-tests.yml 的 pytest job 已加 `windows-latest` matrix（`-m windows_smoke` 冒烟，见 `AGENTS.md` 测试约定） |

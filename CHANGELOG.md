@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **`agate-summary.py` 的平台接入产物漂移检测扩至四个平台**：原仅覆盖 DSH，现覆盖 Claude Code / OpenCode / DSH / Codex 的全局接入产物（与 `agate-setup.py` 的 `PLATFORMS` 表机械核对，防漏登记）。判定改为**按形态分判**——软链比对真实路径、**复制形态比对内容**：正常复制安装不再被误报为「漂移」，而模板升级后副本未刷新会明确报「已过期」并给出修复命令。
+- 移除该检测中的 `os.name == "nt"` 整体跳过（改为"平台目录不存在即跳过"）——Codex 在 Windows 亦会安装，不应被跳过。相关测试同步去掉 3 处 Windows 跳过（改用「建链失败即 skip」的平台无关写法）。
+
 ### 新增
 
 - **`agate-setup.py` 平台接入命令**：自动探测已装平台（Claude Code / OpenCode / DSH / Codex）→ 注册 orchestrator 身份（默认**全局**，`--scope project` 落项目内）→ 装 git hook；幂等、既有非本工具文件先备份、Windows 无链接权限时退化复制。替代 `SETUP.md`「步骤 2」的逐平台手工 `ln -sf`/`cp` 步骤。
