@@ -101,7 +101,7 @@ permission:
 
 ## 接入（一次性，通常已经在 SETUP.md 步骤里做过，这里列出来是给你确认用的）
 
-1. `python3 {agate_root}/scripts/install-hook.py` — 安装 pre-commit + commit-msg + pre-push hook
+1. `python3 ~/.agate/scripts/agate-setup.py` — 一条命令完成「平台身份注册 + 装 hook」（等价于手工跑 `install-hook.py` 加各平台接入命令）
 2. `mkdir -p {AGATE_WORKSPACE}/{roadmap,tasks,agents,archived,reviews,decisions,plans,logs,debt}` — 创建工作区 9 个子目录（roadmap/tasks/agents/archived/reviews/decisions/plans/logs/debt，debt/ 为技术债登记目录）
 3. 若 `{AGATE_WORKSPACE}/tasks/active-tasks.md` 不存在，从 `{agate_root}/assets/templates/active-tasks-template.md` 复制（已存在则跳过）
 

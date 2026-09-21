@@ -490,3 +490,28 @@ def py_path():
         return str(path)
 
     return _convert
+
+# ── 适配层去漂移共享判据（2026-09-21）────────────────────────────────────────
+#
+# **为何放 conftest 而非某个测试文件**：该判据要守护**两个不同测试文件**里守护的
+# 三类载体（dsh/agent.cordis.yml 的 persona、dsh/SKILL.md、codex/SKILL.md）。
+# 若各自在本文件内写字面量，改一处词表另一处不跟随——正是本 PR 要消的"两套标准"形态。
+# 单一来源在此，两处 import。
+#
+# **锚点选取标准（硬要求）**：必须在被守护文件的**改动前版本**（main `77e33da`）中
+# 真实出现过，否则是"死判据"（对旧文件不变红 = 不是回归测试）。计数实测：
+#   `只有你能写的文件` persona(旧)=1 模板=1 ／ `你不是 gate` persona(旧)=0 模板=1
+#   `会话开始时` persona(旧)=1 模板=2
+PROTOCOL_RULE_MARKERS = (
+    "只有你能写的文件",   # 模板「只有你能写的文件」表名
+    "你不是 gate",        # 模板规则段
+    "会话开始时",         # 模板步骤节标题（旧 persona 逐字复述过）
+)
+
+# persona 专属：协议内部文件名/变量——persona 职责只是"指向模板"，点名内部文件即复述步骤。
+# （旧 persona 逐条列过 active-tasks.md / phase-cards / {AGATE_WORKSPACE}）
+PERSONA_INTERNAL_NAME_MARKERS = ("active-tasks.md", "phase-cards", "{AGATE_WORKSPACE}")
+
+# 工具映射表的**行特征**（映射单一来源判据用；DSH 有 persona 层，其 SKILL 不得再有映射表）。
+# 用正则容忍空格变体（复审实测 `|读状态|` 会绕过字面量）。
+MAPPING_ROW_RE = re.compile(r"^\|\s*(读状态|派发 subagent|跑 gate|更新状态)\s*\|", re.MULTILINE)

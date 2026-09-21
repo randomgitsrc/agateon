@@ -5,22 +5,19 @@ description: Agateon 协议的 DSH 适配层——工具映射、平台注意、
 
 # Agateon × DSH 适配层
 
-> 协议本体在 `~/.agate`（跨平台共享，本 skill 不改协议任何文件）。本 skill 只回答一件事：
+> 协议本体位置由 `agate-resolve.py` 运行时解析得到（通常 `~/.agate/current/agate`；`~/.agate` 是**版本根**，其下才有 `vX.Y.Z/`）。本 skill 不改协议任何文件，也不复制协议内容——它只回答一件事：
 > **在 deepseek-harness 上，怎么把 Agateon 的编排纪律映射到 DSH 的工具面。**
 
 ## 何时加载
 
 - 你是 Agateon 编排者（preset persona 已要求你执行 orchestrator-template.md）→ 已自动获得工具映射，本 skill 补充进阶食谱
-- 你想在 DSH 上手动跑 Agateon 任务（未用 preset）→ 加载本 skill，按「编排者四项职责」执行
+- 你想在 DSH 上手动跑 Agateon 任务（未用 preset）→ 加载本 skill；先按下方「工具映射」指引取工具面，再按 `{agate_root}/orchestrator-template.md` 执行
 
-## 编排者四项职责 × DSH 工具（与 persona 一致，速查）
+## 工具映射
 
-| Agateon 职责 | DSH 工具 | 注意 |
-|------------|----------|------|
-| 读状态 | `read` / `grep` / `glob` | 不占 bash 通道，优先用 |
-| 派发 subagent | `subagent`（spawn）/ `subagent_fork`（fork）| 后台默认；prompt 只传路径不传内容（铁律 2）|
-| 跑 gate | `bash` 跑 `{agate_root}/scripts/check-gate.py P{N}` | 以 `[exit code: N]` 标记判定；长 gate 用后台 job |
-| 更新状态 | `write` / `edit` 改 `.state.yaml` + `active-tasks.md` | 先写 dispatch-context 再派发（模板铁律）|
+**单一来源在 `agent.cordis.yml` 的 persona**（会话开始即加载，保证"未加载本 skill 也有映射"）——本 skill **不再复述**，避免两处维护漂移。本 skill 只补充 persona 没有的**进阶食谱**与平台注意。
+
+> 若你是在**没有 preset** 的环境下手动加载本 skill：先读 `agent.cordis.yml` 的 `persona.config.prefix` 取工具映射——该文件在 `~/.dsh/.agent-presets/agate/agent.cordis.yml`（`agate-setup.py` 安装后的位置）或 `{agate_root}/assets/templates/dsh/agent.cordis.yml`（模板源，两者通常为软链关系）——再按 `{agate_root}/orchestrator-template.md` 执行。
 
 ## DSH 原生进阶食谱（其他平台没有的能力）
 
@@ -63,7 +60,7 @@ judge 需要 fresh context（只看标准、不看实现者自述）——DSH �
 
 ## 平台注意（DSH 特有，务必遵守）
 
-1. **沙箱只读区**：DSH 默认 workspace-write，只覆盖会话工作区。协议本体目录（如 `/home/kity/oclab/agate`）对沙箱**只读**——gate 脚本若写仓库内文件会 `Errno 30`。任务工作区放可写位置（如 `dsh-workspace` 下）
+1. **沙箱只读区**：DSH 默认 workspace-write，只覆盖会话工作区。协议本体目录（`{agate_root}`）对沙箱**只读**——gate 脚本若写仓库内文件会 `Errno 30`。任务工作区放可写位置（如 `dsh-workspace` 下）
 2. **/tmp 只读**：pytest 等需要临时目录的工具要用 `--basetemp` 指向可写目录（`TMPDIR` 环境变量亦可）
 3. **审批策略**：审批被禁用时沙箱拒绝即终局，不可升级——gate 命令设计成不触发需审批的操作
 4. **bash 纪律**：长命令外层 `timeout`；读文件用 read/grep/glob 工具而非 bash（避免 bash 挂起）

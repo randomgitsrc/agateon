@@ -42,7 +42,7 @@ LLM agents are powerful but unreliable on long tasks: context gets polluted, sub
    python3 ~/.agate/scripts/agate-install.py v0.49.0      # pin a specific version
    python3 ~/.agate/scripts/agate-install.py --check      # environment probe
    ```
-2. **Register the orchestrator.** Symbolically link `orchestrator-template.md` into your platform's agent directory and install the git hooks (`python3 ~/.agate/scripts/install-hook.py`). Platform-specific steps — OpenCode, Claude Code, and Windows fallbacks — are in [`agate/SETUP.md`](agate/SETUP.md).
+2. **Register the orchestrator.** One command does it: `python3 ~/.agate/scripts/agate-setup.py` — it detects the platforms you have, registers the orchestrator identity (global by default), and installs the git hooks. Platform specifics and manual fallbacks (OpenCode, Claude Code, DSH, Codex, Windows copy mode) are in [`agate/SETUP.md`](agate/SETUP.md).
 3. **Run your first task.** Start a session with the orchestrator agent. The workspace (`agate-workspace/`) is initialized automatically on the orchestrator's first run; see [`agate/SETUP.md`](agate/SETUP.md) for the one-time setup.
 
 ## How it works
@@ -73,7 +73,13 @@ The orchestrator does exactly four things: read state, dispatch subagents, run g
 | Codex | ✅ | Full P0-P8 |
 | Claude Project sessions | ❌ | Design phases (P0-P2) only |
 
-DSH and Codex have no `.claude/agents/`-equivalent orchestrator-symlink registration step (DSH uses a preset; Codex is set up via CLI login + automation flags — it still runs full P0-P8 with native `spawn_agent` dispatch); their one-time setup is in [`agate/SETUP.md`](agate/SETUP.md) steps 2-DSH / 2-Codex. See [`agate/platform-notes.md`](agate/platform-notes.md) — the authoritative source for per-platform capability — for full adaptation notes, including native Windows (Git for Windows) support.
+All four platforms run the full P0-P8, but their **identity artifacts differ**: Claude Code / OpenCode use an agent markdown file, DSH uses an agent-preset trio, and Codex relies on a skill (it has no agent-registration mechanism). **Setup is command-driven** — one command detects your platforms and installs the right form:
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py
+```
+
+Details in [`agate/SETUP.md`](agate/SETUP.md) step 2; [`agate/platform-notes.md`](agate/platform-notes.md) is the authoritative source for per-platform capability (including native Windows / Git for Windows).
 
 ## Documentation
 

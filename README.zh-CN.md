@@ -42,7 +42,7 @@ LLM Agent 在长任务上强大但不可靠：上下文被污染、subagent 漂�
    python3 ~/.agate/scripts/agate-install.py v0.49.0      # 钉指定版本
    python3 ~/.agate/scripts/agate-install.py --check      # 环境探测
    ```
-2. **注册编排 Agent。** 将 `orchestrator-template.md` 符号链接到你的平台 Agent 目录，并安装 git hooks（`python3 ~/.agate/scripts/install-hook.py`）。平台相关步骤——OpenCode、Claude Code、Windows 降级方案——见 [`agate/SETUP.md`](agate/SETUP.md)。
+2. **注册编排 Agent。** 一条命令完成：`python3 ~/.agate/scripts/agate-setup.py`——自动探测已装平台、注册 orchestrator 身份（默认全局）、安装 git hooks。平台差异与手工兜底（OpenCode、Claude Code、DSH、Codex、Windows 复制模式）见 [`agate/SETUP.md`](agate/SETUP.md)。
 3. **运行你的第一个任务。** 用编排 Agent 开启一个会话。工作区（`agate-workspace/`）在编排 Agent 首次运行时自动初始化；一次性接入步骤见 [`agate/SETUP.md`](agate/SETUP.md)。
 
 ## 工作原理
@@ -73,7 +73,13 @@ gate 检查（测试运行器 exit code、类型检查器、git log、BDD 运行
 | Codex | ✅ | 完整 P0-P8 |
 | Claude Project 会话 | ❌ | 仅设计阶段（P0-P2） |
 
-DSH 与 Codex 没有 `.claude/agents/` 等价的 orchestrator 软链注册步骤（DSH 用 preset；Codex 经 CLI 登录 + 自动化 flag 接入，仍跑完整 P0-P8、有原生 `spawn_agent` 派发），一次性接入见 [`agate/SETUP.md`](agate/SETUP.md) 步骤 2-DSH / 2-Codex。各平台能力的权威源是 [`agate/platform-notes.md`](agate/platform-notes.md)——完整适配说明（含原生 Windows / Git for Windows）见此。
+四个平台都跑完整 P0-P8，但**身份接入物形态不同**：Claude Code / OpenCode 是 agent md 文件，DSH 是 agent-preset 三件套，Codex 靠 skill（它没有 agent 注册机制）。**接入已命令化**——一条命令自动探测并按平台选对形态：
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py
+```
+
+细节见 [`agate/SETUP.md`](agate/SETUP.md) 步骤 2；各平台能力差异的权威源是 [`agate/platform-notes.md`](agate/platform-notes.md)（含原生 Windows / Git for Windows 适配）。
 
 ## 文档
 
@@ -83,7 +89,7 @@ DSH 与 Codex 没有 `.claude/agents/` 等价的 orchestrator 软链注册步骤
 | 理解 P0-P8 阶段工作流与裁剪规则 | [`agate/WORKFLOW.md`](agate/WORKFLOW.md) |
 | 查跨阶段规则（retry 上限 / 状态转移 / C8 评审映射） | [`agate/rules/`](agate/rules/)——`phases.yaml` / `dispatch.yaml` / `roles.yaml` / `dispatch-tiers.yaml` + `schema/`，与 `state-transitions.md` / `review-mapping.md` 并列 |
 | 阅读协议本体入口（面向 Agent 与深度用户） | [`agate/AGENTS.md`](agate/AGENTS.md) |
-| 把 Agateon 适配到你的平台（OpenCode / Claude Code / Windows） | [`agate/platform-notes.md`](agate/platform-notes.md) |
+| 把 Agateon 适配到你的平台（Claude Code / OpenCode / DSH / Codex / Windows） | [`agate/platform-notes.md`](agate/platform-notes.md) |
 | 了解已知结构性局限 | [`agate/LIMITATIONS.md`](agate/LIMITATIONS.md) |
 | 升级前检查破坏性变更 | [`agate/UPGRADING.md`](agate/UPGRADING.md) |
 | 查阅术语表 / 统一语言 | [`agate/CONTEXT.md`](agate/CONTEXT.md) |
