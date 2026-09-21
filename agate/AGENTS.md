@@ -86,7 +86,7 @@ cd <你克隆 Agateon 的目录> && git pull
 
 **已有 Agateon 项目升级，先读 `UPGRADING.md`**——它讲清楚旧任务数据（active-tasks.md/.state.yaml/任务编号）如何处理，避免踩到破坏性变更。
 
-下次 commit 自动用新版本协议。pre-commit/commit-msg/pre-push 三个 hook 经 `python3 ~/.agate/scripts/install-hook.py` 安装（`ln -sf` 软链 / Windows 复制模式），指向**固定解析入口** `resolve-entry.py`，运行时按项目 `.agate-version` 解析到对应版本目录——项目锁定旧版用旧版 gate、无声明用全局 current，切版本**无需重装 hook**。（Windows 无符号链接权限时以复制模式安装，升级后需重跑 `python3 ~/.agate/scripts/install-hook.py`，见 `platform-notes.md`「Windows 原生」章节。）
+下次 commit 自动用新版本协议。pre-commit/commit-msg/pre-push 三个 hook 经 `python3 ~/.agate/scripts/install-hook.py` 安装（`ln -sf` 软链 / Windows 复制模式）——或用 `agate-setup.py` 一次完成「平台身份注册 + 装 hook」——指向**固定解析入口** `resolve-entry.py`，运行时按项目 `.agate-version` 解析到对应版本目录——项目锁定旧版用旧版 gate、无声明用全局 current，切版本**无需重装 hook**。（Windows 无符号链接权限时以复制模式安装，升级后需重跑 `python3 ~/.agate/scripts/install-hook.py`，见 `platform-notes.md`「Windows 原生」章节。）
 
 版本管理形态（TAG0008 起）：
 ```bash
@@ -95,6 +95,7 @@ python3 ~/.agate/scripts/agate-install.py latest       # 更新到最新发布�
 python3 ~/.agate/scripts/agate-install.py vX.Y.Z       # 装指定版本目录（幂等）
 python3 ~/.agate/scripts/agate-install.py --uninstall vX.Y.Z   # 卸载版本（含项目引用保护）
 python3 ~/.agate/scripts/agate-resolve.py              # 查看当前项目解析到的版本 + 原因
+python3 ~/.agate/scripts/agate-setup.py                # 接入平台：探测已装平台 → 注册 orchestrator 身份（默认全局）+ 装 hook（幂等）
 ```
 > GitHub 直装得到的元仓库整仓形态版本目录（协议在 `agate/` 子目录）由 `_protocol_root` 两形态探测（`vdir/scripts` 先、`vdir/agate/scripts` 后）适配；根 `~/.agate/scripts/` 是随每次安装/升级刷新的单源副本（非软链）。完整的安装 / 迁移 / 更新 / 回退口径以 `UPGRADING.md`「版本管理生命周期」节为权威。
 
