@@ -193,6 +193,54 @@ def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, aga
     assert "SETUP.md" in result.output
 
 
+# --- Claude Code / OpenCode 产物校验（2026-09-21 补齐：四平台全覆盖）---
+#
+# 缺口实证：`agate-setup.py` 支持四个平台，而漂移检测此前只覆盖 DSH（后加 Codex）——
+# CC/OC 的 orchestrator.md 漂移无人发现，而它恰是**最易漂**的产物之一（指向协议根的
+# 模板文件，路径随版本布局变动）。本组锁定两平台的检测在位。
+
+
+def _install_orch(home, tpl, platform_dir, *, symlink, content=None):
+    link = home / platform_dir / "agents" / "orchestrator.md"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if symlink:
+        _symlink_or_skip(tpl, link)
+    else:
+        link.write_bytes(content if content is not None else tpl.read_bytes())
+
+
+@pytest.mark.parametrize("label,platform_dir", [
+    ("Claude Code", ".claude"),
+    ("OpenCode", ".config/opencode"),
+])
+def test_cc_oc_orchestrator_canonical_chain_no_warning(
+        run_cli, python_exe, agate_scripts, agate_root, tmp_path, label, platform_dir):
+    """CC/OC 的 orchestrator.md 软链指向权威模板 → 无警告。"""
+    home = _make_home(tmp_path)
+    _install_orch(home, agate_root / "orchestrator-template.md", platform_dir, symlink=True)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert f"{label} 安装产物" not in result.output
+
+
+@pytest.mark.parametrize("label,platform_dir", [
+    ("Claude Code", ".claude"),
+    ("OpenCode", ".config/opencode"),
+])
+def test_cc_oc_orchestrator_stale_target_warns(
+        run_cli, python_exe, agate_scripts, tmp_path, label, platform_dir):
+    """CC/OC 产物指向非权威副本 → 警告（回归：此前这两平台完全不在检测表内）。"""
+    home = _make_home(tmp_path)
+    stale = tmp_path / "stale-orch"
+    stale.mkdir()
+    (stale / "orchestrator.md").write_text("stale\n", encoding="utf-8")
+    _install_orch(home, stale / "orchestrator.md", platform_dir, symlink=True)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert f"{label} 安装产物" in result.output
+    assert "orchestrator-template.md" in result.output  # 修复命令给出权威目标
+
+
 # --- Codex 安装产物校验（2026-09-21：Codex 此前不在检测表内，产物漂移无人发现）---
 
 _CODEX_ARTIFACTS = (("skills/agate-protocol/SKILL.md", "SKILL.md"),)

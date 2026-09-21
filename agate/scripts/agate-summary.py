@@ -92,16 +92,25 @@ def _check_copy_drift(script_dir):
             )
 
 
-# 平台安装产物清单：{平台名: (平台 home 目录, 权威模板子目录, ((产物相对路径, 模板文件名), ...), SETUP 步骤)}
-#   新增平台接入物时须同步本表——否则该平台的产物漂移无人检测（Codex 曾因此缺席，2026-09-21）。
+# 平台安装产物清单：{平台名: (平台 home 目录, ((产物相对路径, 模板相对协议根路径), ...), SETUP 步骤)}
+#   覆盖 `agate-setup.py` 支持的**全部四个平台**——清单与 PLATFORMS 表须同步：漏一个，
+#   该平台的产物漂移就无人检测（Codex 曾缺席；Claude Code / OpenCode 亦曾缺席，2026-09-21 补齐）。
+#   仅覆盖**全局**形态（`--scope project` 的项目内产物不在此列：它随项目走、且项目目录各异，
+#   其一致性由项目自身的版本控制保证）。
 _PLATFORM_ARTIFACTS = (
-    ("DSH", ".dsh", "dsh", (
-        (".agent-presets/agate/preset.yml", "preset.yml"),
-        (".agent-presets/agate/agent.cordis.yml", "agent.cordis.yml"),
-        ("skills/agate-protocol/SKILL.md", "SKILL.md"),
+    ("Claude Code", ".claude", (
+        ("agents/orchestrator.md", "orchestrator-template.md"),
+    ), "2"),
+    ("OpenCode", ".config/opencode", (
+        ("agents/orchestrator.md", "orchestrator-template.md"),
+    ), "2"),
+    ("DSH", ".dsh", (
+        (".agent-presets/agate/preset.yml", "assets/templates/dsh/preset.yml"),
+        (".agent-presets/agate/agent.cordis.yml", "assets/templates/dsh/agent.cordis.yml"),
+        ("skills/agate-protocol/SKILL.md", "assets/templates/dsh/SKILL.md"),
     ), "2-DSH"),
-    ("Codex", ".agents", "codex", (
-        ("skills/agate-protocol/SKILL.md", "SKILL.md"),
+    ("Codex", ".agents", (
+        ("skills/agate-protocol/SKILL.md", "assets/templates/codex/SKILL.md"),
     ), "2-Codex"),
 )
 
@@ -131,13 +140,13 @@ def _check_platform_artifacts(script_dir):
     无该平台目录（未装该平台）或本版本无对应权威模板 → 跳过，不误报。
     """
     home = os.path.expanduser("~")
-    for name, platform_dir, tpl_sub, artifacts, setup_step in _PLATFORM_ARTIFACTS:
+    proto_root = os.path.dirname(script_dir)
+    for name, platform_dir, artifacts, setup_step in _PLATFORM_ARTIFACTS:
         if not os.path.isdir(os.path.join(home, platform_dir)):
             continue
-        tpl_dir = os.path.join(os.path.dirname(script_dir), "assets", "templates", tpl_sub)
-        for rel, fname in artifacts:
+        for rel, tpl_rel in artifacts:
             link = os.path.join(home, platform_dir, *rel.split("/"))
-            expected = os.path.join(tpl_dir, fname)
+            expected = os.path.join(proto_root, *tpl_rel.split("/"))
             if not os.path.isfile(expected):
                 continue  # 本版本无该权威模板 → 无从校验
             if not os.path.lexists(link):
