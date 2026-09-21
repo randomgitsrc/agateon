@@ -92,7 +92,9 @@ def _check_copy_drift(script_dir):
             )
 
 
-# 平台安装产物清单：{平台名: (平台 home 目录, ((产物相对路径, 模板相对协议根路径), ...), SETUP 步骤)}
+# 平台安装产物清单：{平台名: (平台 home 目录, ((产物相对路径, 模板相对协议根路径), ...), 备注)}
+#   末位字段当前未在输出中使用（未接入提示已聚合为一行、统一指 SETUP.md 步骤 2）；
+#   保留以记录各平台接入步骤编号，供人工排查时对照。
 #   覆盖 `agate-setup.py` 支持的**全部四个平台**——清单与 PLATFORMS 表须同步：漏一个，
 #   该平台的产物漂移就无人检测（Codex 曾缺席；Claude Code / OpenCode 亦曾缺席，2026-09-21 补齐）。
 #   仅覆盖**全局**形态（`--scope project` 的项目内产物不在此列：它随项目走、且项目目录各异，
@@ -115,6 +117,32 @@ _PLATFORM_ARTIFACTS = (
 )
 
 
+def _candidate_proto_roots(script_dir):
+    """候选权威协议根，**按优先级**返回（调用方取第一个确实含模板的）：
+
+      ① **本次运行解析到的协议根**（`resolve_version_root`）——安装态。接入产物应指向它，
+         故它必须优先：从 dev checkout / worktree 跑时，运行树是开发态而产物指向安装态，
+         拿运行树比对会**误报漂移**（2026-09-21 实测）。
+      ② **运行脚本所在的树**（`script_dir` 上溯一层）——version 目录直接调用、以及测试
+         夹具（隔离 HOME 内无真实版本目录）走这条。
+
+    为什么不能只用 ②：`~/.agate/scripts/`（SETUP 文档规定的调用方式）是**根级副本**，
+    其上溯一层是 `~/.agate` 而**不是**协议根，其下没有 `assets/templates/` → 检测会
+    全部 `continue` **静默失效**（2026-09-21 实测）。加入 ① 后三条调用路径都正确。
+    """
+    roots = []
+    try:
+        info = resolve_version_root()
+        if info and info.get("root"):
+            roots.append(info["root"])
+    except Exception:  # 解析失败不应影响 summary 其余输出（降级为只用运行树）
+        pass
+    roots.append(os.path.dirname(script_dir))
+    # 去重保序
+    seen = set()
+    return [r for r in roots if not (r in seen or seen.add(r))]
+
+
 def _check_platform_artifacts(script_dir):
     """校验各平台安装产物与权威模板一致（防静默漂移 / 防复制模式过期）。
 
@@ -131,20 +159,26 @@ def _check_platform_artifacts(script_dir):
     无该平台目录（未装该平台）或本版本无对应权威模板 → 跳过，不误报。
     """
     home = os.path.expanduser("~")
-    proto_root = os.path.dirname(script_dir)
-    for name, platform_dir, artifacts, setup_step in _PLATFORM_ARTIFACTS:
+    roots = _candidate_proto_roots(script_dir)
+    not_installed = []          # 聚合待报（见函数末：一行汇总，避免逐平台刷屏）
+    for name, platform_dir, artifacts, _setup_step in _PLATFORM_ARTIFACTS:
         if not os.path.isdir(os.path.join(home, platform_dir)):
             continue
         for rel, tpl_rel in artifacts:
             link = os.path.join(home, platform_dir, *rel.split("/"))
-            expected = os.path.join(proto_root, *tpl_rel.split("/"))
-            if not os.path.isfile(expected):
+            # 取第一个确实含该模板的候选根（见 _candidate_proto_roots 的理由）
+            expected = next(
+                (p for p in (os.path.join(r, *tpl_rel.split("/")) for r in roots)
+                 if os.path.isfile(p)),
+                None,
+            )
+            if expected is None:
                 continue  # 本版本无该权威模板 → 无从校验
             if not os.path.lexists(link):
-                sys.stderr.write(
-                    f"⚠️  {name} 安装产物未安装: {link}"
-                    f"（如需 {name} 接入见 agate/SETUP.md 步骤 {setup_step}）\n"
-                )
+                # 「已装该平台但未接入 agate」是**正常状态**（用户可能不需要），
+                # 故只做**一行汇总**提示，不逐产物刷屏——本机四平台目录都在时，
+                # 逐条会一次打出 3 行噪声（2026-09-21 对齐审查指出）。
+                not_installed.append(name)
                 continue
             if os.path.islink(link):
                 if os.path.realpath(link) != os.path.realpath(expected):
@@ -164,6 +198,15 @@ def _check_platform_artifacts(script_dir):
                     f"（复制模式不自动同步）\n"
                     f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                 )
+    if not_installed:
+        # 去重保序（DSH 三产物只报一次平台名）。措辞保留「未安装」与 SETUP.md 指引
+        # （既有 BDD 断言锚定这两个子串），只是把 N 行合并为 1 行。
+        names = list(dict.fromkeys(not_installed))
+        sys.stderr.write(
+            f"ℹ️  平台接入产物未安装: {' / '.join(names)}"
+            f"（接入: python3 ~/.agate/scripts/agate-setup.py；"
+            f"平台差异见 agate/SETUP.md 步骤 2）\n"
+        )
 
 
 def main():

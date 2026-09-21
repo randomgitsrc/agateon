@@ -57,6 +57,12 @@ SCOPE+ 影响范围多大，全部由主 Agent 最终拍板。没有任何机制
 - **协议文档自身的语义一致性**没有 in-flow gate：`check-protocol-consistency.py` + SELF-GATE 是结构 /
   关键词兜底，不覆盖语义；改协议靠人触发 protocol-alignment-review + 人确认 `NEEDS_HUMAN_REVIEW`。
   （本文档的存在就是这条的实例——一次全仓文实脱节靠人发起审计才发现。）
+- **平台适配层「去漂移」的机械守护只到关键词级**（2026-09-21 决策，见 `adr.md` ADR-008 增补
+  2026-09-21b）：适配层（agent md / preset / skill）只允许「指向 + 平台差异」，不得复述协议内容；
+  守护测试拦的是**逐字复述 / 照抄表头**（这是实际发生过的形态：某平台适配层曾抄会话开始步骤，
+  模板改了协议根回退路径而副本未跟）。但**同义改写即可绕过**，且**不打算**升级为语义判据：代价高于收益，还会给出"有守护就不会漂"
+  的虚假安全感。**防线归属仍是人工评审**。该上限登记为 `DEBT0049`（观察项：若再发生一次改写式复制
+  导致的实际漂移，则启动备选的结构性判据）。
 - **不启用 CI 时**，`git commit --no-verify` 可绕过全部 pre-commit gate 且无自动恢复——pre-commit
   hook 是唯一 enforcement 点。启用 CI（GitHub / GitLab / Gitea Actions）则 backstop 重跑
   `check-gate.py` + `check-p6-provenance.py` + `check-events.py` 兜底。

@@ -1625,20 +1625,24 @@ status: open
 priority: low
 evidence:
   - path: agate/tests/conftest.py
-    note: "PROTOCOL_RULE_MARKERS / PERSONA_INTERNAL_NAME_MARKERS / MAPPING_ROW_RE——判据锚点为字面短语与表格行特征；注释已登记『已知限制』但仅存在于代码内"
+    note: "PROTOCOL_RULE_MARKERS / PERSONA_INTERNAL_NAME_MARKERS / MAPPING_ROW_RE——判据锚点为字面短语与表格行特征；注释已登记『已知限制』并指向本条目"
   - path: agate/tests/unit/test_dsh_preset.py
     note: "守护 dsh/agent.cordis.yml 的 persona 与 dsh/SKILL.md：放回改动前文件会变红（回归有效），但把协议规则同义改写（如『你负责的产出文件只有这些』）即全不命中"
   - path: agate/tests/unit/test_platform_setup.py
     note: "守护 codex/SKILL.md：同上，否定断言同样可被改写绕过"
 impact: "守护能拦住最常见形态（逐字复述 / 照抄表头），但无法穷尽语义等价改写。若有人有意或无意改写措辞后复制协议内容，CI 不会红，漂移仍会随发布进入主线——而『看起来有守护』可能让评审放松。真正的防线仍是 protocol-alignment-review 人工审查。"
-recommendation: "两条路（择一或并行）：① 不追求语义判据，仅在协议层明确『适配层去漂移靠人工评审』并保持现守护为第一道网；② 若确需机械兜底，改为结构性判据——适配层文件**不得出现协议规则段的指纹特征**（如表格列头 + 行数阈值），或反过来断言『适配层只含指向句 + 工具映射 + 平台注意三节』的白名单式结构校验。注意：任何机械判据都有上限，勿再声称『已封死』。"
+recommendation: "**已决策（2026-09-21）：采路 ①** —— 不追求语义级判据（代价高于收益且给出虚假安全感），防线归属人工评审，决策记录于 `adr.md` ADR-008 增补(2026-09-21b) 与 `LIMITATIONS.md` 局限 3 专项条。**路 ②（结构性判据）作为备选保留**，触发条件：若再发生一次『改写式复制』导致的适配层漂移（即守护未拦住的实际事故），则启动——做法为断言『适配层只含指向句 + 工具映射 + 平台注意』的白名单式结构校验。**本条目因此转为观察项，非待办**。"
 closure_criteria:
-  - "决策已记录（选 ① 则在 SETUP/platform-notes 或 adr.md 写明防线归属；选 ② 则有对应的结构性判据 + 红/绿实证）"
-  - "现有守护的代码注释不再暗示『已封堵改写路径』"
-  - "consistency 0 ERROR"
+  - "① 决策已记录 ✅（见 ADR-008 增补 2026-09-21b + LIMITATIONS.md 局限 3 专项条）"
+  - "② 现有守护的代码注释不再暗示『已封堵改写路径』 ✅（conftest『已知限制』段已写明）"
+  - "③ 若启动备选（结构性判据）：有对应判据 + 红/绿实证（放回改写式复制样例应收紧为红）"
+  - path: agate/adr.md
+    note: "决策已记录（2026-09-21）：ADR-008「增补（2026-09-21b）：平台适配层『去漂移』的防线归属」——明确守护为关键词级第一道网、防线归属人工评审（同 LIMITATIONS.md 局限 3），并给出不做语义级判据的理由"
+  - path: agate/LIMITATIONS.md
+    note: "决策已记录（2026-09-21）：局限 3 下补专项条目『平台适配层去漂移的机械守护上限』——用户可读的权威局限面，与 ADR-008 增补互为指针"
 source: retrospective
 created_at: 2026-09-21
-task_id: null   # 待立项；由 2026-09-21 适配层去漂移 PR 的第三轮对齐审查提出，当时仅登记在代码注释（用户追问后补入本表）
+task_id: null   # 由 2026-09-21 适配层去漂移 PR 的对齐审查提出。**不关闭**：本条目已按「决策接受」处置（防线归属已记录），但 validator 要求 closed 条目须有 task_id + P5/P6 证据，而本次为 hotfix 类改动、无阶段产出——硬凑 task_id 属骗 gate。故保留 open 作**触发式观察项**：若再发生「改写式复制」导致的漂移，则启动备选方案（结构性判据）。
 ```
 
 ## DEBT0048
