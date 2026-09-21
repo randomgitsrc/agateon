@@ -639,3 +639,78 @@ def test_bdd_8_recon_plan_and_known_baseline_four_elements(agate_root):
 # protocol-tests.yml 真实 CI run 才能判定，P3 单元测试无法本地模拟/断言这类跨多次
 # CI 触发的稳定性结果。此 BDD 由 P6 阶段的 CI 触发验证覆盖，P3 不提供单元测试
 # （见 P3-test-cases.md 与 dispatch-context 约束 5，避免为了凑数造一个假测试）。
+
+
+# ---------- 元素类型校验（2026-09-21 补；对齐审查 E2 的连带建议）----------
+#
+# 背景：原校验只查 evidence / closure_criteria「是 list」，不查**元素类型**——实测一条
+# DEBT 的 closure_criteria 里混进了 evidence 形态的 `{path, note}` 字典而 **rc=0 放行**
+# （"决策已记录"的证据没进 evidence）。下面两例锁死两个方向。
+
+_PREFIX = (
+    "# 技术债登记\n\n## DEBT0001\n\n```yaml\n"
+    "id: DEBT0001\ncategory: technical\ntitle: T\nstatus: open\npriority: high\n"
+)
+
+
+def _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body):
+    md = tmp_path / "tech-debt.md"
+    md.write_text(_PREFIX + body + "```\n", encoding="utf-8")
+    return _run_check_debt(agate_scripts, python_exe, run_cli, str(md))
+
+
+def test_closure_criteria_element_type_enforced(agate_scripts, python_exe, run_cli, tmp_path):
+    """closure_criteria 混入 dict（evidence 形态）→ 必须报错（原实现 rc=0 放行）。"""
+    body = (
+        "evidence:\n  - path: a.md\n    note: n\n"
+        "impact: i\nrecommendation: r\n"
+        "closure_criteria:\n  - path: b.md\n    note: 错挂证据\n"
+        "source: review\ncreated_at: 2026-09-21\n"
+    )
+    result = _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body)
+    assert result.returncode != 0, f"closure_criteria 含 dict 应报错:\n{result.output}"
+    assert "closure_criteria 元素类型错误" in result.output
+
+
+def test_evidence_element_type_enforced(agate_scripts, python_exe, run_cli, tmp_path):
+    """evidence 混入 str（closure_criteria 形态）→ 必须报错。"""
+    body = (
+        "evidence:\n  - 只是个字符串\n"
+        "impact: i\nrecommendation: r\n"
+        "closure_criteria:\n  - 完成\n"
+        "source: review\ncreated_at: 2026-09-21\n"
+    )
+    result = _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body)
+    assert result.returncode != 0, f"evidence 含 str 应报错:\n{result.output}"
+    assert "evidence 元素类型错误" in result.output
+
+
+def test_evidence_empty_entry_rejected(agate_scripts, python_exe, run_cli, tmp_path):
+    """evidence 元素为**空 dict** → 拒绝（零信息量证据；原实现 rc=0 放行）。
+
+    同时锁定**最小收紧**：只拒绝空/无已知键的条目，不改动既有可接受形态
+    （如只有 `note` 的历史回填条目，见 BDD-11 夹具）。
+    """
+    body = (
+        "evidence:\n  - {}\n"
+        "impact: i\nrecommendation: r\n"
+        "closure_criteria:\n  - c\n"
+        "source: review\ncreated_at: 2026-09-21\n"
+    )
+    result = _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body)
+    assert result.returncode != 0, f"空 evidence 应被拒:\n{result.output}"
+    assert "为空或无已知键" in result.output
+
+
+def test_evidence_note_only_entry_accepted(agate_scripts, python_exe, run_cli, tmp_path):
+    """evidence 元素**只含 note**（无 path/ref）→ 仍接受（最小收紧的边界，勿过度收紧）。"""
+    body = (
+        "evidence:\n  - note: 根因说明\n"
+        "impact: i\nrecommendation: r\n"
+        "closure_criteria:\n  - c\n"
+        "source: review\ncreated_at: 2026-09-21\n"
+    )
+    result = _run_single_entry(agate_scripts, python_exe, run_cli, tmp_path, body)
+    assert result.returncode == 0, (
+        f"只含 note 的 evidence 属既有可接受形态（BDD-11 夹具同形），不应被拒:\n{result.output}"
+    )

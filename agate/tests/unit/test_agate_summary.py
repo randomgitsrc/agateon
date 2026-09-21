@@ -6,7 +6,9 @@
 
 import os
 import re
+import shutil
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -17,10 +19,65 @@ def _resolve_env(home):
     return {"AGATE_ROOT": "", "HOME": str(home), "USERPROFILE": str(home)}
 
 
+# 平台接入产物的权威判据是「**任一已安装版本**里含该模板」（见 _installed_version_proto_roots
+# 的理由），故假 HOME 的版本目录里必须真放模板，否则检测一律跳过。
+_PROTO_ROOT = Path(__file__).resolve().parents[2]          # agate/tests/unit/ → agate/
+_TEMPLATE_RELS = (
+    "orchestrator-template.md",
+    "assets/templates/dsh/preset.yml",
+    "assets/templates/dsh/agent.cordis.yml",
+    "assets/templates/dsh/SKILL.md",
+    "assets/templates/codex/SKILL.md",
+)
+
+
+# 四平台的（平台目录, 产物相对路径）→ 权威模板相对协议根路径（抄自 agate-setup.py 的
+# PLATFORMS，用于参数化覆盖"指向 current 应静默"对**嵌套模板**同样成立）。
+_TPL_BY_PLATFORM = {
+    (".claude", "agents/orchestrator.md"): "orchestrator-template.md",
+    (".config/opencode", "agents/orchestrator.md"): "orchestrator-template.md",
+    (".dsh", ".agent-presets/agate/agent.cordis.yml"): "assets/templates/dsh/agent.cordis.yml",
+    (".dsh", ".agent-presets/agate/preset.yml"): "assets/templates/dsh/preset.yml",
+    (".dsh", "skills/agate-protocol/SKILL.md"): "assets/templates/dsh/SKILL.md",
+    (".agents", "skills/agate-protocol/SKILL.md"): "assets/templates/codex/SKILL.md",
+}
+
+
+def _no_artifact_signal(output):
+    """输出中**无任何**平台接入产物信号（漂移 / 已过期 / 版本落后 / 未安装）。
+
+    为什么需要（2026-09-21 终审暴露的假绿）：单查某个平台子串（如 `"DSH 安装产物"`）
+    会漏掉**聚合**行——「版本落后」与「未安装」都是聚合文案（「平台接入产物版本落后
+    （当前 …）: DSH」），不含 `"DSH 安装产物"` → 信号已发出而断言照过。
+    """
+    return all(
+        kw not in output
+        for kw in ("安装产物漂移", "安装产物已过期", "版本落后", "未安装或不完整")
+    )
+
+
+def _installed_tpl(home, rel, version="v0.44.0"):
+    """假 HOME 中**已安装版本**内的模板路径（产物应指向这里才算权威）。"""
+    return home / ".agate" / version / rel
+
+
 def _make_home(tmp_path, versions=("v0.43.0", "v0.44.0"), current="latest", latest="v0.44.0"):
+    """假 HOME：版本目录 + latest/current **文本指针**（非软链，跨平台确定性）。
+
+    版本目录内**复刻真实模板**（从 `_PROTO_ROOT` 拷贝）——因为产物检测的权威判据是
+    "任一已装版本含该模板"。同时建 `scripts/` 使 `_protocol_root` 认定其为协议根。
+    """
     home = tmp_path / "home"
     for v in versions:
-        (home / ".agate" / v).mkdir(parents=True, exist_ok=True)
+        vdir = home / ".agate" / v
+        (vdir / "scripts").mkdir(parents=True, exist_ok=True)
+        for rel in _TEMPLATE_RELS:
+            src = _PROTO_ROOT / rel
+            if not src.is_file():
+                continue
+            dst = vdir / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
     (home / ".agate" / "latest").write_text(latest + "\n", encoding="utf-8")
     (home / ".agate" / "current").write_text(current + "\n", encoding="utf-8")
     return home
@@ -123,18 +180,22 @@ def test_dsh_links_no_dsh_dir_no_warning(run_cli, python_exe, agate_scripts, tmp
         cwd=str(project), env=_resolve_env(home),
     )
     assert result.returncode == 0
-    assert "DSH 安装产物" not in result.output
+    # 不得只查单平台子串——「版本落后」是聚合行（「平台接入产物版本落后…: DSH」），
+    # 不含该子串 → 信号已发出而断言照过（2026-09-21 两轮审查均实测此假绿）。
+    assert _no_artifact_signal(result.output), (
+        f"指向权威模板应无任何产物信号:\n{result.output}"
+    )
 
 
 @pytest.mark.windows_smoke
 def test_dsh_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
     """三个产物软链均指向权威模板（{agate_root}/assets/templates/dsh/）→ 无警告。"""
     home = _make_home(tmp_path)
-    tpl_dir = agate_assets / "templates" / "dsh"
     for rel, name in _DSH_ARTIFACTS:
         link = home / ".dsh" / rel
         link.parent.mkdir(parents=True, exist_ok=True)
-        _symlink_or_skip(tpl_dir / name, link)
+        # 指向**已安装版本**内的模板（权威）；指向真实仓库树会被正确判为漂移
+        _symlink_or_skip(_installed_tpl(home, f"assets/templates/dsh/{name}"), link)
     project = tmp_path / "project"
     project.mkdir()
     result = run_cli(
@@ -142,7 +203,9 @@ def test_dsh_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts
         cwd=str(project), env=_resolve_env(home),
     )
     assert result.returncode == 0
-    assert "DSH 安装产物" not in result.output
+    assert _no_artifact_signal(result.output), (
+        f"未装 DSH（无 ~/.dsh）应无任何产物信号:\n{result.output}"
+    )
 
 
 def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_scripts, tmp_path):
@@ -170,7 +233,10 @@ def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_script
     # 开发 checkout 运行，那时 expected 指向未发布树，照抄会把安装指错。权威模板路径
     # 仍单独打印（上一行断言 SKILL.md 即其一部分）。
     assert "agate-setup.py" in result.output, "应给出可执行的修复命令"
-    assert "当前权威模板" in result.output, "应告知当前权威模板位置（信息不丢）"
+    # BDD 意图 = 「告知权威位置（信息不丢）」。2026-09-21 起文案改为
+    # 「…下的同名模板才是权威；示例: <path>」（原「权威模板之一: …」在单候选时语义怪、
+    # 且可能印旧版本路径）——断言随行为更新，意图不变。
+    assert "才是权威" in result.output and "示例" in result.output, "应告知权威位置（信息不丢）"
 
 
 def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
@@ -216,7 +282,7 @@ def test_cc_oc_orchestrator_canonical_chain_no_warning(
         run_cli, python_exe, agate_scripts, agate_root, tmp_path, label, platform_dir):
     """CC/OC 的 orchestrator.md 软链指向权威模板 → 无警告。"""
     home = _make_home(tmp_path)
-    _install_orch(home, agate_root / "orchestrator-template.md", platform_dir, symlink=True)
+    _install_orch(home, _installed_tpl(home, "orchestrator-template.md"), platform_dir, symlink=True)
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
     assert f"{label} 安装产物" not in result.output
@@ -268,10 +334,12 @@ def _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path):
 def test_codex_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
     """Codex 产物软链指向权威模板 → 无警告（回归：Codex 此前不在检测表内）。"""
     home = _make_home(tmp_path)
-    _install_codex(home, agate_assets / "templates" / "codex", symlink=True)
+    _install_codex(home, _installed_tpl(home, "assets/templates/codex"), symlink=True)
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
-    assert "Codex 安装产物" not in result.output
+    assert _no_artifact_signal(result.output), (
+        f"指向权威模板应无任何产物信号（聚合行不含单平台子串，勿只查后者）:\n{result.output}"
+    )
 
 
 def test_codex_links_stale_target_warns_with_fix(run_cli, python_exe, agate_scripts, tmp_path):
@@ -294,7 +362,10 @@ def test_codex_links_missing_artifact_warns_not_installed(run_cli, python_exe, a
     (home / ".agents").mkdir(parents=True, exist_ok=True)
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
-    assert "Codex 安装产物未安装" in result.output
+    # 2026-09-21 有意变更：未安装提示由「逐平台一行」改为**聚合一行**（消除噪声，
+    # 本机实测原先一次刷 3 行）。BDD 意图（告知未接入 + 给出指引）不变。
+    assert "平台接入产物未安装" in result.output
+    assert "Codex" in result.output
     assert "SETUP.md" in result.output
 
 
@@ -313,8 +384,8 @@ def test_copy_mode_identical_content_no_warning(run_cli, python_exe, agate_scrip
     _install_codex(home, agate_assets / "templates" / "codex", symlink=False)
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
-    assert "Codex 安装产物" not in result.output, (
-        f"复制形态内容一致时不得报警（旧实现比 realpath 会误报漂移）:\n{result.output}"
+    assert _no_artifact_signal(result.output), (
+        f"复制形态内容一致时不得报任何产物信号（含聚合的「版本落后」）:\n{result.output}"
     )
 
 
@@ -510,3 +581,257 @@ def test_platform_tables_cover_identical_global_artifacts(agate_scripts):
         extra = got_by_key[key] - want_by_key[key]
         assert not missing, f"{key}: 检测表漏了这些产物（漂移将无人发现）: {sorted(missing)}"
         assert not extra, f"{key}: 检测表多出这些不在 PLATFORMS 的项: {sorted(extra)}"
+
+
+# --- ⑤ 边界回归 + 候选根语义（2026-09-21，对齐审查可选⑤ + 自查发现的调用路径缺陷）---
+#
+# 自查发现（比审查的④更实质）：原实现只以 `script_dir` 上溯作权威根，导致三条调用路径
+# 里**只有一条正确**——
+#   ① 版本目录直接调用（.../agate/scripts/）：正确
+#   ② `~/.agate/scripts/`（SETUP 文档规定的写法，根级副本）：上溯到 ~/.agate 而**非**协议根
+#      → 模板找不到 → 全部 continue → 检测**静默失效**
+#   ③ dev checkout / worktree：运行树是开发态、产物指向安装态 → **误报漂移**
+# 修法：候选根按优先级取第一个含模板者——① 解析到的协议根（安装态）② 运行树。
+# 下面用**隔离版本目录**构造判别用例：只有"优先用解析根"的实现才能通过。
+
+
+def _make_home_with_version(tmp_path, version="v9.9.9"):
+    """隔离 HOME：版本目录内**含真实 assets**（src=真实模板），使解析根可用。"""
+    home = tmp_path / "home"
+    vdir = home / ".agate" / version / "agate"
+    (vdir / "scripts").mkdir(parents=True)
+    (vdir / "assets" / "templates" / "codex").mkdir(parents=True)
+    (vdir / "assets" / "templates" / "codex" / "SKILL.md").write_text(
+        "# canonical v9.9.9\n", encoding="utf-8")
+    (home / ".agate" / "latest").write_text(version + "\n", encoding="utf-8")
+    (home / ".agate" / "current").write_text("latest\n", encoding="utf-8")
+    return home, vdir
+
+
+def test_proto_root_prefers_resolved_over_script_tree(run_cli, python_exe, agate_scripts, tmp_path):
+    """产物指向**解析到的协议根**时不得报漂移——即使运行树是别的树。
+
+    判别力：若实现只看 `script_dir`（旧行为），expected 会取**运行树**的模板，
+    与指向隔离版本目录的产物不等 → 误报漂移 → 本用例红。
+    """
+    home, vdir = _make_home_with_version(tmp_path)
+    link = home / ".agents" / "skills" / "agate-protocol" / "SKILL.md"
+    link.parent.mkdir(parents=True)
+    _symlink_or_skip(vdir / "assets" / "templates" / "codex" / "SKILL.md", link)
+
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物漂移" not in result.output, (
+        f"产物指向**解析到的**协议根（安装态）时不得报漂移（旧实现只看运行树会误报）:\n{result.output}"
+    )
+
+
+@pytest.mark.windows_smoke
+def test_dsh_copy_mode_stale_content_warns(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
+    """⑤ 边界：DSH 复制形态内容已旧 → 报「已过期」（此前只测了 Codex 的复制形态）。"""
+    home = _make_home(tmp_path)
+    for rel, _name in _DSH_ARTIFACTS:
+        link = home / ".dsh" / rel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.write_bytes(b"# outdated\n")
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert result.output.count("已过期") == len(_DSH_ARTIFACTS), (
+        f"DSH 三个复制产物都过期 → 应各报一次「已过期」:\n{result.output}"
+    )
+
+
+@pytest.mark.parametrize("label,platform_dir", [
+    ("Claude Code", ".claude"),
+    ("OpenCode", ".config/opencode"),
+])
+@pytest.mark.windows_smoke
+def test_cc_oc_copy_mode_stale_content_warns(
+        run_cli, python_exe, agate_scripts, tmp_path, label, platform_dir):
+    """⑤ 边界：CC/OC 复制形态内容已旧 → 报「已过期」。"""
+    home = _make_home(tmp_path)
+    link = home / platform_dir / "agents" / "orchestrator.md"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.write_bytes(b"# outdated\n")
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert f"{label} 安装产物已过期" in result.output
+
+
+def test_multiple_platforms_drift_reported_independently(run_cli, python_exe, agate_scripts, tmp_path):
+    """⑤ 边界：多平台同时漂移 → 逐平台各报一次，互不吞没。"""
+    home = _make_home(tmp_path)
+    stale = tmp_path / "stale-all"
+    stale.mkdir()
+    # Codex 与 OpenCode 同时装成指向非权威副本
+    for platform_dir, rel in ((".agents", "skills/agate-protocol/SKILL.md"),
+                              (".config/opencode", "agents/orchestrator.md")):
+        f = stale / rel.replace("/", "_")
+        f.write_text("stale\n", encoding="utf-8")
+        link = home / platform_dir / rel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        _symlink_or_skip(f, link)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物漂移" in result.output
+    assert "OpenCode 安装产物漂移" in result.output
+
+
+def test_not_installed_hint_aggregated_single_line(run_cli, python_exe, agate_scripts, tmp_path):
+    """④ 未安装提示聚合为**一行**（原先每平台一行，本机实测一次刷 3 行噪声）。"""
+    home = _make_home(tmp_path)
+    for d in (".claude", ".config/opencode", ".agents", ".dsh"):
+        (home / d).mkdir(parents=True, exist_ok=True)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    lines = [ln for ln in result.output.splitlines() if "平台接入产物未安装" in ln]
+    assert len(lines) == 1, f"未安装提示应聚合为一行，实际 {len(lines)} 行:\n{result.output}"
+    # 平台名都列在这一行里
+    for name in ("Claude Code", "OpenCode", "DSH", "Codex"):
+        assert name in lines[0], f"聚合行应含 {name}"
+
+
+@pytest.mark.windows_smoke
+def test_pinned_project_does_not_flag_global_artifact(run_cli, python_exe, agate_scripts, tmp_path):
+    """E3 回归：项目 `.agate-version` 钉旧版时，**全局**产物指向 current 版**不得**报漂移。
+
+    判别力：若权威取 `resolve_version_root()`（层序含**项目声明**），钉版项目里会误报；
+    按提示"修复"（把全局链接改指钉的版本）后，非钉版目录**又**报漂移 → 实测双向振荡。
+    本用例锁死正确语义：全局产物的权威 = **任一已安装版本**，与项目钉版无关。
+    """
+    home = _make_home(tmp_path, versions=("v1.0.0", "v2.0.0"), latest="v2.0.0")
+    link = home / ".agents" / "skills" / "agate-protocol" / "SKILL.md"
+    link.parent.mkdir(parents=True)
+    # 全局产物指向 current 版（v2.0.0）——完全正当
+    _symlink_or_skip(_installed_tpl(home, "assets/templates/codex/SKILL.md", version="v2.0.0"), link)
+
+    proj = tmp_path / "pinned"
+    proj.mkdir()
+    (proj / ".agate-version").write_text("agate: v1.0.0\n", encoding="utf-8")
+    result = run_cli(python_exe, str(agate_scripts / "agate-summary.py"),
+                     cwd=str(proj), env=_resolve_env(home))
+    assert result.returncode == 0
+    assert "漂移" not in result.output, (
+        f"全局产物指向 current 版，在钉版项目里不得报漂移（权威与项目钉版无关）:\n{result.output}"
+    )
+
+
+def test_artifact_pointing_outside_installed_versions_is_flagged(run_cli, python_exe,
+                                                                 agate_scripts, tmp_path):
+    """反向断言：产物指向**真实仓库树（dev checkout，非任何已装版本）**→ 报漂移。
+
+    这正是该检测的原始缺陷类（历史上某平台产物曾指向测试临时副本、静默穿过一次发布）。
+    与上一条合起来锁定语义：**在已装版本内 = 正当；在已装版本外 = 漂移**。
+    """
+    home = _make_home(tmp_path)
+    link = home / ".config" / "opencode" / "agents" / "orchestrator.md"
+    link.parent.mkdir(parents=True)
+    _symlink_or_skip(_PROTO_ROOT / "orchestrator-template.md", link)  # 指向 dev 树
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "OpenCode 安装产物漂移" in result.output, (
+        f"指向已安装版本树之外的产物应报漂移:\n{result.output}"
+    )
+
+
+@pytest.mark.windows_smoke
+def test_artifact_pointing_into_repo_clone_is_flagged(run_cli, python_exe, agate_scripts, tmp_path):
+    """应修1 回归：产物指向 `~/.agate/repo`（origin clone，**非版本目录**）→ 报漂移。
+
+    `agate_home()` 下有 `repo/`（clone）与 `scripts/`（根副本）等非版本目录；把它们算作
+    "已安装版本"会让"产物指向 dev clone"静默通过——而 clone 可能领先发布版（真机实测领先
+    4 提交）。权威集须只认 `vX.Y.Z`（`is_strict_version`）。
+    """
+    home = _make_home(tmp_path)
+    # 造一个 **真实形态**的 repo clone：`repo/agate/scripts/` 存在（故 `_protocol_root(repo)`
+    # 会正确识别 `repo/agate` 为协议根——夹具若缺这层，候选会被 `isfile` 过滤掉，
+    # 测试就会"因错误的原因通过"，失去判别力）。
+    clone_proto = home / ".agate" / "repo" / "agate"
+    (clone_proto / "scripts").mkdir(parents=True, exist_ok=True)
+    clone_tpl = clone_proto / "assets" / "templates" / "codex" / "SKILL.md"
+    clone_tpl.parent.mkdir(parents=True, exist_ok=True)
+    clone_tpl.write_text("# from clone\n", encoding="utf-8")
+    link = home / ".agents" / "skills" / "agate-protocol" / "SKILL.md"
+    link.parent.mkdir(parents=True)
+    _symlink_or_skip(clone_tpl, link)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "Codex 安装产物漂移" in result.output, (
+        f"指向 repo clone（非版本目录）应报漂移——否则 dev clone 静默通过:\n{result.output}"
+    )
+
+
+@pytest.mark.windows_smoke
+def test_artifact_pointing_to_installed_but_not_current_reports_lagging(
+        run_cli, python_exe, agate_scripts, tmp_path):
+    """应修2 回归：产物指向**已装但非 current** 的版本 → 报「落后」（信息级，非漂移）。
+
+    为什么必须有信号：`agate-install.py` 装新版**不删旧版**，而接入产物指向的是**具体版本
+    目录**（非 current 软链）→ "升级后产物落后"是**默认状态**，静默会让用户以为一直在用新版。
+    用**机器 current** 判（项目钉版不影响），故不会振荡。
+    """
+    home = _make_home(tmp_path, versions=("v1.0.0", "v2.0.0"), latest="v2.0.0")
+    link = home / ".config" / "opencode" / "agents" / "orchestrator.md"
+    link.parent.mkdir(parents=True)
+    # 指向已装的旧版 v1.0.0（current = v2.0.0）
+    _symlink_or_skip(_installed_tpl(home, "orchestrator-template.md", version="v1.0.0"), link)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "版本落后" in result.output, f"指向已装旧版应报「落后」:\n{result.output}"
+    assert "漂移" not in result.output, (
+        f"落后**不是**漂移（未指向异物），措辞须区分（否则与 E3 的钉版用例冲突）:\n{result.output}"
+    )
+
+
+@pytest.mark.windows_smoke
+@pytest.mark.parametrize("platform_dir,rel", [
+    (".claude", "agents/orchestrator.md"),
+    (".config/opencode", "agents/orchestrator.md"),
+    (".dsh", ".agent-presets/agate/preset.yml"),
+    (".agents", "skills/agate-protocol/SKILL.md"),
+])
+def test_artifact_on_current_version_reports_nothing(
+        run_cli, python_exe, agate_scripts, tmp_path, platform_dir, rel):
+    """对照：产物指向**机器 current 版** → 完全静默（四平台全覆盖）。
+
+    **不能只测 OpenCode**（2026-09-21 终审指出）：CC/OC 的模板直接在协议根下，而
+    DSH/Codex 的模板**嵌在 `assets/templates/…`** —— 若判据用 `dirname(候选)` 比协议根，
+    嵌套模板会被误报「版本落后」（且重跑 setup 也无法消除）。本用例对四平台逐一锁定。
+    """
+    home = _make_home(tmp_path, versions=("v1.0.0", "v2.0.0"), latest="v2.0.0")
+    # 装该平台的**全部**产物（DSH 三件套；只装一件会被正确报「不完整」，那不是本用例要测的）
+    for (pdir, prel), tpl in _TPL_BY_PLATFORM.items():
+        if pdir != platform_dir:
+            continue
+        link = home / pdir / prel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        _symlink_or_skip(_installed_tpl(home, tpl, version="v2.0.0"), link)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert _no_artifact_signal(result.output), (
+        f"指向 current 版应完全静默（嵌套模板尤须注意）:\n{result.output}"
+    )
+
+
+def test_fixture_template_paths_cover_artifact_table(agate_scripts):
+    """夹具健壮性：`_TEMPLATE_RELS` / `_TPL_BY_PLATFORM` 必须**覆盖**产物表里的全部模板路径。
+
+    为什么需要（2026-09-21 复核实测）：若产物表的某条模板路径被改名而夹具未跟，`_make_home`
+    就不会放该模板 → 候选为空 → 检测 `continue` → 该参数用例**因"无候选"而假绿**。
+    本用例把这种"夹具与表脱节"变成红灯。
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("sum", agate_scripts / "agate-summary.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    needed = {tpl for _n, _d, items, _s in mod._PLATFORM_ARTIFACTS for _rel, tpl in items}
+    missing = needed - set(_TEMPLATE_RELS)
+    assert not missing, (
+        f"夹具 _TEMPLATE_RELS 未覆盖产物表的模板路径（会导致候选为空而假绿）: {sorted(missing)}"
+    )
+    mapped = set(_TPL_BY_PLATFORM.values())
+    missing2 = needed - mapped
+    assert not missing2, (
+        f"_TPL_BY_PLATFORM 未覆盖产物表的模板路径: {sorted(missing2)}"
+    )
