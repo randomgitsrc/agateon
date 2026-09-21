@@ -289,6 +289,35 @@ python3 ~/.agate/scripts/agate-setup.py --uninstall --purge         # 再删本�
 用户数据（`agate-workspace/` 等）只报告不删；装 hook 时备份的用户原 hook 卸载时还原。
 详见 `agate/AGENTS.md`「卸载」节。
 
+### v0.75.0 — 完整卸载（**无破坏性变更**）
+
+**升级方式**：`python3 ~/.agate/scripts/agate-install.py latest`（幂等）。**零迁移动作**。
+
+> 实现注记：本节平台名为平台接入细节的记述，非协议语义定义。
+
+**新增**：
+
+- **`agate-setup.py --uninstall`（完整卸载）**——此前只有"装"没有"卸"：`--list` 查看已装、
+  `--dry-run` 预览、`--uninstall` 清接入物（`--scope global|project`）、`--all-projects`
+  清台账里每个装过的项目、`--purge` 删本体。
+  **三条安全约束**：① 删前**按事实验证归属**（证不出则保留并报告）；② 用户工作数据
+  （`agate-workspace/` 等）**只报告不删**；③ 装 hook 时备份的用户原文件卸载时**还原**。
+- **项目安装台账** `<安装根>/installed-projects.json`：`--scope project` 安装时登记，
+  解决"全局装一次 + 多项目分散装 → 卸载不知项目在哪"的散落问题。台账**只作索引**。
+
+**修复**：
+
+- **复制模式装出的 hook 不可执行 → git 静默忽略 → gate 兜底无声失效**（v0.73.0 起存在）：
+  `shutil.copyfile` 不携带权限位，且只对源脚本补执行位、未对目标补位 → Windows
+  （无符号链接权限）与手工走复制模式时，`git commit` 报"钩子被忽略"且 **exit 0**。
+  现复制后显式补执行位。
+- `--scope project` 的**安装基准与卸载/台账不一致**（安装按进程 cwd、其余按 git 根）：
+  在仓库子目录安装会让那些产物**永远清不掉**；现统一以 git 根为基准。
+- 未安装提示聚合、`agate-debt-check.py` 校验加强等（见 `CHANGELOG.md`）。
+
+**注意**：**不要用 `rm -rf ~/.agate` 卸载**——那只删本体，平台接入物与项目侧 hook 会留下
+断链或陈旧副本（复制模式下的可执行陈旧 hook 会让 `git commit` 失败）。用上面的 `--uninstall`。
+
 ### v0.74.0 — 平台接入命令化 + 适配层去漂移（**无破坏性变更**）
 
 > 实现注记：本节平台名为**平台接入细节**的记述（非协议语义定义）——协议语义层不感知具体平台的注册机制与工具名。

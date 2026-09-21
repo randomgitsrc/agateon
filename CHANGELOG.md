@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+（暂无——下个版本的变更在此累积。）
+
+## [0.75.0] - 2026-09-21
+
 ### 新增
 
 - **`agate-setup.py --uninstall`（完整卸载）**：此前只有"装"没有"卸"——文档让用户 `rm -rf ~/.agate`，但那**只删本体**，平台接入物与项目侧 git hook 会变成**断链**（**复制模式下的陈旧 hook 会让 `git commit` 直接失败**；软链断链或非可执行副本则被 git 静默忽略——2026-09-21 实测修正）。现提供对称卸载：`--list` 查看、`--dry-run` 预览、`--uninstall` 清接入物（`--scope global|project`）、`--all-projects` 清台账里每个项目、`--purge` 删本体。
