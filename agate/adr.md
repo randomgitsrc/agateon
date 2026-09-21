@@ -256,7 +256,7 @@ agate 协议里散落在正文的机器读取字段（P1/P2/P6/P7 共约 40+ 个
 
 > 实现注记：本段为平台接入细节的决策记录（OpenCode/Claude Code frontmatter 字段兼容实测结论），属实现注记，非协议语义定义。
 
-- Windows 无符号链接权限（无开发者模式/非管理员）时退化为复制，牺牲自动同步能力——`agate/SETUP.md` 已文档化此权衡和退化步骤。**该缺口已于 2026-09-21 关闭**：`agate-summary.py` 的漂移检测现覆盖**四个平台**的接入产物（Claude Code / OpenCode / DSH / Codex），且对复制形态**比对内容**——模板升级后副本未刷新会给出「已过期」警告与修复命令（不再是纯手工步骤）
+- Windows 无符号链接权限（无开发者模式/非管理员）时退化为复制，牺牲自动同步能力——`agate/SETUP.md` 已文档化此权衡和退化步骤。**该缺口已于 2026-09-21 关闭**：`agate-summary.py` 的漂移检测现覆盖**四个平台**的接入产物（Claude Code / OpenCode / DSH / Codex），且对复制形态**比对内容**——副本内容若与任何已装版本都不一致则告警「已过期」、仍等于某个已装版本（升级后旧版未卸载的常态）则给信息级「版本落后」，均附修复命令（不再是纯手工步骤）
 - `permission`/`mode`/`color` 等 OpenCode 专属字段和 Claude Code 需要的 `name` 字段共存于同一份 frontmatter——经实测确认 Claude Code 会静默忽略不认识的字段（不报错），OpenCode 会把不认识的字段归入通用 `options` 桶保留（不报错），两边互不冲突；但 Claude Code 缺少必填的 `name` 字段会导致整个文件被静默跳过（无警告日志），是本次改造过程中发现的一个容易复发的坑，`orchestrator-template.md`/`agate/SETUP.md` 均已加提醒
 
 ### 后果

@@ -237,7 +237,11 @@ def _check_platform_artifacts():
                         f"⚠️  {name} 安装产物漂移: {link}\n"
                         f"    实指 {target}\n"
                         f"    不在任何已安装版本树内"
-                        f"（{cur_root or '权威'}/… 下的同名模板才是权威；示例: {cand_pairs[-1][1]}）\n"
+                        f"（"
+                        f"{os.path.join(cur_root, tpl_rel) if cur_root else '任一已安装版本的同名模板'}"
+                        f" 才是权威；示例: "
+                        f"{next((c for r, c in cand_pairs if r == cur_root), cand_pairs[-1][1])}"
+                        f"）\n"
                         # 修复命令用**稳定入口**而非上面那行路径：本脚本可能正从
                         # worktree/开发 checkout 运行，此时候选路径指向未发布树，
                         # 照抄会把安装指到那里。

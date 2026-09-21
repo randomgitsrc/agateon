@@ -180,7 +180,11 @@ def test_dsh_links_no_dsh_dir_no_warning(run_cli, python_exe, agate_scripts, tmp
         cwd=str(project), env=_resolve_env(home),
     )
     assert result.returncode == 0
-    assert "DSH 安装产物" not in result.output
+    # 不得只查单平台子串——「版本落后」是聚合行（「平台接入产物版本落后…: DSH」），
+    # 不含该子串 → 信号已发出而断言照过（2026-09-21 两轮审查均实测此假绿）。
+    assert _no_artifact_signal(result.output), (
+        f"指向权威模板应无任何产物信号:\n{result.output}"
+    )
 
 
 @pytest.mark.windows_smoke
@@ -199,7 +203,9 @@ def test_dsh_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts
         cwd=str(project), env=_resolve_env(home),
     )
     assert result.returncode == 0
-    assert "DSH 安装产物" not in result.output
+    assert _no_artifact_signal(result.output), (
+        f"未装 DSH（无 ~/.dsh）应无任何产物信号:\n{result.output}"
+    )
 
 
 def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_scripts, tmp_path):
@@ -331,7 +337,9 @@ def test_codex_links_canonical_chain_no_warning(run_cli, python_exe, agate_scrip
     _install_codex(home, _installed_tpl(home, "assets/templates/codex"), symlink=True)
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
-    assert "Codex 安装产物" not in result.output
+    assert _no_artifact_signal(result.output), (
+        f"指向权威模板应无任何产物信号（聚合行不含单平台子串，勿只查后者）:\n{result.output}"
+    )
 
 
 def test_codex_links_stale_target_warns_with_fix(run_cli, python_exe, agate_scripts, tmp_path):
@@ -376,8 +384,8 @@ def test_copy_mode_identical_content_no_warning(run_cli, python_exe, agate_scrip
     _install_codex(home, agate_assets / "templates" / "codex", symlink=False)
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
-    assert "Codex 安装产物" not in result.output, (
-        f"复制形态内容一致时不得报警（旧实现比 realpath 会误报漂移）:\n{result.output}"
+    assert _no_artifact_signal(result.output), (
+        f"复制形态内容一致时不得报任何产物信号（含聚合的「版本落后」）:\n{result.output}"
     )
 
 
@@ -804,3 +812,26 @@ def test_artifact_on_current_version_reports_nothing(
         f"指向 current 版应完全静默（嵌套模板尤须注意）:\n{result.output}"
     )
 
+
+def test_fixture_template_paths_cover_artifact_table(agate_scripts):
+    """夹具健壮性：`_TEMPLATE_RELS` / `_TPL_BY_PLATFORM` 必须**覆盖**产物表里的全部模板路径。
+
+    为什么需要（2026-09-21 复核实测）：若产物表的某条模板路径被改名而夹具未跟，`_make_home`
+    就不会放该模板 → 候选为空 → 检测 `continue` → 该参数用例**因"无候选"而假绿**。
+    本用例把这种"夹具与表脱节"变成红灯。
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("sum", agate_scripts / "agate-summary.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    needed = {tpl for _n, _d, items, _s in mod._PLATFORM_ARTIFACTS for _rel, tpl in items}
+    missing = needed - set(_TEMPLATE_RELS)
+    assert not missing, (
+        f"夹具 _TEMPLATE_RELS 未覆盖产物表的模板路径（会导致候选为空而假绿）: {sorted(missing)}"
+    )
+    mapped = set(_TPL_BY_PLATFORM.values())
+    missing2 = needed - mapped
+    assert not missing2, (
+        f"_TPL_BY_PLATFORM 未覆盖产物表的模板路径: {sorted(missing2)}"
+    )
