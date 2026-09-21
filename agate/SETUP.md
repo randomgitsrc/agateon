@@ -372,5 +372,5 @@ python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects --purge
 
 本命令装的东西（平台身份 + git hook）由同一条命令对称卸载；`--list` 先看装了什么，
 `--dry-run` 先预览。**不要直接 `rm -rf ~/.agate`**——平台接入物与项目侧 hook 会变断链
-（复制模式下的陈旧 hook 可执行，会让 `git commit` 失败；软链断链则被 git 静默忽略）。用户工作数据（`agate-workspace/` 等）卸载**不删**。
+（复制模式下的陈旧 hook 可执行，会让 `git commit` 失败；软链断链或非可执行副本则被 git 静默忽略）。用户工作数据（`agate-workspace/` 等）卸载**不删**。
 完整口径见 `agate/AGENTS.md`「卸载」节。
