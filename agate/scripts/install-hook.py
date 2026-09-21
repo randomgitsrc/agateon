@@ -10,12 +10,12 @@ TAG0008：hook 薄壳是固定解析入口（运行时经 resolve-entry.py 解�
 安装时校验 resolve-entry.py 存在（缺失仅 WARNING，不阻断——复制模式 fake 根可无它）。
 
 用法：
-  python3 install-hook.py                       # 默认 ~/.agate
+  python3 install-hook.py                       # 默认 agate_home()（尊重 AGATE_HOME 覆盖）
   python3 install-hook.py /path/to/agate_root   # 或环境变量 AGATE_ROOT
 
 AGATE_ROOT 解析保持 sh 原优先级：argv[1] > 环境变量 AGATE_ROOT > ~/.agate。
 （不用 agate_common.resolve_agate_root——其 env 优先 + 脚本路径上溯语义与本安装器
-「默认 ~/.agate 稳定版」契约不同，此处逐行保留 sh 语义。）
+「默认 agate_home()（尊重 AGATE_HOME 覆盖） 稳定版」契约不同，此处逐行保留 sh 语义。）
 
 CLI 契约：可选 1 个参数；非 git 仓库 / AGATE_ROOT 缺脚本 → stderr + exit 1；提示写
 stdout；成功 exit 0。Python 3.8+（无 match / str.removeprefix）；所有文本读写显式
@@ -62,12 +62,17 @@ def _ln_sf(source, link_path):
     if os.environ.get("AGATE_HOOK_COPY_MODE") == "1":
         with contextlib.suppress(OSError):
             shutil.copyfile(source, link_path)
+            _chmod_x(link_path)
         return
     try:
         os.symlink(source, link_path)
     except OSError:
         with contextlib.suppress(OSError):
             shutil.copyfile(source, link_path)
+            # 复制**不携带权限位**（`shutil.copyfile` 语义）→ 必须显式补执行位，
+            # 否则 git 因"钩子不可执行"**静默忽略**（且 exit 0）→ gate 兜底无声失效
+            # （2026-09-21 复核发现的既有缺陷；POSIX 复制模式实测装出 0644）。
+            _chmod_x(link_path)
 
 
 def _backup(hook_file, label):
@@ -88,7 +93,15 @@ def _chmod_x(path):
 
 
 def main():
-    agate_root = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("AGATE_ROOT") or os.path.expanduser("~/.agate")
+    # 默认根用 agate_home()（尊重 AGATE_HOME 覆盖）——此前写死 ~/.agate，
+    # 覆盖安装时会指错（2026-09-21 修）。
+    if len(sys.argv) > 1:
+        agate_root = sys.argv[1]
+    elif os.environ.get("AGATE_ROOT"):
+        agate_root = os.environ["AGATE_ROOT"]
+    else:
+        import agate_package
+        agate_root = agate_package.agate_home()
 
     rc, out = run_git(["rev-parse", "--show-toplevel"])
     if rc != 0 or not out.strip():
@@ -171,6 +184,16 @@ def main():
             print("⚠️  .gitignore 中忽略了 .state.yaml")
             print("    agate 需要 git add -f 强制暂存 .state.yaml（否则 git add agate-workspace/tasks/ 不会暂存它）")
             print("    建议：从 .gitignore 移除 .state.yaml，或在每次 git add 时记得加 -f")
+    # 项目台账登记（2026-09-21）：供 `agate-setup.py --uninstall --all-projects` 定位
+    # 装了 hook 的项目。本脚本是 hook 的唯一安装者，直接调它的场景（见 agate/AGENTS.md）
+    # 也要能被卸载发现。登记失败不阻断安装（台账是辅助索引，非 gate）。
+    try:
+        import agate_common
+        agate_common.record_project(repo_root)
+    except Exception as exc:  # 台账非关键路径，任何失败都不应让装 hook 失败
+        print(f"提示: 项目台账登记跳过（{exc}）")
+
+
 
 
 if __name__ == "__main__":

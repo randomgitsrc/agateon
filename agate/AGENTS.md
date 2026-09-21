@@ -102,10 +102,27 @@ python3 ~/.agate/scripts/agate-setup.py                # 接入平台：探测�
 ## 卸载
 
 ```bash
-# 卸载具体版本目录 + 清理指针
+python3 ~/.agate/scripts/agate-setup.py --list                     # 先看装了什么（含台账项目）
+python3 ~/.agate/scripts/agate-setup.py --uninstall --dry-run      # 预览
+python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects # 清接入物（全局 + 每个装过的项目）
+python3 ~/.agate/scripts/agate-setup.py --uninstall --purge        # 再删本体（收尾；含 repo/ 与各版本）
+
+# 只卸某个版本目录 + 清理指针（保留其余版本）
 python3 ~/.agate/scripts/agate-install.py --uninstall vX.Y.Z
-rm -rf ~/.agate                       # 卸载整个版本管理根（已装版本全删）
 ```
+
+**为什么要走 `--uninstall` 而不是直接 `rm -rf ~/.agate`**：本体之外还有两类产物——
+平台接入物（各平台全局配置目录）+ **项目侧 git hook**。直接删本体它们会留下**断链或陈旧副本**；
+其中**复制模式（含 Windows）下的陈旧 hook 仍可执行，会让 `git commit` 直接失败**
+（软链断链、或非可执行的副本，则被 git 静默忽略——2026-09-21 实测）。`--uninstall` 按序清完再删本体。
+
+**三条安全约束**：① 删前**按事实验证归属**（软链是否指向本安装 / 复制内容是否等于权威模板），
+证不出就保留并报告；② `agate-workspace/`、`.agate-version`、`AGENTS.md` 等**用户数据只报告不删**；
+③ 装 hook 时备份过的用户原 hook，卸载时**还原**。
+
+**项目台账**：`--scope project` 安装（或直接跑 `install-hook.py`）会把项目登记到
+`<安装根>/installed-projects.json`——`--all-projects` 据此定位散落各处的项目。
+台账只作**索引**，不作删除依据（见约束①）。
 
 ## 更多
 

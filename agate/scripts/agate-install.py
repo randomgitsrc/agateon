@@ -421,6 +421,13 @@ def _cmd_install(agate_home, version=None):
         _install_version(agate_home, repo, version)
         _register(agate_home, version, move_pointers=False)
         print(f"已安装 {version}")
+    # 装完即告知**装到哪**与**怎么卸**——位置可经 AGATE_HOME 覆盖，写死 ~/.agate 会误导；
+    # 且没有卸载指引时用户只能 rm -rf，那会留下平台接入物与 hook 断链（hook 断链会让
+    # `git commit` 直接失败）。2026-09-21。
+    entry = os.path.join(agate_home, "scripts", "agate-setup.py")
+    print(f"安装根: {agate_home}")
+    print(f"接入平台: python3 {entry}            # 注册 orchestrator 身份 + 装 hook")
+    print(f"完整卸载: python3 {entry} --uninstall --all-projects --purge")
     sys.exit(0)
 
 

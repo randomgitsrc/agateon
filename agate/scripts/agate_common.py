@@ -196,6 +196,14 @@ def symlink_migration_hint(base=None):
             detected = f"检测到的软链：{base}"
     else:
         detected = f"检测到的软链基址：{base}（路径经软链解析）"
+    # 路径**刻意保持字面 `~/.agate`**（2026-09-21 决策，见下）：
+    #   · 三步片段与 `install.sh` / `agate-install.py` / `install-offline.py` **手写同源**
+    #     （无法 import 共享），由 BDD-34/35 机械校验"跨侧逐字一致"——在解析器侧单方面
+    #     插入 `AGATE_HOME` 真实路径会立刻破坏该契约（实测 4 个用例转红）。
+    #   · 真实基址**已在上面 `detected` 行打印**（`检测到的软链：<base> → …`），
+    #     用户不会误判；`agate-install.py` 另有"若它不是 ~/.agate 请替换"的说明。
+    #   · 四处动态化需**同时改测试契约**（`_migration_steps` 的正则要求含 `.agate`），
+    #     属独立改动，不在本次范围。
     return (
         f"{detected}\n"
         "错误: ~/.agate 是旧软链布局，v0.73.0 起不再支持（fail-closed，不会把软链目标当协议根）。\n"
@@ -632,6 +640,96 @@ def resolve_workspace(project_root):
             workspace = os.path.join(project_root, "agate-workspace")
             tasks_dir = os.path.join(workspace, "tasks")
     return workspace, tasks_dir
+
+
+# ── 项目侧安装台账（2026-09-21）──────────────────────────────────────────────
+#
+# **为什么需要**：全局装一次 + 在 N 个项目里 `agate-setup.py --scope project` 后，接入物
+# 散落在各项目的 `.claude/agents/` 与 `.git/hooks/`。卸载时**无从知道项目在哪** → 那些项目
+# 会留下断链（hook 断链会让 `git commit` 直接失败）。台账记录"哪些项目装过"，供
+# `agate-setup.py --uninstall --all-projects` 定位。
+#
+# **台账只做索引，不做删除依据**：删任何文件前都要**按事实验证归属**（软链 realpath 落在
+# 本安装根内 / 复制内容与权威模板一致）——台账可能过期或指向已被用户改作他用的文件。
+#
+# **位置跟随 `agate_home()`**（`AGATE_HOME` 可覆盖）——装在 `/opt/agate` 时台账就在
+# `/opt/agate/installed-projects.json`，与本体同生共死（本体删了台账自然消失）。
+
+_LEDGER_NAME = "installed-projects.json"
+_LEDGER_SCHEMA = 1
+
+
+def project_ledger_path():
+    """台账路径：`<版本根基址>/installed-projects.json`。"""
+    return os.path.join(agate_home(), _LEDGER_NAME)
+
+
+def read_projects():
+    """读台账 → list[dict]。**文件损坏/格式非法不抛异常**（返回 []），避免台账问题
+    让卸载整体不可用——卸载宁可少删（**项目侧的唯一来源就是本台账，没有别的扫描兜底**；
+    读不出条目时由调用方打印显式警告，提示人工检查），不可崩在半路留下不一致状态。
+    """
+    path = project_ledger_path()
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict) or data.get("schema") != _LEDGER_SCHEMA:
+        return []
+    projects = data.get("projects")
+    if not isinstance(projects, list):
+        return []
+    return [e for e in projects if isinstance(e, dict) and isinstance(e.get("path"), str)]
+
+
+def record_project(project_root, platforms=None, scope="project"):
+    """登记/更新一个项目（按 realpath 归一化后 upsert，幂等）。
+
+    在**安装成功之后**调用——记录失败不应让安装失败（台账是辅助索引，非 gate），
+    故内部吞掉 OSError 并返回 False，由调用方决定是否提示。
+    """
+    root = os.path.realpath(os.path.abspath(project_root))
+    path = project_ledger_path()
+    entries = read_projects()
+    entry = next((e for e in entries if os.path.realpath(e["path"]) == root), None)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if entry is None:
+        entry = {"path": root, "first_seen": now, "platforms": [], "scope": scope}
+        entries.append(entry)
+    entry["last_seen"] = now
+    entry["scope"] = scope
+    if platforms:
+        entry["platforms"] = sorted(set(entry.get("platforms") or []) | set(platforms))
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"schema": _LEDGER_SCHEMA, "projects": entries},
+                      f, ensure_ascii=False, indent=2, sort_keys=True)
+            f.write("\n")
+    except OSError:
+        return False
+    return True
+
+
+def forget_project(project_root):
+    """从台账移除一个项目（卸载该项目之后调用）。返回是否确有移除。"""
+    root = os.path.realpath(os.path.abspath(project_root))
+    entries = read_projects()
+    kept = [e for e in entries if os.path.realpath(e["path"]) != root]
+    if len(kept) == len(entries):
+        return False
+    path = project_ledger_path()
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"schema": _LEDGER_SCHEMA, "projects": kept},
+                      f, ensure_ascii=False, indent=2, sort_keys=True)
+            f.write("\n")
+    except OSError:
+        return False
+    return True
 
 
 def compute_sha256(path):

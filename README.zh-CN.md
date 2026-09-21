@@ -81,6 +81,35 @@ python3 ~/.agate/scripts/agate-setup.py
 
 细节见 [`agate/SETUP.md`](agate/SETUP.md) 步骤 2；各平台能力差异的权威源是 [`agate/platform-notes.md`](agate/platform-notes.md)（含原生 Windows / Git for Windows 适配）。
 
+## 卸载
+
+```bash
+# 清掉平台接入物 + 所有装过 agateon 的项目（含 git hook），再删本体
+python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects --purge
+```
+
+三条保证：
+
+| 保证 | 说明 |
+|------|------|
+| **不误删你的东西** | 删任何文件前先**按事实验证归属**（软链是否指向本安装、内容是否等于权威模板）；证不出来就**保留并报告**，绝不猜着删 |
+| **不动你的工作数据** | `agate-workspace/`（任务 / 复盘 / 技术债）、`.agate-version`、`AGENTS.md` 等**只报告不删**——那是你的成果，不是安装物 |
+| **不留坏状态** | 装 hook 时备份过你原有的 hook，卸载时**还原**；否则会留下指向已删脚本的断链或陈旧副本——**复制模式（含 Windows）下的陈旧 hook 仍可执行，会让 `git commit` 直接失败**（软链断链、或非可执行的副本，则被 git 静默忽略） |
+
+分步用法：
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py --list                    # 先看装了什么（含台账里的项目）
+python3 ~/.agate/scripts/agate-setup.py --uninstall --dry-run     # 预览将删什么
+python3 ~/.agate/scripts/agate-setup.py --uninstall --scope global  # 只清全局接入物（留项目侧）
+python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects  # 清全局 + 台账里每个项目
+python3 ~/.agate/scripts/agate-setup.py --uninstall --purge         # 再删本体（收尾）
+```
+
+在**项目里**装过（`--scope project`）时，安装会把该项目登记到**安装台账**（`<安装根>/installed-projects.json`），`--all-projects` 据此把它们全部清干净——这是「多处散落」不遗留断链的机制。
+
+若安装根不在默认位置（`AGATE_HOME` 覆盖过），把上面命令里的 `~/.agate` 换成实际安装根；`--list` 会打印真实路径。
+
 ## 文档
 
 | 如果你要…… | 请读 |

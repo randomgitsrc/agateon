@@ -276,6 +276,19 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### 完整卸载（尚未发布的版本起；此前版本需手动清理接入物与 hook）
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py --list                      # 看装了什么
+python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects  # 清接入物（全局 + 每个装过的项目）
+python3 ~/.agate/scripts/agate-setup.py --uninstall --purge         # 再删本体
+```
+
+**不要直接 `rm -rf ~/.agate`**：那只删本体，平台接入物与项目侧 hook 会留下断链或陈旧副本
+（复制模式下的**可执行**陈旧 hook 让 `git commit` 失败；软链断链或非可执行副本则被 git 静默忽略）。三条约束：删前按事实验证归属（证不出则保留并报告）；
+用户数据（`agate-workspace/` 等）只报告不删；装 hook 时备份的用户原 hook 卸载时还原。
+详见 `agate/AGENTS.md`「卸载」节。
+
 ### v0.74.0 — 平台接入命令化 + 适配层去漂移（**无破坏性变更**）
 
 > 实现注记：本节平台名为**平台接入细节**的记述（非协议语义定义）——协议语义层不感知具体平台的注册机制与工具名。

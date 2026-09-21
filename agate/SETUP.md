@@ -363,3 +363,14 @@ AGATE_WORKSPACE=/srv/agate-ws/My Project   # 绝对路径（可含空格）→ �
 - 两种方式都建议顺手跑一次 `python3 ~/.agate/scripts/agate-summary.py`——它会检测协议版本、根 `scripts/` 副本漂移，**以及四个平台接入产物的漂移**：产物须指向**某个已安装版本**的模板（这是"权威"的判据——项目用 `.agate-version` 钉版**不影响**该判定，全局产物本就与项目钉版无关）；它给**两级信号**：指向开发 checkout / 临时副本（**不在任何已装版本树内**）→ 警告「漂移」+ 修复命令；指向**已装但没有跟随 `current` 的版本** → 信息级「版本落后」提示（`agate-install.py` 装新版不删旧版，且接入产物指向具体版本目录，故升级后"落后"是常见状态，需重跑 `agate-setup.py` 跟上）；复制形态内容与任何已装版本都不一致 → 警告「已过期」。
 
 **更新口径（与 `UPGRADING.md` 一致）**：更新 = `python3 ~/.agate/scripts/agate-install.py latest`（幂等）。安装 / 迁移 / 更新 / 回退完整对照，以及 hook 重装时机、根 `~/.agate/scripts/` 副本维护语义，见 `UPGRADING.md` 的「版本管理生命周期」节。
+
+## 卸载
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects --purge
+```
+
+本命令装的东西（平台身份 + git hook）由同一条命令对称卸载；`--list` 先看装了什么，
+`--dry-run` 先预览。**不要直接 `rm -rf ~/.agate`**——平台接入物与项目侧 hook 会变断链
+（复制模式下的陈旧 hook 可执行，会让 `git commit` 失败；软链断链或非可执行副本则被 git 静默忽略）。用户工作数据（`agate-workspace/` 等）卸载**不删**。
+完整口径见 `agate/AGENTS.md`「卸载」节。

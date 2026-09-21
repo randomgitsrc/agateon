@@ -81,6 +81,35 @@ python3 ~/.agate/scripts/agate-setup.py
 
 Details in [`agate/SETUP.md`](agate/SETUP.md) step 2; [`agate/platform-notes.md`](agate/platform-notes.md) is the authoritative source for per-platform capability (including native Windows / Git for Windows).
 
+## Uninstalling
+
+```bash
+# Remove platform artifacts + every project agateon was installed into (incl. git hooks), then the body
+python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects --purge
+```
+
+Three guarantees:
+
+| Guarantee | Detail |
+|-----------|--------|
+| **Never deletes your files by mistake** | Every removal is gated on **verified ownership** (symlink points into this install? content equals the authoritative template?); anything unprovable is **kept and reported**, never guessed at |
+| **Never touches your work data** | `agate-workspace/` (tasks / retros / tech debt), `.agate-version`, `AGENTS.md` etc. are **reported, not deleted** — those are your results, not install artifacts |
+| **Leaves no broken state** | Any hook that existed before is backed up at install time and **restored** on uninstall; otherwise you would be left with dangling symlinks to deleted scripts (**a stale copy-mode hook stays executable and makes `git commit` fail outright (a dangling symlink, or a non-executable copy, is silently ignored by git)**) |
+
+Step by step:
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py --list                      # see what is installed (incl. ledger projects)
+python3 ~/.agate/scripts/agate-setup.py --uninstall --dry-run       # preview removals
+python3 ~/.agate/scripts/agate-setup.py --uninstall --scope global  # global artifacts only
+python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects  # global + every ledged project
+python3 ~/.agate/scripts/agate-setup.py --uninstall --purge         # then delete the body itself
+```
+
+Project-scoped installs (`--scope project`) are recorded in an **install ledger** (`<install-root>/installed-projects.json`), which is how `--all-projects` finds and cleans every one of them.
+
+If the install root is not the default (i.e. `AGATE_HOME` was set), substitute the real path for `~/.agate`; `--list` prints it.
+
 ## Documentation
 
 | If you want to… | Read |

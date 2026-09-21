@@ -10,7 +10,13 @@
 
 ## [Unreleased]
 
-（暂无——下个版本的变更在此累积。）
+### 新增
+
+- **`agate-setup.py --uninstall`（完整卸载）**：此前只有"装"没有"卸"——文档让用户 `rm -rf ~/.agate`，但那**只删本体**，平台接入物与项目侧 git hook 会变成**断链**（**复制模式下的陈旧 hook 会让 `git commit` 直接失败**；软链断链或非可执行副本则被 git 静默忽略——2026-09-21 实测修正）。现提供对称卸载：`--list` 查看、`--dry-run` 预览、`--uninstall` 清接入物（`--scope global|project`）、`--all-projects` 清台账里每个项目、`--purge` 删本体。
+  - **三条安全约束**：删前**按事实验证归属**（软链 realpath 落在本安装根内 / 复制内容等于任一已装版本的权威模板），证不出则**保留并报告**；`agate-workspace/`、`.agate-version`、`AGENTS.md` 等**用户数据只报告不删**；装 hook 时备份的用户原 hook 卸载时**还原**。
+  - **项目安装台账** `<安装根>/installed-projects.json`：项目侧安装时登记，解决"全局装一次 + 多项目分散装 → 卸载不知项目在哪"的散落问题。台账**只作索引**，不作删除依据。
+  - **`--purge` 守卫**：目标不像 agate 安装根时 fail-closed（判据为「入口脚本 `scripts/agate-install.py` **+ 版本根形态**：有 `current`/`latest` 指针或含协议布局的 `vX.Y.Z` 目录」），防 `AGATE_HOME` 指错而误删无关目录。
+- **安装根可覆盖性的补齐**（`AGATE_HOME` 早已支持，但提示与默认值未跟随）：`agate-summary.py` 的修复/接入提示、`agate-install.py` 的完成输出均打印**真实**安装根（此前写死 `~/.agate`，覆盖时给出不存在的命令）；`install-hook.py` 默认根改用 `agate_home()`；安装完成后打印"装到哪 + 怎么卸"。
 
 ## [0.74.0] - 2026-09-21
 
