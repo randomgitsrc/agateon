@@ -129,8 +129,6 @@ def test_dsh_links_no_dsh_dir_no_warning(run_cli, python_exe, agate_scripts, tmp
 @pytest.mark.windows_smoke
 def test_dsh_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
     """三个产物软链均指向权威模板（{agate_root}/assets/templates/dsh/）→ 无警告。"""
-    if os.name == "nt":
-        pytest.skip("DSH 链接校验在 Windows 跳过（复制模式，无 DSH 部署）")
     home = _make_home(tmp_path)
     tpl_dir = agate_assets / "templates" / "dsh"
     for rel, name in _DSH_ARTIFACTS:
@@ -149,8 +147,6 @@ def test_dsh_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts
 
 def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_scripts, tmp_path):
     """软链指向非权威副本（真实 bug 复现）→ WARNING 指明产物 + 给出 ln -sf 修复命令。"""
-    if os.name == "nt":
-        pytest.skip("DSH 链接校验在 Windows 跳过（复制模式，无 DSH 部署）")
     home = _make_home(tmp_path)
     stale_dir = tmp_path / "stale-copy"
     stale_dir.mkdir()
@@ -174,8 +170,6 @@ def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_script
 
 def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
     """~/.dsh 存在但部分产物缺失 → 提示未安装（含 SETUP.md 指引），不误报为漂移。"""
-    if os.name == "nt":
-        pytest.skip("DSH 链接校验在 Windows 跳过（复制模式，无 DSH 部署）")
     home = _make_home(tmp_path)
     tpl_dir = agate_assets / "templates" / "dsh"
     rel, name = _DSH_ARTIFACTS[0]
