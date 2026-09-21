@@ -18,7 +18,7 @@
 
 | 你要做什么 | 看这里 |
 |------|------|
-| 第一次接入 Agateon 到我的项目（把 orchestrator 注册成可调用的 agent）| `SETUP.md`（平台相关的具体步骤，从这里开始）|
+| 第一次接入 Agateon 到我的项目（把 orchestrator 注册成可调用的 agent）| 一条命令：`python3 ~/.agate/scripts/agate-setup.py`；平台差异见 `SETUP.md` 步骤 2 |
 | 理解 P0-P8 阶段流程与裁剪规则 | `WORKFLOW.md`（主流程，主入口） |
 | 查跨阶段规则（retry 上限 / 状态转移 / C8 评审映射）| `rules/`（phases.yaml / dispatch.yaml / roles.yaml 权威源 + schema/ + 既有 review-mapping.md / state-transitions.md md）|
 | 理解 orchestrator-template.md 本身该怎么用 | `orchestrator-template.md`（对所有项目内容完全一致，符号链接，不拷贝——项目特定信息写 `assets/templates/project.md`）|
@@ -27,7 +27,7 @@
 | 角色体系（双层角色） | `role-system.md` |
 | 用 git 持久化状态 | `git-integration.md` |
 | /loop 自动编排 | `loop-orchestration.md` |
-| 不同平台适配（OpenCode/Claude Code/Windows）| `platform-notes.md` |
+| 不同平台适配（Claude Code / OpenCode / Codex / DSH / Windows 原生）| `platform-notes.md`（能力差异权威源）；接入步骤见 `SETUP.md` 步骤 2 |
 | 已知局限 | `LIMITATIONS.md`（使用前建议先读） |
 | 术语表 + 上下文 | `CONTEXT.md`（Ubiquitous Language） |
 | 架构决策记录 | `adr.md`（A7 审查锚点） |
@@ -45,7 +45,7 @@
 
 如果你是主 Agent（编排者）：
 
-1. 从 `orchestrator-template.md`（符号链接进你的平台 agent 目录，接入步骤见 `SETUP.md`）进入
+1. 从 `orchestrator-template.md`（按平台以符号链接 / preset / skill 形式接入，见 `SETUP.md` 步骤 2 或直接跑 `agate-setup.py`）进入
 2. **按 mapping 表加载当前阶段卡片**（`phase-cards/P{N}-*.md`）——不必全读 8 个协议文件
 3. 阶段卡片自包含（前置条件 / 派发 / 产出 / gate / 推进 / 常见错误 / 下游影响）
 4. 跨阶段规则（retry / 转移 / 评审映射）在 `rules/` 下按需查阅
@@ -86,7 +86,7 @@ cd <你克隆 Agateon 的目录> && git pull
 
 **已有 Agateon 项目升级，先读 `UPGRADING.md`**——它讲清楚旧任务数据（active-tasks.md/.state.yaml/任务编号）如何处理，避免踩到破坏性变更。
 
-下次 commit 自动用新版本协议。pre-commit/commit-msg/pre-push 三个 hook 经 `python3 ~/.agate/scripts/install-hook.py` 安装（`ln -sf` 软链 / Windows 复制模式）——或用 `agate-setup.py` 一次完成「平台身份注册 + 装 hook」——指向**固定解析入口** `resolve-entry.py`，运行时按项目 `.agate-version` 解析到对应版本目录——项目锁定旧版用旧版 gate、无声明用全局 current，切版本**无需重装 hook**。（Windows 无符号链接权限时以复制模式安装，升级后需重跑 `python3 ~/.agate/scripts/install-hook.py`，见 `platform-notes.md`「Windows 原生」章节。）
+下次 commit 自动用新版本协议。pre-commit/commit-msg/pre-push 三个 hook 经 `python3 ~/.agate/scripts/install-hook.py` 安装（`ln -sf` 软链 / Windows 复制模式）——或用 `agate-setup.py` 一次完成「平台身份注册 + 装 hook」——指向**固定解析入口** `resolve-entry.py`，运行时按项目 `.agate-version` 解析到对应版本目录——项目锁定旧版用旧版 gate、无声明用全局 current，切版本**无需重装 hook**。（Windows 无符号链接权限时以复制模式安装，升级后需重跑 `agate-setup.py` 刷新，见 `platform-notes.md`「Windows 原生」章节。）
 
 版本管理形态（TAG0008 起）：
 ```bash

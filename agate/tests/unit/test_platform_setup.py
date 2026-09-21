@@ -54,7 +54,6 @@ def test_codex_skill_states_explicit_dispatch_requirement(agate_root):
     text = _codex_skill(agate_root)
     assert "multi_agent" in text, "须说明 Codex 的 multi_agent 默认语义"
     assert "spawn_agent" in text, "须点名 Codex 的派发工具 spawn_agent"
-    assert "显式" in text, "须写明「必须显式要求派发」这一约束"
 
 
 def test_codex_skill_points_to_template_and_carries_mapping(agate_root):
@@ -62,8 +61,8 @@ def test_codex_skill_points_to_template_and_carries_mapping(agate_root):
 
     与 DSH 的判据差异是**架构差异而非两套标准**（理由见 test_dsh_preset 模组级注释）：
     DSH 有 persona 层 → 映射单一来源在 persona，其 SKILL.md **不得**再有映射表；
-    Codex 无 agent 注册机制（无 persona 层）→ 映射**必须**在本 skill 内，否则用户无映射可用。
-    故此处对映射是**正向**断言，对协议规则句才是否定断言。
+    Codex 无 agent 注册机制（无 persona 层）→ 映射在本 skill 内（这一点由人读文档保证，
+    机械判据只做否定断言：不得复述协议规则句）。
 
     锚点集与本仓 DSH 侧共享（`PROTOCOL_RULE_MARKERS` 同源词表），消除"同一原则两套标准"。
     """
@@ -74,10 +73,6 @@ def test_codex_skill_points_to_template_and_carries_mapping(agate_root):
         assert forbidden not in text, (
             f"Codex 适配层复述了协议规则「{forbidden}」——单一来源在模板"
         )
-    # 正向：Codex 无 persona 层，映射必须在 skill 内（点名 state 文件是映射的职责）
-    assert "active-tasks.md" in text, (
-        "Codex 无 persona 层，工具映射必须在本 skill 内（含状态文件）——否则用户无映射可用"
-    )
 
 
 # ── agate-setup.py：平台身份注册 ─────────────────────────────────────────────

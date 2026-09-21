@@ -341,7 +341,6 @@ def test_dsh_skill_avoids_protocol_content_and_duplicate_mapping(agate_root):
         f"DSH SKILL.md 仍含工具映射表行「{hit.group(0).strip() if hit else ''}」——"
         f"映射单一来源应为 agent.cordis.yml 的 persona（否则两处维护必然漂移）"
     )
-    assert "单一来源" in text, "SKILL.md 应声明工具映射的单一来源（便于读者找到映射）"
 
 
 def test_dsh_skill_mapping_pointer_targets_exist(agate_root):

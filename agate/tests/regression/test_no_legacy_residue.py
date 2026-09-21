@@ -31,6 +31,14 @@ PATTERNS = {
     "legacy-symlink-layout": re.compile(r"legacy[ _-]?(软链|symlink|layout)", re.I),
     "单软链": re.compile("单软链", re.I),
     "软链兜底": re.compile("软链兜底", re.I),
+    # 最直接的 legacy 形态：把 ~/.agate 本身建成软链（`ln -s <repo>/agate ~/.agate`）。
+    # 2026-09-21 补：此前 4 个模式都是**术语**（use_legacy / 单软链 等），而这句是
+    # **安装命令本身**——历史上 platform-notes「Windows 安装」节就写着它却未被扫到
+    # （当时仅因同文件别处出现"单软链"一词才碰巧命中）。术语换个说法就漏，命令形态更稳。
+    # 行尾锚定：`~/.agate/scripts/...` 等正常路径不受影响。
+    "agate-home-as-symlink": re.compile(
+        r"ln\s+-s\S*\s+\S+\s+[\"']?(?:~|\$HOME)/\.agate[\"']?\s*$", re.M
+    ),
 }
 
 # 目录级排除（路径分量匹配任意层级 / 前缀匹配）
