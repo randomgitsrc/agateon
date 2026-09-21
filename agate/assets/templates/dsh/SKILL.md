@@ -11,7 +11,7 @@ description: Agateon 协议的 DSH 适配层——工具映射、平台注意、
 ## 何时加载
 
 - 你是 Agateon 编排者（preset persona 已要求你执行 orchestrator-template.md）→ 已自动获得工具映射，本 skill 补充进阶食谱
-- 你想在 DSH 上手动跑 Agateon 任务（未用 preset）→ 加载本 skill，按「编排者四项职责」执行
+- 你想在 DSH 上手动跑 Agateon 任务（未用 preset）→ 加载本 skill；先按下方「工具映射」指引取工具面，再按 `{agate_root}/orchestrator-template.md` 执行
 
 ## 工具映射
 
