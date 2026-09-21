@@ -31,6 +31,31 @@ _TEMPLATE_RELS = (
 )
 
 
+# 四平台的（平台目录, 产物相对路径）→ 权威模板相对协议根路径（抄自 agate-setup.py 的
+# PLATFORMS，用于参数化覆盖"指向 current 应静默"对**嵌套模板**同样成立）。
+_TPL_BY_PLATFORM = {
+    (".claude", "agents/orchestrator.md"): "orchestrator-template.md",
+    (".config/opencode", "agents/orchestrator.md"): "orchestrator-template.md",
+    (".dsh", ".agent-presets/agate/agent.cordis.yml"): "assets/templates/dsh/agent.cordis.yml",
+    (".dsh", ".agent-presets/agate/preset.yml"): "assets/templates/dsh/preset.yml",
+    (".dsh", "skills/agate-protocol/SKILL.md"): "assets/templates/dsh/SKILL.md",
+    (".agents", "skills/agate-protocol/SKILL.md"): "assets/templates/codex/SKILL.md",
+}
+
+
+def _no_artifact_signal(output):
+    """输出中**无任何**平台接入产物信号（漂移 / 已过期 / 版本落后 / 未安装）。
+
+    为什么需要（2026-09-21 终审暴露的假绿）：单查某个平台子串（如 `"DSH 安装产物"`）
+    会漏掉**聚合**行——「版本落后」与「未安装」都是聚合文案（「平台接入产物版本落后
+    （当前 …）: DSH」），不含 `"DSH 安装产物"` → 信号已发出而断言照过。
+    """
+    return all(
+        kw not in output
+        for kw in ("安装产物漂移", "安装产物已过期", "版本落后", "未安装或不完整")
+    )
+
+
 def _installed_tpl(home, rel, version="v0.44.0"):
     """假 HOME 中**已安装版本**内的模板路径（产物应指向这里才算权威）。"""
     return home / ".agate" / version / rel
@@ -202,7 +227,10 @@ def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_script
     # 开发 checkout 运行，那时 expected 指向未发布树，照抄会把安装指错。权威模板路径
     # 仍单独打印（上一行断言 SKILL.md 即其一部分）。
     assert "agate-setup.py" in result.output, "应给出可执行的修复命令"
-    assert "权威模板" in result.output, "应告知权威模板位置（信息不丢）"
+    # BDD 意图 = 「告知权威位置（信息不丢）」。2026-09-21 起文案改为
+    # 「…下的同名模板才是权威；示例: <path>」（原「权威模板之一: …」在单候选时语义怪、
+    # 且可能印旧版本路径）——断言随行为更新，意图不变。
+    assert "才是权威" in result.output and "示例" in result.output, "应告知权威位置（信息不丢）"
 
 
 def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
@@ -747,14 +775,32 @@ def test_artifact_pointing_to_installed_but_not_current_reports_lagging(
     )
 
 
-def test_artifact_on_current_version_reports_nothing(run_cli, python_exe, agate_scripts, tmp_path):
-    """对照：产物指向**机器 current 版** → 既不报漂移也不报落后（避免误报）。"""
+@pytest.mark.windows_smoke
+@pytest.mark.parametrize("platform_dir,rel", [
+    (".claude", "agents/orchestrator.md"),
+    (".config/opencode", "agents/orchestrator.md"),
+    (".dsh", ".agent-presets/agate/preset.yml"),
+    (".agents", "skills/agate-protocol/SKILL.md"),
+])
+def test_artifact_on_current_version_reports_nothing(
+        run_cli, python_exe, agate_scripts, tmp_path, platform_dir, rel):
+    """对照：产物指向**机器 current 版** → 完全静默（四平台全覆盖）。
+
+    **不能只测 OpenCode**（2026-09-21 终审指出）：CC/OC 的模板直接在协议根下，而
+    DSH/Codex 的模板**嵌在 `assets/templates/…`** —— 若判据用 `dirname(候选)` 比协议根，
+    嵌套模板会被误报「版本落后」（且重跑 setup 也无法消除）。本用例对四平台逐一锁定。
+    """
     home = _make_home(tmp_path, versions=("v1.0.0", "v2.0.0"), latest="v2.0.0")
-    link = home / ".config" / "opencode" / "agents" / "orchestrator.md"
-    link.parent.mkdir(parents=True)
-    _symlink_or_skip(_installed_tpl(home, "orchestrator-template.md", version="v2.0.0"), link)
+    # 装该平台的**全部**产物（DSH 三件套；只装一件会被正确报「不完整」，那不是本用例要测的）
+    for (pdir, prel), tpl in _TPL_BY_PLATFORM.items():
+        if pdir != platform_dir:
+            continue
+        link = home / pdir / prel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        _symlink_or_skip(_installed_tpl(home, tpl, version="v2.0.0"), link)
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
-    assert "漂移" not in result.output and "版本落后" not in result.output, (
-        f"指向 current 版应完全静默:\n{result.output}"
+    assert _no_artifact_signal(result.output), (
+        f"指向 current 版应完全静默（嵌套模板尤须注意）:\n{result.output}"
     )
+

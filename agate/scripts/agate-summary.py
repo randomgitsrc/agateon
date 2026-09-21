@@ -211,11 +211,18 @@ def _check_platform_artifacts():
             continue
         for rel, tpl_rel in artifacts:
             link = os.path.join(home, platform_dir, *rel.split("/"))
-            # 权威候选 = **任一已安装版本**里的同名模板（见 _installed_version_proto_roots）
-            candidates = [os.path.join(r, *tpl_rel.split("/")) for r in installed]
-            candidates = [c for c in candidates if os.path.isfile(c)]
-            if not candidates:
-                continue  # 无任何已安装版本含该模板 → 无从校验
+            # 权威候选 = **任一已安装版本**里的同名模板（见 _installed_version_proto_roots）。
+            # 每个候选携带**所属版本根的 realpath**——判「落后」要比的是"候选属于哪个版本"，
+            # 而非 `dirname(候选)`：DSH/Codex 的模板**嵌在子目录**（assets/templates/…），
+            # 其 dirname 永远 ≠ 协议根（2026-09-21 终审实测：用 dirname 会把"精确指向 current"
+            # 的嵌套产物误报为落后，且重跑 setup 也无法消除）。
+            cand_pairs = []      # [(版本根 realpath, 候选文件 realpath)]
+            for r in installed:
+                c = os.path.join(r, *tpl_rel.split("/"))
+                if os.path.isfile(c):
+                    cand_pairs.append((os.path.realpath(r), os.path.realpath(c)))
+            if not cand_pairs:
+                continue  # 无任何已装版本含该模板 → 无从校验
             if not os.path.lexists(link):
                 # 「已装该平台但未接入 agate」是**正常状态**（用户可能不需要），
                 # 故只做**一行汇总**提示，不逐产物刷屏——本机四平台目录都在时，
@@ -224,24 +231,25 @@ def _check_platform_artifacts():
                 continue
             if os.path.islink(link):
                 target = os.path.realpath(link)
-                cand_reals = {os.path.realpath(c) for c in candidates}
+                cand_reals = {c for _r, c in cand_pairs}
                 if target not in cand_reals:
                     sys.stderr.write(
                         f"⚠️  {name} 安装产物漂移: {link}\n"
                         f"    实指 {target}\n"
-                        f"    不在任何已安装版本树内（权威模板之一: {candidates[-1]}）\n"
+                        f"    不在任何已安装版本树内"
+                        f"（{cur_root or '权威'}/… 下的同名模板才是权威；示例: {cand_pairs[-1][1]}）\n"
                         # 修复命令用**稳定入口**而非上面那行路径：本脚本可能正从
                         # worktree/开发 checkout 运行，此时候选路径指向未发布树，
                         # 照抄会把安装指到那里。
                         f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                     )
-                elif cur_root and os.path.dirname(target) != cur_root:
+                elif cur_root and all(root != cur_root for root, c in cand_pairs if c == target):
                     # 指向**已装但非 current**：不是漂移（未指向异物），但是升级后常见的
                     # 落后状态——`agate-install.py` 装新版不删旧版，而接入产物指向的是
                     # **具体版本目录**（非 current 软链），故"升级后产物落后"是默认状态。
                     # 仅信息级提示（措辞不含"漂移"），且用**机器 current** 判（项目钉版不影响）。
                     lagging.append(name)
-            elif not any(_files_identical(link, c) for c in candidates):
+            elif not any(_files_identical(link, c) for _r, c in cand_pairs):
                 # 复制形态且内容与**所有**已安装版本都不一致 = 副本已旧或来自异物
                 sys.stderr.write(
                     f"⚠️  {name} 安装产物已过期: {link} 内容与任何已安装版本的模板都不一致"
@@ -249,9 +257,9 @@ def _check_platform_artifacts():
                     f"    修复: python3 ~/.agate/scripts/agate-setup.py\n"
                 )
             elif cur_root and not any(
-                os.path.dirname(os.path.realpath(c)) == cur_root
-                for c in candidates if _files_identical(link, c)
+                root == cur_root for root, c in cand_pairs if _files_identical(link, c)
             ):
+                # 内容与**某个**已装版本一致，但那个版本不是 current → 落后
                 lagging.append(name)
     if lagging:
         names = list(dict.fromkeys(lagging))
