@@ -666,8 +666,8 @@ def project_ledger_path():
 
 def read_projects():
     """读台账 → list[dict]。**文件损坏/格式非法不抛异常**（返回 []），避免台账问题
-    让卸载整体不可用——卸载宁可少删（漏删的项目会由 `--all-projects` 的扫描兜底），
-    不可崩在半路留下不一致状态。
+    让卸载整体不可用——卸载宁可少删（**项目侧的唯一来源就是本台账，没有别的扫描兜底**；
+    读不出条目时由调用方打印显式警告，提示人工检查），不可崩在半路留下不一致状态。
     """
     path = project_ledger_path()
     if not os.path.isfile(path):

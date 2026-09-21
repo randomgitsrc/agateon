@@ -285,7 +285,7 @@ python3 ~/.agate/scripts/agate-setup.py --uninstall --purge         # 再删本�
 ```
 
 **不要直接 `rm -rf ~/.agate`**：那只删本体，平台接入物与项目侧 hook 会留下断链或陈旧副本
-（复制模式下的陈旧 hook 让 `git commit` 失败）。三条约束：删前按事实验证归属（证不出则保留并报告）；
+（复制模式下的**可执行**陈旧 hook 让 `git commit` 失败；软链断链或非可执行副本则被 git 静默忽略）。三条约束：删前按事实验证归属（证不出则保留并报告）；
 用户数据（`agate-workspace/` 等）只报告不删；装 hook 时备份的用户原 hook 卸载时还原。
 详见 `agate/AGENTS.md`「卸载」节。
 

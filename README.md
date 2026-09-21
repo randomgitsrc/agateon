@@ -94,7 +94,7 @@ Three guarantees:
 |-----------|--------|
 | **Never deletes your files by mistake** | Every removal is gated on **verified ownership** (symlink points into this install? content equals the authoritative template?); anything unprovable is **kept and reported**, never guessed at |
 | **Never touches your work data** | `agate-workspace/` (tasks / retros / tech debt), `.agate-version`, `AGENTS.md` etc. are **reported, not deleted** — those are your results, not install artifacts |
-| **Leaves no broken state** | Any hook that existed before is backed up at install time and **restored** on uninstall; otherwise you would be left with dangling symlinks to deleted scripts (**a stale copy-mode hook stays executable and makes `git commit` fail outright (a dangling symlink, by contrast, is silently ignored by git)**) |
+| **Leaves no broken state** | Any hook that existed before is backed up at install time and **restored** on uninstall; otherwise you would be left with dangling symlinks to deleted scripts (**a stale copy-mode hook stays executable and makes `git commit` fail outright (a dangling symlink, or a non-executable copy, is silently ignored by git)**) |
 
 Step by step:
 

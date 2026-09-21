@@ -684,3 +684,60 @@ def test_purge_refuses_lookalike_dir(run_cli, python_exe, agate_scripts,
                     "--uninstall", "--purge")
     assert result.returncode == 1, f"仅凭入口脚本不应放行:\n{result.output}"
     assert (look / "重要文件.txt").is_file(), "拒绝后不得删任何东西"
+
+
+def test_project_install_from_subdir_uses_git_root(run_cli, python_exe, agate_scripts,
+                                                   agate_root, git_repo, tmp_path):
+    """**X1 回归**：在仓库**子目录**里 `--scope project` 安装 → 落点应是 **git 根**，且能卸掉。
+
+    复核实测的不对称：安装按**进程 cwd**（`abspath`）解析、而台账/卸载按 **git 根** →
+    在 `<repo>/sub/deep` 安装会把产物落到 `sub/deep/.claude/…`，之后**任何**位置卸载都
+    报"已删除 0 项"，那些产物永远清不掉（pre-fix 反而能删到，属修复引入的回归）。
+    """
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    proj = git_repo.path
+    sub = proj / "sub" / "deep"
+    sub.mkdir(parents=True)
+
+    res = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                 "--scope", "project", "--platform", "claude-code", cwd=str(sub))
+    assert res.returncode == 0, res.output
+    at_root = proj / ".claude/agents/orchestrator.md"
+    at_sub = sub / ".claude/agents/orchestrator.md"
+    assert os.path.lexists(at_root), (
+        f"子目录安装的产物应落在 git 根（与台账/卸载基准一致）:\n{res.output}"
+    )
+    assert not os.path.lexists(at_sub), f"不应落在 cwd 下:\n{res.output}"
+
+    # 从**第三个目录**卸载也必须清掉（靠台账 + git 根基准）
+    un = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                "--uninstall", "--all-projects", cwd=str(tmp_path))
+    assert un.returncode == 0, un.output
+    assert not os.path.lexists(at_root), f"应能清掉:\n{un.output}"
+    assert "已删除 0 项" not in un.output, f"计数不得为 0:\n{un.output}"
+
+
+def test_copy_mode_hook_is_executable(run_cli, python_exe, agate_scripts,
+                                      agate_root, git_repo, tmp_path):
+    """**既有缺陷回归**：复制模式装出的 hook 必须**可执行**（否则 git 静默忽略 → gate 失效）。
+
+    复核发现（本分支未引入）：`shutil.copyfile` **不携带权限位** → POSIX 复制模式装出
+    0644，git 因"钩子不可执行"**静默忽略**且 exit 0 → **gate 兜底无声失效**。
+    修法：复制两分支后都补执行位。
+    """
+    if os.name == "nt":  # Windows 无 POSIX 执行位语义
+        pytest.skip("Windows 无 POSIX 执行位语义")
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    proj = git_repo.path
+    res = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                 "--scope", "project", "--platform", "claude-code",
+                 cwd=str(proj), copy_mode=True)
+    assert res.returncode == 0, res.output
+    hook = proj / ".git" / "hooks" / "pre-commit"
+    assert hook.is_file() and not hook.is_symlink(), f"应为复制形态:\n{res.output}"
+    assert os.access(hook, os.X_OK), (
+        f"复制模式的 hook 必须可执行（否则 git 静默忽略 → gate 失效）: "
+        f"mode={oct(hook.stat().st_mode)[-3:]}\n{res.output}"
+    )

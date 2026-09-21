@@ -62,12 +62,17 @@ def _ln_sf(source, link_path):
     if os.environ.get("AGATE_HOOK_COPY_MODE") == "1":
         with contextlib.suppress(OSError):
             shutil.copyfile(source, link_path)
+            _chmod_x(link_path)
         return
     try:
         os.symlink(source, link_path)
     except OSError:
         with contextlib.suppress(OSError):
             shutil.copyfile(source, link_path)
+            # 复制**不携带权限位**（`shutil.copyfile` 语义）→ 必须显式补执行位，
+            # 否则 git 因"钩子不可执行"**静默忽略**（且 exit 0）→ gate 兜底无声失效
+            # （2026-09-21 复核发现的既有缺陷；POSIX 复制模式实测装出 0644）。
+            _chmod_x(link_path)
 
 
 def _backup(hook_file, label):

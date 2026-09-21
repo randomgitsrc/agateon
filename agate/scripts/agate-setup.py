@@ -168,8 +168,14 @@ def _install_hook(proto_root, dry_run):
     return 0
 
 
-def _register_platform(name, proto_root, scope, dry_run, copy_mode):
-    """注册单个平台身份。scope ∈ {global, project}。返回 (成功数, 失败数)。"""
+def _register_platform(name, proto_root, scope, dry_run, copy_mode, project_root=None):
+    """注册单个平台身份。scope ∈ {global, project}。返回 (成功数, 失败数)。
+
+    **project 侧基准 = `project_root`（即 git 根），不是进程 cwd**（2026-09-21 复核 X1）：
+    原实现用 `os.path.abspath`（按 cwd）——在 `<repo>/sub/deep` 安装会把产物落到
+    `sub/deep/.claude/…`，而**台账与卸载都以 git 根为基准** → 那些产物**永远清不掉**
+    （从根、从别处、甚至回原子目录都算"已删除 0 项"）。两侧基准必须一致。
+    """
     links = PLATFORMS[name][scope]
     if not links:
         print(f"  （{name} 无 {scope} 侧注册形态，跳过）")
@@ -177,7 +183,12 @@ def _register_platform(name, proto_root, scope, dry_run, copy_mode):
     ok = fail = 0
     for src_rel, dst_spec in links:
         src = os.path.join(proto_root, src_rel)
-        dst = os.path.expanduser(dst_spec) if dst_spec.startswith("~") else os.path.abspath(dst_spec)
+        if dst_spec.startswith("~"):
+            dst = os.path.expanduser(dst_spec)
+        elif project_root:
+            dst = os.path.join(project_root, dst_spec)
+        else:
+            dst = os.path.abspath(dst_spec)
         if not os.path.isfile(src):
             sys.stderr.write(f"  ⚠️  源不存在，跳过: {src}\n")
             fail += 1
@@ -285,9 +296,12 @@ def _hook_owned(hook_file, home, marker_ok):
       · 内容子串（`resolve-entry.py` / `pre-commit-gate`）：用户仅在**注释**里提到就满足 →
         从未安装过 agate 的项目里，用户自己的 hook 被删。
 
-    代价：复制模式下**升级后**的旧副本（内容与当前安装根不同）会被判为"非本安装"而**保留**。
-    这是**正确的保守方向**——约束①要求"证不出则保留并报告"，留一个陈旧 hook 由用户决定，
-    好过删掉用户的东西。此处如实返回理由，不静默。
+    **升级后的旧副本仍会被识别**：候选集含**任一已装版本**目录内的同名脚本，故内容等于
+    旧版脚本的副本照样命中（复核已实测）。
+
+    **代价（残余保守）**：仅当旧版本目录**已不在安装根**（例如旧版被 `--uninstall vX.Y.Z`
+    删掉）时，那种陈旧副本因"证不出"而被**保留并打印弱证据理由**——这是约束①要求的保守
+    方向：留一个陈旧 hook 由用户决定，好过删掉用户的东西。
     """
     if os.path.islink(hook_file):
         target = os.path.realpath(hook_file)
@@ -316,7 +330,11 @@ def _hook_owned(hook_file, home, marker_ok):
 
 
 def _restore_backup(hook_file, dry_run):
-    """还原 agateon 安装时备份的**最新**用户原 hook（`*.bak.<epoch>`）。返回说明或 None。"""
+    """还原 agateon 安装时备份的**最新**用户原文件（`*.bak.<epoch>`）。
+
+    同时用于 hook 与平台产物，故文案用**中性词**（复核 OPT-2：对 orchestrator.md 打印
+    "你原有的 hook" 属措辞错位）。
+    """
     parent = os.path.dirname(hook_file)
     base = os.path.basename(hook_file) + ".bak."
     try:
@@ -328,10 +346,10 @@ def _restore_backup(hook_file, dry_run):
     newest = max(cands, key=lambda e: int(e[len(base):]))
     src = os.path.join(parent, newest)
     if dry_run:
-        return f"将还原你原有的 hook: {newest}"
+        return f"将还原你原有的文件: {newest}"
     try:
         os.replace(src, hook_file)
-        return f"已还原你原有的 hook（来自 {newest}）"
+        return f"已还原你原有的文件（来自 {newest}）"
     except OSError as exc:
         return f"⚠️ 还原备份失败: {exc}"
 
@@ -580,9 +598,16 @@ def _run_uninstall(args):
                     os.path.lexists(os.path.join(path, "latest")):
                 return True
             try:
-                return any(re.fullmatch(r"v\d+\.\d+\.\d+", e)
-                           for e in os.listdir(path)
-                           if os.path.isdir(os.path.join(path, e)))
+                for e in os.listdir(path):
+                    vdir = os.path.join(path, e)
+                    if not (re.fullmatch(r"v\d+\.\d+\.\d+", e) and os.path.isdir(vdir)):
+                        continue
+                    # 版本目录内须有协议布局（`<v>/agate/scripts` 或 `<v>/scripts`）——
+                    # 否则"随便建个空 v1.0.0 目录"就能骗过守卫（复核 OPT-1 残余）。
+                    if os.path.isdir(os.path.join(vdir, "agate", "scripts")) or \
+                            os.path.isdir(os.path.join(vdir, "scripts")):
+                        return True
+                return False
             except OSError:
                 return False
 
@@ -666,6 +691,8 @@ def main():
         _ok, fail = _register_platform(
             name, proto_root, id_scope, args.dry_run,
             copy_mode=os.environ.get("AGATE_HOOK_COPY_MODE") == "1",
+            # project 侧以 **git 根** 为基准（与 hook 安装、台账、卸载一致）
+            project_root=_git_root() if id_scope == "project" else None,
         )
         if fail:
             rc = 1
