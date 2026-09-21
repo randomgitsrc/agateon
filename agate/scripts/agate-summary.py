@@ -138,6 +138,11 @@ def _installed_version_proto_roots():
     取镜像目录时不跟随软链（`latest`/`current` 是指针软链，不是版本目录）；Windows 下
     它们是文本文件，`isdir` 自然排除。
 
+    **不受 `AGATE_ROOT` 影响**：权威集一律取自 `agate_home()` 下的版本目录。故若有人用
+    `AGATE_ROOT=<开发树>` 跑过 `agate-setup.py`（产物因而指向开发树），随后普通调用会报
+    「漂移」——这是**正确**的判断（产物确实指向非权威的开发树），修复即不带 override 重跑
+    `agate-setup.py`。
+
     **两级信号（2026-09-21 定型）**：
       - **漂移**（WARNING）：指向**不在任何已装版本树内**的目标——异物 / 临时副本 / dev
         checkout。这是本检测的原始职责（历史上确有产物指向测试临时副本、静默穿过一次发布）。
