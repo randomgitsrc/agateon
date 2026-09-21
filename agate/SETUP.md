@@ -87,9 +87,36 @@ cp {agate_root}/assets/templates/project.md {AGATE_WORKSPACE}/agents/project.md
 
 ## 步骤 2：把 orchestrator 注册到你的平台
 
-**先确认你的 `agate_root`**（默认 `~/.agate/current/agate`，即上面的 `$AGATE_DIR`；自定义过装哪的话按实际路径替换命令里的 `~/.agate`）。
+**一条命令搞定**（推荐——自动探测已装平台、注册身份、装 hook；幂等，可反复跑）：
 
-### Claude Code（`.claude/agents/`）
+```bash
+python3 ~/.agate/scripts/agate-setup.py
+```
+
+它做的事：
+
+| 层 | 动作 |
+|----|------|
+| **平台身份**（全局） | 按探测到的平台建配置物：Claude Code / OpenCode → `~/.claude/agents/` · `~/.config/opencode/agents/`；DSH → `~/.dsh/.agent-presets/agate/` + `~/.dsh/skills/`；Codex → `~/.agents/skills/agate-protocol/` |
+| **项目侧** | 装 git hook（等价于下面的步骤 4） |
+
+常用参数：`--platform dsh,codex`（显式指定）· `--scope global`（只注册身份）· `--scope project`（注册到项目内目录，适合按项目钉不同版本）· `--dry-run`（只看将做什么）。
+
+> **为什么默认全局**：`orchestrator-template.md` 对**所有项目内容完全一致**（`adr.md` ADR-008），且其 `{agate_root}` 是**运行时按 cwd 解析**的——一个全局注册在项目 A 里跑就解析 A 钉的版本。故一次注册即可服务所有项目。
+> **何时用 `--scope project`**：项目用 `.agate-version` 钉了**非 current** 的版本，且你希望身份文件也随该项目版本走。
+
+**装到哪了 / 验证**（注册物应均可读；断链会让平台静默找不到 orchestrator）：
+
+```bash
+for f in ~/.claude/agents/orchestrator.md ~/.config/opencode/agents/orchestrator.md \
+         ~/.dsh/.agent-presets/agate/agent.cordis.yml ~/.agents/skills/agate-protocol/SKILL.md; do
+  [ -r "$f" ] && echo "✅ $f" || echo "（未装/不适用）$f"
+done
+```
+
+**平台差异（命令内部做的事，供理解与手工兜底）**——各平台配置物形态不同，以下是细节：
+
+### Claude Code（`~/.claude/agents/`）
 
 ```bash
 mkdir -p .claude/agents
@@ -190,7 +217,10 @@ python3 ~/.agate/scripts/install-hook.py
 
 ### 步骤 2-Codex：codex-cli（Codex）接入
 
-Codex 支持完整 P0-P8（有原生 `spawn_agent` 子代理派发，见 `platform-notes.md`「Codex」章），但**没有 `.claude/agents/` 等价的 orchestrator 软链注册步骤**（同 DSH——DSH 用 preset）。接入只需装 CLI + 登录 + 配好自动化环境的绕过 flag。已实机验证：codex-cli **0.153.4** + **ChatGPT 登录**账号（能力矩阵与时效注记见 `platform-notes.md`「Codex」章）。
+Codex 支持完整 P0-P8（有原生 `spawn_agent` 子代理派发，见 `platform-notes.md`「Codex」章），但**没有 `.claude/agents/` 等价的 agent 注册机制**——它的身份靠 **skill**（`~/.agents/skills/agate-protocol/SKILL.md`，`~/.agents/skills/` 是 Codex 共享 skill 根）。接入 = 装 CLI + 登录 + 装 skill + 配自动化 flag。已实机验证：codex-cli **0.153.4** + **ChatGPT 登录**账号（能力矩阵与时效注记见 `platform-notes.md`「Codex」章）。
+
+> ⚠️ **Codex 特有硬约束：必须显式要求派发**。Codex 会话上下文含 `<multi_agent_mode>`，其默认语义是「**除非用户或适用的 AGENTS.md / skill 指令显式要求，否则不要派发子 agent**」。而 Agateon 的整个模型建立在主 Agent 派发 subagent 之上——**不显式要求则静默不派发**，P0-P8 直接失效。适配层已写明该要求（见 `assets/templates/codex/SKILL.md`）；用 `agate-setup.py` 装上即生效。
+> 注意与 `codex features list` 的 `multi_agent` **不是一回事**：后者是**能力开关**（stable/true = 可派发），前者是**行为默认值**（要求显式声明才派发）。
 
 **1. 安装**：
 

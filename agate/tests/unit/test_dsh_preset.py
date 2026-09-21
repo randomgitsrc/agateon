@@ -12,7 +12,7 @@
 # BDD 覆盖（TAG0018 P1-requirements.md）：
 #   - BDD-1  agent.cordis.yml 行列表每行非空 id/name（用例 1）
 #   - BDD-2  tool-fs-search 必填配置 sampleOverCapGlobResults: false（用例 2，BDD-17 回归护栏同源）
-#   - BDD-3  persona 薄身份：含 {agate_root}/orchestrator-template.md、不含模板首行标题（用例 3）
+#   - BDD-3  persona 薄身份：含模板路径引用、**不含**模板正文/会话步骤/职责边界（用例 3，2026-09-21 加严）
 #   - BDD-4  preset.yml 合法且 name/description 非空（用例 4）
 #   - BDD-5  SKILL.md frontmatter name: agate-protocol + description 非空（用例 5）
 #   - BDD-7   SETUP.md「步骤 2-DSH」标题串（用例 6）+ 位于步骤 2 平台章节区内（用例 7）
@@ -130,6 +130,21 @@ def test_dsh_persona_is_thin_identity(agate_root):
     assert "# Orchestrator（agate 编排 Agent）" not in text, (
         "persona 不得内嵌模板正文首行标题「# Orchestrator（agate 编排 Agent）」（不复制模板全文）"
     )
+    # 2026-09-21 加严：原负判据只查模板首行标题，**放任 persona 复制会话开始步骤**
+    # （解析 {AGATE_WORKSPACE} / 读 active-tasks / 读 phase-cards / 职责边界四件事）。
+    # 后果实证：TAG0037 改了模板的协议根回退路径，persona 副本未跟 → 把版本根
+    # `~/.agate` 当协议根（实测失实）。协议内容必须单一来源（模板），适配层只做
+    # 「指向 + 平台差异」——下列关键词属模板的「你是谁」「会话开始时」两节，不得复制。
+    for forbidden, why in (
+        ("你永远不亲自写阶段产出物", "职责边界（模板「你是谁」节）"),
+        ("active-tasks.md", "会话开始步骤（模板第 5 步）"),
+        ("phase-cards", "阶段卡片映射（模板内容）"),
+        ("AGATE_WORKSPACE", "工作区解析步骤（模板第 3 步）"),
+    ):
+        assert forbidden not in text, (
+            f"persona 复制了协议内容「{forbidden}」（{why}）——协议内容单一来源在 "
+            f"orchestrator-template.md；适配层只留「指向 + 平台差异」，否则必然漂移"
+        )
 
 
 # ── DSH 包 required-key 契约（通用 schema 校验）─────────────────────────────

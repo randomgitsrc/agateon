@@ -10,7 +10,15 @@
 
 ## [Unreleased]
 
-（暂无——下个版本的变更在此累积。）
+### 新增
+
+- **`agate-setup.py` 平台接入命令**：自动探测已装平台（Claude Code / OpenCode / DSH / Codex）→ 注册 orchestrator 身份（默认**全局**，`--scope project` 落项目内）→ 装 git hook；幂等、既有非本工具文件先备份、Windows 无链接权限时退化复制。替代 `SETUP.md`「步骤 2」的逐平台手工 `ln -sf`/`cp` 步骤。
+- **Codex 适配层** `assets/templates/codex/SKILL.md`：Codex 无 agent 注册机制，身份靠 skill（`~/.agents/skills/`）；内含 **Codex 特有硬约束**——其 `<multi_agent_mode>` 默认「未显式要求则不派发子 agent」，而 Agateon 模型建立在主 Agent 派发之上，不写明则 P0-P8 **静默失效**。
+
+### 变更
+
+- **平台适配层不再复制协议内容**（去漂移）：DSH 的 `persona` 此前复制了「职责边界 + 会话开始步骤」，与 `orchestrator-template.md` 两处维护——TAG0037 改了模板的协议根回退路径而 DSH 副本未跟（**实测失实**：把版本根 `~/.agate` 当协议根）。现适配层只做「指向 + 平台差异」，并加测试守护（BDD-3 加严：persona/skill 不得含职责边界、会话步骤、`{AGATE_WORKSPACE}` 等协议内容）。
+- `SETUP.md`「步骤 2」以命令为主路径；各平台小节改为「命令内部做的事（理解与手工兜底）」。
 
 ## [0.73.0] - 2026-09-20
 

@@ -72,6 +72,7 @@
 
 ### 子代理派发（`spawn_agent`）与既有「Codex 兼容性」注记的时效
 
+- **⚠️ 行为默认值 ≠ 能力开关**：能力上 `spawn_agent` 可用（见下条 feature flag），但会话上下文含 `<multi_agent_mode>`——「**除非用户或适用的 AGENTS.md / skill 指令显式要求，否则不要派发子 agent**」（实测 `codex debug prompt-input`，2026-09-21，0.153.4）。**Agateon 的模型建立在主 Agent 派发之上**，故在 Codex 上必须显式要求派发，否则**静默不派发**、P0-P8 失效。适配层 `assets/templates/codex/SKILL.md` 已写明该要求。
 - backing feature flag：`multi_agent` = **stable / effective true**（实测 `codex features list`，0.153.4）——`spawn_agent` 无需任何 `--enable` 即可用。命名有变更史：`collaboration_modes` / `multi_agent_mode` 已 `removed`，`multi_agent_v2` stable 但 false（子会话 `session_meta` 却见 `multi_agent_version: "v2"` 字样——内部版本仍在演进）。**目标版本上 `codex features list` 复核一次**。
 - `spawn_agent` 子会话是**独立的 `rollout-*.jsonl` 文件**（非父文件内嵌事件），与父文件同目录；子文件 `session_meta` 含 `parent_thread_id` / `thread_source=="subagent"` / `source.subagent.thread_spawn.depth`。**单层 `spawn_agent` 已实测可用**（P5 V3）；**嵌套深度（`spawn_agent` 内再 `spawn_agent`）P6 V7 已两次独立实测 `depth=2` 可用**（TAG0033，2026-09；`source.subagent.thread_spawn.depth == 2` 的孙会话）。
 - **与本文件下方「Hardening-roadmap 跨平台适配」节「Codex 兼容性」注记的交叉引用 + 时效**：那条 `Codex subagent max_depth=1` /「Codex 单层任务工具无法再派发」注记**写于 subagent workflows 默认启用之前**——按当前实测，`multi_agent` flag 已 stable/true、单层派发已实测可用；既有 `max_depth=1` 结论已经 P6 V7 复核**推翻**：嵌套 `spawn_agent` 实测 `depth=2` 可用（TAG0033，两次独立证实）。既有注记那几行事实内容不删（本章只做时效指针），全文档以本小节为该维度的时效口径，**不存在**「一处说无法再派发、另一处说已支持多层」的未标时效对立陈述。
