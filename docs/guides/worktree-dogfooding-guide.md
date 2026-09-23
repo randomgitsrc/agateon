@@ -75,7 +75,17 @@ ls -la "$(git rev-parse --git-path hooks)" | grep -E 'pre-commit|commit-msg|pre-
 
 > **新 worktree 不需要重装 hook**：共享目录已就位，新建的 worktree 直接继承（本机 hook 一直在**主 checkout** 的 `.git/hooks/`）。
 > 反过来说，`<worktree>/.git/hooks` 这种写法在 worktree 下**必然失败**——`.git` 是文件不是目录。
-> v0.75.0 及更早的 `install-hook.py` / `agate-setup.py` 正是硬编码该路径，实测在 worktree 里**装不上（NotADirectoryError）、也卸不掉（报"已删除 0 项"而 hook 仍在）**；现已改为问 git 要目录（`git rev-parse --git-path hooks`）。
+> 修好之前 `install-hook.py` / `agate-setup.py` 正是硬编码该路径，实测在 worktree 里**装不上（NotADirectoryError）、也卸不掉（报"已删除 0 项"而 hook 仍在）**；修好后改为问 git 要目录（`git rev-parse --git-path hooks`）。
+
+> **先确认你手上装的是哪一版**（`~/.agate/scripts/` 是稳定版副本，**它**决定命令行为，不是你当前 checkout 的代码）：
+>
+> ```bash
+> grep -c 'git-path' ~/.agate/scripts/install-hook.py    # 0 = 旧版（含此缺陷）；≥1 = 已带修复
+> python3 ~/.agate/scripts/agate-resolve.py              # 看实际解析到的版本
+> ```
+>
+> 旧版下在 worktree 里跑 `agate-setup.py` 会以 `NotADirectoryError` 崩掉——**但这不影响 worktree 干活**：
+> hook 早已装在共享目录里，worktree 的 `git commit` 照常触发 gate（实测）。只有"在 worktree 里**装/卸** hook"这一动作在旧版下不可用。
 
 > **唯一的例外：`core.hooksPath` 写成相对路径**。git 对相对值按**运行目录**解析（实测 git 2.43：从 worktree 提交触发 `<worktree>/<hooksPath>`，从主 checkout 提交触发 `<主 checkout>/<hooksPath>`）——此时"装一次全仓库生效"**不成立**，各 worktree 会各读一份，换目录提交就可能 gate 失效。`install-hook.py` 检测到相对值会显式告警并建议改成绝对路径；绝对 `core.hooksPath` 则回到"共享、只装一次"的正常语义。
 
