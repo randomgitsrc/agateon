@@ -452,6 +452,12 @@ python3 ~/.agate/scripts/agate-setup.py --uninstall       # 清共享 hooks（�
 > 反过来，**在 worktree 里 `--uninstall` 会连带清掉主 checkout 的 gate**——卸载是仓库级动作，不是 worktree 级动作，
 > 多任务并行时别顺手在某个 worktree 里卸（v0.75.0 及更早该命令在 worktree 里是坏的，所以这个陷阱当时还撞不上）。
 
+> **⚠️ 更宽的一种"仓库级动作"：`core.hooksPath` 指向共享目录时，卸载会跨仓库生效。**
+> 若 repoA、repoB 都设了 `core.hooksPath=<共享目录>`（多仓共治的常见做法），它们**共用同一份 hook**；
+> 在 repoA 里 `--uninstall` 会把三个 hook 从共享目录删掉 → **repoB 的 gate 同时消失**。
+> 删除对象确实是 agate 自有文件（归属校验会保留你自己写的 hook），但"卸的是哪个仓库"与"影响面"不是一回事——
+> `--uninstall` 现在会在这种配置下显式打印该提示。多仓共用时请确认这是你要的效果，或改用各仓库自己的 `.git/hooks`。
+
 **与「双工作区」的关系**：本 guide 的 dogfooding 模式用的是**全局**平台身份（`~/.claude` 等）+ **共享** hook，
 worktree 内**不应**出现 `.claude/agents/`；只有刻意用 `--scope project` 钉版本时才会出现——那正是上表第 1 行要清的。
 

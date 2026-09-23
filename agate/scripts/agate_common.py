@@ -49,17 +49,37 @@ MAX_RETRY_MAP = "P1:3,P2:3,P3:2,P4:3,P5:2,P6:2,P7:2,P8:2"
 # ---------- run_git / 通用工具 ----------
 
 
-def run_git(args, cwd=None):
+# 定位仓库布局时必须中和的 git 环境变量：它们会**压过 cwd**，让"问 git"问到别的仓库。
+# 实测（2026-09-23）：`GIT_DIR=<B>/.git git rev-parse --git-path hooks`（在外层 cwd=A 时）
+# 返回 B 的 hooks，而 `--show-toplevel` 仍按 cwd 返回 A → 两侧基准不一致，卸载 A 时删掉 B 的
+# hook，同时 A 的 gate 原样留下并被 forget（**静默残留**，正是本次要消灭的失效模式）。
+_GIT_LOCATION_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR")
+
+
+def _git_env_clean():
+    """去掉 `GIT_DIR` 等"重定位仓库"变量的子进程环境（保留 PATH/SSH 等其余变量）。"""
+    env = os.environ.copy()
+    for name in _GIT_LOCATION_ENV:
+        env.pop(name, None)
+    return env
+
+
+def run_git(args, cwd=None, clean_location_env=False):
     """git subprocess 封装。
 
     encoding="utf-8" + errors="replace"（Windows 代码页差异不崩溃），返回
     (returncode, stdout)。git 不可用时按失败处理（同 sh 侧 2>/dev/null 语义）。
+
+    `clean_location_env=True` 时去掉 `GIT_DIR`/`GIT_WORK_TREE`/`GIT_COMMON_DIR`——
+    **按 `cwd`/显式路径定位仓库的调用方必须开**，否则环境里的 GIT_DIR 会把查询劫持到别的
+    仓库（见 `_GIT_LOCATION_ENV` 的实测说明）。默认 False 保持既有语义不变。
     """
     try:
         proc = subprocess.run(
             ["git", *args],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             cwd=cwd,
+            env=_git_env_clean() if clean_location_env else None,
         )
         return proc.returncode, proc.stdout
     except OSError:
@@ -82,13 +102,25 @@ def git_hooks_dir(repo_root):
     ⚠️ 因此**相对** `core.hooksPath` 下位置本身就是 cwd 相关的（同一仓库的不同 worktree
     会各读一份）——这不是本函数能消除的，安装侧会就此显式告警。git 不可用/非仓库时回退
     `.git/hooks`（保持旧语义）。
+
+    **必须中和 `GIT_DIR` 等环境变量**（`clean_location_env=True`）：本函数的契约是"按
+    `repo_root` 定位"，而运行时的进程环境可能带着 GIT_DIR（包装脚本 / IDE / 用户 shell）。
     """
-    rc, out = run_git(["rev-parse", "--git-path", "hooks"], cwd=repo_root)
+    rc, out = run_git(["rev-parse", "--git-path", "hooks"], cwd=repo_root,
+                      clean_location_env=True)
     rel = out.strip() if rc == 0 else ""
     if not rel:
         return os.path.join(repo_root, ".git", "hooks")
     # 绝对路径时 os.path.join 直接返回后者（core.hooksPath 为绝对路径的情形）
     return os.path.normpath(os.path.join(repo_root, rel))
+
+
+def git_hooks_path_config(repo_root):
+    """该仓库生效的 `core.hooksPath` 配置值（未设置 → ""）。同样中和 GIT_DIR。"""
+    rc, out = run_git(["config", "--get", "core.hooksPath"], cwd=repo_root,
+                      clean_location_env=True)
+    return out.strip() if rc == 0 else ""
+
 
 
 def git_shared_hook_owner(repo_root):
@@ -100,9 +132,12 @@ def git_shared_hook_owner(repo_root):
     故登记时把宿主根一并登记（宿主才是 hook 的真身所在）。
 
     判定：`git worktree list --porcelain` 首条即主工作树；且必须**确实共用** hooks 目录
-    （防 submodule / 非常规布局误登记）。非仓库、git 不可用、或已是主工作树 → None。
+    （防 submodule / 非常规布局误登记），并**确实是工作树**（`--separate-git-dir` 与 submodule
+    下首行给的是 **gitdir**，如 `<repo>/.git` 或 `<sup>/.git/modules/...`——那不是项目，登记进
+    台账会让 `--list` 显示 git 内部目录，OP-2 实测）。非仓库、git 不可用、或已是主工作树 → None。
     """
-    rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root)
+    rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root,
+                      clean_location_env=True)
     if rc != 0:
         return None
     for line in (out or "").splitlines():
@@ -113,6 +148,10 @@ def git_shared_hook_owner(repo_root):
             return None
         main = os.path.realpath(main)
         if main == os.path.realpath(repo_root):
+            return None
+        # 必须是**工作树**（其下有 .git，文件或目录皆可）——排除 separate-git-dir / submodule
+        # 的 gitdir（gitdir 内部没有 .git）。
+        if not os.path.lexists(os.path.join(main, ".git")):
             return None
         return main if git_hooks_dir(main) == git_hooks_dir(repo_root) else None
     return None

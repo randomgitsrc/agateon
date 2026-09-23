@@ -108,7 +108,7 @@
 - 全量 pytest 分 unit/regression/integration 片跑、每片大 timeout、片内加 `-n auto` 并行（约 3.5x 提速；套件按隔离设计可安全并行）。**完整 CI 口径**（含 flaky 兜底的 `--reruns` 与所需插件）见 `agate/tests/README.md`——本机验证前先对齐，否则可能把已知 flaky 当新缺陷追；gate/consistency 单跑
 - 输出控制在几十行内；先看全输出再分析，不用 tail 截断（count-tests 教训：数字被 tail 吞掉误判）
 - commit 前检查 hook 会跑什么：pre-commit 按 .state.yaml phase 跑 check-gate，commit 时 phase 应与本次产出一致（P1 产出 → phase=P1 再 commit），否则 hook 拦截
-- hook 在共享 git 目录：worktree 的 `.git/hooks` 为空，hook 实际在 `<主 checkout>/.git/hooks/`（pre-commit / commit-msg / pre-push 软链已装），改 hook 装那里。权威取值 `git rev-parse --git-path hooks`（`core.hooksPath` 覆盖时也认）——`install-hook.py` / `agate-setup.py` 据此安装与卸载，故 **worktree 内可直接跑接入/卸载命令，无需按 worktree 各装一次**；反之在 worktree 里 `--uninstall` 会清掉主 checkout 的 gate（仓库级动作，多任务并行别顺手卸）
+- hook 在共享 git 目录：worktree 的 `.git/hooks` 为空，hook 实际在 `<主 checkout>/.git/hooks/`（pre-commit / commit-msg / pre-push 软链已装），改 hook 装那里。权威取值 `git rev-parse --git-path hooks`（`core.hooksPath` 覆盖时也认）——`install-hook.py` / `agate-setup.py` 据此安装与卸载，故 **worktree 内可直接跑接入/卸载命令，无需按 worktree 各装一次**；反之在 worktree 里 `--uninstall` 会清掉主 checkout 的 gate（仓库级动作，多任务并行别顺手卸）；若 `core.hooksPath` 指向多仓共用目录，`--uninstall` 还会**跨仓库**摘掉别的仓库的 gate（该情形会显式告警）
 - CI 等待用 `gh pr checks <PR> --watch [--fail-fast]`，不手写 jq 轮询（2026-08-18 教训）
 - **docs/site 改动走快路径、不被全量 CI 卡死的机理与准则**：见 `docs/guides/ci-docs-only-playbook.md`（2026-08-26：`on:[push,pull_request]` 双跑 + 建分支 push 的 `before` 全零致 fast-pass 失效，已修为 detect-docs-only 对全零 before 回退 diff 对 origin/main）
 - git 脚本不在 bash PATH 时用绝对路径：`/home/kity/bin/git-to-pr` / `/home/kity/bin/git-to-main`（非交互 shell 不读 bashrc，2026-08-18 确认）

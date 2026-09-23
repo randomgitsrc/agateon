@@ -435,6 +435,14 @@ def _uninstall_project(project_root, home, dry_run):
     removed, kept = _uninstall_platforms(home, "project", dry_run, project_root=project_root)
 
     hook_dir = agate_common.git_hooks_dir(project_root)
+    # 跨仓库警告（2026-09-23 复核 MF-2）：`core.hooksPath` 覆盖时该目录**不属于本仓库**，
+    # 很可能被多个仓库共用——在这里卸载会把**别的仓库**的 gate 一并摘掉（删除对象确是 agate
+    # 自有文件，归属校验拦得住用户文件，但"仓库级动作"的提示原先只覆盖 worktree→宿主）。
+    # 静态验证（如 CI 复盘）：见 test_uninstall_warns_when_hooks_path_may_be_shared_across_repos。
+    hooks_cfg = agate_common.git_hooks_path_config(project_root)
+    if hooks_cfg:
+        print(f"  ℹ️  本仓库用 core.hooksPath 指定了 hooks 目录（{hooks_cfg}）——该目录可能被"
+              f"**其他仓库共用**，本次卸载会同时摘掉它们的 gate；如非本意请改用共享前先确认。")
     marker = os.path.join(hook_dir, ".agate-root")
     # marker 值须**非空**再判归属：`_read_text` 读不到返回 ""，而 `os.path.realpath("")`
     # 会塌缩成 **cwd** → 空标记也可能被判"有效"（2026-09-21 审查 BLK-2 实测）。
@@ -508,8 +516,14 @@ def _list_installed(home):
 
 
 def _git_root():
-    """当前目录所在 git 仓库根（不在仓库返回 None）。"""
-    rc, out = agate_common.run_git(["rev-parse", "--show-toplevel"])
+    """当前目录所在 git 仓库根（不在仓库返回 None）。
+
+    `clean_location_env=True`：环境里的 `GIT_DIR` 会让 `--show-toplevel` 与
+    `--git-path hooks` 出现**不一致**的基准（前者按 cwd、后者被 GIT_DIR 劫持）——那正是
+    "卸载 A 却删掉 B 的 hook"的成因（2026-09-23 复核 MF-1）。本命令一律按 **cwd** 定位项目，
+    故所有 git 查询都中和这些变量。
+    """
+    rc, out = agate_common.run_git(["rev-parse", "--show-toplevel"], clean_location_env=True)
     return out.strip() if rc == 0 and out.strip() else None
 
 
