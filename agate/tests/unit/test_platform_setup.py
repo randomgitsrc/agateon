@@ -1034,6 +1034,53 @@ def test_git_shared_hook_owner_ignores_non_worktree_gitdir(agate_scripts, tmp_pa
     )
 
 
+def test_is_bare_repo_uses_config_key_not_computed_flag(agate_scripts, tmp_path):
+    """裸仓库判据读 **配置键** `core.bare`，不用 `--is-bare-repository` 的计算值。
+
+    **为什么**（复核 C1-edge 实测）：`--is-bare-repository` 是 cwd/gitdir 敏感的**计算值**——
+    `--separate-git-dir` 的 **gitdir** 在 `core.bare` 键缺失时会被算成 `true`，于是那个 git
+    内部目录会被重新当成"宿主项目"登记进台账（OP-2 症状回归：`--list` 显示 git 内部目录）。
+    git 自建布局都显式写 `core.bare`，故读键既准确又不误纳。
+    """
+    import subprocess as sp
+
+    def _git(*args, cwd=None):
+        return sp.run(["git", *args], capture_output=True, text=True, cwd=cwd)
+
+    gd = tmp_path / "gd"
+    work = tmp_path / "work"
+    work.mkdir()
+    assert _git("init", "-q", f"--separate-git-dir={gd}", str(work)).returncode == 0
+    for kv in (("user.email", "t@t"), ("user.name", "t")):
+        _git("config", *kv, cwd=str(work))
+    (work / "a.txt").write_text("a\n", encoding="utf-8")
+    _git("add", "-A", cwd=str(work))
+    _git("commit", "-qm", "i", cwd=str(work))
+    wt = tmp_path / "wt"
+    assert _git("worktree", "add", "-q", str(wt), "-b", "wtb", cwd=str(work)).returncode == 0
+
+    p = str(agate_scripts)
+    if p not in sys.path:
+        sys.path.insert(0, p)
+    import agate_common
+
+    # 前置：默认布局下该 gitdir 的键是 false（本条主要防"键缺失"这一边界）
+    assert agate_common._is_bare_repo(str(gd)) is False, "前置：separate-git-dir gitdir 非裸仓库"
+
+    # 键缺失 → 计算值会变 true，但判据必须仍为 False（否则 gitdir 被当宿主）
+    assert _git("config", "--unset", "core.bare", cwd=str(gd)).returncode == 0
+    rc_flag, flag_out = agate_common.run_git(["rev-parse", "--is-bare-repository"], cwd=str(gd),
+                                            clean_location_env=True)
+    assert flag_out.strip() == "true", (
+        f"前置：该边界下计算值应为 true（否则本用例测不到目标分支）: {rc_flag} {flag_out!r}"
+    )
+    assert agate_common._is_bare_repo(str(gd)) is False, (
+        "键缺失时不得认定为裸仓库（否则 separate-git-dir 的 gitdir 会被当宿主项目）"
+    )
+    assert agate_common.git_shared_hook_owner(str(wt)) is None
+    assert agate_common.git_shared_hook_owner(str(work)) is None
+
+
 def test_install_hook_fallback_copies_match_primary(agate_scripts, tmp_path):
     """`install-hook.py` 的**降级副本**必须与 `agate_common` 主实现行为一致（防漂移）。
 
@@ -1115,6 +1162,33 @@ def test_install_hook_fallback_copies_match_primary(agate_scripts, tmp_path):
         cfg_p = _load_primary("git_hooks_path_config")(root)
         cfg_f = _load_fallback("git_hooks_path_config")(root)
         assert cfg_p == cfg_f, f"[{layout}] git_hooks_path_config 不一致"
+
+    # **GIT_DIR 被污染**的布局（复核 C3-gap）：降级副本的 `run_git` 若丢掉
+    # `clean_location_env`，上面三条"无污染环境"的比对**全绿**——该依赖必须被显式打到。
+    other = tmp_path / "other-repo"
+    other.mkdir()
+    _git("init", "-q", ".", cwd=str(other))
+    polluted = {"GIT_DIR": str(other / ".git")}
+    old_env = {k: os.environ.get(k) for k in polluted}
+    os.environ.update(polluted)
+    try:
+        got_p = _load_primary("git_hooks_dir")(str(linked))
+        got_f = _load_fallback("git_hooks_dir")(str(linked))
+        assert got_p == got_f, "[GIT_DIR 污染] git_hooks_dir 主实现与降级副本不一致"
+        owner_p = _load_primary("git_shared_hook_owner")(str(linked))
+        owner_f = _load_fallback("git_shared_hook_owner")(str(linked))
+        assert owner_p == owner_f, "[GIT_DIR 污染] git_shared_hook_owner 不一致"
+        # 且两者都**没有**被 GIT_DIR 劫持到 other（否则中性化形同虚设）
+        assert got_p == _ac.git_hooks_dir(str(linked)), got_p
+        assert os.path.realpath(got_p) != os.path.realpath(str(other / ".git" / "hooks")), (
+            f"GIT_DIR 不得劫持 hook 目录: {got_p}"
+        )
+    finally:
+        for k, v in old_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
     del bare
 
 

@@ -87,7 +87,9 @@ except (ImportError, SystemExit):
             if main == os.path.realpath(repo_root):
                 return None
             if not os.path.lexists(os.path.join(main, ".git")):
-                rc_bare, bare_out = run_git(["rev-parse", "--is-bare-repository"], cwd=main,
+                # 读 **配置键** `core.bare`（不是 `--is-bare-repository` 的计算值：后者对
+                # `--separate-git-dir` 的 gitdir 在键缺失时会算成 true，误纳 git 内部目录）。
+                rc_bare, bare_out = run_git(["config", "--get", "--bool", "core.bare"], cwd=main,
                                             clean_location_env=True)
                 if rc_bare != 0 or bare_out.strip() != "true":
                     return None

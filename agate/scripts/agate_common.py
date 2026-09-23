@@ -169,8 +169,16 @@ def git_shared_hook_owner(repo_root):
 
 
 def _is_bare_repo(path):
-    """`path` 是否为裸仓库（`core.bare=true`）。非仓库 / git 不可用 → False。"""
-    rc, out = run_git(["rev-parse", "--is-bare-repository"], cwd=path,
+    """`path` 是否为裸仓库。判据 = 配置键 `core.bare` **显式为 true**。
+
+    **为什么不直接用 `rev-parse --is-bare-repository`**（复核 C1-edge 实测）：该命令是
+    **cwd/gitdir 敏感的计算值**——`--separate-git-dir` 的 **gitdir** 在 `core.bare` 键缺失时
+    会被算成 `true`，于是那个 git 内部目录会被重新当成"宿主项目"（OP-2 症状回归：
+    `--list` 显示 git 内部目录）。git 自己写入的布局都有显式 `core.bare`（`init/clone --bare`
+    → `true`；普通仓库 `.git` 与 `--separate-git-dir` gitdir → `false`），故读配置键既准确
+    又不误纳。键缺失 / 非仓库 / git 不可用 → False（保守：不认定为宿主）。
+    """
+    rc, out = run_git(["config", "--get", "--bool", "core.bare"], cwd=path,
                       clean_location_env=True)
     return rc == 0 and out.strip() == "true"
 

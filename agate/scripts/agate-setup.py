@@ -443,8 +443,8 @@ def _uninstall_project(project_root, home, dry_run):
     if hooks_cfg:
         print(f"  ℹ️  本仓库用 core.hooksPath 指定了 hooks 目录（{hooks_cfg}）——该目录可能被"
               f"**其他仓库共用**，本次卸载会同时摘掉它们的 gate。")
-        print("      若这不是你要的效果：让各仓库改用各自的 `.git/hooks`"
-              "（`git config --unset core.hooksPath`）后再卸载。")
+        print("      若这不是你要的效果：让各仓库改用各自的 `.git/hooks` 后再卸载——"
+              "`git config --unset core.hooksPath`（值来自全局配置时加 `--global`）。")
     marker = os.path.join(hook_dir, ".agate-root")
     # marker 值须**非空**再判归属：`_read_text` 读不到返回 ""，而 `os.path.realpath("")`
     # 会塌缩成 **cwd** → 空标记也可能被判"有效"（2026-09-21 审查 BLK-2 实测）。
