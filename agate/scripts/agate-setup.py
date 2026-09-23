@@ -434,7 +434,7 @@ def _uninstall_project(project_root, home, dry_run):
     print(f"\n项目 {project_root}:")
     removed, kept = _uninstall_platforms(home, "project", dry_run, project_root=project_root)
 
-    hook_dir = os.path.join(project_root, ".git", "hooks")
+    hook_dir = agate_common.git_hooks_dir(project_root)
     marker = os.path.join(hook_dir, ".agate-root")
     # marker 值须**非空**再判归属：`_read_text` 读不到返回 ""，而 `os.path.realpath("")`
     # 会塌缩成 **cwd** → 空标记也可能被判"有效"（2026-09-21 审查 BLK-2 实测）。
@@ -552,6 +552,13 @@ def _run_uninstall(args):
                 print("\n台账为空（无项目侧安装记录）")
         for p in missing:
             print(f"\n项目 {p}: ⚠️ 目录已不存在，从台账移除")
+            # 目录没了 → 它自己的接入物随之消失；但**hook 可能仍在**：链接 worktree 的
+            # hook 装在**共享**的 `<主工作树>/.git/hooks`（2026-09-23 起按 git 解析）。
+            # 新装的项目会把宿主根一并登记（见 agate_common.record_project），故本轮多半
+            # 会连共享 hooks 一起清掉；只有 v0.75.0 及更早写的旧台账才可能缺宿主条目——
+            # 那时共享 hooks 无处可查（目录已不存在，无法再问 git 谁是宿主）。
+            print("      ⚠️  若它曾是某仓库的链接 worktree：其 hook 在**该仓库的共享 hooks 目录**。"
+                  "该仓库若也在台账中，本轮会一并清理；若不在，请从该仓库重跑 --uninstall")
             if not args.dry_run:
                 agate_common.forget_project(p)
     elif args.scope in ("all", "project"):

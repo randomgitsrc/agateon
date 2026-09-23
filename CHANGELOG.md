@@ -10,7 +10,16 @@
 
 ## [Unreleased]
 
-（暂无——下个版本的变更在此累积。）
+### 修复
+
+- **git worktree / `core.hooksPath` 下 hook 装不上也卸不掉**（`install-hook.py` 与 `agate-setup.py` 两处同源硬编码 `<repo>/.git/hooks`）：链接 worktree 的 `.git` 是**文件**（指向 `<主 checkout>/.git/worktrees/<name>`），git 真正执行的是**共享**的 `<主 checkout>/.git/hooks`。后果是双向失效——安装侧 `os.makedirs` 抛 `NotADirectoryError`（**命令直接崩**），卸载侧 `os.path.lexists` 恒 False（**静默跳过**，报"已删除 0 项"而 hook 仍在）。而 worktree 正是 dogfooding 的工作目录（`docs/guides/worktree-dogfooding-guide.md`）。现统一改为问 git：`agate_common.git_hooks_dir()` = `git rev-parse --git-path hooks`（同时覆盖 worktree 与 `core.hooksPath` 两种情形；非仓库时回退旧语义）。
+- **`core.hooksPath` 覆盖时 gate 静默失效**：hook 被装进 git **不会执行**的地方——与「复制模式 hook 不可执行」同一种失效模式（装了但没生效），且同样无声。
+
+### 变更
+
+- **链接 worktree 的安装会连带登记其宿主根**（`agate_common.record_project` → `git_shared_hook_owner`）：hook 装在共享目录，宿主才是真身所在。只登记 worktree 路径的话，`git worktree remove` 之后台账仅剩"目录已不存在"的死条目，而**共享 hooks 仍生效却再也定位不到**（用户以为已卸干净）。台账同时登记宿主，`--uninstall --all-projects` 才总能把 hook 清干净。
+- **相对 `core.hooksPath` 显式告警**：git 对相对值按**运行目录**解析（实测 git 2.43：同一仓库里从 worktree 提交触发 `<worktree>/<hooksPath>`、从主 checkout 提交触发 `<主 checkout>/<hooksPath>`）——此时"装一次全仓库生效"**不成立**，各 worktree 各读一份，换目录提交即可能 gate 静默失效。该语义无法由本工具单方面修正，改为如实告警 + 建议改绝对路径（告警走 stdout：`agate-setup.py` 只在子进程非 0 时透传其 stderr）。
+- **文档对齐**（`docs/guides/worktree-dogfooding-guide.md`）：Step 4 改为「worktree **无需**重装 hook + 权威取值 `git rev-parse --git-path hooks`」（并记录相对 `core.hooksPath` 这一例外）；Step 5 由 4 条手工 `ln -sf` 改为 `agate-setup.py`（默认全局，一次覆盖本机所有项目/所有 worktree），并说明"仅钉版本时才用 `--scope project`"；新增「worktree 里的 agateon 产物」节（三类产物分别怎么清，含"在 worktree 里 `--uninstall` 会清掉主 checkout 的 gate"这一仓库级陷阱）；前置条件补"Agateon 已安装"（接入命令从已装版本解析协议根）。`AGENTS.md` 工具纪律与 `handoff-template.md` §2 同步指向权威取值。
 
 ## [0.75.0] - 2026-09-21
 

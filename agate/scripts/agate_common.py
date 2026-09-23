@@ -66,6 +66,58 @@ def run_git(args, cwd=None):
         return 1, ""
 
 
+def git_hooks_dir(repo_root):
+    """git **实际会执行** hooks 的目录（绝对路径）——hook 的安装/卸载唯一基准。
+
+    **为什么不写 `<repo_root>/.git/hooks`**（2026-09-23 实测，两处硬编码同源）：
+      · **链接 worktree**：`<repo_root>/.git` 是**文件**（指向 `<主 checkout>/.git/worktrees/<name>`），
+        生效目录是**共享**的 `<主 checkout>/.git/hooks` → 硬编码路径会让安装抛
+        `NotADirectoryError`（命令崩）、卸载 `lexists` 恒 False（**静默漏删**，报"已删除 0 项"）。
+        而 worktree 正是 dogfooding 的工作目录（`docs/guides/worktree-dogfooding-guide.md`）。
+      · **`core.hooksPath` 覆盖**：git 只看该目录 → 硬编码路径把 hook 装进 git 不执行的地方，
+        gate **静默失效**（与"复制模式不可执行"同一种失效模式：装了但没生效）。
+    `git rev-parse --git-path hooks` 同时覆盖两种情形；返回值可能是相对路径（相对 cwd），
+    故显式以 `repo_root` 为 cwd 调用再归一化——与 `--path-format=absolute` 结果一致
+    （实测 git 2.43：相对 `core.hooksPath` 按 **cwd** 解析）。
+    ⚠️ 因此**相对** `core.hooksPath` 下位置本身就是 cwd 相关的（同一仓库的不同 worktree
+    会各读一份）——这不是本函数能消除的，安装侧会就此显式告警。git 不可用/非仓库时回退
+    `.git/hooks`（保持旧语义）。
+    """
+    rc, out = run_git(["rev-parse", "--git-path", "hooks"], cwd=repo_root)
+    rel = out.strip() if rc == 0 else ""
+    if not rel:
+        return os.path.join(repo_root, ".git", "hooks")
+    # 绝对路径时 os.path.join 直接返回后者（core.hooksPath 为绝对路径的情形）
+    return os.path.normpath(os.path.join(repo_root, rel))
+
+
+def git_shared_hook_owner(repo_root):
+    """若 `repo_root` 是**链接 worktree**，返回其宿主（主工作树）根；否则 None。
+
+    用途：链接 worktree 的 hook 装在**共享**的 `<主工作树>/.git/hooks`（见 `git_hooks_dir`）。
+    在 worktree 里安装时若只登记 worktree 路径，worktree 一旦被 `git worktree remove`，
+    台账条目即失效 → **共享 hooks 再无从定位**（gate 继续生效，用户以为已卸干净）。
+    故登记时把宿主根一并登记（宿主才是 hook 的真身所在）。
+
+    判定：`git worktree list --porcelain` 首条即主工作树；且必须**确实共用** hooks 目录
+    （防 submodule / 非常规布局误登记）。非仓库、git 不可用、或已是主工作树 → None。
+    """
+    rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root)
+    if rc != 0:
+        return None
+    for line in (out or "").splitlines():
+        if not line.startswith("worktree "):
+            continue
+        main = line[len("worktree "):].strip()
+        if not main:
+            return None
+        main = os.path.realpath(main)
+        if main == os.path.realpath(repo_root):
+            return None
+        return main if git_hooks_dir(main) == git_hooks_dir(repo_root) else None
+    return None
+
+
 def probe_python():
     """探测可用 python 解释器：python3 → python（shutil.which 顺序，替代 detect_python）。
 
@@ -690,19 +742,30 @@ def record_project(project_root, platforms=None, scope="project"):
 
     在**安装成功之后**调用——记录失败不应让安装失败（台账是辅助索引，非 gate），
     故内部吞掉 OSError 并返回 False，由调用方决定是否提示。
+
+    **链接 worktree 会连带登记其宿主根**（`git_shared_hook_owner`）：hook 装在共享目录，
+    宿主才是它的真身所在；只登记 worktree 路径会让 worktree 删除后台账失去对共享 hook 的
+    定位能力。宿主条目同时登记，`--all-projects` 才总能把 hook 清干净。
     """
     root = os.path.realpath(os.path.abspath(project_root))
     path = project_ledger_path()
     entries = read_projects()
-    entry = next((e for e in entries if os.path.realpath(e["path"]) == root), None)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    if entry is None:
-        entry = {"path": root, "first_seen": now, "platforms": [], "scope": scope}
-        entries.append(entry)
-    entry["last_seen"] = now
-    entry["scope"] = scope
-    if platforms:
-        entry["platforms"] = sorted(set(entry.get("platforms") or []) | set(platforms))
+
+    def _upsert(target):
+        entry = next((e for e in entries if os.path.realpath(e["path"]) == target), None)
+        if entry is None:
+            entry = {"path": target, "first_seen": now, "platforms": [], "scope": scope}
+            entries.append(entry)
+        entry["last_seen"] = now
+        entry["scope"] = scope
+        if platforms:
+            entry["platforms"] = sorted(set(entry.get("platforms") or []) | set(platforms))
+
+    _upsert(root)
+    owner = git_shared_hook_owner(root)
+    if owner and os.path.isdir(owner):
+        _upsert(owner)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:

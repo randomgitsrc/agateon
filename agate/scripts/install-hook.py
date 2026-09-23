@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """install-hook.py — 安装 pre-commit / commit-msg / pre-push hook（TAG0010 批次 3b + TAG0008 批次 resolve-chain）
 
-迁移自 install-hook.sh（93 行）：把 agate 的三个 hook 薄壳软链到当前 git 仓库的
-.git/hooks/ 下（Windows 无符号链接权限时退化为复制 + 写 .agate-root 兜底标记），
-并做 chmod +x、既有 hook 备份、.gitignore 对 .state.yaml 的忽略检测。
+迁移自 install-hook.sh（93 行）：把 agate 的三个 hook 薄壳软链到**本仓库 git 实际使用的
+hooks 目录**（`git rev-parse --git-path hooks`——链接 worktree 下是共享的
+`<主 checkout>/.git/hooks`，`core.hooksPath` 覆盖时是它指定的目录；见
+`agate_common.git_hooks_dir`）下（Windows 无符号链接权限时退化为复制 + 写 `.agate-root`
+兜底标记），并做 chmod +x、既有 hook 备份、.gitignore 对 .state.yaml 的忽略检测。
 
 TAG0008：hook 薄壳是固定解析入口（运行时经 resolve-entry.py 解析项目 .agate-version
 → 对应版本 gate py），不直接安装具体版本脚本——切版本不用重装 hook（BDD-18）。
@@ -31,7 +33,7 @@ import sys
 import time
 
 try:
-    from agate_common import run_git
+    from agate_common import git_hooks_dir, run_git
 except (ImportError, SystemExit):
     # 公共库依赖缺失时降级本地 subprocess 实现（安装器不依赖 pyyaml）。
     def run_git(args, cwd=None):
@@ -43,6 +45,14 @@ except (ImportError, SystemExit):
             return proc.returncode, proc.stdout
         except OSError:
             return 1, ""
+
+    def git_hooks_dir(repo_root):
+        """`agate_common.git_hooks_dir` 的降级副本——降级路径同样不硬编码 `.git/hooks`。"""
+        rc, out = run_git(["rev-parse", "--git-path", "hooks"], cwd=repo_root)
+        rel = out.strip() if rc == 0 else ""
+        if not rel:
+            return os.path.join(repo_root, ".git", "hooks")
+        return os.path.normpath(os.path.join(repo_root, rel))
 
 
 _STATE_YAML_RE = re.compile(r"^\s*[*]*\.state\.yaml")
@@ -109,7 +119,26 @@ def main():
         sys.exit(1)
     repo_root = out.strip()
 
-    hook_dir = os.path.join(repo_root, ".git", "hooks")
+    # 问 git 要 hooks 目录（不硬编码 .git/hooks）——链接 worktree 下 `.git` 是文件，
+    # 生效目录在**共享**的主 checkout；core.hooksPath 覆盖时又是另一处。见 agate_common.git_hooks_dir。
+    hook_dir = git_hooks_dir(repo_root)
+    if os.path.isfile(os.path.join(repo_root, ".git")):
+        print(f"检测到链接 worktree——hook 装在 git 实际读取的目录: {hook_dir}")
+    # 相对 core.hooksPath 是 git 的**cwd 相对**语义（2026-09-23 实测：从 worktree 提交
+    # 触发的是 `<worktree>/<hooksPath>`，从主 checkout 提交触发 `<主 checkout>/<hooksPath>`）。
+    # 无 core.hooksPath 时链接 worktree 共用一套 hook；一旦它是相对路径，装/卸位置就随
+    # **运行目录**变——这不是本工具能单方面解决的，如实提示并给可执行出路（改绝对路径）。
+    rc_cfg, cfg_out = run_git(["config", "--get", "core.hooksPath"])
+    hooks_cfg = cfg_out.strip() if rc_cfg == 0 else ""
+    if hooks_cfg and not os.path.isabs(hooks_cfg):
+        # 走 stdout：这是**提示**而非错误，且 agate-setup.py 只转发子进程 stdout
+        # （stderr 仅在其返回非 0 时透传）——写 stderr 会被静默丢掉。
+        print(f"⚠️  core.hooksPath 是相对路径（{hooks_cfg}）：git 按**运行目录**解析它，"
+              f"故 hook 位置随 cwd 变（本仓库各 worktree 会各读一份）。")
+        print("    建议改成绝对路径（git config core.hooksPath <绝对路径>），"
+              "否则换目录提交时 gate 会静默失效。")
+    elif os.path.isfile(os.path.join(repo_root, ".git")):
+        print("  （该目录对本仓库所有 worktree 生效；无需在每个 worktree 重装）")
 
     # pre-commit hook
     hook_file = os.path.join(hook_dir, "pre-commit")
