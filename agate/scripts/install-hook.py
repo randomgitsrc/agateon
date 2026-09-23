@@ -68,7 +68,11 @@ except (ImportError, SystemExit):
         return out.strip() if rc == 0 else ""
 
     def git_shared_hook_owner(repo_root):
-        """降级副本：链接 worktree → 宿主工作树根；否则 None。"""
+        """降级副本：链接 worktree → 宿主（工作树**或裸仓库**）根；否则 None。
+
+        必须与 `agate_common.git_shared_hook_owner` **逐项同判**（有单测逐布局比对两者返回值，
+        防手工维护的副本漂移）：宿主为裸仓库时它没有 `.git`，故判据是「工作树或裸仓库」。
+        """
         rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root,
                           clean_location_env=True)
         if rc != 0:
@@ -76,11 +80,17 @@ except (ImportError, SystemExit):
         for line in (out or "").splitlines():
             if not line.startswith("worktree "):
                 continue
-            main = os.path.realpath(line[len("worktree "):].strip())
+            main = line[len("worktree "):].strip()
+            if not main:
+                return None
+            main = os.path.realpath(main)
             if main == os.path.realpath(repo_root):
                 return None
             if not os.path.lexists(os.path.join(main, ".git")):
-                return None
+                rc_bare, bare_out = run_git(["rev-parse", "--is-bare-repository"], cwd=main,
+                                            clean_location_env=True)
+                if rc_bare != 0 or bare_out.strip() != "true":
+                    return None
             return main if git_hooks_dir(main) == git_hooks_dir(repo_root) else None
         return None
 

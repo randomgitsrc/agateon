@@ -140,6 +140,12 @@ def git_shared_hook_owner(repo_root):
     该布局下 worktree 被删除后共享 hooks 失去台账线索（与"登记一个 git 内部目录"相比，宁愿少
     登记也不误导；该布局罕见，且 `--list` 与卸载输出仍会提示从原仓库重跑）。`git_hooks_dir`
     本身对该布局解析正确（返回 `<gitdir>/hooks`），故安装/卸载**当场**的行为不受影响。
+
+    **裸仓库宿主必须接受**（2026-09-23 复核修回归）：宿主可以是裸仓库（`git clone --bare` +
+    `worktree add`），它**没有** `.git`（自己就是 git 目录）。若一律要求 `.git` 存在，宿主判定
+    为 None → worktree 删除后共享 hooks 仍在却失去线索，而推荐的补救（"从该仓库重跑
+    `--uninstall`"）在裸目录里**不可执行**（`rev-parse --show-toplevel` fatal）——正是本系列要
+    消灭的静默残留。故判据是「**工作树或裸仓库**」，不是「有 `.git`」。
     """
     rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root,
                       clean_location_env=True)
@@ -154,12 +160,19 @@ def git_shared_hook_owner(repo_root):
         main = os.path.realpath(main)
         if main == os.path.realpath(repo_root):
             return None
-        # 必须是**工作树**（其下有 .git，文件或目录皆可）——排除 separate-git-dir / submodule
-        # 的 gitdir（gitdir 内部没有 .git）。
-        if not os.path.lexists(os.path.join(main, ".git")):
+        # 宿主必须是**项目**：工作树（其下有 .git，文件或目录皆可）**或裸仓库**（自己即 git
+        # 目录）。排除 separate-git-dir / submodule 的 gitdir——那两者既无 `.git` 也非裸仓库。
+        if not os.path.lexists(os.path.join(main, ".git")) and not _is_bare_repo(main):
             return None
         return main if git_hooks_dir(main) == git_hooks_dir(repo_root) else None
     return None
+
+
+def _is_bare_repo(path):
+    """`path` 是否为裸仓库（`core.bare=true`）。非仓库 / git 不可用 → False。"""
+    rc, out = run_git(["rev-parse", "--is-bare-repository"], cwd=path,
+                      clean_location_env=True)
+    return rc == 0 and out.strip() == "true"
 
 
 def probe_python():

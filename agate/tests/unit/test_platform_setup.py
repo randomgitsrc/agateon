@@ -16,6 +16,7 @@
 #   4. 不调用真实平台 CLI——只断言文件落地与内容
 
 
+import importlib.util
 import json
 import os
 import shutil
@@ -25,6 +26,8 @@ import pytest
 import yaml
 
 from conftest import PROTOCOL_RULE_MARKERS
+
+_MISSING = object()  # sys.modules 哨兵（区分「不存在」与「值为 None」）
 
 SETUP_PY = ("scripts", "agate-setup.py")
 CODEX_TEMPLATE = ("assets", "templates", "codex", "SKILL.md")
@@ -1031,6 +1034,90 @@ def test_git_shared_hook_owner_ignores_non_worktree_gitdir(agate_scripts, tmp_pa
     )
 
 
+def test_install_hook_fallback_copies_match_primary(agate_scripts, tmp_path):
+    """`install-hook.py` 的**降级副本**必须与 `agate_common` 主实现行为一致（防漂移）。
+
+    为什么单测这条：pyyaml 缺失时 install-hook 会走 `except (ImportError, SystemExit)` 里的
+    本地副本（安装器不依赖 pyyaml）。这些副本是**手工维护的第二/第三份实现**——复核已实测
+    它们与主实现存在过差异（缺空值守卫）。本用例按三种布局**逐一比对两者的返回值**，
+    让任何一份漂移立刻变红（同 `test_protocol_root_dual_impl` 的守护思路）。
+    """
+    import subprocess as sp
+
+    def _git(*args, cwd=None):
+        return sp.run(["git", *args], capture_output=True, text=True, cwd=cwd)
+
+    # 布局 1：普通仓库（含 core.hooksPath 覆盖）2：链接 worktree 3：裸仓库宿主
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    _git("init", "-q", ".", cwd=str(plain))
+    custom = tmp_path / "custom-hooks"
+    _git("config", "core.hooksPath", str(custom), cwd=str(plain))
+    linked = tmp_path / "linked"
+    _git("worktree", "add", "-q", str(linked), "-b", "linked-b", cwd=str(plain))
+    bare, bare_wt = _bare_host_with_worktree(tmp_path)
+
+    primary_dir = agate_scripts
+    # `agate_common` 必须能被**主实现**导入（且下面的自检也要用它），先把 scripts 目录上 path
+    if str(primary_dir) not in sys.path:
+        sys.path.insert(0, str(primary_dir))
+    import agate_common as _ac
+
+    # 独立加载"降级副本"：只放 install-hook.py（无 agate_common）→ 必走 except 分支
+    fallback_dir = tmp_path / "fallback-scripts"
+    fallback_dir.mkdir()
+    shutil.copyfile(primary_dir / "install-hook.py", fallback_dir / "install-hook.py")
+
+    def _load_primary(name):
+        """加载**主实现**：`agate_common` 正常可导入，故模块级 try 走 import 分支。"""
+        spec = importlib.util.spec_from_file_location(
+            f"primary_{name}", primary_dir / "install-hook.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return getattr(mod, name)
+
+    def _load_fallback(name):
+        """加载**降级副本**：临时把 `agate_common` 置为不可导入（`sys.modules[x] = None`
+        是 import 失败的官方语义），强制走 `except (ImportError, SystemExit)` 分支。
+
+        ⚠️ 不这样做该用例是**假绿**（2026-09-23 自查实测）：`agate_common` 在 sys.path 上
+        可导入时，`install-hook.py` 的模块级 try 永远成功，降级副本**从不被执行**——无论副本
+        怎么漂移都测不出来。
+        """
+        saved = sys.modules.get("agate_common", _MISSING)
+        sys.modules["agate_common"] = None  # → `import agate_common` 抛 ImportError
+        try:
+            spec = importlib.util.spec_from_file_location(
+                f"fallback_{name}", fallback_dir / "install-hook.py")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return getattr(mod, name)
+        finally:
+            if saved is _MISSING:
+                sys.modules.pop("agate_common", None)
+            else:
+                sys.modules["agate_common"] = saved
+
+    # 前置自检：降级副本确实走的是 except 分支（否则该用例无鉴别力）
+    fb_impl = _load_fallback("git_hooks_dir")
+    assert fb_impl is not _ac.git_hooks_dir, (
+        "前置：降级副本未被真正加载（agate_common 仍可导入）——该用例会是假绿"
+    )
+
+    for layout, root in (("plain+hooksPath", str(plain)), ("linked", str(linked)),
+                         ("bare-host-wt", str(bare_wt))):
+        got_p = _load_primary("git_hooks_dir")(root)
+        got_f = _load_fallback("git_hooks_dir")(root)
+        assert got_p == got_f, f"[{layout}] git_hooks_dir 主实现与降级副本不一致"
+        owner_p = _load_primary("git_shared_hook_owner")(root)
+        owner_f = _load_fallback("git_shared_hook_owner")(root)
+        assert owner_p == owner_f, f"[{layout}] git_shared_hook_owner 不一致"
+        cfg_p = _load_primary("git_hooks_path_config")(root)
+        cfg_f = _load_fallback("git_hooks_path_config")(root)
+        assert cfg_p == cfg_f, f"[{layout}] git_hooks_path_config 不一致"
+    del bare
+
+
 def test_git_hooks_dir_falls_back_outside_a_repo(agate_scripts, tmp_path):
     """`git_hooks_dir` 在非仓库目录下不得抛异常（`.git/hooks` 兜底）。
 
@@ -1047,14 +1134,97 @@ def test_git_hooks_dir_falls_back_outside_a_repo(agate_scripts, tmp_path):
     assert agate_common.git_hooks_dir(str(stray)) == os.path.join(str(stray), ".git", "hooks")
     assert agate_common.git_shared_hook_owner(str(stray)) is None
 
-    # 兜底必须与 git 对**真仓库**的答案一致，否则"回退旧语义"等价于回到缺陷
+    # 兜底必须与 git 对**真仓库**的答案一致，否则"回退旧语义"等价于回到缺陷。
+    # ⚠️ 必须用**答案不等于 `<repo>/.git/hooks`** 的布局（core.hooksPath 覆盖）——
+    # 普通仓库下两者按定义相等，任何生产代码改动都不会让该断言变红（复核 OP-3 实测）。
     from conftest import GitRepo
     repo = GitRepo(tmp_path / "real-repo")
+    custom = tmp_path / "elsewhere-hooks"
+    assert repo.git("config", "core.hooksPath", str(custom)).returncode == 0
     rc, out = agate_common.run_git(["rev-parse", "--git-path", "hooks"], cwd=str(repo.path))
     assert rc == 0, out
-    assert agate_common.git_hooks_dir(str(repo.path)) == os.path.realpath(
-        os.path.join(str(repo.path), out.strip())
+    resolved = os.path.realpath(os.path.join(str(repo.path), out.strip()))
+    assert resolved != os.path.realpath(os.path.join(str(repo.path), ".git", "hooks")), (
+        "前置：该布局下 git 的答案应与硬编码路径不同，否则断言无鉴别力"
     )
+    assert agate_common.git_hooks_dir(str(repo.path)) == resolved
+
+
+def _bare_host_with_worktree(tmp_path):
+    """建 `host.git`（裸仓库）+ 其链接 worktree `wt`；返回 (bare, wt)。"""
+    import subprocess as sp
+
+    def _git(*args, cwd=None):
+        return sp.run(["git", *args], capture_output=True, text=True, cwd=cwd)
+
+    src = tmp_path / "src"
+    src.mkdir()
+    assert _git("init", "-q", ".", cwd=str(src)).returncode == 0
+    for kv in (("user.email", "t@t"), ("user.name", "t")):
+        _git("config", *kv, cwd=str(src))
+    (src / "a.txt").write_text("a\n", encoding="utf-8")
+    _git("add", "-A", cwd=str(src))
+    _git("commit", "-qm", "i", cwd=str(src))
+
+    bare = tmp_path / "host.git"
+    assert _git("clone", "-q", "--bare", str(src), str(bare)).returncode == 0
+    wt = tmp_path / "wt"
+    r = _git("worktree", "add", "-q", str(wt), "HEAD", cwd=str(bare))
+    assert r.returncode == 0, r.stderr
+    return bare, wt
+
+
+def test_git_shared_hook_owner_accepts_bare_host(agate_scripts, tmp_path):
+    """**回归**：宿主是**裸仓库**时也必须登记它——裸仓库目录下没有 `.git`，但它就是 git 目录。
+
+    复核实测：worktree 的宿主可为裸仓库（`git clone --bare` + `worktree add`），此时
+    宿主目录里**没有** `.git`。若只按"其下有 `.git`"判工作树，宿主判定为 None → 只登记
+    worktree 自身 → `git worktree remove` 后共享 hooks **仍在**却失去台账线索，而推荐的补救
+    （"从该仓库重跑 --uninstall"）在裸目录里**不可执行**（`rev-parse --show-toplevel` 直接
+    fatal："该操作必须在一个工作区中运行"）→ 正是本系列要消灭的静默残留。
+    """
+    bare, wt = _bare_host_with_worktree(tmp_path)
+
+    p = str(agate_scripts)
+    if p not in sys.path:
+        sys.path.insert(0, p)
+    import agate_common
+
+    assert not os.path.lexists(bare / ".git"), "前置：裸仓库目录下没有 .git"
+    owner = agate_common.git_shared_hook_owner(str(wt))
+    assert owner is not None, "裸仓库宿主必须被识别（否则 worktree 删除后 hook 失联）"
+    assert os.path.realpath(owner) == os.path.realpath(str(bare)), owner
+    # 且宿主与 worktree 确实共用同一 hooks 目录（判定前提）
+    assert agate_common.git_hooks_dir(owner) == agate_common.git_hooks_dir(str(wt))
+
+
+def test_bare_host_worktree_install_ledgers_host_and_can_uninstall(
+        run_cli, python_exe, agate_scripts, agate_root, tmp_path):
+    """端到端：裸仓库宿主 + worktree 安装 → 台账含宿主；删掉 worktree 后仍能清共享 hooks。"""
+    home = _fake_homes(tmp_path)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    bare, wt = _bare_host_with_worktree(tmp_path)
+
+    res = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                 "--scope", "project", "--platform", "claude-code", cwd=str(wt))
+    assert res.returncode == 0, res.output
+    for name in _HOOK_NAMES:
+        assert os.path.lexists(bare / "hooks" / name), f"缺 {name}:\n{res.output}"
+    data = json.loads((iroot / "installed-projects.json").read_text(encoding="utf-8"))
+    paths = {os.path.realpath(e["path"]) for e in data["projects"]}
+    assert os.path.realpath(str(bare)) in paths, (
+        f"裸仓库宿主须登记（hook 真身所在）: {paths}"
+    )
+
+    import subprocess as sp
+    r = sp.run(["git", "worktree", "remove", "--force", str(wt)],
+               capture_output=True, text=True, cwd=str(bare))
+    assert r.returncode == 0, r.stderr
+    un = _setup(run_cli, python_exe, agate_scripts, home, iroot,
+                "--uninstall", "--all-projects", cwd=str(tmp_path))
+    assert un.returncode == 0, un.output
+    left = [n for n in _HOOK_NAMES if os.path.lexists(bare / "hooks" / n)]
+    assert not left, f"worktree 已删，裸仓库宿主条目仍应能清掉共享 hooks: {left}\n{un.output}"
 
 
 def test_relative_core_hooks_path_is_reported(run_cli, python_exe, agate_scripts,
