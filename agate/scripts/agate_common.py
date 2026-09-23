@@ -49,21 +49,138 @@ MAX_RETRY_MAP = "P1:3,P2:3,P3:2,P4:3,P5:2,P6:2,P7:2,P8:2"
 # ---------- run_git / 通用工具 ----------
 
 
-def run_git(args, cwd=None):
+# 定位仓库布局时必须中和的 git 环境变量：它们会**压过 cwd**，让"问 git"问到别的仓库。
+# 实测（2026-09-23）：`GIT_DIR=<B>/.git git rev-parse --git-path hooks`（在外层 cwd=A 时）
+# 返回 B 的 hooks，而 `--show-toplevel` 仍按 cwd 返回 A → 两侧基准不一致，卸载 A 时删掉 B 的
+# hook，同时 A 的 gate 原样留下并被 forget（**静默残留**，正是本次要消灭的失效模式）。
+_GIT_LOCATION_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR")
+
+
+def _git_env_clean():
+    """去掉 `GIT_DIR` 等"重定位仓库"变量的子进程环境（保留 PATH/SSH 等其余变量）。"""
+    env = os.environ.copy()
+    for name in _GIT_LOCATION_ENV:
+        env.pop(name, None)
+    return env
+
+
+def run_git(args, cwd=None, clean_location_env=False):
     """git subprocess 封装。
 
     encoding="utf-8" + errors="replace"（Windows 代码页差异不崩溃），返回
     (returncode, stdout)。git 不可用时按失败处理（同 sh 侧 2>/dev/null 语义）。
+
+    `clean_location_env=True` 时去掉 `GIT_DIR`/`GIT_WORK_TREE`/`GIT_COMMON_DIR`——
+    **按 `cwd`/显式路径定位仓库的调用方必须开**，否则环境里的 GIT_DIR 会把查询劫持到别的
+    仓库（见 `_GIT_LOCATION_ENV` 的实测说明）。默认 False 保持既有语义不变。
     """
     try:
         proc = subprocess.run(
             ["git", *args],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             cwd=cwd,
+            env=_git_env_clean() if clean_location_env else None,
         )
         return proc.returncode, proc.stdout
     except OSError:
         return 1, ""
+
+
+def git_hooks_dir(repo_root):
+    """git **实际会执行** hooks 的目录（绝对路径）——hook 的安装/卸载唯一基准。
+
+    **为什么不写 `<repo_root>/.git/hooks`**（2026-09-23 实测，两处硬编码同源）：
+      · **链接 worktree**：`<repo_root>/.git` 是**文件**（指向 `<主 checkout>/.git/worktrees/<name>`），
+        生效目录是**共享**的 `<主 checkout>/.git/hooks` → 硬编码路径会让安装抛
+        `NotADirectoryError`（命令崩）、卸载 `lexists` 恒 False（**静默漏删**，报"已删除 0 项"）。
+        而 worktree 正是 dogfooding 的工作目录（`docs/guides/worktree-dogfooding-guide.md`）。
+      · **`core.hooksPath` 覆盖**：git 只看该目录 → 硬编码路径把 hook 装进 git 不执行的地方，
+        gate **静默失效**（与"复制模式不可执行"同一种失效模式：装了但没生效）。
+    `git rev-parse --git-path hooks` 同时覆盖两种情形；返回值可能是相对路径（相对 cwd），
+    故显式以 `repo_root` 为 cwd 调用再归一化——与 `--path-format=absolute` 结果一致
+    （实测 git 2.43：相对 `core.hooksPath` 按 **cwd** 解析）。
+    ⚠️ 因此**相对** `core.hooksPath` 下位置本身就是 cwd 相关的（同一仓库的不同 worktree
+    会各读一份）——这不是本函数能消除的，安装侧会就此显式告警。git 不可用/非仓库时回退
+    `.git/hooks`（保持旧语义）。
+
+    **必须中和 `GIT_DIR` 等环境变量**（`clean_location_env=True`）：本函数的契约是"按
+    `repo_root` 定位"，而运行时的进程环境可能带着 GIT_DIR（包装脚本 / IDE / 用户 shell）。
+    """
+    rc, out = run_git(["rev-parse", "--git-path", "hooks"], cwd=repo_root,
+                      clean_location_env=True)
+    rel = out.strip() if rc == 0 else ""
+    if not rel:
+        return os.path.join(repo_root, ".git", "hooks")
+    # 绝对路径时 os.path.join 直接返回后者（core.hooksPath 为绝对路径的情形）
+    return os.path.normpath(os.path.join(repo_root, rel))
+
+
+def git_hooks_path_config(repo_root):
+    """该仓库生效的 `core.hooksPath` 配置值（未设置 → ""）。同样中和 GIT_DIR。"""
+    rc, out = run_git(["config", "--get", "core.hooksPath"], cwd=repo_root,
+                      clean_location_env=True)
+    return out.strip() if rc == 0 else ""
+
+
+
+def git_shared_hook_owner(repo_root):
+    """若 `repo_root` 是**链接 worktree**，返回其宿主（主工作树）根；否则 None。
+
+    用途：链接 worktree 的 hook 装在**共享**的 `<主工作树>/.git/hooks`（见 `git_hooks_dir`）。
+    在 worktree 里安装时若只登记 worktree 路径，worktree 一旦被 `git worktree remove`，
+    台账条目即失效 → **共享 hooks 再无从定位**（gate 继续生效，用户以为已卸干净）。
+    故登记时把宿主根一并登记（宿主才是 hook 的真身所在）。
+
+    判定：`git worktree list --porcelain` 首条即主工作树；且必须**确实共用** hooks 目录
+    （防 submodule / 非常规布局误登记），并**确实是工作树**（`--separate-git-dir` 与 submodule
+    下首行给的是 **gitdir**，如 `<repo>/.git` 或 `<sup>/.git/modules/...`——那不是项目，登记进
+    台账会让 `--list` 显示 git 内部目录，OP-2 实测）。非仓库、git 不可用、或已是主工作树 → None。
+
+    **代价（保守方向）**：`--separate-git-dir` 布局下宿主判定为 None → 只登记 worktree 自身。
+    该布局下 worktree 被删除后共享 hooks 失去台账线索（与"登记一个 git 内部目录"相比，宁愿少
+    登记也不误导；该布局罕见，且 `--list` 与卸载输出仍会提示从原仓库重跑）。`git_hooks_dir`
+    本身对该布局解析正确（返回 `<gitdir>/hooks`），故安装/卸载**当场**的行为不受影响。
+
+    **裸仓库宿主必须接受**（2026-09-23 复核修回归）：宿主可以是裸仓库（`git clone --bare` +
+    `worktree add`），它**没有** `.git`（自己就是 git 目录）。若一律要求 `.git` 存在，宿主判定
+    为 None → worktree 删除后共享 hooks 仍在却失去线索，而推荐的补救（"从该仓库重跑
+    `--uninstall`"）在裸目录里**不可执行**（`rev-parse --show-toplevel` fatal）——正是本系列要
+    消灭的静默残留。故判据是「**工作树或裸仓库**」，不是「有 `.git`」。
+    """
+    rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root,
+                      clean_location_env=True)
+    if rc != 0:
+        return None
+    for line in (out or "").splitlines():
+        if not line.startswith("worktree "):
+            continue
+        main = line[len("worktree "):].strip()
+        if not main:
+            return None
+        main = os.path.realpath(main)
+        if main == os.path.realpath(repo_root):
+            return None
+        # 宿主必须是**项目**：工作树（其下有 .git，文件或目录皆可）**或裸仓库**（自己即 git
+        # 目录）。排除 separate-git-dir / submodule 的 gitdir——那两者既无 `.git` 也非裸仓库。
+        if not os.path.lexists(os.path.join(main, ".git")) and not _is_bare_repo(main):
+            return None
+        return main if git_hooks_dir(main) == git_hooks_dir(repo_root) else None
+    return None
+
+
+def _is_bare_repo(path):
+    """`path` 是否为裸仓库。判据 = 配置键 `core.bare` **显式为 true**。
+
+    **为什么不直接用 `rev-parse --is-bare-repository`**（复核 C1-edge 实测）：该命令是
+    **cwd/gitdir 敏感的计算值**——`--separate-git-dir` 的 **gitdir** 在 `core.bare` 键缺失时
+    会被算成 `true`，于是那个 git 内部目录会被重新当成"宿主项目"（OP-2 症状回归：
+    `--list` 显示 git 内部目录）。git 自己写入的布局都有显式 `core.bare`（`init/clone --bare`
+    → `true`；普通仓库 `.git` 与 `--separate-git-dir` gitdir → `false`），故读配置键既准确
+    又不误纳。键缺失 / 非仓库 / git 不可用 → False（保守：不认定为宿主）。
+    """
+    rc, out = run_git(["config", "--get", "--bool", "core.bare"], cwd=path,
+                      clean_location_env=True)
+    return rc == 0 and out.strip() == "true"
 
 
 def probe_python():
@@ -690,19 +807,30 @@ def record_project(project_root, platforms=None, scope="project"):
 
     在**安装成功之后**调用——记录失败不应让安装失败（台账是辅助索引，非 gate），
     故内部吞掉 OSError 并返回 False，由调用方决定是否提示。
+
+    **链接 worktree 会连带登记其宿主根**（`git_shared_hook_owner`）：hook 装在共享目录，
+    宿主才是它的真身所在；只登记 worktree 路径会让 worktree 删除后台账失去对共享 hook 的
+    定位能力。宿主条目同时登记，`--all-projects` 才总能把 hook 清干净。
     """
     root = os.path.realpath(os.path.abspath(project_root))
     path = project_ledger_path()
     entries = read_projects()
-    entry = next((e for e in entries if os.path.realpath(e["path"]) == root), None)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    if entry is None:
-        entry = {"path": root, "first_seen": now, "platforms": [], "scope": scope}
-        entries.append(entry)
-    entry["last_seen"] = now
-    entry["scope"] = scope
-    if platforms:
-        entry["platforms"] = sorted(set(entry.get("platforms") or []) | set(platforms))
+
+    def _upsert(target):
+        entry = next((e for e in entries if os.path.realpath(e["path"]) == target), None)
+        if entry is None:
+            entry = {"path": target, "first_seen": now, "platforms": [], "scope": scope}
+            entries.append(entry)
+        entry["last_seen"] = now
+        entry["scope"] = scope
+        if platforms:
+            entry["platforms"] = sorted(set(entry.get("platforms") or []) | set(platforms))
+
+    _upsert(root)
+    owner = git_shared_hook_owner(root)
+    if owner and os.path.isdir(owner):
+        _upsert(owner)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:

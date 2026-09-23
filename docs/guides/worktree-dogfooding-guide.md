@@ -13,6 +13,7 @@ agate 自身改造 = 用 agate 改造 agate（dogfooding）。涉及双工作区
 ## 前置条件
 
 - 开发 checkout（本仓库）在 main 且干净
+- **Agateon 已安装到本机**（`bash install.sh --versions`；更新用 `python3 ~/.agate/scripts/agate-install.py latest`）——接入命令 `agate-setup.py` 从**已安装版本**解析协议根（见 Step 5），没装则无从接入
 - `~/.agate` 是**版本管理根目录**（非软链）——稳定版来自 `~/.agate/current/`，与开发 checkout **解耦**（见 §「本机稳定版布局」）
 - 任务已 P0 立项（P0-brief + .state.yaml 在 agate-workspace/tasks/）
 
@@ -60,35 +61,52 @@ python3 agate/scripts/check-protocol-consistency.py --strict-errors-only
 
 > ⚠️ **用 `--strict-errors-only` 而非 `--strict`（DEBT0012 教训）**：仓库存量有 300+ 条历史叙事文件死链 WARNING，`--strict` 会让"仅有 WARNING、无 ERROR"也 exit 2，把干净基线误判为"主 checkout 有未合并改动"。`--strict-errors-only` 仅在 ERROR 时非 0（TAG0017 起官方默认语义，见 `agate/scripts/README.md`）。pytest 全量大可分 unit/regression/integration 三片跑（`tests/README.md`），每片外层加 `timeout 90`、片内加 `-n auto` 并行（约 3.5x 提速；套件按隔离设计，可安全并行），gate/consistency 单跑并加 timeout。
 
-### Step 4：确认 hook 就位（共享 git 目录）
+### Step 4：确认 hook 就位（**共享** hooks 目录——worktree 无需重装）
 
-worktree 的 `.git` 是文件（指向主 checkout `.git`），hook 在共享目录：
+worktree 的 `.git` 是**文件**（`gitdir: <主 checkout>/.git/worktrees/<name>`），所以 git 真正执行的是
+**共享**的 hooks 目录，不是 `<worktree>/.git/hooks`：
 
 ```bash
-ls -la /home/kity/oclab/agate/.git/hooks/ | grep -E 'pre-commit|commit-msg|pre-push' | grep -v sample
+git rev-parse --git-path hooks          # 权威答案：worktree / core.hooksPath 两种覆盖都认
+ls -la "$(git rev-parse --git-path hooks)" | grep -E 'pre-commit|commit-msg|pre-push' | grep -v sample
 ```
 
 预期：三个 hook 软链指向 `~/.agate/scripts/`。这是有意的——commit hook 用稳定版判定，避免"用未验证的新 gate 判自己"。
 
-### Step 5：注册 orchestrator（SETUP）
+> **新 worktree 不需要重装 hook**：共享目录已就位，新建的 worktree 直接继承（本机 hook 一直在**主 checkout** 的 `.git/hooks/`）。
+> 反过来说，`<worktree>/.git/hooks` 这种写法在 worktree 下**必然失败**——`.git` 是文件不是目录。
+> v0.75.0 及更早的 `install-hook.py` / `agate-setup.py` 正是硬编码该路径，实测在 worktree 里**装不上（NotADirectoryError）、也卸不掉（报"已删除 0 项"而 hook 仍在）**；现已改为问 git 要目录（`git rev-parse --git-path hooks`）。
+
+> **唯一的例外：`core.hooksPath` 写成相对路径**。git 对相对值按**运行目录**解析（实测 git 2.43：从 worktree 提交触发 `<worktree>/<hooksPath>`，从主 checkout 提交触发 `<主 checkout>/<hooksPath>`）——此时"装一次全仓库生效"**不成立**，各 worktree 会各读一份，换目录提交就可能 gate 失效。`install-hook.py` 检测到相对值会显式告警并建议改成绝对路径；绝对 `core.hooksPath` 则回到"共享、只装一次"的正常语义。
+
+### Step 5：注册 orchestrator（一条命令）
+
+**首选：全局注册一次，本机所有项目（含所有 worktree）通用**——orchestrator 身份与具体项目无关：
 
 ```bash
-# 先取协议根（版本管理布局：~/.agate/current/agate；不再有兜底取值）
-AGATE_DIR="$HOME/.agate/current/agate"
-
-# OpenCode + Claude Code 双平台都注册（TAG0016/17 实际都双平台）
-mkdir -p .opencode/agents
-ln -sf "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
-mkdir -p .claude/agents
-ln -sf "$AGATE_DIR/orchestrator-template.md" .claude/agents/orchestrator.md
-
-# 自检：链后必须可读（写错协议根会得到断链，症状是编排者身份不可用）
-test -r .claude/agents/orchestrator.md && echo "✅ 可读" || echo "❌ 断链——检查 $AGATE_DIR"
+python3 ~/.agate/scripts/agate-setup.py          # 探测已装平台 → 全局身份 + 装 hook（幂等）
+python3 ~/.agate/scripts/agate-setup.py --list   # 核验：全局接入物 + 台账登记的项目
 ```
 
-> **为什么不能直接写 `~/.agate/orchestrator-template.md`**：版本管理布局下协议本体在 `~/.agate/vX.Y.Z/agate/`（经 `current` 指针即 `~/.agate/current/agate`），`~/.agate/` 根下没有该文件，直接写会得到断链（平台报 `--agent 'orchestrator' not found`）。细节见 `SETUP.md`「先取协议根路径」。
+> **为什么不再手工 `ln -sf`（本文档在 v0.75.0 及更早是 4 条手工命令）**：
+> 手工路径只有"文件确实被创建"这一个后果；命令化之后多了三件事——① **幂等**，且已存在的**非本工具**文件先备份再覆盖（`*.bak.<epoch>`）；
+> ② 登记**项目台账**（`<安装根>/installed-projects.json`），`--uninstall --all-projects` 据此找回散落各处的接入物；
+> ③ 平台产物路径 + 协议根解析只有**一处实现**，不会随版本布局漂移（手工写错 = 断链，平台报 `--agent 'orchestrator' not found`）。
 
-`.opencode/` 与 `.claude/` 均已 gitignore（本地环境配置不入库），对应 setup 步骤见 `SETUP.md`（OpenCode 与 Claude Code 各一节）。
+**仅当**本 worktree 要钉不同协议版本、或你刻意不用全局身份时，才用项目侧：
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py --scope project   # 产物落 <git 根>/.claude|.opencode/
+```
+
+> 项目侧基准是 **git 根**（= worktree 根），不是 cwd——在子目录里跑同样落在 worktree 根（与台账、卸载同基准）。
+> 在 worktree 里跑这条会登记**两条**台账：该 worktree 路径 + **它的宿主（主 checkout）根**——因为 hook 装在共享目录，宿主才是 hook 的真身所在
+> （只登记 worktree 的话，`git worktree remove` 之后共享 hooks 仍生效却再也定位不到）。worktree 被 remove 后 `--list` 会显示它"目录已不存在"，下次 `--uninstall --all-projects` 时移除该条目，并**顺带清掉共享 hooks**。
+> `.opencode/` 与 `.claude/` 均已 gitignore（本地环境配置不入库），平台差异见 `SETUP.md` 步骤 2。
+
+自检：`test -r .claude/agents/orchestrator.md && echo "✅ 可读" || echo "❌ 断链"`（用 `--scope project` 时）。
+
+> **为什么不能手工写 `~/.agate/orchestrator-template.md`**：版本管理布局下协议本体在 `~/.agate/vX.Y.Z/agate/`（经 `current` 指针即 `~/.agate/current/agate`），`~/.agate/` 根下没有该文件，直接写会得到断链（平台报 `--agent 'orchestrator' not found`）。命令化后这条坑已由实现兜住（源文件不存在会显式报错并跳过，不会留下断链）。细节见 `SETUP.md`「先取协议根路径」。
 
 ### Step 6：验证工作区解析
 
@@ -144,6 +162,8 @@ git log --oneline -3   # 确认交接单已提交
 |------|------|
 | 开发 checkout 的 `agate/` 不改 | 正常改动走 worktree。**注意**：迁移到版本管理布局后它**已不是**稳定版来源（稳定版 = `~/.agate/current/`），但仍是你的开发 checkout——改它会让本地状态混入"看起来像已发布"的假象 |
 | `~/.agate` 禁止改动 | **版本管理根目录**（`repo/` + `vX.Y.Z/` + 指针 + 根 `scripts/` 副本），是稳定版来源；跑 gate / 读卡片用它，改它等于改稳定版 |
+| **worktree 不重装 hook** | hook 在**共享**的 `<主 checkout>/.git/hooks`（权威取值 `git rev-parse --git-path hooks`）——新建 worktree 直接继承。硬编码 `<worktree>/.git/hooks` 在 worktree 下**装不上也卸不掉**（v0.75.0 及更早实测） |
+| **接入/卸载都走命令** | `agate-setup.py`（配合 `--list` 核验、`--uninstall --all-projects` 清理）。手工 `ln -sf` 造不出台账，卸载**无从发现**该项目的散落产物；删 `~/.agate` 前先 `--uninstall`，否则留下断链/陈旧 hook（复制模式下陈旧 hook 仍可执行，会让 `git commit` 直接失败） |
 | gate 工具 ≠ 检查对象 | commit hook 用 `~/.agate` 判定；但 `check-protocol-consistency.py` 必须用 worktree 自己的（检查 worktree 里的文件） |
 | `~/.agate` 脚本显示**稳定版**上下文 | `agate-summary.py` 在 worktree 跑显示稳定版（`AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号），**不是** worktree/开发 checkout 状态——worktree 状态用 `git log`/`git status` 看 |
 | 工具稳定优先 | hook 指向稳定版，不指向 worktree（避免"用未验证的新 gate 判自己"）——用户已确认此哲学 |
@@ -410,7 +430,36 @@ git branch -D feat/{Txxx}-{slug}
 | 7 | worktree 与分支已清理 | `git worktree list`、`git branch --list 'feat/{Txxx}*'` |
 | 8 | 主 checkout 已同步且干净 | `git status --short`（空）+ `git log --oneline -1` |
 | 9 | tag 有效且在 main 历史 | `git merge-base --is-ancestor v{版本} origin/main && git describe --tags origin/main` |
+| 10 | **worktree 的 agateon 产物已清**（若曾 `--scope project` 装过） | 见下节「worktree 里的 agateon 产物」 |
+
+### worktree 里的 agateon 产物（清理时必须知道的三件事）
+
+> `git worktree remove` **只删工作区**——它不管 agateon 装进去的东西。以下三类必须分别处理。
+
+| # | 产物 | 位置 | 清理方式 |
+|---|------|------|---------|
+| 1 | **平台身份产物** | `<worktree>/.claude/agents/orchestrator.md`、`.opencode/agents/orchestrator.md` | 已 gitignore，随 worktree 目录一起消失；**若在别处仍有副本则由台账负责**（见 3） |
+| 2 | **git hook** | **共享**的 `<主 checkout>/.git/hooks/`（`git rev-parse --git-path hooks`） | **不在 worktree 里**，`worktree remove` 之后**依然生效**。要清就在主 checkout 跑 `--uninstall`（切到任一 worktree 跑同样命中共享目录） |
+| 3 | **台账条目** | `<安装根>/installed-projects.json` | worktree 目录删掉后再跑 `--list`，会显示该路径"目录已不存在"；`--uninstall --all-projects` 会移除死条目（并在输出里提示：若它曾是某仓库的链接 worktree，其 hook 仍在**该仓库的共享 hooks 目录**，需从该仓库清） |
+
+```bash
+# worktree 收尾时的 agateon 侧动作（在本 worktree 或主 checkout 执行均可——两者解析到同一共享 hooks 目录）
+python3 ~/.agate/scripts/agate-setup.py --list            # 核验：本路径是否在台账里（多为"已不存在"）
+python3 ~/.agate/scripts/agate-setup.py --uninstall       # 清共享 hooks（若本仓库还要继续用 agate，跳过这步）
 ```
+
+> **为什么 hook 不用每个 worktree 各装一次**：三个 hook 装在**共享**目录，对本仓库所有 worktree 生效。
+> 反过来，**在 worktree 里 `--uninstall` 会连带清掉主 checkout 的 gate**——卸载是仓库级动作，不是 worktree 级动作，
+> 多任务并行时别顺手在某个 worktree 里卸（v0.75.0 及更早该命令在 worktree 里是坏的，所以这个陷阱当时还撞不上）。
+
+> **⚠️ 更宽的一种"仓库级动作"：`core.hooksPath` 指向共享目录时，卸载会跨仓库生效。**
+> 若 repoA、repoB 都设了 `core.hooksPath=<共享目录>`（多仓共治的常见做法），它们**共用同一份 hook**；
+> 在 repoA 里 `--uninstall` 会把三个 hook 从共享目录删掉 → **repoB 的 gate 同时消失**。
+> 删除对象确实是 agate 自有文件（归属校验会保留你自己写的 hook），但"卸的是哪个仓库"与"影响面"不是一回事——
+> `--uninstall` 现在会在这种配置下显式打印该提示。多仓共用时请确认这是你要的效果，或改用各仓库自己的 `.git/hooks`。
+
+**与「双工作区」的关系**：本 guide 的 dogfooding 模式用的是**全局**平台身份（`~/.claude` 等）+ **共享** hook，
+worktree 内**不应**出现 `.claude/agents/`；只有刻意用 `--scope project` 钉版本时才会出现——那正是上表第 1 行要清的。
 
 ## 与 AGENTS.md 的关系
 

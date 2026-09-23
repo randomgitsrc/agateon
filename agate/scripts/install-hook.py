@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """install-hook.py — 安装 pre-commit / commit-msg / pre-push hook（TAG0010 批次 3b + TAG0008 批次 resolve-chain）
 
-迁移自 install-hook.sh（93 行）：把 agate 的三个 hook 薄壳软链到当前 git 仓库的
-.git/hooks/ 下（Windows 无符号链接权限时退化为复制 + 写 .agate-root 兜底标记），
-并做 chmod +x、既有 hook 备份、.gitignore 对 .state.yaml 的忽略检测。
+迁移自 install-hook.sh（93 行）：把 agate 的三个 hook 薄壳软链到**本仓库 git 实际使用的
+hooks 目录**（`git rev-parse --git-path hooks`——链接 worktree 下是共享的
+`<主 checkout>/.git/hooks`，`core.hooksPath` 覆盖时是它指定的目录；见
+`agate_common.git_hooks_dir`）下（Windows 无符号链接权限时退化为复制 + 写 `.agate-root`
+兜底标记），并做 chmod +x、既有 hook 备份、.gitignore 对 .state.yaml 的忽略检测。
 
 TAG0008：hook 薄壳是固定解析入口（运行时经 resolve-entry.py 解析项目 .agate-version
 → 对应版本 gate py），不直接安装具体版本脚本——切版本不用重装 hook（BDD-18）。
@@ -31,18 +33,68 @@ import sys
 import time
 
 try:
-    from agate_common import run_git
+    from agate_common import git_hooks_dir, git_hooks_path_config, git_shared_hook_owner, run_git
 except (ImportError, SystemExit):
     # 公共库依赖缺失时降级本地 subprocess 实现（安装器不依赖 pyyaml）。
-    def run_git(args, cwd=None):
+    _GIT_LOCATION_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR")
+
+    def run_git(args, cwd=None, clean_location_env=False):
+        env = None
+        if clean_location_env:
+            env = os.environ.copy()
+            for _name in _GIT_LOCATION_ENV:
+                env.pop(_name, None)
         try:
             proc = subprocess.run(
                 ["git", *args], capture_output=True, text=True,
-                encoding="utf-8", errors="replace", cwd=cwd,
+                encoding="utf-8", errors="replace", cwd=cwd, env=env,
             )
             return proc.returncode, proc.stdout
         except OSError:
             return 1, ""
+
+    def git_hooks_dir(repo_root):
+        """`agate_common.git_hooks_dir` 的降级副本——降级路径同样不硬编码 `.git/hooks`。"""
+        rc, out = run_git(["rev-parse", "--git-path", "hooks"], cwd=repo_root,
+                          clean_location_env=True)
+        rel = out.strip() if rc == 0 else ""
+        if not rel:
+            return os.path.join(repo_root, ".git", "hooks")
+        return os.path.normpath(os.path.join(repo_root, rel))
+
+    def git_hooks_path_config(repo_root):
+        rc, out = run_git(["config", "--get", "core.hooksPath"], cwd=repo_root,
+                          clean_location_env=True)
+        return out.strip() if rc == 0 else ""
+
+    def git_shared_hook_owner(repo_root):
+        """降级副本：链接 worktree → 宿主（工作树**或裸仓库**）根；否则 None。
+
+        必须与 `agate_common.git_shared_hook_owner` **逐项同判**（有单测逐布局比对两者返回值，
+        防手工维护的副本漂移）：宿主为裸仓库时它没有 `.git`，故判据是「工作树或裸仓库」。
+        """
+        rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root,
+                          clean_location_env=True)
+        if rc != 0:
+            return None
+        for line in (out or "").splitlines():
+            if not line.startswith("worktree "):
+                continue
+            main = line[len("worktree "):].strip()
+            if not main:
+                return None
+            main = os.path.realpath(main)
+            if main == os.path.realpath(repo_root):
+                return None
+            if not os.path.lexists(os.path.join(main, ".git")):
+                # 读 **配置键** `core.bare`（不是 `--is-bare-repository` 的计算值：后者对
+                # `--separate-git-dir` 的 gitdir 在键缺失时会算成 true，误纳 git 内部目录）。
+                rc_bare, bare_out = run_git(["config", "--get", "--bool", "core.bare"], cwd=main,
+                                            clean_location_env=True)
+                if rc_bare != 0 or bare_out.strip() != "true":
+                    return None
+            return main if git_hooks_dir(main) == git_hooks_dir(repo_root) else None
+        return None
 
 
 _STATE_YAML_RE = re.compile(r"^\s*[*]*\.state\.yaml")
@@ -103,13 +155,39 @@ def main():
         import agate_package
         agate_root = agate_package.agate_home()
 
-    rc, out = run_git(["rev-parse", "--show-toplevel"])
+    # 按 **cwd** 定位仓库：中和 GIT_DIR/GIT_WORK_TREE/GIT_COMMON_DIR——它们会压过 cwd，
+    # 让下面的 repo_root 与 hook_dir 来自**不同**仓库（实测 GIT_DIR 只劫持 hooks 查询而
+    # --show-toplevel 仍按 cwd；GIT_WORK_TREE 则连 --show-toplevel 也劫持）。基准必须一致。
+    rc, out = run_git(["rev-parse", "--show-toplevel"], clean_location_env=True)
     if rc != 0 or not out.strip():
         sys.stderr.write("不在 git 仓库中\n")
         sys.exit(1)
     repo_root = out.strip()
 
-    hook_dir = os.path.join(repo_root, ".git", "hooks")
+    # 问 git 要 hooks 目录（不硬编码 .git/hooks）——链接 worktree 下 `.git` 是文件，
+    # 生效目录在**共享**的主工作树；core.hooksPath 覆盖时又是另一处。见 agate_common.git_hooks_dir。
+    hook_dir = git_hooks_dir(repo_root)
+    # "链接 worktree" 的判据不能只看 `.git` 是文件——submodule 与 `--separate-git-dir`
+    # 也是文件，但它们的 hooks 目录**只影响它们自己**（OP-2 实测）。用宿主判定收窄。
+    is_linked_wt = git_shared_hook_owner(repo_root) is not None
+    if is_linked_wt:
+        print(f"检测到链接 worktree——hook 装在 git 实际读取的目录: {hook_dir}")
+
+    # 相对 core.hooksPath 是 git 的**cwd 相对**语义（2026-09-23 实测：从 worktree 提交
+    # 触发的是 `<worktree>/<hooksPath>`，从主 checkout 提交触发 `<主 checkout>/<hooksPath>`）。
+    # 无 core.hooksPath 时链接 worktree 共用一套 hook；一旦它是相对路径，装/卸位置就随
+    # **运行目录**变——这不是本工具能单方面解决的，如实提示并给可执行出路（改绝对路径）。
+    # `~` 前缀**不算**相对：git 会展开它（`~user` 亦然，实测），位置不随 cwd 变（OP-1 误报）。
+    hooks_cfg = git_hooks_path_config(repo_root)
+    if hooks_cfg and not os.path.isabs(hooks_cfg) and not hooks_cfg.startswith("~"):
+        # 走 stdout：这是**提示**而非错误，且 agate-setup.py 只转发子进程 stdout
+        # （stderr 仅在其返回非 0 时透传）——写 stderr 会被静默丢掉。
+        print(f"⚠️  core.hooksPath 是相对路径（{hooks_cfg}）：git 按**运行目录**解析它，"
+              f"故 hook 位置随 cwd 变（本仓库各 worktree 会各读一份）。")
+        print("    建议改成绝对路径（git config core.hooksPath <绝对路径>），"
+              "否则换目录提交时 gate 会静默失效。")
+    elif is_linked_wt:
+        print("  （该目录对本仓库所有 worktree 生效；无需在每个 worktree 重装）")
 
     # pre-commit hook
     hook_file = os.path.join(hook_dir, "pre-commit")

@@ -28,13 +28,14 @@
   - 但 `check-protocol-consistency.py` **必须用 worktree 自己的**（`python3 agate/scripts/check-protocol-consistency.py`），因为检查对象是 **worktree 里的协议文件**。若误用 `~/.agate` 的 consistency 脚本，会扫到主 checkout 的文件而非 worktree 的改动
   - 同理：`python3 ~/.agate/scripts/agate-summary.py` 在 worktree 里跑会显示**主 checkout 的上下文**（版本/分支/HEAD 是稳定版的），不代表 worktree 状态——worktree 自己的状态用 `git log`/`git status` 看
   - 同理：**所有编排/派发类工具脚本**（`agate-inject-card.py`、`agate-render-dispatch-prompt.py`、`agate-next-card.py` 等）都用 `~/.agate/scripts/` 稳定版调用（TAG0016 教训：用 worktree 相对路径调用 `agate-inject-card.py` 时，其 AGATE_ROOT 自解析逻辑会读到 worktree 正在被修改的协议卡片副本，把尚未发布的新机制内容注入任务——P5 才发现并改正，P1-P4 纯属侥幸未实际受损）
-- **hook 在共享 git 目录**：worktree 的 `.git` 是文件（指向主 checkout `.git`），hook 实际在主 checkout 的 `.git/hooks/`（pre-commit/commit-msg/pre-push 已软链安装）。worktree commit 时 hook 自动触发。
+- **hook 在共享 git 目录**：worktree 的 `.git` 是文件（指向主 checkout `.git`），hook 实际在主 checkout 的 `.git/hooks/`（pre-commit/commit-msg/pre-push 已软链安装）。worktree commit 时 hook 自动触发。**权威取值**：`git rev-parse --git-path hooks`（`core.hooksPath` 覆盖时也会跟着变）；新 worktree **无需重装** hook。
 
 **已完成的 setup（worktree 已可独立使用）**：
 - 依赖齐全：bash / python / pyyaml / pytest / shellcheck
 - 基线验证：全量 pytest 全绿 + consistency 0 ERROR（--strict-errors-only；DEBT0012 教训：存量 300+ WARNING 下 --strict 会误导判 exit 2）
 - commit hook：指向 `~/.agate`（稳定版），worktree commit 自动触发
-- orchestrator 注册：`.opencode/agents/orchestrator.md` + `.claude/agents/orchestrator.md` → `$AGATE_DIR/orchestrator-template.md`（`$AGATE_DIR` = `~/.agate/current/agate`；符号链接，不拷贝，双平台）
+- 平台接入：`python3 ~/.agate/scripts/agate-setup.py`（**默认全局**，一次覆盖本机所有项目/所有 worktree；内部按 `~/.agate/current/agate`（= `$AGATE_DIR`）解析协议根，幂等、可 `--list` 核验）。只有刻意钉版本时才用 `--scope project`（产物落 git 根，且会把路径登记进安装台账）
+- 卸载（收尾时按需）：`agate-setup.py --list` → `--uninstall --all-projects`。**注意 hook 是仓库级共享的**——在任一 worktree 里卸载会一并清掉主 checkout 的 gate，多任务并行时别顺手卸
 - 工作区解析：`agate_common.py` 输出 worktree 自己的 `agate-workspace/`
 - 任务数据：{Txxx} P0-brief + .state.yaml phase=P0 在 worktree 的 `agate-workspace/tasks/`
 
