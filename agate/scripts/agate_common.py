@@ -135,6 +135,11 @@ def git_shared_hook_owner(repo_root):
     （防 submodule / 非常规布局误登记），并**确实是工作树**（`--separate-git-dir` 与 submodule
     下首行给的是 **gitdir**，如 `<repo>/.git` 或 `<sup>/.git/modules/...`——那不是项目，登记进
     台账会让 `--list` 显示 git 内部目录，OP-2 实测）。非仓库、git 不可用、或已是主工作树 → None。
+
+    **代价（保守方向）**：`--separate-git-dir` 布局下宿主判定为 None → 只登记 worktree 自身。
+    该布局下 worktree 被删除后共享 hooks 失去台账线索（与"登记一个 git 内部目录"相比，宁愿少
+    登记也不误导；该布局罕见，且 `--list` 与卸载输出仍会提示从原仓库重跑）。`git_hooks_dir`
+    本身对该布局解析正确（返回 `<gitdir>/hooks`），故安装/卸载**当场**的行为不受影响。
     """
     rc, out = run_git(["worktree", "list", "--porcelain"], cwd=repo_root,
                       clean_location_env=True)
