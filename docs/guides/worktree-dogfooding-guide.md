@@ -75,7 +75,7 @@ ls -la "$(git rev-parse --git-path hooks)" | grep -E 'pre-commit|commit-msg|pre-
 
 > **新 worktree 不需要重装 hook**：共享目录已就位，新建的 worktree 直接继承（本机 hook 一直在**主 checkout** 的 `.git/hooks/`）。
 > 反过来说，`<worktree>/.git/hooks` 这种写法在 worktree 下**必然失败**——`.git` 是文件不是目录。
-> v0.75.0 前 `install-hook.py` / `agate-setup.py` 正是硬编码该路径，实测在 worktree 里**装不上（NotADirectoryError）、也卸不掉（报"已删除 0 项"而 hook 仍在）**；现已改为问 git 要目录（`git rev-parse --git-path hooks`）。
+> v0.75.0 及更早的 `install-hook.py` / `agate-setup.py` 正是硬编码该路径，实测在 worktree 里**装不上（NotADirectoryError）、也卸不掉（报"已删除 0 项"而 hook 仍在）**；现已改为问 git 要目录（`git rev-parse --git-path hooks`）。
 
 > **唯一的例外：`core.hooksPath` 写成相对路径**。git 对相对值按**运行目录**解析（实测 git 2.43：从 worktree 提交触发 `<worktree>/<hooksPath>`，从主 checkout 提交触发 `<主 checkout>/<hooksPath>`）——此时"装一次全仓库生效"**不成立**，各 worktree 会各读一份，换目录提交就可能 gate 失效。`install-hook.py` 检测到相对值会显式告警并建议改成绝对路径；绝对 `core.hooksPath` 则回到"共享、只装一次"的正常语义。
 
@@ -88,7 +88,7 @@ python3 ~/.agate/scripts/agate-setup.py          # 探测已装平台 → 全局
 python3 ~/.agate/scripts/agate-setup.py --list   # 核验：全局接入物 + 台账登记的项目
 ```
 
-> **为什么不再手工 `ln -sf`（本文档在 v0.75.0 前是 4 条手工命令）**：
+> **为什么不再手工 `ln -sf`（本文档在 v0.75.0 及更早是 4 条手工命令）**：
 > 手工路径只有"文件确实被创建"这一个后果；命令化之后多了三件事——① **幂等**，且已存在的**非本工具**文件先备份再覆盖（`*.bak.<epoch>`）；
 > ② 登记**项目台账**（`<安装根>/installed-projects.json`），`--uninstall --all-projects` 据此找回散落各处的接入物；
 > ③ 平台产物路径 + 协议根解析只有**一处实现**，不会随版本布局漂移（手工写错 = 断链，平台报 `--agent 'orchestrator' not found`）。
@@ -162,7 +162,7 @@ git log --oneline -3   # 确认交接单已提交
 |------|------|
 | 开发 checkout 的 `agate/` 不改 | 正常改动走 worktree。**注意**：迁移到版本管理布局后它**已不是**稳定版来源（稳定版 = `~/.agate/current/`），但仍是你的开发 checkout——改它会让本地状态混入"看起来像已发布"的假象 |
 | `~/.agate` 禁止改动 | **版本管理根目录**（`repo/` + `vX.Y.Z/` + 指针 + 根 `scripts/` 副本），是稳定版来源；跑 gate / 读卡片用它，改它等于改稳定版 |
-| **worktree 不重装 hook** | hook 在**共享**的 `<主 checkout>/.git/hooks`（权威取值 `git rev-parse --git-path hooks`）——新建 worktree 直接继承。硬编码 `<worktree>/.git/hooks` 在 worktree 下**装不上也卸不掉**（v0.75.0 前实测） |
+| **worktree 不重装 hook** | hook 在**共享**的 `<主 checkout>/.git/hooks`（权威取值 `git rev-parse --git-path hooks`）——新建 worktree 直接继承。硬编码 `<worktree>/.git/hooks` 在 worktree 下**装不上也卸不掉**（v0.75.0 及更早实测） |
 | **接入/卸载都走命令** | `agate-setup.py`（配合 `--list` 核验、`--uninstall --all-projects` 清理）。手工 `ln -sf` 造不出台账，卸载**无从发现**该项目的散落产物；删 `~/.agate` 前先 `--uninstall`，否则留下断链/陈旧 hook（复制模式下陈旧 hook 仍可执行，会让 `git commit` 直接失败） |
 | gate 工具 ≠ 检查对象 | commit hook 用 `~/.agate` 判定；但 `check-protocol-consistency.py` 必须用 worktree 自己的（检查 worktree 里的文件） |
 | `~/.agate` 脚本显示**稳定版**上下文 | `agate-summary.py` 在 worktree 跑显示稳定版（`AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号），**不是** worktree/开发 checkout 状态——worktree 状态用 `git log`/`git status` 看 |
@@ -450,7 +450,7 @@ python3 ~/.agate/scripts/agate-setup.py --uninstall       # 清共享 hooks（�
 
 > **为什么 hook 不用每个 worktree 各装一次**：三个 hook 装在**共享**目录，对本仓库所有 worktree 生效。
 > 反过来，**在 worktree 里 `--uninstall` 会连带清掉主 checkout 的 gate**——卸载是仓库级动作，不是 worktree 级动作，
-> 多任务并行时别顺手在某个 worktree 里卸（v0.75.0 前该命令在 worktree 里是坏的，所以这个陷阱当时还撞不上）。
+> 多任务并行时别顺手在某个 worktree 里卸（v0.75.0 及更早该命令在 worktree 里是坏的，所以这个陷阱当时还撞不上）。
 
 **与「双工作区」的关系**：本 guide 的 dogfooding 模式用的是**全局**平台身份（`~/.claude` 等）+ **共享** hook，
 worktree 内**不应**出现 `.claude/agents/`；只有刻意用 `--scope project` 钉版本时才会出现——那正是上表第 1 行要清的。
