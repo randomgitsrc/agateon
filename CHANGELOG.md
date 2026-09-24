@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+（暂无——下个版本的变更在此累积。）
+
+## [0.76.0] - 2026-09-24
+
 ### 修复
 
 - **git worktree / `core.hooksPath` 下 hook 装不上也卸不掉**（`install-hook.py` 与 `agate-setup.py` 两处同源硬编码 `<repo>/.git/hooks`）：链接 worktree 的 `.git` 是**文件**（指向 `<主 checkout>/.git/worktrees/<name>`），git 真正执行的是**共享**的 `<主 checkout>/.git/hooks`。后果是双向失效——安装侧 `os.makedirs` 抛 `NotADirectoryError`（**命令直接崩**），卸载侧 `os.path.lexists` 恒 False（**静默跳过**，报"已删除 0 项"而 hook 仍在）。而 worktree 正是 dogfooding 的工作目录（`docs/guides/worktree-dogfooding-guide.md`）。现统一改为问 git：`agate_common.git_hooks_dir()` = `git rev-parse --git-path hooks`（同时覆盖 worktree 与 `core.hooksPath` 两种情形；非仓库时回退旧语义）。
