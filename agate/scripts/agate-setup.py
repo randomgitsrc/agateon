@@ -66,13 +66,18 @@ PLATFORMS = {
         "project": [("orchestrator-template.md", ".opencode/agents/orchestrator.md")],
     },
     "dsh": {
+        # ⚠️ 2026-09-24：**不再**往 `~/.dsh/.agent-presets/agate/` 写目录式 preset——
+        # DSH 自 0.1.7-alpha.1（d1e22a7e24）起不再读该目录（上游 skill 原文：
+        # "Nothing reads that directory any more."）。实测本机 09-20 后**无任何** agate
+        # 会话，而 `--list` 仍报 ✅（它检查的正是那个死目录）——"装了但没生效且无人报错"。
+        # 新形态 = 往 profile 的 `cordis.patch.yml` 写**声明式**声明（见 `_register_dsh_preset`）。
         "probe": "~/.dsh",
         "global": [
-            ("assets/templates/dsh/agent.cordis.yml", "~/.dsh/.agent-presets/agate/agent.cordis.yml"),
-            ("assets/templates/dsh/preset.yml", "~/.dsh/.agent-presets/agate/preset.yml"),
             ("assets/templates/dsh/SKILL.md", "~/.dsh/skills/agate-protocol/SKILL.md"),
         ],
         "project": [],
+        # 声明式 preset 不是软链/复制产物，走专用注册与卸载路径（内容带定界符，可精确摘除）
+        "declarative": "dsh",
     },
     "codex": {
         # Codex 无 agent 注册机制，身份靠 skill（~/.agents/skills/ 是其共享 skill 根）。
@@ -168,6 +173,102 @@ def _install_hook(proto_root, dry_run):
     return 0
 
 
+def _register_dsh_preset(proto_root, dry_run):
+    """把 Agateon 编排者写成 DSH **声明式** preset（profile patch 托管块）。返回 (ok, fail)。
+
+    **为什么是 profile patch 而不是 bundle**：bundle 需要 pnpm 安装 + 网络 + 一个包目录；
+    而 profile 自己的 `cordis.patch.yml` 明确是"你的 patch 层"并支持 insert 列表（该文件
+    头部注释原文），且实机验证写入后新会话的模式选择器立即出现「Agateon 编排者」。
+    代价是它写进**用户文件**——故用定界符托管块，卸载只摘两行之间，绝不整文件覆盖。
+    """
+    block = agate_common.dsh_preset_block(proto_root)
+    if not block:
+        sys.stderr.write(
+            f"  ⚠️  无法生成 DSH 声明式 preset（模板缺失或字段不全）: "
+            f"{proto_root}/assets/templates/dsh/\n"
+        )
+        return 0, 1
+    patches = agate_common.dsh_patch_files()
+    if not patches:
+        sys.stderr.write(
+            "  ⚠️  未找到 DSH profile（~/.dsh/profiles/*/cordis.patch.yml）——"
+            "DSH 从未启动过？启动一次后重跑本命令，或见 SETUP.md「步骤 2-DSH」手工兜底\n"
+        )
+        return 0, 1
+    ok = 0
+    for patch in patches:
+        text = _read_text(patch)
+        new = agate_common.dsh_apply_block(text, block)
+        if dry_run:
+            print(f"  [dry-run] 写入声明式 preset 块: {patch}")
+            ok += 1
+            continue
+        if new == text:
+            # **内容未变就不落盘**：否则每次重跑都会凭空多一个 `*.bak.<epoch>`
+            # （幂等性测试当场抓到 `test_setup_is_idempotent`）。
+            print(f"  ✅ {patch}  ← preset-agate 声明块（已是最新，未改动）")
+            ok += 1
+            continue
+        os.makedirs(os.path.dirname(patch), exist_ok=True)
+        # **只在首次接入该文件时备份**：这是用户自己的 DSH profile 配置，首次改动前留一份
+        # 原件（防备块摘除逻辑出错）。此后只是**块内容**随模板更新——`--uninstall` 能精确
+        # 摘除，再备份只会让用户的 profile 目录每次升级多一个垃圾文件。
+        if agate_common.dsh_extract_block(text) is None:
+            _backup(patch)
+        with open(patch, "w", encoding="utf-8") as f:
+            f.write(new)
+        print(f"  ✅ {patch}  ← preset-agate 声明块（name={agate_common.DSH_PRESET_ID}）")
+        ok += 1
+    return ok, 0
+
+
+def _unregister_dsh_preset(home, dry_run):
+    """摘掉 profile patch 里的托管块 + 清旧版遗留的死目录条目。返回 (removed, kept)。
+
+    **同时清旧形态**：`~/.dsh/.agent-presets/agate/`（DSH 0.1.7 起已不读）留着会让
+    `--list` 与用户都以为"已接入"，正是本次要修的误导来源。
+    """
+    removed = kept = 0
+    for patch in agate_common.dsh_patch_files(home):
+        text = _read_text(patch)
+        new, had = agate_common.dsh_strip_block(text)
+        if not had:
+            continue
+        if dry_run:
+            print(f"  [dry-run] 将摘除声明式 preset 块: {patch}")
+        else:
+            _backup(patch)
+            with open(patch, "w", encoding="utf-8") as f:
+                f.write(new)
+            print(f"  ✅ 已摘除声明式 preset 块: {patch}")
+        removed += 1
+
+    # 旧形态：目录式 preset（DSH 已不读）。只删**指向本安装**的软链，其余保留并报告。
+    dsh_home = os.environ.get("DSH_HOME") or os.path.join(os.path.expanduser("~"), ".dsh")
+    legacy = os.path.join(dsh_home, ".agent-presets", agate_common.DSH_PRESET_ID)
+    for fname in ("agent.cordis.yml", "preset.yml"):
+        f = os.path.join(legacy, fname)
+        if not os.path.lexists(f):
+            continue
+        owned, why = _owned_artifact(f, home, "")
+        if not (owned and os.path.islink(f)):
+            print(f"  ⏭️  保留 {f}\n      理由: 旧版目录式 preset 但{why}")
+            kept += 1
+            continue
+        if dry_run:
+            print(f"  [dry-run] 将删除旧版死目录产物 {f}（{why}）")
+        else:
+            with contextlib.suppress(OSError):
+                os.unlink(f)
+                print(f"  ✅ 已删除旧版死目录产物 {f}（DSH 0.1.7 起不再读取）")
+        removed += 1
+    if not dry_run and os.path.isdir(legacy) and not os.listdir(legacy):
+        with contextlib.suppress(OSError):
+            os.rmdir(legacy)
+            print(f"  ✅ 已删除空目录 {legacy}")
+    return removed, kept
+
+
 def _register_platform(name, proto_root, scope, dry_run, copy_mode, project_root=None):
     """注册单个平台身份。scope ∈ {global, project}。返回 (成功数, 失败数)。
 
@@ -176,11 +277,19 @@ def _register_platform(name, proto_root, scope, dry_run, copy_mode, project_root
     `sub/deep/.claude/…`，而**台账与卸载都以 git 根为基准** → 那些产物**永远清不掉**
     （从根、从别处、甚至回原子目录都算"已删除 0 项"）。两侧基准必须一致。
     """
+    ok = fail = 0
+    # 声明式接入（DSH preset）：**先做但不 return**——该平台另有普通产物（skill 软链）要走
+    # 下面的循环。首版写成 `return _register_dsh_preset(...)`，把 skill 一起跳过了
+    # （被 test_setup_registers_all_detected_platforms 的前置断言当场抓到）。
+    if PLATFORMS[name].get("declarative") == "dsh" and scope == "global":
+        d_ok, d_fail = _register_dsh_preset(proto_root, dry_run)
+        ok += d_ok
+        fail += d_fail
     links = PLATFORMS[name][scope]
     if not links:
-        print(f"  （{name} 无 {scope} 侧注册形态，跳过）")
-        return 0, 0
-    ok = fail = 0
+        if not ok and not fail:
+            print(f"  （{name} 无 {scope} 侧注册形态，跳过）")
+        return ok, fail
     for src_rel, dst_spec in links:
         src = os.path.join(proto_root, src_rel)
         if dst_spec.startswith("~"):
@@ -364,6 +473,11 @@ def _uninstall_platforms(home, scope, dry_run, project_root=None):
     """
     removed = kept = 0
     for name, cfg in PLATFORMS.items():
+        # 声明式接入（DSH）：不在 global/project 列表里，走专用摘除（内含旧死目录清理）
+        if cfg.get("declarative") and scope == "global":
+            r, k = _unregister_dsh_preset(home, dry_run)
+            removed += r
+            kept += k
         for src_rel, dst_spec in cfg.get(scope) or []:
             if dst_spec.startswith("~"):
                 dst = os.path.expanduser(dst_spec)
@@ -490,12 +604,51 @@ def _uninstall_project(project_root, home, dry_run):
     return removed, kept
 
 
+def _dsh_block_matches_installed(home, block):
+    """该声明块是否等于**任一已装版本**生成的权威块。
+
+    与 `_installed_template_matches` 同一权威口径（"指向某个已装版本"即正当）：
+    产物是**装的时候**那一版生成的，升级后与 current 不同属正常，不应误报。
+    """
+    if not os.path.isdir(home):
+        return False
+    for name in sorted(os.listdir(home)):
+        if not agate_package.is_strict_version(name):
+            continue
+        vdir = os.path.join(home, name)
+        if os.path.islink(vdir) or not os.path.isdir(vdir):
+            continue
+        want = agate_common.dsh_preset_block(agate_common._protocol_root(vdir))
+        if want and want.strip() == block.strip():
+            return True
+    return False
+
+
 def _list_installed(home):
     """列出已装内容：全局接入物 + 台账登记的项目。"""
     print(f"安装根: {home}\n")
     print("全局接入物:")
     found = False
     for name, cfg in PLATFORMS.items():
+        # 声明式接入（DSH）：核验**DSH 真正读取的位置**（profile patch 托管块），
+        # 而不是旧死目录——本命令曾因检查死目录而长期假报 ✅（2026-09-24 实测）。
+        if cfg.get("declarative") == "dsh":
+            for patch in agate_common.dsh_patch_files(home):
+                got = agate_common.dsh_extract_block(_read_text(patch))
+                if got is None:
+                    print(f"  ❌ [{name}] {patch}  未找到 preset-agate 声明块（DSH 不会出现该模式）")
+                elif not _dsh_block_matches_installed(home, got):
+                    print(f"  ⚠️  [{name}] {patch}  声明块存在但与**任何已装版本**的权威模板都不一致"
+                          f"（已过期或被手改；重跑接入刷新）")
+                else:
+                    print(f"  ✅ [{name}] {patch}  preset-agate 声明块")
+                found = True
+            legacy = os.path.join(
+                os.environ.get("DSH_HOME") or os.path.join(os.path.expanduser("~"), ".dsh"),
+                ".agent-presets", agate_common.DSH_PRESET_ID)
+            if os.path.isdir(legacy):
+                print(f"  ℹ️  [{name}] {legacy}  旧目录式 preset——DSH ≥0.1.7 已不读取"
+                      f"（重跑接入即可清理）")
         for src_rel, dst_spec in cfg.get("global") or []:
             dst = os.path.expanduser(dst_spec)
             if not os.path.lexists(dst):

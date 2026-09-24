@@ -15,7 +15,7 @@
 | **OpenCode** | `.opencode/agents/orchestrator.md`（或全局同名路径）| `task` 工具 | 完整 P0-P8 |
 | **Claude Code** | `.claude/agents/orchestrator.md`（或全局同名路径）| `Task` 工具 | 完整 P0-P8 |
 | **Codex** | `~/.agents/skills/agate-protocol/SKILL.md`（无 agent 注册机制，身份靠 skill）| 原生 `spawn_agent` | 完整 P0-P8 |
-| **DSH** | agent-preset 三件套（`agent.cordis.yml` + `preset.yml` + `SKILL.md`）| `subagent` / `subagent_fork` | 完整 P0-P8 |
+| **DSH** | agent-preset **声明块**（写进 profile 的 `cordis.patch.yml`；由 `agent.cordis.yml` + `preset.yml` 生成）+ `SKILL.md` | `subagent` / `subagent_fork` | 完整 P0-P8 |
 | **Claude Project 会话**（claude.ai） | —（纯对话环境，无身份接入与派发）| ❌ 无 | 仅 P0-P2 |
 
 > 与既有文档的关系：`README.md`「支持的平台」给的是**新用户视角**的推荐矩阵；本文是**能力细节**的权威源；`SETUP.md` 步骤 2 是**接入命令**的权威源。
@@ -132,15 +132,15 @@
 
 ## DSH（deepseek-harness）
 
-> 接入步骤见 `SETUP.md`「步骤 2-DSH」（接入命令单一真相源，本条目只做能力差异说明）；preset / skill 模板文件在 `assets/templates/dsh/`。已实机验证（2026-08-21，DSH v0.1.0-rc.8）——新兴平台，机制可能随版本变化。最近复核（2026-09-01，DSH v0.1.2-alpha.3，实机核验通过）：工具面（subagent / subagent_fork / workflow / ralph / goal）、preset 工具行包名与 delegation 组、skill 发现机制、`sampleOverCapGlobResults` 挂载关键字段均未漂移，与当前 DSH 标准 preset 结构逐行一致。
+> 接入步骤见 `SETUP.md`「步骤 2-DSH」（接入命令单一真相源，本条目只做能力差异说明）；preset / skill 模板文件在 `assets/templates/dsh/`。已实机验证（2026-08-21，DSH v0.1.0-rc.8）——新兴平台，机制可能随版本变化。最近复核（2026-09-01，DSH v0.1.2-alpha.3，实机核验通过）：工具面（subagent / subagent_fork / workflow / ralph / goal）、preset 工具行包名与 delegation 组、skill 发现机制、`sampleOverCapGlobResults` 挂载关键字段均未漂移，与当前 DSH 标准 preset 结构逐行一致。**2026-09-24 修正**：preset 的**载体**变了——DSH ≥ **0.1.7-alpha.1** 起不再读目录式 `$DSH_HOME/.agent-presets/<id>/`，改为读 profile 自己 patch 文件里的声明行（见下「已知注意」）。
 
-**平台形态**：pnpm monorepo + cordis 插件框架；身份注册用 **agent-preset**（`agent.cordis.yml` + `preset.yml`），skill 是打包/分发单元（`SKILL.md` + frontmatter，自动进会话技能目录）。
+**平台形态**：pnpm monorepo + cordis 插件框架；身份注册用 **agent-preset**——声明行由 `agent.cordis.yml`（插件行列表）+ `preset.yml`（`name` / `description` / `order`）两个模板生成，写进 **profile 自己的 patch 文件** `~/.dsh/profiles/<profile>/cordis.patch.yml` 的托管块（定界符之间的整段，卸载按定界符精确摘除）；skill 是打包/分发单元（`SKILL.md` + frontmatter，自动进会话技能目录）。
 
 **能力差异（与 OpenCode / Claude Code 对照）**：
 
 | 能力 | OpenCode / Claude Code | DSH |
 |------|---------------------|-----|
-| orchestrator 身份注册 | agent md 文件软链（`mode: primary`）| agent-preset（`persona.prefix` + 工具行）|
+| orchestrator 身份注册 | agent md 文件软链（`mode: primary`）| agent-preset 声明行（`persona.prefix` + 工具行），写进 profile 的 `cordis.patch.yml` |
 | 派发 subagent | task 工具 | `subagent` / `subagent_fork`（spawn / fork 两种上下文模式）|
 | 批量并行派发 | 手工多路 task | **workflow 脚本**（agent / pipeline / parallel / phase）|
 | 独立复核（judge）| 手工保证 fresh context | **ralph**（每轮全新 agent + bounded handoff）|
@@ -150,7 +150,9 @@
 **已知注意**：
 
 - 沙箱默认 workspace-write，协议本体目录可能只读（写仓库内文件 Errno 30）——任务工作区放可写位置
-- DSH **无** `.claude/agents/*.md` 等价物——不要试图把 `orchestrator-template.md` 软链进 DSH 目录，用 preset
+- DSH **无** `.claude/agents/*.md` 等价物——不要试图把 `orchestrator-template.md` 软链进 DSH 目录，用 preset（**且必须是声明行**：DSH ≥ 0.1.7-alpha.1 起目录式 preset 已不被读取）
+- **目录式 preset 已死**（DSH ≥ **0.1.7-alpha.1**，commit `d1e22a7e24`）：`$DSH_HOME/.agent-presets/<id>/` 不再被任何代码读取（上游 skill 原文："Nothing reads that directory any more."）。旧的 `~/.dsh/.agent-presets/agate/` **留着无害但会误导**——看起来像"已接入"，而会话选择器里没有「Agateon 编排者」；本机实测其代价是 2026-09-20 22:25 之后再无一个会话用上 agate preset（全部落 `standard`）。现行载体 = profile patch 的托管声明块，`agate-setup.py --list` / `agate-summary.py` 检查的正是该位置
+- **插件包改名（激活失败陷阱）**：`@deepseek-ai/dsh-workflow-worker-thread` 在 0.1.7 已不存在 → 现名 **`@deepseek-ai/dsh-workflow-ptc`**。手抄旧 preset 而不改这一行会让 preset **挂载/激活失败**；`agate_common.dsh_preset_block()` 生成时自动替换（上游要求逐个核对包名，理由即此）
 
 ---
 

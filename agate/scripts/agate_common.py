@@ -860,6 +860,150 @@ def forget_project(project_root):
     return True
 
 
+# ── DSH 声明式 preset（2026-09-24）──────────────────────────────────────────
+#
+# **背景（实测，2026-09-24）**：DSH 自 `dsh-v0.1.7-alpha.1`（提交 d1e22a7e24，
+# 2026-09-21 `feat(preset): declare Agent compositions in profile YAML`）起**不再读**
+# `$DSH_HOME/.agent-presets/<id>/` 目录。上游自己的 skill 原文：
+#   "Before declaration rows, a user preset was a directory `$DSH_HOME/.agent-presets/<id>/`
+#    … **Nothing reads that directory any more.**"
+#   （`packages/preset/agent-preset/skills/editing-cordis-compositions/SKILL.md`）
+# 后果实测：本机 09-20 22:25 之后**再无** `agentPreset=agate` 的会话（全部 standard），
+# 而 `--list` 仍报 ✅（它检查的正是那个死目录）——典型的"装了但没生效且无人报错"。
+#
+# 新形态 = 在 profile 的 `cordis.patch.yml` 里放一条 `@deepseek-ai/dsh-agent-preset`
+# 声明：`preset.yml` 的 name/description/order → `config` 同名键，
+# `agent.cordis.yml` 的插件行 → `config.plugins`。
+#
+# **为什么用 profile patch 而不是 bundle**：bundle 需要 pnpm 安装 + 网络 + 一个包目录；
+# 而 profile 自己的 `cordis.patch.yml` 明确是"你的 patch 层"，支持 insert 列表
+# （该文件头部注释原文），且实机验证：写入后新会话的模式选择器立即出现「Agateon 编排者」。
+#
+# **单一来源**：块内容由 `assets/templates/dsh/{preset.yml,agent.cordis.yml}` **生成**
+# （不新增第三份手维护副本）；两个模板仍是权威，本函数只管形态转换。
+
+# 托管块定界符（幂等替换 + 精确卸载都靠它；**用户文件里只动这两行之间**）
+DSH_BLOCK_BEGIN = "# >>> agateon: preset-agate（由 agate-setup.py 管理；手改会在下次接入时被覆盖）>>>"
+DSH_BLOCK_END = "# <<< agateon: preset-agate <<<"
+DSH_PRESET_ID = "agate"
+
+# 插件包改名（0.1.7 实测：`dsh-workflow-worker-thread` 已不存在，并入 ptc）。
+# ⚠️ 照抄旧模板会**激活失败**（DSH 那份 skill 明确警告包改名问题）。
+_DSH_PLUGIN_RENAMES = (
+    ("@deepseek-ai/dsh-workflow-worker-thread", "@deepseek-ai/dsh-workflow-ptc"),
+)
+
+
+def dsh_preset_block(proto_root):
+    """由权威模板生成 DSH 声明式 preset 块（整块文本，含定界符）。失败返回 None。
+
+    **转换规则只有两条，且都不"理解"内容**（防静默丢内容）：
+      1. **只砍文件头部注释块**——首个 `- id:` 之前的行。位置判据，不是"行首是 # 就丢"：
+         后者会误删 persona `>-` 块标量里的 markdown 标题（`## 第一步（必须）` 等实测丢了 3 个）。
+      2. 应用 `_DSH_PLUGIN_RENAMES` 包改名。
+    其余内容**逐字**保留，整体缩进到 `plugins:` 之下。
+    """
+    tdir = os.path.join(proto_root, "assets", "templates", "dsh")
+
+    def _read(p):
+        try:
+            with open(p, encoding="utf-8", errors="replace") as f:
+                return f.read()
+        except OSError:
+            return ""
+
+    cordis = _read(os.path.join(tdir, "agent.cordis.yml"))
+    meta = _read(os.path.join(tdir, "preset.yml"))
+    if not cordis.strip() or not meta.strip():
+        return None
+
+    def _field(name):
+        m = re.search(r"^" + name + r":\s*(.+)$", meta, re.M)
+        return m.group(1).strip() if m else ""
+
+    name, desc, order = _field("name"), _field("description"), _field("order")
+    if not (name and desc and order):
+        return None
+
+    lines = cordis.splitlines()
+    starts = [i for i, ln in enumerate(lines) if ln.startswith("- id:")]
+    if not starts:
+        return None
+    body = lines[starts[0]:]
+    # 包改名 + 对应行 id 对齐（写成显式循环：字典推导式容易写错成笛卡尔积）
+    for old_pkg, new_pkg in _DSH_PLUGIN_RENAMES:
+        # 行 id 用**去掉 `dsh-` 前缀**的短名（模板里写 `- id: workflow-worker-thread`，
+        # 而包名是 `@deepseek-ai/dsh-workflow-worker-thread`——直接用包名短串匹配不上）
+        old_id = re.sub(r"^dsh-", "", old_pkg.rsplit("/", 1)[-1])
+        new_id = re.sub(r"^dsh-", "", new_pkg.rsplit("/", 1)[-1])
+        out = []
+        for raw_line in body:
+            replaced = raw_line.replace(old_pkg, new_pkg)
+            if replaced.strip() == f"- id: {old_id}":
+                replaced = replaced.replace(f"- id: {old_id}", f"- id: {new_id}")
+            out.append(replaced)
+        body = out
+    indented = "\n".join((" " * 10 + ln) if ln.strip() else "" for ln in body)
+
+    return (
+        f"{DSH_BLOCK_BEGIN}\n"
+        f"- insert:\n"
+        f"    - id: preset-{DSH_PRESET_ID}\n"
+        f"      name: '@deepseek-ai/dsh-agent-preset'\n"
+        f"      config:\n"
+        f"        id: {DSH_PRESET_ID}\n"
+        f"        name: {name}\n"
+        f"        description: {desc}\n"
+        f"        order: {order}\n"
+        f"        plugins:\n"
+        f"{indented}\n"
+        f"{DSH_BLOCK_END}\n"
+    )
+
+
+def dsh_patch_files(home=None):
+    """该机器上所有 DSH profile 的 `cordis.patch.yml`（**声明式 preset 的落点**）。
+
+    遍历 `$DSH_HOME/profiles/*/cordis.patch.yml`。为什么遍历而非写死 `web`：profile 名
+    由部署决定（本机是 `web`），写死会在别的部署下静默写错文件。无 profile 时返回 []。
+    """
+    base = os.environ.get("DSH_HOME") or os.path.join(os.path.expanduser("~"), ".dsh")
+    pdir = os.path.join(base, "profiles")
+    out = []
+    if not os.path.isdir(pdir):
+        return out
+    for name in sorted(os.listdir(pdir)):
+        cand = os.path.join(pdir, name, "cordis.patch.yml")
+        if os.path.isfile(cand):
+            out.append(cand)
+    return out
+
+
+def dsh_apply_block(text, block):
+    """把托管块幂等写入 patch 文本：先移除既有块，再追加。返回新文本。"""
+    stripped = re.sub(
+        r"\n*" + re.escape(DSH_BLOCK_BEGIN) + r".*?" + re.escape(DSH_BLOCK_END) + r"\n?",
+        "\n", text, flags=re.S)
+    if not stripped.endswith("\n"):
+        stripped += "\n"
+    return stripped + "\n" + block
+
+
+def dsh_strip_block(text):
+    """移除托管块；返回 (新文本, 是否确有移除)。"""
+    new = re.sub(
+        r"\n*" + re.escape(DSH_BLOCK_BEGIN) + r".*?" + re.escape(DSH_BLOCK_END) + r"\n?",
+        "\n", text, flags=re.S)
+    return new, new != text
+
+
+def dsh_extract_block(text):
+    """取出现存的托管块文本（含定界符）；无 → None。"""
+    m = re.search(
+        re.escape(DSH_BLOCK_BEGIN) + r".*?" + re.escape(DSH_BLOCK_END), text, flags=re.S)
+    return m.group(0) if m else None
+
+
 def compute_sha256(path):
     """sha256 hex：文件=内容哈希；目录=排序逐文件 hash 拼接再整体 hash（TAG0031 DEBT0002，
     从 agate-pack-offline.py / install-offline.py 迁移的共享单实现，逐字节保留现状排序键

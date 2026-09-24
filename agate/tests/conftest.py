@@ -115,6 +115,12 @@ def _run_cli_impl(*args, cwd=None, input=None, env=None):
     cmd = [str(a) for a in args]
     full_env = os.environ.copy()
     full_env.pop("AGATE_HOME", None)
+    # **同时中和 `DSH_HOME`**（2026-09-24，与 AGATE_HOME 同一类泄漏）：本机开发环境常设
+    # `DSH_HOME`（DSH 自己会导出），被测脚本/子进程若继承它，`~/.dsh` 的读取会绕开假 HOME
+    # → 测试会读到**开发者真实的 DSH profile**，红绿由机器状态决定（实测：假 HOME 里写的
+    # profile patch 被忽略，`_dsh_declarative_*` 检的是真实 `~/.dsh`）。
+    # 需要模拟 DSH 的测试在 `env=` 里传自己的 `DSH_HOME`（在下方 update 时覆盖）。
+    full_env.pop("DSH_HOME", None)
     # HOME 与 USERPROFILE 同时设（Windows 的 expanduser 读 USERPROFILE）
     full_env["HOME"] = _isolated_home()
     full_env["USERPROFILE"] = full_env["HOME"]

@@ -17,7 +17,9 @@ description: Agateon 协议的 DSH 适配层——工具映射、平台注意、
 
 **单一来源在 `agent.cordis.yml` 的 persona**（会话开始即加载，保证"未加载本 skill 也有映射"）——本 skill **不再复述**，避免两处维护漂移。本 skill 只补充 persona 没有的**进阶食谱**与平台注意。
 
-> 若你是在**没有 preset** 的环境下手动加载本 skill：先读 `agent.cordis.yml` 的 `persona.config.prefix` 取工具映射——该文件在 `~/.dsh/.agent-presets/agate/agent.cordis.yml`（`agate-setup.py` 安装后的位置）或 `{agate_root}/assets/templates/dsh/agent.cordis.yml`（模板源，两者通常为软链关系）——再按 `{agate_root}/orchestrator-template.md` 执行。
+> 若你是在**没有 preset** 的环境下手动加载本 skill：先读 `{agate_root}/assets/templates/dsh/agent.cordis.yml` 的 `persona.config.prefix` 取工具映射，再按 `{agate_root}/orchestrator-template.md` 执行。
+>
+> （2026-09-24 修正：此前这里还给出过"安装后位置"的路径（版本根下的 preset 目录）——DSH ≥0.1.7-alpha.1 起**不再读取**该目录，`agate-setup.py` 也不再创建它，那个基路径对新装环境是**悬空**的。现在 preset 由 profile 的 `cordis.patch.yml` 里一条声明行承载，工具映射的权威来源就是上面这个模板文件。）
 
 ## DSH 原生进阶食谱（其他平台没有的能力）
 

@@ -101,7 +101,7 @@ python3 ~/.agate/scripts/agate-setup.py
 
 | 层 | 动作 |
 |----|------|
-| **平台身份**（全局） | 按探测到的平台建配置物：Claude Code / OpenCode → `~/.claude/agents/` · `~/.config/opencode/agents/`；DSH → `~/.dsh/.agent-presets/agate/` + `~/.dsh/skills/`；Codex → `~/.agents/skills/agate-protocol/` |
+| **平台身份**（全局） | 按探测到的平台建配置物：Claude Code / OpenCode → `~/.claude/agents/` · `~/.config/opencode/agents/`；DSH → `~/.dsh/profiles/*/cordis.patch.yml` 里的声明块 + `~/.dsh/skills/`；Codex → `~/.agents/skills/agate-protocol/` |
 | **项目侧** | 装 git hook（可单独跑 `install-hook.py`，见「核心结论」节） |
 
 常用参数：
@@ -123,10 +123,12 @@ python3 ~/.agate/scripts/agate-setup.py
 
 ```bash
 for f in ~/.claude/agents/orchestrator.md ~/.config/opencode/agents/orchestrator.md \
-         ~/.dsh/.agent-presets/agate/agent.cordis.yml ~/.agents/skills/agate-protocol/SKILL.md; do
+         ~/.dsh/skills/agate-protocol/SKILL.md ~/.agents/skills/agate-protocol/SKILL.md; do
   [ -r "$f" ] && echo "✅ $f" || echo "（未装/不适用）$f"
 done
 ```
+
+> DSH 的 preset 是**写进 profile patch 的声明块**、不是独立文件，故不在上面这个"文件可读"循环里——查它用 `agate-setup.py --list` 或 `agate-summary.py`（见「步骤 2-DSH」）。
 
 **平台差异（命令内部做的事，供理解与手工兜底）**——各平台配置物形态不同，以下是细节：
 
@@ -172,30 +174,76 @@ opencode debug agent orchestrator
 DSH 的身份注册机制是 **agent-preset**（`agent.cordis.yml` + `preset.yml`，声明式 agent 组合）+ **skill**（`SKILL.md`），
 与 Claude Code / OpenCode 的「单个 agent md 软链」**形态不同**（同一目的、三种载体）。模板源在 `{agate_root}/assets/templates/dsh/`。
 
-**推荐**：用步骤 2 的命令（`agate-setup.py` 会写入下面三处）；下面是它内部做的事，供理解与手工兜底：
+**推荐路径——仍是步骤 2 的那一条命令**：`agate-setup.py` 会把声明块写进**已存在的每个** `~/.dsh/profiles/*/cordis.patch.yml`，并装 `~/.dsh/skills/agate-protocol/SKILL.md`：
 
 ```bash
-# 注册全局身份（DSH preset 三件套）
-mkdir -p ~/.dsh/.agent-presets/agate ~/.dsh/skills/agate-protocol
-ln -sf "$AGATE_DIR/assets/templates/dsh/agent.cordis.yml" ~/.dsh/.agent-presets/agate/agent.cordis.yml
-ln -sf "$AGATE_DIR/assets/templates/dsh/preset.yml" ~/.dsh/.agent-presets/agate/preset.yml
-ln -sf "$AGATE_DIR/assets/templates/dsh/SKILL.md" ~/.dsh/skills/agate-protocol/SKILL.md
-
-# 装 hook（与所有平台一致，唯一安装脚本；agate-setup.py 内部即调用它）
-python3 ~/.agate/scripts/install-hook.py
+python3 ~/.agate/scripts/agate-setup.py            # 自动探测已装平台；只接 DSH 时加 --platform dsh
 ```
 
-**链接完整性校验**：`agate-summary.py` 每次运行会校验上面三个软链是否指向**某个已安装版本**里的同名模板（权威判据见「升级 Agateon 之后」节）；指向开发 checkout / 临时副本会给出 WARNING + 修复指引，指向已装但没有跟随 `current` 的版本则给信息级的「版本落后」提示。升级后跑一次即可确认。
+> 一个 profile patch 都没有时，命令会提示「未找到 DSH profile」——那说明 DSH 从未启动过。先启动一次 DSH 让它建出 `profiles/<name>/`，再重跑本命令。
 
-**身份薄、协议厚**：preset 的 persona **只做两件事**——指向 `{agate_root}/orchestrator-template.md`（唯一权威行为规范）+ 给 DSH 工具映射与平台注意；**不复制协议内容**（曾复制「会话开始步骤」，结果模板改了路径而副本未跟 → 实测失实）。模板随协议根升级自动更新；符号链接方式升级后什么都不用做；**Windows 无符号链接权限时退复制模式，升级后重跑一次 `agate-setup.py` 即可刷新**（复制不自动跟随源文件）。
+**新形态：声明式 profile patch**。DSH 现在从 **profile 自己的 patch 文件**读 preset 声明，不再读任何 preset 目录：
+
+| 项 | 值 |
+|----|----|
+| 落点 | `~/.dsh/profiles/<profile>/cordis.patch.yml`（本机是 `web`；命令遍历 `~/.dsh/profiles/*/`，不写死 profile 名）|
+| 起点标记 | 以 `>>> agateon: preset-agate` 起头的注释行（括号内写明"由 agate-setup.py 管理；手改会在下次接入时被覆盖"）|
+| 终点标记 | 以 `<<< agateon: preset-agate` 起头的注释行（两标记之间的整段 = 托管范围）|
+| 块内容 | 一条 `- insert:` 行：`id: preset-agate`、插件 `@deepseek-ai/dsh-agent-preset`、`config.id: agate`，外加 `name` / `description` / `order`（取自 `preset.yml`）与 `config.plugins`（= `agent.cordis.yml` 的行列表）|
+
+> **为什么旧形态没了**：DSH **≥ 0.1.7-alpha.1**（commit `d1e22a7e24`「declare Agent compositions in profile YAML」）起**不再读取**目录式 preset `$DSH_HOME/.agent-presets/<id>/`。上游自带 skill 的原文：*"Before declaration rows, a user preset was a directory `$DSH_HOME/.agent-presets/<id>/` holding `preset.yml` …… Nothing reads that directory any more."*
+> 所以旧的 `~/.dsh/.agent-presets/agate/` **留着无害**（不报错、不影响别的配置），但**具有误导性**——它看起来像"已接入"，而 DSH 会话选择器里根本没有「Agateon 编排者」。本机实测的后果：最后一次选中 agate preset 的会话停在 2026-09-20 22:25，之后每个会话都落在 `standard`；而 `agate-setup.py --list` 因为只检查那个死目录，一直报 ✅。
+
+**验证**（落点与内容各看一处）：
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py --list   # 检查 DSH 真正读取的位置（profile patch 的托管块）
+python3 ~/.agate/scripts/agate-summary.py        # 版本 + 各平台接入产物；块内容与任何已装版本模板不一致 → 报漂移
+```
+
+`agate-summary.py` 每次运行校验两件事（权威判据见「升级 Agateon 之后」节）：① skill 软链是否指向**某个已安装版本**里的同名模板；② profile patch 里的声明块是否等于**某个已安装版本**模板的生成结果。指向开发 checkout / 临时副本、块被手改、或内容落后 → WARNING + 重跑接入命令的修复指引。升级后跑一次即可确认。
+
+**手工兜底（正常用户让命令做即可）**：若你要自己往 profile patch 里写，可以粘下面这段——它与 `agate-setup.py` 写入的**逐字相同**（含两个托管标记）。注意它是**托管块**：内容由命令从两个模板重新生成，**手改会在下次接入时被覆盖**；本段是**快照**，模板改动后它不会自动跟随——**以 `agate-setup.py` 的生成结果为准**。
+
+```yaml
+# >>> agateon: preset-agate（由 agate-setup.py 管理；手改会在下次接入时被覆盖）>>>
+- insert:
+    - id: preset-agate
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: agate
+        name: Agateon 编排者
+        description: Agateon 编排 Agent（P0-P8 全流程管理，派发 subagent 执行，gate 硬边界验证）。
+        order: 1
+        plugins:
+          # … 插件的完整行列表（约 200 行）由命令从模板生成，见下方说明
+# <<< agateon: preset-agate <<<
+```
+
+> **为什么不把整块贴在这里**：那 200 行是 `assets/templates/dsh/{preset.yml,agent.cordis.yml}`
+> 两个模板的**机械展开**。贴进文档就多出一份**手工维护的快照**——模板一改、文档即漂移，正是本次
+> 要消灭的那类失配（本仓文档原则：权威源只指路，不复制）。要看真实块内容，让命令写完后直接读：
+>
+> ```bash
+> sed -n '/agateon: preset-agate/,/<<< agateon: preset-agate/p' \
+>   ~/.dsh/profiles/*/cordis.patch.yml
+> ```
+>
+> 若确实要手工粘，用 `python3 -c "import sys;sys.path.insert(0,'~/.agate/scripts');import agate_common as a;print(a.dsh_preset_block('~/.agate/current/agate'))"` 生成——那是**唯一**不会漂移的来源。
+
+> **迁移旧副本时的已知陷阱**：插件包名改过一次——`@deepseek-ai/dsh-workflow-worker-thread` → **`@deepseek-ai/dsh-workflow-ptc`**（旧包在 0.1.7 已不存在）。**照抄旧文件里那一行会让 preset 激活失败**：上游 skill 要求逐个核对包名，理由正是"preset 写就之后改过名的包会在激活时失败"。上面的生成器已自动替换，只有手抄旧副本时才会踩到。
+> **唯一安装脚本**：hook（与所有平台一致）仍由 `python3 ~/.agate/scripts/install-hook.py` 安装——`agate-setup.py` 内部即调用它。DSH 没有、也不引入 per-platform installer。
+
+**身份薄、协议厚**：preset 的 persona **只做两件事**——指向 `{agate_root}/orchestrator-template.md`（唯一权威行为规范）+ 给 DSH 工具映射与平台注意；**不复制协议内容**（曾复制「会话开始步骤」，结果模板改了路径而副本未跟 → 实测失实）。声明块由 `preset.yml` / `agent.cordis.yml` 两个模板生成，模板仍是**唯一来源**；块内容是复制进 profile 的，不跟随源文件——升级协议根后重跑一次 `agate-setup.py` 即刷新。
 
 **使用**：打开 DSH 会话，在会话选择器选「Agateon 编排者」（对应 `claude --agent orchestrator`），
 然后执行 orchestrator-template.md 的「开始」几步验证。
 
-> 版本敏感提示：本接入已实机验证（2026-08-21，DSH v0.1.0-rc.8：preset 软链安装 → 热发现 →
-> 会话选择器出现「Agateon 编排者 · 自定义」→ 新会话以 Agateon 编排者人格启动）。DSH 是新兴平台，
-> preset/skill 发现机制可能随版本变化——升级 DSH 后若会话选择器找不到「Agateon 编排者」，
-> 重跑上方命令块即可。
+> 版本敏感提示：两种形态都已实机验证——目录式（2026-08-21，DSH v0.1.0-rc.8：软链安装 → 热发现 →
+> 会话选择器出现「Agateon 编排者 · 自定义」）与声明式（2026-09-24：写入 profile patch 后新会话
+> 模式选择器出现「Agateon 编排者」且可选中）。**目录式 preset 自 0.1.7-alpha.1 起已被上游停止读取**，
+> 这正是本节改写的原因。DSH 是新兴平台，机制随版本变化快——升级 DSH 后若选择器里找不到
+> 「Agateon 编排者」，重跑上方命令块即可。
 
 ### 步骤 2-Codex：codex-cli（Codex）接入
 
@@ -247,7 +295,7 @@ timeout 120s codex exec --json --skip-git-repo-check --dangerously-bypass-approv
 
 > ⚠️ **默认保持非默认（三平台通用原则）**：标准步骤 2 完成后，orchestrator 只是「可手动选择」的角色，
 > **不会成为任何平台的默认 agent**——Claude Code 需 `settings.json` 才默认、OpenCode 无默认机制、
-> DSH 出厂 `agent-presets.default` 即 `standard`（web-app bundle 内建，ln preset 不碰 settings 就不会变）。
+> DSH 出厂 `agent-presets.default` 即 `standard`（web-app bundle 内建；接入只往 profile patch 写声明块、不碰 `settings.yaml`，故不会变）。
 > **默认不主动设成默认**：orchestrator 是重人格（每次会话先解析 agate_root / 读 active-tasks / 按 phase
 > 读卡片，且只派发不亲自动手），设默认会让普通开发会话被引导走 P0-P8。只有明确要做「全项目统一进
 > 编排模式」时才执行本步骤；DSH 侧无等价的"一键设默认"入口，改 `~/.dsh/settings.yaml` 的
@@ -358,7 +406,7 @@ AGATE_WORKSPACE=/srv/agate-ws/My Project   # 绝对路径（可含空格）→ �
 
 **已有 Agateon 项目（跑过旧版任务）升级，先读 `UPGRADING.md`**——它讲清楚旧任务数据（active-tasks.md/.state.yaml/任务编号）如何处理，避免升级后踩到破坏性变更。
 
-- **符号链接方式**（Linux / macOS 标准）：什么都不用做，orchestrator 提示词自动跟着新版本。
+- **符号链接方式**（Linux / macOS 标准）：什么都不用做，orchestrator 提示词自动跟着新版本。**例外是 DSH**——它的 preset 是复制进 profile patch 的声明块（不是软链），升级后重跑一次 `agate-setup.py` 刷新；`agate-summary.py` 会报「漂移 / 已过期」提醒。
 - **复制模式**（Windows 无符号链接权限）：重跑一次 `python3 ~/.agate/scripts/agate-setup.py` 刷新（`cp` 是旧手工步骤，已被该命令取代）。
 - 两种方式都建议顺手跑一次 `python3 ~/.agate/scripts/agate-summary.py`——它会检测协议版本、根 `scripts/` 副本漂移，**以及四个平台接入产物的漂移**：产物须指向**某个已安装版本**的模板（这是"权威"的判据——项目用 `.agate-version` 钉版**不影响**该判定，全局产物本就与项目钉版无关）；它给**两级信号**：指向开发 checkout / 临时副本（**不在任何已装版本树内**）→ 警告「漂移」+ 修复命令；指向**已装但没有跟随 `current` 的版本** → 信息级「版本落后」提示（`agate-install.py` 装新版不删旧版，且接入产物指向具体版本目录，故升级后"落后"是常见状态，需重跑 `agate-setup.py` 跟上）；复制形态内容与任何已装版本都不一致 → 警告「已过期」。
 
