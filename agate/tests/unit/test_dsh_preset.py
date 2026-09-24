@@ -32,10 +32,14 @@
 #   - 模板根 = {agate_root}/assets/templates/dsh/（agate_root fixture 指向 agate/ 子目录）
 #   - SETUP.md 在 agate_root 下
 
+import os
 import re
 
 import pytest
 import yaml
+
+# 假安装根夹具与平台接入测试共用（同目录模块；避免第二份实现漂移）
+from test_platform_setup import _fake_install_root
 
 from conftest import (
     MAPPING_ROW_RE,
@@ -243,38 +247,27 @@ def test_dsh_skill_frontmatter_valid(agate_root):
     assert fm.get("description"), "SKILL.md frontmatter 缺 description"
 
 
-def test_dsh_setup_section_and_symlink_commands_present(agate_root):
-    """BDD-7（标题串）+ BDD-8：SETUP.md 需含「步骤 2-DSH」章节与 BDD-8 精确符号链接命令串。
+def test_dsh_setup_section_documents_declarative_form(agate_root):
+    """BDD-7（标题串）+ BDD-8：SETUP.md 的 DSH 章节须写**现行**接入形态（声明式 profile patch）。
 
-    断言以 BDD-8 字面为准（P2-design R-1：以精确命令串为断言基准；P2-review 建议 5：三条独立 ln 行），
-    且限定在 DSH 章节切片内，防既有章节路径字面量误命中。
+    **本用例 2026-09-24 改写**：原先断言三条 `ln -sf` 到 `~/.dsh/.agent-presets/agate/`——
+    那套机制 DSH ≥0.1.7-alpha.1 起**已不被读取**（上游 skill 原文 "Nothing reads that
+    directory any more."）。旧断言把**死形态**固化成"正确"，正是它让"文档与工具长期报 ✅
+    而 DSH 里根本没有该模式"（实测 2026-09-20 之后零 agate 会话）无人发现。
+    守护对象改为"DSH 真正读取的位置"。
     """
     setup = _read(agate_root, "SETUP.md")
     assert "步骤 2-DSH" in setup, "SETUP.md 缺「步骤 2-DSH」章节"
     section = _dsh_section(setup)
-    # BDD-8：mkdir -p 目标目录（preset + skill 两处安装根）
-    assert "mkdir -p ~/.dsh/.agent-presets/agate ~/.dsh/skills/agate-protocol" in section, (
-        "SETUP.md DSH 章节缺 mkdir -p 命令"
+    assert "agate-setup.py" in section, "DSH 章节缺 agate-setup.py 接入命令"
+    assert "cordis.patch.yml" in section, "DSH 章节须说明落点是 profile 的 cordis.patch.yml"
+    assert "~/.dsh/profiles/" in section, "DSH 章节缺 profile 目录路径"
+    assert "@deepseek-ai/dsh-agent-preset" in section, "DSH 章节缺声明插件名"
+    assert "preset-agate" in section, "DSH 章节缺 loader 行 id（preset-agate）"
+    assert "plugins:" in section, "DSH 章节缺手工兜底的 plugins 片段"
+    assert ".agent-presets/agate/agent.cordis.yml" not in section, (
+        "DSH 章节仍在教旧死形态（.agent-presets）——DSH 已不读取该目录"
     )
-    # BDD-8：三条独立 ln -sf，源路径均指向模板目录下的三个文件。
-    # 源前缀用 $AGATE_DIR（2026-09-19 起）——协议根在版本管理布局下是 ~/.agate/current/agate，
-    # 不是 ~/.agate 本身，写死 ~/.agate/... 在版本管理布局下会创建**断链**
-    # （实测 claude --agent orchestrator 报 not found）。BDD-8 的契约是"命令与模板文件名
-    # 耦合在册"（见 P1-requirements coupling_checklist），故断言锚定**文件名 + 目标路径**，
-    # 前缀统一为 "$AGATE_DIR/assets/templates/dsh/"。
-    src_prefix = '"$AGATE_DIR/assets/templates/dsh/'
-    assert f"ln -sf {src_prefix}agent.cordis.yml\"" in section, (
-        "DSH 章节缺 agent.cordis.yml 符号链接命令"
-    )
-    assert f"ln -sf {src_prefix}preset.yml\"" in section, (
-        "DSH 章节缺 preset.yml 符号链接命令"
-    )
-    assert f"ln -sf {src_prefix}SKILL.md\"" in section, (
-        "DSH 章节缺 SKILL.md 符号链接命令"
-    )
-    # BDD-8：安装目标路径（preset → ~/.dsh/.agent-presets/agate/、SKILL → ~/.dsh/skills/agate-protocol/）
-    assert "~/.dsh/.agent-presets/agate/" in section, "DSH 章节缺 preset 安装目标路径"
-    assert "~/.dsh/skills/agate-protocol/SKILL.md" in section, "DSH 章节缺 skill 安装目标路径"
 
 
 def test_dsh_setup_dsh_section_within_step_2(agate_root):
@@ -353,8 +346,13 @@ def test_dsh_skill_mapping_pointer_targets_exist(agate_root):
     skill = agate_root.joinpath("assets", "templates", "dsh", "SKILL.md")
     text = skill.read_text(encoding="utf-8")
     assert "persona.config.prefix" in text, "SKILL.md 应指明从 persona.config.prefix 取映射"
-    assert ".agent-presets/agate/agent.cordis.yml" in text, (
-        "应给出安装后的基路径（~/.dsh/.agent-presets/agate/），否则无-preset 环境找不到文件"
+    # 2026-09-24：指针只指向**模板源**——旧的"安装后位置 ~/.dsh/.agent-presets/..." 在
+    # DSH ≥0.1.7-alpha.1 下已不被读取、`agate-setup.py` 也不再创建，属悬空指针。
+    assert "{agate_root}/assets/templates/dsh/agent.cordis.yml" in text, (
+        "SKILL.md 须给出模板源路径（安装后位置已不存在）"
+    )
+    assert ".agent-presets/agate/agent.cordis.yml" not in text, (
+        "SKILL.md 不得再把 .agent-presets 当安装后位置（该目录已不被 DSH 读取）"
     )
     agent = agate_root.joinpath("assets", "templates", "dsh", "agent.cordis.yml")
     assert agent.is_file(), "指针目标（模板源 agent.cordis.yml）必须存在"
@@ -364,3 +362,153 @@ def test_dsh_skill_mapping_pointer_targets_exist(agate_root):
     prefix = (persona or {}).get("config", {}).get("prefix", "")
     for tool in ("subagent", "read", "bash"):
         assert tool in prefix, f"persona 映射应含工具「{tool}」（SKILL.md 的指针指向它）"
+
+
+# ── 声明式 preset 生成与接入/卸载（2026-09-24）────────────────────────────────
+#
+# 背景：DSH ≥0.1.7-alpha.1（d1e22a7e24）起**不再读取** `~/.dsh/.agent-presets/<id>/`。
+# 上述守护（旧 BDD-8 断言三条 ln -sf）把死形态固化为"正确"，于是工具长期报 ✅ 而
+# DSH 里该模式已消失。本节守护**现行**形态：从两个权威模板生成声明块 → 写入 profile 的
+# `cordis.patch.yml` → 可精确摘除。
+
+
+def _dsh_common(agate_root):
+    """导入被测的 agate_common（scripts 目录在 agate_root 下）。"""
+    import sys as _sys
+    p = str(agate_root / "scripts")
+    if p not in _sys.path:
+        _sys.path.insert(0, p)
+    import agate_common
+    return agate_common
+
+
+def test_dsh_preset_block_preserves_persona_byte_for_byte(agate_root):
+    """**回归**：生成的声明块必须**逐字**保留模板内容。
+
+    为什么单测这条：转换（模板行列表 → 声明 `plugins:`）极易静默丢内容。本任务第一版
+    用"行首是 `#` 就丢"过滤注释，结果把 persona `>-` 块标量里的 markdown 标题
+    （`## 第一步（必须）` / `## DSH 工具映射` / `## 平台注意（DSH 特有）`）**删掉 3 个**——
+    而 YAML 仍能解析、实机仍能挂载，**没有任何报错**。故此处按解析后的字段逐字比对。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+    assert block, "应能生成声明块"
+
+    class _L(yaml.SafeLoader):
+        pass
+
+    _L.add_multi_constructor("tag:yaml.org,2002:", lambda loader, tag, node: None)
+    _L.add_multi_constructor("!", lambda loader, tag, node: None)
+    orig = yaml.load(_read(agate_root, "assets/templates/dsh/agent.cordis.yml"), Loader=_L)
+    new = yaml.load(block, Loader=_L)
+    new_rows = new[0]["insert"][0]["config"]["plugins"]
+
+    assert len(new_rows) == len(orig), f"插件行数须一致: {len(orig)} → {len(new_rows)}"
+    o_prefix = orig[0]["config"]["prefix"]
+    n_prefix = new_rows[0]["config"]["prefix"]
+    assert n_prefix == o_prefix, "persona prefix 必须逐字一致（不得丢任何行）"
+    for heading in ("第一步（必须）", "DSH 工具映射", "平台注意（DSH 特有）"):
+        assert heading in n_prefix, f"persona 内的小节标题被吞掉: {heading}"
+
+
+def test_dsh_preset_block_declares_metadata_and_renamed_plugin(agate_root):
+    """声明须含 id/name/description/order，且旧包名已替换为 0.1.7 的现存包。"""
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    class _L(yaml.SafeLoader):
+        pass
+
+    _L.add_multi_constructor("tag:yaml.org,2002:", lambda loader, tag, node: None)
+    _L.add_multi_constructor("!", lambda loader, tag, node: None)
+    row = yaml.load(block, Loader=_L)[0]["insert"][0]
+    cfg = row["config"]
+    assert row["id"] == "preset-agate" and cfg["id"] == "agate"
+    for k in ("name", "description", "order", "plugins"):
+        assert cfg.get(k), f"声明缺字段 {k}"
+    # 模板里的旧包名在 0.1.7 已不存在；不替换会导致**激活失败**（DSH skill 明确警告包改名）
+    assert "dsh-workflow-worker-thread" not in block, "旧包名未替换（0.1.7 会导致激活失败）"
+    assert "@deepseek-ai/dsh-workflow-ptc" in block, "应替换为现存包 dsh-workflow-ptc"
+
+
+def test_dsh_block_apply_and_strip_are_symmetric_and_idempotent(agate_root):
+    """托管块：幂等写入（重复跑不叠加）+ 精确摘除（只动两行之间，用户内容不受影响）。"""
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+    user = "# 用户自己的 patch\n- id: sandbox-policy\n  name: '@deepseek-ai/dsh-sandbox-policy'\n"
+
+    once = ac.dsh_apply_block(user, block)
+    twice = ac.dsh_apply_block(once, block)
+    assert once.count(ac.DSH_BLOCK_BEGIN) == 1
+    assert twice.count(ac.DSH_BLOCK_BEGIN) == 1, "重复写入不得叠加"
+    assert twice == once, "幂等：第二次写入应与第一次结果相同"
+
+    stripped, had = ac.dsh_strip_block(twice)
+    assert had and ac.DSH_BLOCK_BEGIN not in stripped
+    # 用户内容逐字保留
+    assert "- id: sandbox-policy" in stripped
+    assert "# 用户自己的 patch" in stripped
+
+    _text2, had2 = ac.dsh_strip_block(stripped)
+    assert not had2, "无块时不应报告已移除"
+
+
+def test_dsh_register_and_uninstall_roundtrip(run_cli, python_exe, agate_scripts,
+                                              agate_root, tmp_path):
+    """端到端：`agate-setup.py` 写入声明块 → `--list` 认它 → `--uninstall` 精确摘除。
+
+    用假 DSH_HOME（`profiles/web/cordis.patch.yml`），不碰真实 `~/.dsh`。
+    """
+    dsh_home = tmp_path / "dshhome"
+    patch = dsh_home / "profiles" / "web" / "cordis.patch.yml"
+    patch.parent.mkdir(parents=True)
+    patch.write_text("- id: sandbox-policy\n  config:\n    mode: workspace-write\n",
+                     encoding="utf-8")
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+
+    env = {"HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home"),
+           "AGATE_HOME": str(iroot), "AGATE_ROOT": "", "DSH_HOME": str(dsh_home)}
+    (tmp_path / "home").mkdir(exist_ok=True)
+
+    res = run_cli(python_exe, str(agate_scripts / "agate-setup.py"),
+                  "--scope", "global", "--platform", "dsh", env=env)
+    assert res.returncode == 0, res.output
+    text = patch.read_text(encoding="utf-8")
+    assert "preset-agate" in text and "@deepseek-ai/dsh-agent-preset" in text, res.output
+    assert "- id: sandbox-policy" in text, "用户内容必须保留"
+
+    listed = run_cli(python_exe, str(agate_scripts / "agate-setup.py"), "--list", env=env)
+    assert "preset-agate" in listed.output, f"--list 应报告声明块:\n{listed.output}"
+    assert "❌" not in listed.output, f"--list 不应报缺失:\n{listed.output}"
+
+    un = run_cli(python_exe, str(agate_scripts / "agate-setup.py"),
+                 "--uninstall", "--scope", "global", env=env)
+    assert un.returncode == 0, un.output
+    after = patch.read_text(encoding="utf-8")
+    assert "preset-agate" not in after, f"卸载应摘除声明块:\n{after}"
+    assert "- id: sandbox-policy" in after, "卸载不得动用户其它内容"
+
+
+def test_uninstall_removes_legacy_dead_preset_dir(run_cli, python_exe, agate_scripts,
+                                                  agate_root, tmp_path):
+    """卸载须清掉旧死目录（DSH 已不读它，留着会继续误导"已接入"）。"""
+    dsh_home = tmp_path / "dshhome"
+    (dsh_home / "profiles" / "web").mkdir(parents=True)
+    (dsh_home / "profiles" / "web" / "cordis.patch.yml").write_text("[]\n", encoding="utf-8")
+    legacy = dsh_home / ".agent-presets" / "agate"
+    legacy.mkdir(parents=True)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+    # 指向本安装的软链（归属可证）→ 应被删
+    (legacy / "preset.yml").symlink_to(iroot / "v9.9.9" / "agate"
+                                       / "assets" / "templates" / "dsh" / "preset.yml")
+    # 用户自己的实体文件 → 必须保留
+    (legacy / "user-note.txt").write_text("mine\n", encoding="utf-8")
+
+    (tmp_path / "home").mkdir(exist_ok=True)
+    env = {"HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home"),
+           "AGATE_HOME": str(iroot), "AGATE_ROOT": "", "DSH_HOME": str(dsh_home)}
+    res = run_cli(python_exe, str(agate_scripts / "agate-setup.py"),
+                  "--uninstall", "--scope", "global", env=env)
+    assert res.returncode == 0, res.output
+    assert not os.path.lexists(legacy / "preset.yml"), "指向本安装的旧死目录产物应被清"
+    assert (legacy / "user-note.txt").is_file(), "用户文件不得被删"

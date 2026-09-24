@@ -96,7 +96,10 @@ def _runnable_lines(block, skip_install_hook=True):
 
 def _bash_env(home, extra=None):
     env = dict(os.environ)
-    for key in ("AGATE_ROOT", "AGATE_HOME", "AGATE_DIR"):
+    # **`DSH_HOME` 必须一起中和**（2026-09-24 实测事故）：它会让被测的 `agate-setup.py`
+    # 绕开假 HOME 去读写**开发者真实的 `~/.dsh`**——本地全量跑一次就把真实 DSH profile 的
+    # 声明块装了又卸（并留下一串 `.bak.*`）。与 `AGATE_HOME`（DEBT0042）同一类泄漏。
+    for key in ("AGATE_ROOT", "AGATE_HOME", "AGATE_DIR", "DSH_HOME"):
         env.pop(key, None)
     env["HOME"] = str(home)
     env["USERPROFILE"] = str(home)
@@ -314,40 +317,66 @@ def test_bdd_43_opencode_registration_and_debug_agent(bash, layout, project, rea
 # ---------------------------------------------------------------------------
 
 
-def test_bdd_44_dsh_links_and_summary_reports_no_drift(bash, tmp_path, project):
-    """BDD-44：隔离 HOME 下按 SETUP「步骤 2-DSH」节命令建 mkdir + 三条 ln -sf——三个链接存在且目标可读；
-    随后 agate-summary.py exit 0 且无「DSH 安装产物漂移 / 未安装」警告。DSH 无需真实安装；不执行 install-hook。"""
+def test_bdd_44_dsh_declarative_block_and_summary_reports_no_drift(layout, project, tmp_path):
+    """BDD-44（2026-09-24 改写）：SETUP「步骤 2-DSH」节的**手工兜底块**须与实现生成的一致，
+    且实跑接入后 `agate-summary.py` 无漂移/未安装信号。
+
+    **为什么改写**：旧用例跑 `mkdir -p` + 三条 `ln -sf` 到 `~/.dsh/.agent-presets/agate/`——
+    那套载体 DSH ≥0.1.7-alpha.1 起**已不被读取**（上游 skill 原文 "Nothing reads that
+    directory any more."）。旧用例把死形态固化成"正确"，正是"工具长期报 ✅ 而 DSH 里根本没有
+    该模式"无人发现的原因之一（实测 2026-09-20 之后零 agate 会话）。
+    新判据对准 DSH **真正读取**的位置：profile 的 `cordis.patch.yml` 声明块。
+
+    本用例仍满足 BDD-44 的原意（"按 SETUP 的说明操作后，DSH 侧确实接入且 summary 不报异常"），
+    只是载体换成了现行形态；同时新增"文档里的兜底块 == 实现生成的块"这一**防漂移**判据。
+    """
     home = tmp_path / "dsh_home"
     home.mkdir()
     lay = _build_layout(home)
+
+    # ① 手工兜底块必须是**真块**（含定界符与声明三要素）
     sec = _setup_section(r"步骤 2-DSH", 3)
-    blocks = _bash_blocks(sec)
-    assert blocks, "SETUP DSH 章节缺命令块"
-    agate_dir, proc = _eval_agate_dir(bash, home, project)
-    assert agate_dir == lay.expected_dir, proc.stderr
-    script = _runnable_lines(blocks[0])
-    assert script.count("ln -sf") == 3 and "mkdir -p" in script, f"DSH 命令块应为 mkdir -p + 三条 ln -sf: {script!r}"
-    run = _run_bash(bash, script, home, project, extra={"AGATE_DIR": agate_dir})
-    assert run.returncode == 0, run.stderr
-    links = [
-        home / ".dsh" / ".agent-presets" / "agate" / "agent.cordis.yml",
-        home / ".dsh" / ".agent-presets" / "agate" / "preset.yml",
-        home / ".dsh" / "skills" / "agate-protocol" / "SKILL.md",
-    ]
-    for link in links:
-        assert link.is_symlink() and os.access(link, os.R_OK), f"{link} 应为可读符号链接"
+    assert "cordis.patch.yml" in sec, "SETUP DSH 章节须说明落点是 profile patch"
+    assert "@deepseek-ai/dsh-agent-preset" in sec, "SETUP DSH 章节缺声明插件名"
+    assert "preset-agate" in sec, "SETUP DSH 章节缺 loader 行 id"
+
+    # ② 文档**不重复**整块（否则必漂移）——它给出形状，并指向唯一不会漂移的来源
+    assert "dsh_preset_block" in sec, (
+        "SETUP 应指向生成器（唯一不漂移的来源），而不是手抄整块"
+    )
+    assert "sed -n" in sec, "SETUP 应给出读取真实块内容的命令"
+    # 形状片段必须属实：定界符 + 关键字段
+    for frag in ("# >>> agateon: preset-agate", "# <<< agateon: preset-agate <<<",
+                 "id: agate", "plugins:"):
+        assert frag in sec, f"SETUP DSH 兜底片段缺 {frag!r}"
+    # 且**不得**再出现旧死形态的安装路径
+    assert ".agent-presets/agate/agent.cordis.yml" not in sec
+
+    # ③ 实跑一次真实接入（假 DSH_HOME + 假 HOME），再让 summary 判定
+    patch = home / ".dsh" / "profiles" / "web" / "cordis.patch.yml"
+    patch.parent.mkdir(parents=True, exist_ok=True)
+    patch.write_text("# 用户自己的 patch\n", encoding="utf-8")
+    env = _bash_env(home, {"DSH_HOME": str(home / ".dsh")})
+    proc = subprocess.run(
+        [sys.executable, str(lay.agate / "scripts" / "agate-setup.py"),
+         "--scope", "global", "--platform", "dsh"],
+        cwd=str(project), env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    written = patch.read_text(encoding="utf-8")
+    assert "preset-agate" in written and "@deepseek-ai/dsh-agent-preset" in written, written
+    assert "# 用户自己的 patch" in written, "接入不得丢弃用户原有内容"
+
     summary = subprocess.run(
         [sys.executable, str(lay.agate / "scripts" / "agate-summary.py")],
-        cwd=str(project),
-        env=_bash_env(home),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=120,
+        cwd=str(project), env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120,
     )
     assert summary.returncode == 0, summary.stderr
-    assert "DSH 安装产物漂移" not in summary.stderr and "DSH 安装产物未安装" not in summary.stderr, summary.stderr
+    out = summary.stdout + summary.stderr
+    assert "DSH 接入产物漂移" not in out, out
+    assert "DSH" not in out or "未安装或不完整" not in out, out
 
 
 # ---------------------------------------------------------------------------

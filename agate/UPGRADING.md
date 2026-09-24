@@ -276,18 +276,38 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
-### 完整卸载（尚未发布的版本起；此前版本需手动清理接入物与 hook）
+### Unreleased — DSH preset 接入形态变更（**无破坏性变更**；尚未发布）
+
+> 本节描述**尚未发布**的改动（发版时转为本版本号章节）。协议语义、`.state.yaml` schema、既有任务数据格式均未变。
+> 实现注记：本节是**平台接入细节**的记述（非协议语义定义——协议语义层不感知各平台的身份注册机制）。
+
+**升级方式**：`python3 ~/.agate/scripts/agate-install.py latest`（幂等），**DSH 用户需再重跑一次接入命令**：
 
 ```bash
-python3 ~/.agate/scripts/agate-setup.py --list                      # 看装了什么
+python3 ~/.agate/scripts/agate-setup.py     # 把 DSH preset 写成 profile patch 里的声明块（幂等）
+```
+
+**变更**：
+
+- **DSH preset 不再是目录式软链**：DSH ≥ **0.1.7-alpha.1**（上游 commit `d1e22a7e24`）起**不再读取** `$DSH_HOME/.agent-presets/<id>/`（上游 skill 原文："Nothing reads that directory any more."）。`agate-setup.py` 现在把 preset 声明写进**已存在的每个** `~/.dsh/profiles/*/cordis.patch.yml` 的**托管块**（定界符之间；幂等写入、卸载精确摘除，只动自己那一段）。
+- **存量用户动作（仅 DSH）**：重跑一次 `python3 ~/.agate/scripts/agate-setup.py`；旧的 `~/.dsh/.agent-presets/agate/` 目录**可以直接删除**（`--uninstall` 亦会顺带清掉其中**指向本安装**的软链，用户自己的文件保留）。核对方式：`python3 ~/.agate/scripts/agate-setup.py --list` 应报告 profile patch 里的 `preset-agate` 声明块，而不是那个目录。
+- **为什么修**：旧形态下工具长期报 ✅ 而 DSH 里根本没有该模式——实测最后一个用上 agate preset 的会话停在 2026-09-20 22:25，此后每个会话都落 `standard`。
+
+**不受影响**：**Claude Code / OpenCode / Codex 用户不是破坏性变更**——本次只涉及 DSH 的接入载体，这三个平台的身份注册物与命令未变（软链 / 副本 / skill），无需任何动作。DSH 用户也无需迁移任务数据，只是旧接入物失效、需重跑那条命令刷新。
+
+### 完整卸载
+
+> 卸载功能自 **v0.75.0** 起已发布（不再是"尚未发布"）。步骤、三条安全约束与设计理由的**权威源** =
+> `agate/AGENTS.md`「卸载」节；用户视角的简版 = `agate/SETUP.md`。本文件不重复（重复即漂移）。
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py --list                      # 看装了什么（含台账项目）
 python3 ~/.agate/scripts/agate-setup.py --uninstall --all-projects  # 清接入物（全局 + 每个装过的项目）
 python3 ~/.agate/scripts/agate-setup.py --uninstall --purge         # 再删本体
 ```
 
-**不要直接 `rm -rf ~/.agate`**：那只删本体，平台接入物与项目侧 hook 会留下断链或陈旧副本
-（复制模式下的**可执行**陈旧 hook 让 `git commit` 失败；软链断链或非可执行副本则被 git 静默忽略）。三条约束：删前按事实验证归属（证不出则保留并报告）；
-用户数据（`agate-workspace/` 等）只报告不删；装 hook 时备份的用户原 hook 卸载时还原。
-详见 `agate/AGENTS.md`「卸载」节。
+> **不要直接 `rm -rf ~/.agate`**：那只删本体，平台接入物与项目侧 hook 会留下断链或陈旧副本
+> （复制模式下的**可执行**陈旧 hook 让 `git commit` 失败；软链断链或非可执行副本则被 git 静默忽略）。
 
 ### v0.75.0 — 完整卸载（**无破坏性变更**）
 

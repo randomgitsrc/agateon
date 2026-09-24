@@ -25,6 +25,9 @@ try:
     from agate_common import (
         _protocol_root,
         _resolve_pointer_chain,
+        dsh_extract_block,
+        dsh_patch_files,
+        dsh_preset_block,
         resolve_version_root,
         symlink_migration_hint,
     )
@@ -113,8 +116,11 @@ _PLATFORM_ARTIFACTS = (
         ("agents/orchestrator.md", "orchestrator-template.md"),
     ), "2"),
     ("DSH", ".dsh", (
-        (".agent-presets/agate/preset.yml", "assets/templates/dsh/preset.yml"),
-        (".agent-presets/agate/agent.cordis.yml", "assets/templates/dsh/agent.cordis.yml"),
+        # ⚠️ 2026-09-24：**删掉** `.agent-presets/agate/*` 两条——DSH ≥0.1.7-alpha.1 起
+        # 不再读取该目录（上游 skill 原文 "Nothing reads that directory any more."）；
+        # 保留它们正是"本命令与 agate-setup --list 长期假报 ✅、而 DSH 里根本没有该模式"
+        # 的成因（实测 09-20 后零 agate 会话）。DSH 的声明式 preset 落点在 profile patch，
+        # 内容比对语义不同，由 `_dsh_declarative_signals()` 单独判定。
         ("skills/agate-protocol/SKILL.md", "assets/templates/dsh/SKILL.md"),
     ), "2-DSH"),
     ("Codex", ".agents", (
@@ -281,8 +287,19 @@ def _check_platform_artifacts():
             f"——升级后接入产物指向的是具体版本目录，需重跑以跟上："
             f"python3 {_home_entry('agate-setup.py')}\n"
         )
+    # DSH 声明式 preset：状态先算出来——「未接入」要**并入上面的聚合行**（而不是自己
+    # 再打一行，那会让"未安装"变成两条噪声）。
+    if _dsh_declarative_drifted(installed):
+        sys.stderr.write(
+            "⚠️  DSH 接入产物漂移: profile patch 里的 preset-agate 声明块与任何已安装版本的"
+            "权威模板都不一致（DSH 仍会出现该模式，但内容已旧或被你手改）\n"
+            f"    修复: python3 {_home_entry('agate-setup.py')}\n"
+        )
+    elif _dsh_declarative_missing():
+        not_installed.append("DSH")
+
     if not_installed:
-        # 去重保序（DSH 三产物只报一次平台名）。措辞保留「未安装」与 SETUP.md 指引
+        # 去重保序（同平台多产物只报一次）。措辞保留「未安装」与 SETUP.md 指引
         # （既有 BDD 断言锚定这两个子串），只是把 N 行合并为 1 行。
         names = list(dict.fromkeys(not_installed))
         sys.stderr.write(
@@ -291,6 +308,54 @@ def _check_platform_artifacts():
             f"（接入: python3 {_home_entry('agate-setup.py')}；"
             f"平台差异见 agate/SETUP.md 步骤 2）\n"
         )
+
+
+def _dsh_declarative_state(installed):
+    """DSH 声明式 preset 的状态：`(状态, 命中的 patch)`，状态 ∈ {missing, ok, drifted}。
+
+    **为什么单独判**（不塞进 `_PLATFORM_ARTIFACTS`）：那边的判据是"软链 realpath / 复制内容
+    等于模板"，而 DSH 新形态是把声明**内联进用户 profile 的 patch 文件**——形态不同，
+    判据也不同（提取托管块 → 与任一已装版本生成的块比对）。
+
+    **为什么必须有这条**：DSH 0.1.7 换掉目录式 preset 后，旧清单仍在检查那个**死目录**，
+    于是本命令与 `agate-setup --list` **双双长期假报 ✅**，而 DSH 里该模式已消失
+    （实测 2026-09-20 之后零 agate 会话）。**检测不到比没有检测更糟**。
+    """
+    if not os.path.isdir(os.path.join(os.path.expanduser("~"), ".dsh")):
+        return "missing", None      # 未装 DSH 平台 → 由调用方按既有语义处理
+    patches = dsh_patch_files()
+    if not patches:
+        return "missing", None
+    ok_variants = [b.strip() for b in (dsh_preset_block(r) for r in installed) if b]
+    for patch in patches:
+        try:
+            with open(patch, encoding="utf-8", errors="replace") as f:
+                got = dsh_extract_block(f.read())
+        except OSError:
+            continue
+        if got is None:
+            continue
+        if ok_variants and got.strip() not in ok_variants:
+            return "drifted", patch
+        return "ok", patch
+    return "missing", None
+
+
+def _dsh_declarative_drifted(installed):
+    return _dsh_declarative_state(installed)[0] == "drifted"
+
+
+def _dsh_declarative_missing():
+    """DSH 已装（有 profile）但**没有**声明块 → 并入「未安装或不完整」聚合提示。
+
+    ⚠️ 两个前提都必要：未装 DSH 的机器不该被提示（与其它平台同语义）；DSH 从未启动过
+    （无 profile 目录）时也谈不上"未接入"——那时提示无处可写，只会变成噪声。
+    """
+    if not os.path.isdir(os.path.join(os.path.expanduser("~"), ".dsh")):
+        return False
+    if not dsh_patch_files():
+        return False
+    return _dsh_declarative_state([])[0] == "missing"
 
 
 def main():

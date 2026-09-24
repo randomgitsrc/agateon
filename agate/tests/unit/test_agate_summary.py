@@ -56,9 +56,39 @@ def _no_artifact_signal(output):
     )
 
 
+def _dsh_patch_path(home):
+    """假 HOME 下 DSH profile 的 patch 路径（声明式 preset 的落点）。"""
+    return home / ".dsh" / "profiles" / "web" / "cordis.patch.yml"
+
+
+def _write_dsh_block(home, block_text):
+    """把给定块写进假 HOME 的 DSH profile patch（保留既有内容）。"""
+    p = _dsh_patch_path(home)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("- id: sandbox-policy\n" + block_text, encoding="utf-8")
+    return p
+
+
+def _write_canonical_dsh_block(home):
+    """写入**权威**声明块（由已装版本的模板生成）→ 不应报漂移。"""
+    import sys as _sys
+    p = str(_PROTO_ROOT / "scripts")
+    if p not in _sys.path:
+        _sys.path.insert(0, p)
+    import agate_common as _ac
+    blk = _ac.dsh_preset_block(str(_version_dir(home)))
+    assert blk, "前置：应能由已装版本生成权威块"
+    return _write_dsh_block(home, blk)
+
+
 def _installed_tpl(home, rel, version="v0.44.0"):
     """假 HOME 中**已安装版本**内的模板路径（产物应指向这里才算权威）。"""
     return home / ".agate" / version / rel
+
+
+def _version_dir(home, version="v0.44.0"):
+    """假 HOME 中**已安装版本目录**（= 生成声明块时的协议根）。"""
+    return home / ".agate" / version
 
 
 def _make_home(tmp_path, versions=("v0.43.0", "v0.44.0"), current="latest", latest="v0.44.0"):
@@ -156,9 +186,10 @@ def test_bdd_21_summary_global_current_reason(run_cli, python_exe, agate_scripts
 # dsh-workspace/agate-copy（测试用临时副本）而非 ~/.agate 权威链，静默存活 5 天
 # 穿过 v0.64.0 发布。机制缺口：安装后无任何校验。本组测试覆盖修复。
 
+# DSH 侧 2026-09-24 起只剩 skill 走"软链/复制"判据；preset 改为**声明式**（写进 profile 的
+# cordis.patch.yml），由 `_dsh_declarative_*` 与下方 DSH 专项用例守护（DSH ≥0.1.7-alpha.1
+# 已不再读取 `.agent-presets/` 目录——继续检查死目录正是长期假报 ✅ 的成因）。
 _DSH_ARTIFACTS = (
-    (".agent-presets/agate/preset.yml", "preset.yml"),
-    (".agent-presets/agate/agent.cordis.yml", "agent.cordis.yml"),
     ("skills/agate-protocol/SKILL.md", "SKILL.md"),
 )
 
@@ -189,22 +220,18 @@ def test_dsh_links_no_dsh_dir_no_warning(run_cli, python_exe, agate_scripts, tmp
 
 @pytest.mark.windows_smoke
 def test_dsh_links_canonical_chain_no_warning(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
-    """三个产物软链均指向权威模板（{agate_root}/assets/templates/dsh/）→ 无警告。"""
+    """skill 软链指向权威模板 + 声明式 preset 块在位（且与已装版本一致）→ 无警告。"""
     home = _make_home(tmp_path)
     for rel, name in _DSH_ARTIFACTS:
         link = home / ".dsh" / rel
         link.parent.mkdir(parents=True, exist_ok=True)
         # 指向**已安装版本**内的模板（权威）；指向真实仓库树会被正确判为漂移
         _symlink_or_skip(_installed_tpl(home, f"assets/templates/dsh/{name}"), link)
-    project = tmp_path / "project"
-    project.mkdir()
-    result = run_cli(
-        python_exe, str(agate_scripts / "agate-summary.py"),
-        cwd=str(project), env=_resolve_env(home),
-    )
+    _write_canonical_dsh_block(home)
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
     assert _no_artifact_signal(result.output), (
-        f"未装 DSH（无 ~/.dsh）应无任何产物信号:\n{result.output}"
+        f"skill 软链权威 + 声明块与已装版本一致 → 应无任何产物信号:\n{result.output}"
     )
 
 
@@ -240,22 +267,19 @@ def test_dsh_links_stale_target_warns_with_fix(run_cli, python_exe, agate_script
 
 
 def test_dsh_links_missing_artifact_warns_not_installed(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
-    """~/.dsh 存在但部分产物缺失 → 提示未安装（含 SETUP.md 指引），不误报为漂移。"""
+    """`~/.dsh` 存在但**未接入** → 提示未安装（含 SETUP.md 指引），不误报为漂移。
+
+    2026-09-24 调整：DSH 的软链产物只剩 skill（preset 改为声明式），故"缺失"就是**一个都
+    没建**。原先建 1 个、缺 2 个的写法在本形态下只剩"指向非权威树"→ 那是**漂移**、不是未安装
+    （且原断言能过只是因为另外 2 个旧产物缺失，属形态变更后失效的偶然绿）。
+    """
     home = _make_home(tmp_path)
-    tpl_dir = agate_assets / "templates" / "dsh"
-    rel, name = _DSH_ARTIFACTS[0]
-    link = home / ".dsh" / rel
-    link.parent.mkdir(parents=True, exist_ok=True)
-    _symlink_or_skip(tpl_dir / name, link)  # 只装 1 个，其余 2 个缺失
-    project = tmp_path / "project"
-    project.mkdir()
-    result = run_cli(
-        python_exe, str(agate_scripts / "agate-summary.py"),
-        cwd=str(project), env=_resolve_env(home),
-    )
+    (home / ".dsh").mkdir(parents=True, exist_ok=True)   # 平台在，但未接入 agate
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
     assert "未安装" in result.output
     assert "SETUP.md" in result.output
+    assert "DSH 接入产物漂移" not in result.output, "未接入不应被误报为漂移"
 
 
 # --- Claude Code / OpenCode 产物校验（2026-09-21 补齐：四平台全覆盖）---
@@ -627,18 +651,30 @@ def test_proto_root_prefers_resolved_over_script_tree(run_cli, python_exe, agate
 
 
 @pytest.mark.windows_smoke
-def test_dsh_copy_mode_stale_content_warns(run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
-    """⑤ 边界：DSH 复制形态内容已旧 → 报「已过期」（此前只测了 Codex 的复制形态）。"""
+def test_dsh_declarative_block_stale_warns(run_cli, python_exe, agate_scripts,
+                                           agate_assets, tmp_path):
+    """**声明式 DSH preset 块过期**（与任何已装版本都不一致）→ 报漂移并给修复命令。
+
+    **取代**原先基于 `.agent-presets/` 复制形态的「已过期」用例：那条检查的目录 DSH
+    ≥0.1.7-alpha.1 已不读取，产物再"过期"也不影响实际行为——真正该报的是**DSH 会读取的
+    那处**（profile patch 里的声明块）。
+    """
     home = _make_home(tmp_path)
-    for rel, _name in _DSH_ARTIFACTS:
-        link = home / ".dsh" / rel
-        link.parent.mkdir(parents=True, exist_ok=True)
-        link.write_bytes(b"# outdated\n")
+    import sys as _sys
+    p = str(_PROTO_ROOT / "scripts")
+    if p not in _sys.path:
+        _sys.path.insert(0, p)
+    import agate_common as _ac
+    # 真块（含定界符）但内容被改旧 —— 模拟"装过旧版/被手改"
+    stale = _ac.dsh_preset_block(str(_version_dir(home)))
+    assert stale, "前置：应能生成块"
+    _write_dsh_block(home, stale.replace("order: 1", "order: 99"))
     result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
     assert result.returncode == 0
-    assert result.output.count("已过期") == len(_DSH_ARTIFACTS), (
-        f"DSH 三个复制产物都过期 → 应各报一次「已过期」:\n{result.output}"
+    assert "DSH 接入产物漂移" in result.output, (
+        f"声明块已旧 → 应报漂移:\n{result.output}"
     )
+    assert "agate-setup.py" in result.output, "漂移提示须给出修复入口"
 
 
 @pytest.mark.parametrize("label,platform_dir", [
@@ -787,7 +823,6 @@ def test_artifact_pointing_to_installed_but_not_current_reports_lagging(
 @pytest.mark.parametrize("platform_dir,rel", [
     (".claude", "agents/orchestrator.md"),
     (".config/opencode", "agents/orchestrator.md"),
-    (".dsh", ".agent-presets/agate/preset.yml"),
     (".agents", "skills/agate-protocol/SKILL.md"),
 ])
 def test_artifact_on_current_version_reports_nothing(

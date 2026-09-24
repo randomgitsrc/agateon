@@ -88,12 +88,22 @@ def test_codex_skill_points_to_template_and_carries_mapping(agate_root):
 
 
 def _fake_homes(tmp_path):
-    """建四个平台的假全局目录（判定"平台已装"的探测点）。"""
+    """建四个平台的假全局目录（判定"平台已装"的探测点）。
+
+    **DSH 需连 profile 一起建**（2026-09-24）：DSH 的 preset 现在是**声明式**，落点是
+    `~/.dsh/profiles/<name>/cordis.patch.yml`。只建 `~/.dsh` 等于"装了 DSH 但从未启动过"
+    （真实机器上 profile 由 DSH 首次启动时创建）——那种状态下接入**无法完成**，命令应如实
+    报失败（本模块的假 HOME 应模拟"Dsh 可用"这一正常前提，而不是"装了没用过"）。
+    """
     home = tmp_path / "home"
     for rel in (".claude", ".config/opencode", ".dsh", ".codex"):
         (home / rel).mkdir(parents=True, exist_ok=True)
     # Codex 的 skill 落到 ~/.agents（跨工具共享根），也需存在
     (home / ".agents").mkdir(parents=True, exist_ok=True)
+    # DSH profile（声明式 preset 的落点）
+    patch = home / ".dsh" / "profiles" / "web" / "cordis.patch.yml"
+    patch.parent.mkdir(parents=True, exist_ok=True)
+    patch.write_text("# profile patch\n", encoding="utf-8")
     return home
 
 
@@ -107,8 +117,9 @@ def _run_setup(run_cli, python_exe, agate_scripts, home, agate_root, *extra, cop
 REGISTERED = (
     ".claude/agents/orchestrator.md",
     ".config/opencode/agents/orchestrator.md",
-    ".dsh/.agent-presets/agate/agent.cordis.yml",
-    ".dsh/.agent-presets/agate/preset.yml",
+    # DSH 的 preset 自 2026-09-24 起是**声明式**（写进 profile 的 cordis.patch.yml 托管块），
+    # 不再是 `~/.dsh/.agent-presets/agate/*` 两个软链——DSH ≥0.1.7-alpha.1 已不读该目录。
+    # 声明式一侧的覆盖见 test_dsh_preset.py（含往返、逐字保真与幂等/摘除对称）。
     ".dsh/skills/agate-protocol/SKILL.md",
     ".agents/skills/agate-protocol/SKILL.md",
 )
@@ -127,13 +138,24 @@ def test_setup_registers_all_detected_platforms(run_cli, python_exe, agate_scrip
 
 
 def test_setup_is_idempotent(run_cli, python_exe, agate_scripts, agate_root, tmp_path):
-    """幂等：重跑不报错、不产生重复备份（已存在的是软链 → 非"非本工具文件"）。"""
+    """幂等：重跑不报错、不新增备份、不改动已就位的产物。
+
+    DSH 的声明式 preset 会**首次**接入时备份用户的 profile patch（那是用户自己的 DSH 配置），
+    但此后只更新托管块内容——**再跑不得新增备份**（否则每次升级都在用户 profile 目录里留垃圾）。
+    """
     home = _fake_homes(tmp_path)
     for _ in range(2):
         r = _run_setup(run_cli, python_exe, agate_scripts, home, agate_root, "--scope", "global")
         assert r.returncode == 0, r.stderr
+    patch = home / ".dsh" / "profiles" / "web" / "cordis.patch.yml"
+    first = patch.read_text(encoding="utf-8")
     backups = list(home.rglob("*.bak.*"))
-    assert not backups, f"幂等重跑不应产生备份文件: {backups}"
+    assert len(backups) <= 1, f"首次接入最多留一份原件备份，实际 {backups}"
+    # 第三次跑：内容与备份数都不应再变
+    r = _run_setup(run_cli, python_exe, agate_scripts, home, agate_root, "--scope", "global")
+    assert r.returncode == 0, r.stderr
+    assert patch.read_text(encoding="utf-8") == first, "重跑不得改动已就位的声明块"
+    assert list(home.rglob("*.bak.*")) == backups, "重跑不得新增备份"
 
 
 def test_setup_copy_mode_when_no_symlink_permission(run_cli, python_exe, agate_scripts,

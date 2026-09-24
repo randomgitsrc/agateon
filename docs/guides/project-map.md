@@ -116,7 +116,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 - 运行依赖：系统 `python3` + `pyyaml`（强制）+ `git`；Pillow 可选（P6 图像检测）
 - 开发 Agateon 本体另需 `ruff`（锁 0.16.4）；测试另需 `pytest`（+ `pytest-xdist` / `pytest-rerunfailures`）
 - 3 个 hook 薄壳（`pre-commit-gate.sh` / `commit-msg-self-gate.sh` / `pre-push-gate.sh`）需 sh（Git for Windows 自带）
-- `~/.dsh`：DSH 平台接入三件套（`.agent-presets/agate/preset.yml` / `agent.cordis.yml` / `skills/agate-protocol/SKILL.md`，软链指向 `agate/assets/templates/dsh/` 权威副本）——`agate-summary.py` 可查漂移，覆盖**四个平台**（Claude Code / OpenCode / DSH / Codex）的接入产物
+- `~/.dsh`：DSH 平台接入 = `skills/agate-protocol/SKILL.md`（软链指向 `agate/assets/templates/dsh/` 权威副本）+ **声明式 preset**（写进 `~/.dsh/profiles/*/cordis.patch.yml` 的 `preset-agate` 托管块；2026-09-24 起——DSH ≥0.1.7-alpha.1 已不再读取旧的 `.agent-presets/` 目录）——`agate-summary.py` 可查漂移，覆盖**四个平台**（Claude Code / OpenCode / DSH / Codex）的接入产物
 - `~/.agents/skills/agate-protocol/`：Codex 平台接入（skill 形态，指向 `agate/assets/templates/codex/`）——Codex 无 agent 注册机制，身份靠 skill
 
 ## 7. 维护约定
