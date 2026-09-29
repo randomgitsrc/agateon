@@ -100,7 +100,7 @@ bash agate/tests/scripts/count-tests.sh
 | self-gate | integration/test_protocol_alignment_review.py | 8 |
 | 新增脚本登记面（DEBT0046）| unit/test_t43_check_registration_surface.py | 12 |
 | 账本污染 CI 兜底（DEBT0040）| unit/test_t43_ledger_pollution_backstop.py | 10 |
-| Windows Store 占位符探测（DEBT0014）| unit/test_t43_debt0014_store_placeholder.py | 3 |
+| Windows Store 占位符探测（DEBT0014）| unit/test_t43_debt0014_store_placeholder.py | 1 |
 | 框架自检 | test_sanity.py | 6 |
 | **总计** | | **以 `count-tests.sh` 输出为准** |
 
