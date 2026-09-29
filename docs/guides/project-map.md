@@ -24,7 +24,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 
 | 区块 | 职责 | 权威入口 | 改动影响 |
 |------|------|----------|----------|
-| `<根>` | 项目开发资料：README（中英）/ CHANGELOG / docs / archived / 根 `AGENTS.md` | `AGENTS.md`（开发指引）| **开发 checkout**——正常改动走 worktree（hotfix 例外见 `AGENTS.md`「改动通道」） |
+| `<根>` | 项目开发资料：README（中英）/ CHANGELOG / docs / archived / 根 `AGENTS.md` | `AGENTS.md`（开发指引）| **开发 checkout**——改动走分支 + PR；**worktree 是隔离选择而非必需**（见 `AGENTS.md`「改动通道」） |
 | `agate/` | **协议本体**：阶段卡片 / 角色库 / 脚本 / 模板 / rules | `agate/AGENTS.md` → `agate/WORKFLOW.md` | 改它触发 SELF-GATE（见 `SELF-GATE.md`）；**运行时稳定版来自 `~/.agate/current/agate/`**（版本管理布局，与开发 checkout 解耦） |
 | `agate-workspace/` | **任务数据**：tasks（含各任务 `.state.yaml`）/ roadmap / debt / reviews 等 9 个子目录 | `agate-workspace/tasks/active-tasks.md`、`agate-workspace/roadmap/roadmap.md` | roadmap 回写 `done` 是 P8 gate 硬校验（RM-AG0043） |
 | `site/` | **产品 Web 层**：VitePress 站点（首页 + 博客 + 中文 i18n）| `site/guides/README.md` | 在协议 gate 治理之外；唯一硬校验 = `npm run build`；博客发布须过独立评审 |
@@ -69,7 +69,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 - 状态推进机械化：`agate next` / `agate advance` 查 `phases.yaml` 表推进，不做临场判断（RM-AG0054）
 - 跨 CLI/model 派发路由（可选，RM-AG0060）：`agate-workspace/dispatch-routing.yaml` 按 `(phase,role)`
   查表 → try-and-fall；未配置 = 逐字节现状
-- 自我改造（dogfooding）走 worktree 隔离双工作区，见 `docs/guides/worktree-dogfooding-guide.md`
+- 自我改造（dogfooding）：**worktree 非必需**（稳定版与 checkout 已解耦）；需隔离时见 `docs/guides/worktree-dogfooding-guide.md`
 - 改协议本体走 SELF-GATE（`check-protocol-consistency.py` 0 ERROR + protocol-alignment-review 语义审查）
 
 ## 4. 权威源导航（想了解 X → 读 Y）

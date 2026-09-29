@@ -12,7 +12,7 @@ known_risks:
   - "同类/影响面预判：面板重放不止 P2（P1/P4/P7 同样是自撰产出 gate），须处理全部走评审的阶段"
   - "改卡片注入形态会牵动 check-p6-provenance 的审计 2（扫描面），须与 TAG0039 协调同一脚本的改动顺序"
 env_constraints:
-  debug_env: "无独立 debug 环境；验证=worktree 内 pytest + 派发上下文体积/占比可脚本量测 + S-1/S-2 零漂移"
+  debug_env: "无独立 debug 环境；验证=本 checkout 内 pytest + 派发上下文体积/占比可脚本量测 + S-1/S-2 零漂移"
   platform: "dsh"
   network: "full"
   consistency_baseline: "386 WARNING / 0 ERROR"
@@ -134,15 +134,14 @@ TPV0099 orchestrator-log 明确记录：为省一轮评审而**故意不修**两
 ## env_constraints
 
 - 运行 agateon 只需系统 `python3` + `pyyaml`；开发另需 `ruff`（CI 锁 `0.16.4`）
-- **本机环境**：`~/.agate` 为版本管理布局；`~/.agate/scripts/` 为**稳定版**——**编排/派发类工具一律用稳定版**（`agate-inject-card.py` / `agate-render-dispatch-prompt.py` 有 AGATE_ROOT 自解析；用 worktree 相对路径会读到正在修改的卡片，把未发布机制注入任务——TAG0016 教训）。本任务**正在改这些机制**，故该纪律尤其关键。
-- **`check-protocol-consistency.py` 必须用 worktree 自己的**
+- **本机环境**：`~/.agate` 为版本管理布局；`~/.agate/scripts/` 为**稳定版**——**编排/派发类工具一律用稳定版**（`agate-inject-card.py` / `agate-render-dispatch-prompt.py` 有 AGATE_ROOT 自解析；用本 checkout 的相对路径会读到正在修改的卡片，把未发布机制注入任务——TAG0016 教训）。本任务**正在改这些机制**，故该纪律尤其关键。
+- **`check-protocol-consistency.py` 必须用本 checkout 自己的**
 - 一致性基线：**386 WARNING / 0 ERROR**；`check-structure-consistency.py` 的 S-1/S-2 须保持零漂移
 - **改动面全部触发 SELF-GATE**（`agate/**/*.md` / `agate/scripts/*.py`）→ 须独立评审 + `self-gate-review:` 引用
 
 ## executor_env
 
-- **worktree**：`git worktree add .worktrees/agate-TAG0040 -b feat/TAG0040-dispatch-cost`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0040.md`
-- **稳定版工具**：`~/.agate/scripts/`（勿动）
+- **工作目录**：**worktree 非必需**——v0.73.0 版本布局后稳定版（`~/.agate/current`）与任何 checkout 已解耦，hook 恒用稳定版判定（已实证：`agate-resolve.py` → `AGATE_ROOT=~/.agate/vX.Y.Z/agate`），故本任务可**直接在开发 checkout 的分支上做**。**何时仍建议 worktree**：① 与其他任务**并行**（工作目录互不干扰）② 需要与 main 的 hotfix/合并操作**隔离**。若用 worktree：`git worktree add .worktrees/agate-TAG0040 -b feat/TAG0040-dispatch-cost`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0040.md`- **稳定版工具**：`~/.agate/scripts/`（勿动）
 - **证据来源**：`agate-workspace/roadmap/roadmap.md` 的 RM-AG0072 / RM-AG0073 条目；原始样本 `peekview/agate-workspace/tasks/TPV0099-fullscreen-link/`（26 份 dispatch-context + orchestrator-log）
 - **先例参照**：`TAG0016`（协议文档职责边界与去重——同类「重复内容收敛为单一权威源 + 指针」先例，其 CHECK 12 是防复发机制）、`TAG0014`（派发编排机制——本任务在其上做成本治理）、`TAG0026`（RM-AG0046 维护性反模式 gate——同类「体量/复杂度可判定判据」先例）
 - **关联外部证据**：peekview TPV0099 的 `P2-dispatch-context-*-rev*.md`（重放样本）

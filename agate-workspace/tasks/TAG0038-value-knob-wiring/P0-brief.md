@@ -12,7 +12,7 @@ known_risks:
   - "删除旋钮属破坏性变更（存量任务声明会变非法），须评估 major bump 与迁移指引"
   - "度量字段若写入方与读取方语义不同源，会重演 v0.76.0 的「报告 ✅ 而实际无数据」"
 env_constraints:
-  debug_env: "无独立 debug 环境；验证=worktree 内 pytest + check-protocol-consistency.py（须用 worktree 自己的脚本）+ 真实 gate CLI"
+  debug_env: "无独立 debug 环境；验证=本 checkout 内 pytest + check-protocol-consistency.py（须用本 checkout 自己的脚本）+ 真实 gate CLI"
   platform: "dsh"
   network: "full"
   consistency_baseline: "386 WARNING / 0 ERROR"
@@ -140,15 +140,15 @@ RM-AG0031 声称「thin 档跳过 LLM 评审」并标 `done`，实测该行为**
 ## env_constraints
 
 - 运行 agateon 只需系统 `python3` + `pyyaml`；开发另需 `ruff`（CI 锁 `0.16.4`）
-- **本机环境**：`~/.agate` 为版本管理布局（`current` 指针）；`~/.agate/scripts/` 是**稳定版**，双向工作区纪律——跑 gate/读卡片用 `~/.agate`，改代码/跑测试在 worktree
-- **`check-protocol-consistency.py` 必须用 worktree 自己的**（`python3 agate/scripts/...`）——用 `~/.agate` 的会扫稳定版目录而非本次改动
+- **本机环境**：`~/.agate` 为**版本管理布局**（`current` 指针）。**稳定版来源 = `~/.agate/current/`，不是本 checkout**——hook 判定恒用稳定版（已实证：`agate-resolve.py` → `AGATE_ROOT=~/.agate/vX.Y.Z/agate`；解析链 `AGATE_ROOT env > AGATE_HOME > .agate-version > current`，**无 cwd 相对回退**），故**改本 checkout 的 `agate/` 不影响 gate 判定**（该耦合已在 v0.73.0 版本布局解除）。`~/.agate/scripts/` 与 hook 同源。**跑 gate/读卡片用 `~/.agate`（与 hook 判定同源），改代码/跑测试在本 checkout**（是否用 worktree 见 executor_env）
+- **`check-protocol-consistency.py` 必须用本 checkout 自己的**（`python3 agate/scripts/...`）——用 `~/.agate` 的会扫稳定版目录而非本次改动
 - 一致性基线：**386 WARNING / 0 ERROR**（改动须保持 0 ERROR；WARNING 数变化须逐条解释）
 - **改动面全部触发 SELF-GATE**（`agate/scripts/*.py` / `agate/**/*.md` / `agate/rules/*.yaml`）→ 须走独立评审 + `self-gate-review:` 引用
 
 ## executor_env
 
-- **worktree**：`git worktree add .worktrees/agate-TAG0038 -b feat/TAG0038-value-knob-wiring`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0038.md` 按模板全 9 节填写
-- **稳定版工具**：`~/.agate/scripts/`（**勿动**）；编排/派发类工具一律用稳定版（AGATE_ROOT 自解析；worktree 相对路径会注入未发布机制）
+- **工作目录**：**worktree 非必需**——v0.73.0 版本布局后稳定版（`~/.agate/current`）与任何 checkout 已解耦，hook 恒用稳定版判定（已实证：`agate-resolve.py` → `AGATE_ROOT=~/.agate/vX.Y.Z/agate`），故本任务可**直接在开发 checkout 的分支上做**。**何时仍建议 worktree**：① 与其他任务**并行**（工作目录互不干扰）② 需要与 main 的 hotfix/合并操作**隔离**。若用 worktree：`git worktree add .worktrees/agate-TAG0038 -b feat/TAG0038-value-knob-wiring`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0038.md` 按模板全 9 节填写
+- **稳定版工具**：`~/.agate/scripts/`（**勿动**）；编排/派发类工具一律用稳定版（AGATE_ROOT 自解析；用本 checkout 的相对路径会注入未发布机制）
 - **证据来源**：`agate-workspace/roadmap/roadmap.md` 的 RM-AG0071 / RM-AG0074 / RM-AG0078 条目（含 6 旋钮实测表与全部数字）
 - **先例参照**：`TAG0019`（风险分路由，交付了本任务要接线的 `ceremony`/`agate-risk-score.py`）、`TAG0023`（RM-AG0042 retries 强制记录——同类「声明→机械校验」接线先例）、`TAG0027`（推进侧状态机 CLI `agate-next.py`）
 - **关联条目**：RM-AG0079（轻量改动通道，**前置依赖本任务**——先修接线再判断是否仍需新通道，本任务不实现）

@@ -9,32 +9,47 @@
 
 ## 仓库四块
 
-- `<仓库根>/`：开发资料（README / CHANGELOG / docs/ / archived/）+ 本文件。**开发 checkout**——正常改动走 worktree（见下方「hotfix 通道」的例外）
+- `<仓库根>/`：开发资料（README / CHANGELOG / docs/ / archived/）+ 本文件。**开发 checkout**——改动走分支 + PR；**worktree 是隔离选择而非必需**（见下方「改动通道」）
 - `agate/`：协议本体。改它触发 SELF-GATE（见下）。**运行时稳定版来自 `~/.agate/current/agate/`**（版本管理布局，与开发 checkout 解耦，见「本机稳定版布局」）
 - `agate-workspace/`：任务数据（tasks/、roadmap/、debt/、reviews/ 等）。roadmap 回写 `done` 是 P8 gate 硬校验（RM-AG0043）
 - `site/`：产品 Web 层（VitePress 站点源码：首页/博客）。属于产品对外内容，**在协议 gate 治理之外**——改它不触发 SELF-GATE，detect-docs-only 视其改动为 docs-only（跳过全量 pytest/shellcheck）。唯一硬校验 = `npm run build` 通过。品牌唯一权威源在 `docs/brand/`，`site/public/` 是构建快照（`npm run sync:brand` + `sync-covers.mjs` 生成，不入库；博客封面同步到 `public/covers/` 供列表页引用）。**接博客任务先读**：文档索引 `site/guides/README.md`，机械流程见 `site/guides/CONTRIBUTING.md`，质量标准见 `site/guides/BLOG-STANDARDS.md`（发布前必须过独立评审）
 
 ## 改动通道：worktree 优先，hotfix 例外
 
-> **默认**：任何改动走 worktree（隔离、可回滚、gate 完整）+ PR。**这一条覆盖绝大多数场景**。
+> **先把三件常被混为一谈的事分开**（2026-09-29 更正）：
 >
-> **hotfix 通道**：满足**全部**下列条件时，**可不开 worktree**（直接在开发 checkout 改 → 分支 → PR）：
+> | 轴 | 问题 | 由什么决定 |
+> |---|---|---|
+> | **A 立项** | 建不建任务目录 / 走不走 P0-P8 | 是 agate 任务 → 立项；一次性修复 → 不立项 |
+> | **B 工作目录** | 开不开 worktree | **隔离需要**（并行 / main 需空闲 / 探针隔离）——**与 A、C 无关** |
+> | **C 独立评审** | 要不要独立评审 | 碰 SELF-GATE 触发面 → 须独立评审；**留痕**由 `self-gate-review:` 提交信息机制检查（仅 WARNING、**不拦截**，强制力靠自觉）——**与 B 无关** |
+>
+> ⚠️ **本条曾把 B 与 C 混同**：原文写「任何 `agate/` 改动**必须走 worktree**（触发 SELF-GATE，需独立评审）」——但**独立评审与 worktree 无关**（留痕靠提交信息，且仅 WARNING 不拦截）。已更正。
+
+> **默认**：改动走**分支 + PR**（下面的 hotfix 通道也是 PR，只是不立项）。**默认开 worktree 用于隔离**——但它是**隔离选择**，不是正确性要求（理由见下）。
+>
+> **worktree 的原始理由已失效（重要）**：该默认制定于 `~/.agate` **还是指向本仓的软链**的年代——那时改开发 checkout 的 `agate/` 会**立即改变判定你自己 commit 的 gate**（"用未验证的新 gate 判自己"）。**v0.73.0 版本布局后该耦合已结构性解除**：hook 是 `~/.agate/scripts/pre-commit-gate.sh`，解析链 `AGATE_ROOT env` > `AGATE_HOME` > `.agate-version` > `current`，**无 cwd 相对回退**（实测本仓 `AGATE_ROOT=~/.agate/v0.76.0/agate`）→ 在哪个目录开发，判定的都是已安装稳定版。
+>
+> ⚠️ **前提**：结论成立于 **`AGATE_ROOT` 未设置 且 版本链可解析**——`AGATE_ROOT` env（优先级最高）与「版本链失败→脚本路径上溯」两条**确实能把判定指向 checkout**。自检：`python3 ~/.agate/scripts/agate-resolve.py`，`AGATE_ROOT=` 须在 `~/.agate/` 下。
+>
+> ⇒ **worktree 现在是"隔离选择"，不是"正确性要求"。** 仍值得用的理由：**① 并行任务**（最强）**② main 需随时接 hotfix/合并他人 PR ③ 探针/临时产物隔离**（放弃时直接删目录）。单任务串行时**可直接在开发 checkout 的分支上做**。
+>
+> **hotfix 通道**：满足**全部**下列条件时，**不立项**（直接在开发 checkout 改 → 分支 → PR）：
 >
 > | # | 条件 | 判据 |
 > |---|------|------|
 > | 1 | **改动面极小** | ≤2 个文件，且无跨模块影响 |
-> | 2 | **不触发 SELF-GATE** | 不碰 `agate/scripts/*`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml`、**`AGENTS.md`**、**`README.md`**（后两者也在 hook 触发面内，见 `commit-msg-self-gate.py` 正则） |
-> | 3 | **不产生阶段产出** | 无 P0-brief/.state.yaml/P1-P8 产物（即：不是 agate 任务，是一次性修复） |
-> | 4 | **可快速验证** | 有明确判据（如单测 + 目标命令 exit code），不需多轮评审 |
+> | 2 | **不是 agate 任务** | 无 P0-brief/.state.yaml/P1-P8 产物（一次性修复）。**注意：这与是否触发 SELF-GATE 无关**——若碰触发面，仍须在提交信息写 `self-gate-review:` |
+> | 3 | **可快速验证** | 有明确判据（如单测 + 目标命令 exit code），不需多轮评审 |
 >
 > **典型 hotfix**：配置 key 对齐上游 schema、文案修正、单文件 bug 修复、CI 配置微调。
 >
-> **不适用 hotfix**（必须走 worktree）：
-> - 任何 `agate/` 协议本体或脚本改动（触发 SELF-GATE，需独立评审）
+> **不适用 hotfix（必须立项为任务）**：
 > - 需要阶段产出/看板登记/roadmap 回写的改动（= agate 任务）
 > - 改动跨多个子系统或需探索性设计
+> - **`agate/` 协议本体或脚本改动（触发 SELF-GATE）** —— 须走**独立评审**并留痕 `self-gate-review:`（仅 WARNING 不拦截）；**是否另开 worktree 仍按轴 B 判断**（并行/隔离需要时才开）
 >
-> **hotfix 也走 PR**（不直接推 main——main 受保护），只是不开 worktree、不建任务目录。
+> **hotfix 也走 PR**（不直接推 main——main 受保护），只是不立项、不建任务目录。
 
 ## 本机稳定版布局（`~/.agate`）
 
@@ -53,7 +68,7 @@
 
 | 事实 | 说明 |
 |------|------|
-| **稳定版来源** = `~/.agate/current/` | **不是**开发 checkout——改开发 checkout 的 `agate/` **不影响** hook/工具链判定（避免"用未验证的新 gate 判自己"） |
+| **稳定版来源** = `~/.agate/current/` | **不是**开发 checkout——改开发 checkout 的 `agate/` **不影响** hook/工具链判定（该耦合已在 v0.73.0 解除；见「改动通道」——**这正是 worktree 不再是必需项的原因**） |
 | hook 是**固定解析入口** | `.git/hooks/*` → `~/.agate/scripts/resolve-entry.py`，运行时按项目 `.agate-version` 解析版本再 exec——**切版本无需重装 hook** |
 | 项目可**钉版本** | 项目根 `.agate-version` 写 `agate: vX.Y.Z`；不写则用 `current`。⚠️ 声明未安装版本 → **警告 + 回退全局**（exit 0），须用 `agate-resolve.py` 确认实际解析 |
 
@@ -93,12 +108,13 @@
 
 ## dogfooding 工作流（Agateon 自身改造任务必读）
 
-> **触发块**：任何 Agateon 自身改造任务（TAG0004+）需要隔离 worktree 时，**必须先读**：
+> **触发块**：任何 Agateon 自身改造任务（TAG0004+）**决定开 worktree 时**，必须先读（**单任务串行可不开**——见「改动通道」轴 B）：
 > - 构建流程：`docs/guides/worktree-dogfooding-guide.md`（10 步标准流程）
 > - 交接单模板：`agate/assets/templates/handoff-template.md`（复制到 worktree 根 `HANDOFF-{Txxx}.md` 填写）
 
-- **双工作区**：改造对象 = worktree 的 `agate/`；开发工具 = `~/.agate`（稳定版，**勿动**）。跑 gate/读卡片用 `~/.agate`，改代码/跑测试在 worktree
-- **gate 工具 ≠ 检查对象**：commit hook 用 `~/.agate`（稳定版）判定；但 `check-protocol-consistency.py` **必须用 worktree 自己的**（`python3 agate/scripts/check-protocol-consistency.py`——检查对象是 worktree 里的协议文件；用 `~/.agate` 的会扫到稳定版目录 `~/.agate/current/`，而非你的改动）
+- **工具选择（不是目录选择）**：gate/卡片一律用 `~/.agate`（稳定版，与 hook 判定同源）；`check-protocol-consistency.py` 用**本 checkout 自己的**（检查对象是本次改动）。**跑 gate 用稳定版 / 改代码在本 checkout** ——两句都是"调哪个脚本"，与你在哪个目录无关
+- **worktree 非必需**（2026-09-29 更正）：v0.73.0 版本布局后稳定版来源 = `~/.agate/current/`，与任何 checkout 解耦（解析链 `AGATE_ROOT env` > `AGATE_HOME` > `.agate-version` > `current`，**无 cwd 相对回退**；实测 `AGATE_ROOT=~/.agate/vX.Y.Z/agate`）→ **改本 checkout 的 `agate/` 不影响 gate 判定**。worktree 的原始理由（避免"用未验证的新 gate 判自己"）**已结构性解除**；仍值得用的理由 = **并行任务 / 与 main 隔离 / 探针产物隔离**。单任务串行可直接在开发 checkout 的分支上做（SELF-GATE 改动仍须独立评审——那是 `self-gate-review:` 机制，与 worktree 无关）
+- **gate 工具 ≠ 检查对象**：commit hook 用 `~/.agate`（稳定版）判定；但 `check-protocol-consistency.py` **必须用本 checkout 自己的**（`python3 agate/scripts/check-protocol-consistency.py`——检查对象是本次改动的协议文件；用 `~/.agate` 的会扫到稳定版目录 `~/.agate/current/`，而非你的改动）
 - **编排/派发类工具一律用 `~/.agate/scripts/` 稳定版**：`agate-inject-card.py` / `agate-render-dispatch-prompt.py` / `agate-next-card.py` 等有 AGATE_ROOT 自解析逻辑，worktree 相对路径调用会读到 worktree 正在修改的协议卡片，把未发布的新机制注入任务（TAG0016 教训）
 - `~/.agate` 脚本显示**稳定版上下文**（`agate-summary.py` 显示 `AGATE_ROOT=~/.agate/vX.Y.Z/agate` + 版本号，**不是**你的 worktree/开发 checkout 状态——后者用 `git log`/`git status` 看）
 
