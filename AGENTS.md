@@ -123,7 +123,12 @@
 - bash 一律加 `timeout`（外层 `timeout N cmd`，N 按预期耗时 30-90s），工具 timeout 参数同步设——无 timeout 的 bash 多次被 abort/挂起
 - 单步串行不并行 bash（并行是 abort 高危）；卡住就换路不重试同一 bash，改用 read/grep/glob 工具（不走 bash 通道）
 - 全量 pytest 分 unit/regression/integration 片跑、每片大 timeout、片内加 `-n auto` 并行（约 3.5x 提速；套件按隔离设计可安全并行）。**完整 CI 口径**（含 flaky 兜底的 `--reruns` 与所需插件）见 `agate/tests/README.md`——本机验证前先对齐，否则可能把已知 flaky 当新缺陷追；gate/consistency 单跑
-- 输出控制在几十行内；先看全输出再分析，不用 tail 截断（count-tests 教训：数字被 tail 吞掉误判）
+- 输出控制在几十行内；**先看全输出再分析，不用 `tail`/`head` 截断**（count-tests 教训：数字被 tail 吞掉误判）。
+  ⚠️ **同类错误已第二次发生**（2026-09-29）：查「既有实现/既有测试是否已覆盖」时用了
+  `grep -rn "AGATE_PYTHON" agate/tests/ | head -6`，**`head -6` 把 `test_pre_commit_hook.py` 的命中截掉**，
+  遂误判「此前只有文档断言测试」并据此写进债务关闭理由（被独立评审证伪）。
+  ⇒ **纪律细化：凡用 grep/rg 的命中数做判断依据（尤其「有没有既有覆盖」这类否定性结论），
+  必须先看 `-c` 计数或全量列表，再决定是否截断展示**；截断仅用于**展示**，不得用于**判断**。
 - commit 前检查 hook 会跑什么：pre-commit 按 .state.yaml phase 跑 check-gate，commit 时 phase 应与本次产出一致（P1 产出 → phase=P1 再 commit），否则 hook 拦截
 - hook 在共享 git 目录：worktree 的 `.git/hooks` 为空，hook 实际在 `<主 checkout>/.git/hooks/`（pre-commit / commit-msg / pre-push 软链已装），改 hook 装那里。权威取值 `git rev-parse --git-path hooks`（`core.hooksPath` 覆盖时也认）——`install-hook.py` / `agate-setup.py` 据此安装与卸载，故 **worktree 内可直接跑接入/卸载命令，无需按 worktree 各装一次**；反之在 worktree 里 `--uninstall` 会清掉主 checkout 的 gate（仓库级动作，多任务并行别顺手卸）；若 `core.hooksPath` 指向多仓共用目录，`--uninstall` 还会**跨仓库**摘掉别的仓库的 gate（该情形会显式告警）
 - CI 等待用 `gh pr checks <PR> --watch [--fail-fast]`，不手写 jq 轮询（2026-08-18 教训）

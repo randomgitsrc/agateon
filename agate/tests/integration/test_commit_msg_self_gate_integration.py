@@ -70,6 +70,11 @@ def test_csg_3_trigger_with_review_no_warning(git_repo, agate_scripts, agate_roo
     repo = _setup_hook(git_repo, agate_scripts)
     (repo / "SELF-GATE.md").write_text("# change\n", encoding="utf-8")
     git_repo.stage("SELF-GATE.md")
+    # 报告须真实存在（2026-09-29 起 hook 校验 trailer 路径存在性，RM-AG0081）：
+    # 原用例引用不存在的占位报告，那正是被修掉的形态；建立真实文件以保持本用例原意。
+    report = repo / "docs" / "reviews" / "agate-alignment-review-2026-07-02.md"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text("---\nstatus: approved\n---\n", encoding="utf-8")
 
     result = _commit(
         run_cli,

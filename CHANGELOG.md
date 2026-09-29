@@ -10,6 +10,28 @@
 
 ## [Unreleased]
 
+> TAG0045 流程加固（RM-AG0081 评审只读纪律 + 我的两次复犯教训机械化）。
+
+### 变更
+
+- **评审角色终于有了「只读纪律」**（RM-AG0081 落地）：此前 `assets/review-roles/*.md` **没有任何只读约束**，而「受限 harness 的临时目录跨调用不重建」这条事实**只写给执行角色**、评审角色未继承 ⇒ 某次 SELF-GATE 评审的 scratch 目录跨调用落空后，评审者改在**被评审的仓库内**执行 `git checkout -- .`，**丢弃了尚未提交的改动集**（主 Agent 据 `git reflog` 才定位，且恢复不完整——事故后新增的 3 处改动一并丢失）。现：
+  - `assets/templates/dispatch-prompt.md`「Review 角色特别指令」新增**只读纪律**：点名禁用 `git checkout -- .` / `restore` / `reset` / `stash` / `clean` / `add` / `commit`；scratch 须在仓外 `git worktree` 或**同一次 bash 调用**内完成建/用/清；操作失败须**如实上报**，**不得**转而"修好"被评审的仓库
+  - `assets/review-roles/protocol-alignment-review.md`（**就是出事故的那个角色**）同步加同款条文，并讲清「被评审的改动集**可能尚未提交**，写仓会销毁他人工作」
+  - `platform-notes.md`「受限 harness 通用约束」新增**约定 5「跨调用不保留 ⇒ 建/用/清必须同一次调用」**（含事故实例 + 三个正确做法），并在节首声明该约束**适用全部角色、含评审角色**（初版只写执行角色正是缺口所在）
+  - **机械守护 3 条**（`test_protocol_alignment_review.py::test_sg_9a/9b/9c`）：断言条文**内容**（点名的禁止命令、同一次调用、为什么只读），而非"文档里有只读二字"——后者会被空话满足。**负向控制**：移除 3 处条文 → 3 条全红，还原即绿
+- **工具纪律细化：截断不得用于「判断」**（我的复犯教训）：`AGENTS.md` 原写「不用 tail 截断」，但同类错误**已第二次发生**——我查「既有测试是否已覆盖」时用 `grep -rn "AGATE_PYTHON" agate/tests/ | head -6`，**`head -6` 把 `test_pre_commit_hook.py` 的命中截掉**，遂误判「此前只有文档断言测试」并写进债务关闭理由（被独立评审证伪）。现明确：**凡用 grep/rg 命中数做判断依据（尤其「有没有既有覆盖」这类否定性结论），必须先看 `-c` 计数或全量列表再决定是否截断展示；截断仅用于展示，不得用于判断**。
+- **`self-gate-review:` 的路径终于被校验了**（虚假留痕机械化，RM-AG0081 复犯）：`commit-msg-self-gate.py` 原先只检查 trailer **字面在场**，**不查那个报告路径是否真的存在** ⇒ 可写一个不存在的路径而放行。该缺陷**连续两次实际发生**（PR #379 与 TAG0045 提交都引用了当时并不存在的评审报告），后果是声称「已过独立评审」却无证据可查。现追加存在性校验（**磁盘或 index**——查 index 是必需的，因为本仓常态是评审报告与代码**同处一个 commit**，提交时报告只在 index/磁盘、不在 HEAD 里，只查 HEAD 会全面误报）。**仍是提示型不拦截**（exit 0，与本 hook 既有契约一致），但把该缺陷在**提交时**即暴露，而非等事后评审才发现。新增 4 条测试；**负向控制**：退回「只查字面」→ 对应用例转红。
+  另：两个既有用例（`test_cmsg_4` / `test_bdd_10b`）原先使用**不存在的占位路径**——那正是被修掉的形态，契约已变，已改为建出真实报告文件以保持其原意（非为过测而改断言）。
+- **removed**：删除冗余测试 `agate/tests/unit/test_t43_debt0014_store_placeholder.py`（经用户许可）——它与 `main` 上既有的
+`test_pre_commit_hook.py::test_bdd_10/test_bdd_11` 重复（后者更强：真跑 hook + 断言回退到真实解释器），仅剩源码级边际价值；
+`DEBT0014` 的 ⑤ 由既有测试承担，无需自建第二把锁。
+
+### 验证
+
+- 全量 pytest **2432 passed / 2 failed / 2 skipped**（分片实测：unit 2240 + regression 82 + integration 110）（2 failed 为既有环境缺陷：`opencode` 不在 PATH、临时目录为独立 tmpfs 致跨设备链接）
+- consistency **0 ERROR / 386 WARNING**；ruff 全绿；debt schema exit 0；平台扫描 0 命中
+- SG.9 三条守护的**负向控制**实测：移除只读条文 → 3 条全红；还原 → 全绿
+
 > TAG0044 债务清单逐条实测复核（14 条 open → 关闭 3 / 入 roadmap 11）。
 
 ### 变更

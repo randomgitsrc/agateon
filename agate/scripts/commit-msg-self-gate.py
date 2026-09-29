@@ -14,6 +14,7 @@ CLI 契约：`commit-msg-self-gate.py COMMIT_MSG_FILE`（缺参 → 用法错误
 Python 3.8+（无 match / str.removeprefix）；所有文本读写显式 encoding="utf-8"。
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -40,7 +41,42 @@ _SELF_GATE_RE = re.compile(
     r"|agate/rules/[^/]+\.ya?ml|SELF-GATE\.md|README\.md|AGENTS\.md)$"
 )
 _SKIP_RE = re.compile(r"^self-gate-skip:\s*\S+", re.MULTILINE)
-_REVIEW_RE = re.compile(r"^self-gate-review:\s*\S+", re.MULTILINE)
+_REVIEW_RE = re.compile(r"^self-gate-review:\s*(\S+)", re.MULTILINE)
+
+
+def _review_path_exists(path: str, root: str) -> bool:
+    """self-gate-review: 的路径是否**真实存在**（磁盘 或 index）。
+
+    为何要查（RM-AG0081 复犯机械化，2026-09-29）：本 hook 原先只检查 trailer **字面存在**，
+    不查路径是否真的存在 ⇒ 可写一个不存在的报告路径而放行。该缺陷**连续两次**实际发生
+    （PR #379 与 TAG0045 提交都引用了当时并不存在的评审报告），后果是**虚假留痕**——
+    声称"已过独立评审"却无证据可查。
+
+    查 index 而非仅查 HEAD 是必需的：本仓的正常形态是**评审报告与代码同处一个 commit**，
+    提交时报告只在磁盘/index 上，不在 HEAD 里；只查 HEAD 会对正常工作流全面误报。
+    """
+    candidate = path if os.path.isabs(path) else os.path.join(root, path)
+    if os.path.exists(candidate):
+        return True
+    # 在 index 中？（已 git add 但尚未 commit）
+    rc, _out = run_git(["ls-files", "--error-unmatch", "--", path], cwd=root)
+    return rc == 0
+
+
+def _check_review_path(commit_msg: str, root: str) -> None:
+    """对每个 self-gate-review: 路径做存在性校验；不存在则告警（**不拦截**）。"""
+    for m in _REVIEW_RE.finditer(commit_msg):
+        path = m.group(1)
+        if _review_path_exists(path, root):
+            continue
+        sys.stderr.write(
+            "GATE SELF-GATE: commit message 的 self-gate-review: 指向的路径**不存在**：\n"
+            f"  {path}\n"
+            "  这会造成**虚假留痕**（声称已过独立评审，却无证据可查）。\n"
+            "  请先落盘评审报告再提交，或改用 self-gate-skip: <理由>。\n"
+            "  （提示型检查：不拦截本次 commit，但请在推送前修正。见 RM-AG0081。）\n"
+        )
+
 
 
 def main():
@@ -72,6 +108,8 @@ def main():
     if _SKIP_RE.search(commit_msg):
         return
     if _REVIEW_RE.search(commit_msg):
+        # trailer 字面在场 ≠ 报告真的存在：追加存在性校验（虚假留痕防线，RM-AG0081）
+        _check_review_path(commit_msg, os.getcwd())
         return
 
     sys.stderr.write(

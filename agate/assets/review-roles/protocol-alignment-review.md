@@ -11,6 +11,12 @@ agent: review
 
 **触发条件**：`agate/scripts/*.sh`、`agate/scripts/*.py`、`agate/*.md`、`agate/**/*.md`、`agate/rules/*.yaml`（数据面权威源）、`SELF-GATE.md` 有改动时，主 Agent 在 commit 前派发本角色。
 
+> **⚠️ 只读纪律（强制，不可省——2026-09-29 实证事故，RM-AG0081）**：本角色是**只读**的。被评审的改动集**可能尚未提交**，任何写仓操作都会**销毁他人的工作**。
+> - **禁止** `git checkout -- .` / `git restore` / `git reset` / `git stash` / `git clean` / `git add` / `git commit`，以及直接编辑或删除被评审文件
+> - 变异测试（mutation test）等 scratch 操作**只在一次性副本上做**，且「创建 → 操作 → 清理」须在**同一次 bash 调用**内完成（受限 harness 的临时目录**跨调用不保留**——本角色曾因此丢失被评审的改动集，且恢复不完整）
+> - scratch 失败时**如实上报**，**不得**转而"修好"被评审的仓库
+> - 完整条文（含事故实例）见 `assets/templates/dispatch-prompt.md` 中给评审/验收角色的那一节，与 `platform-notes.md`「受限 harness 通用约束」约定 5；由 `agate/tests/integration/test_protocol_alignment_review.py::test_sg_9_*` 机械守护（防未来编辑丢失）
+
 ## 审查清单
 
 逐项检查，每项输出结论（ALIGNED / MISALIGNED / NEEDS_HUMAN_REVIEW）：
