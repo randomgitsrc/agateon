@@ -2,7 +2,7 @@
 
 > 职责边界：平台适配权威源——各 Agent 平台（OpenCode / Claude Code / Codex / DSH 等）能力矩阵、Windows 原生安装指南（详见职责声明表，P2-design.md §0）。
 > **接入步骤**见 `SETUP.md` 步骤 2（或其推荐形式：一条命令 `python3 ~/.agate/scripts/agate-setup.py`）；本文只做**能力差异与平台特性**说明，不重复接入命令。
-> **结构**：「平台速览」→ 各平台详情 → 「Windows 原生」（运行环境）→ 「跨平台通用机制」两节（gate 平台无关性 / 跨 CLI 判成败）。
+> **结构**：「平台速览」→ 各平台详情 → 「受限 harness 通用约束」（沙箱写权限 + 进程存活）→ 「Windows 原生」（运行环境）→ 「跨平台通用机制」两节（gate 平台无关性 / 跨 CLI 判成败）。
 
 不同 Agent 平台对 agate 的支持程度不同，本文记录已知情况。
 
@@ -153,12 +153,79 @@
 - DSH **无** `.claude/agents/*.md` 等价物——不要试图把 `orchestrator-template.md` 软链进 DSH 目录，用 preset（**且必须是声明行**：DSH ≥ 0.1.7-alpha.1 起目录式 preset 已不被读取）
 - **目录式 preset 已死**（DSH ≥ **0.1.7-alpha.1**，commit `d1e22a7e24`）：`$DSH_HOME/.agent-presets/<id>/` 不再被任何代码读取（上游 skill 原文："Nothing reads that directory any more."）。旧的 `~/.dsh/.agent-presets/agate/` **留着无害但会误导**——看起来像"已接入"，而会话选择器里没有「Agateon 编排者」；本机实测其代价是 2026-09-20 22:25 之后再无一个会话用上 agate preset（全部落 `standard`）。现行载体 = profile patch 的托管声明块，`agate-setup.py --list` / `agate-summary.py` 检查的正是该位置
 - **插件包改名（激活失败陷阱）**：`@deepseek-ai/dsh-workflow-worker-thread` 在 0.1.7 已不存在 → 现名 **`@deepseek-ai/dsh-workflow-ptc`**。手抄旧 preset 而不改这一行会让 preset **挂载/激活失败**；`agate_common.dsh_preset_block()` 生成时自动替换（上游要求逐个核对包名，理由即此）
+- **`agent-team` 组合包：默认关闭；agateon 会话不建议启用（启用会形成两套并存的委派面）**。上游 README（`packages/experimental/agent-team-profile/README.zh.md`）原文：*「普通 subagent 委派及名称重叠的 global child control 会被禁用；Workflow 仍可创建 fresh 子代理。本包随 dsh 安装提供，**默认关闭**」*。
+  **⚠️ 冲突的确切形态（同 README「已知限制」原文，勿升级为「preset 会失效」）**：该组合包作用在**顶层**——注册 team 工具（`spawn_teammate` / `wait_agent` / `team_task_*` + Web 成员与任务看板）并禁用**顶层**的 subagent 控件；而本 preset 把 `subagent` / `subagent_fork` / `list_agents` / child control 挂在**预设作用域**（`config.plugins`），上游「已知限制」明确写：*「Web 预设仍可在预设作用域挂载 continuable Subagent 控件；**顶层组合包不会替换这些注册**」*。
+  ⇒ **实际后果是「两套委派面并存」**（team 工具 + preset 内 subagent），而非「agateon 工具映射失效」；
+  - **本仓曾把这一条写错两次**，留存备查：① 最初（RM-AG0076 原始登记）称「本机 profile 已挂该 bundle、两套工具**同时可见**、`disabled` 未生效」——**事实前提为假**（本机 `dsh.profile.bundles` 未含该包；「同时可见」是**启用后**才会出现的状态，不是当前状态）；② 更正 v1 又写成「启用后 preset 工具映射**整体失效**」——**与上游「已知限制」直接冲突**（预设作用域不受顶层 disable 影响）。**正确表述只有上面这一种**：默认关闭 → 若启用则两套并存。
+  - **代价（为何仍不建议启用）**：编排者面对两套面须自行判断用哪套；团队任务板与 `.state.yaml` 形成**第二个协调基质**，与「单一权威 + 阶段门禁 + 单一作者」竞争。**agateon 已有等价能力**：批量并行 = `workflow`；独立 fresh 复核 = `ralph`；跨轮续跑 = `goal`。
+  - **可执行的检测（不是纯文档声明）**：`agate-setup.py` 在注册 DSH preset 时读同目录 `package.json` 的 `dsh.profile.bundles`，若含 agent-team 则打印冲突告警（**仅提示、不阻断**——那是用户对自身 profile 的选择）。自查：`python3 ~/.agate/scripts/agate-setup.py`，或直接看 `~/.dsh/profiles/<profile>/package.json`。本机 2026-09-29 实测 = `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-web-app`，**未含**该包。
+- **本节第一条（沙箱只读）与长驻服务的完整口径** → 见上文「受限 harness 通用约束」（跨平台权威源）
 
 ---
 
 ## Hermes / OpenClaw 等
 
 待补充——如有使用经验，欢迎 PR。
+
+---
+
+## 受限 harness 通用约束（沙箱写权限 + 进程存活）
+
+> 适用**所有**默认限制写权限的 agent 平台（DSH `workspace-write`、Codex `-s workspace-write` 等），**不止 DSH**。两条都是**环境事实**，不是可绕过的配置——agent 的产物落点与长驻服务设计必须适配它们。本节是权威源；各平台详情见上文章节。
+
+### 一、临时产物：`<项目根>/.agate-tmp/`（canonical）
+
+**为什么需要约定**：两条环境事实叠加 ⇒ agent 落 scratch 的实际可行位置只有**项目树内**：
+
+1. **工作区外不可写**（沙箱 `workspace-write` 只覆盖会话工作区）；
+2. **`/tmp` 是 per-call tmpfs**——**可写，但每次调用都挂一份全新空 tmpfs**，上一个调用写的文件下一个调用读不到。
+   - **机制出处（DSH 源码，非推断）**：`sandbox/src/roots.ts::writableRoots()` 在 `workspace-write` 下返回 `[workspaceRoot, '/tmp', tmpdir()]`（**`/tmp` 确在可写白名单内**）；而 `sandbox-local/src/profiles.ts::bwrapProfileArgs()` 为 `workspace-write` 加 `--tmpfs /tmp` ⇒ **每次执行挂一份私有空 tmpfs**。
+   - **本机实测**（2026-09-29，workspace-write 会话）：一次 bash 调用写入 `/tmp/_xcall_*` 成功；**下一次调用该文件已不存在，`/tmp` 为空**。
+   - **实际代价**：某任务 `make debug-stop` 报「服务已停止」而端口仍监听——因 `/tmp` 里的 pidfile 对当前调用不可见 ⇒ 排查不到真正的持有者。
+
+> ⚠️ **更正**：本仓既有文档（`assets/templates/dsh/SKILL.md` 平台注意第 2 条）与本节初稿都写作「`/tmp` **只读**」——**与事实不符**：`~/.dsh/env.md` 明标 `/tmp` **✅ 可写**（用途「调试数据/日志/PID，如 peekview-debug 全套」），实测 `touch /tmp/...` 亦成功。**结论（用 `.agate-tmp/`）不变**，但正确论据是「**per-call tmpfs / 跨调用不可见**」，而非「只读」。
+
+没有约定时各项目自行发明，并反复踩三个坑（均有实测代价）：
+
+| 踩到的坑 | 实测代价 |
+|---|---|
+| 目录**未被 VCS 忽略** | 某任务 `.agate-tmp/` 涨到 76 MB、含 **10 个明文 token/cookie**；release 流程的 `git add -A` 会 stage 158 条 → **凭证入 git 历史不可逆** |
+| 探针文件名**命中测试收集面** | 并行评审写入的 `.agate-tmp/*.spec.ts` 被 vitest 默认收集 → 基线 **110 → 115** files，且**静默推翻**另一评审刚作出的「不影响基线」结论 |
+| 无清理时点 | 临时物随任务结束留在工作区（含旧凭证） |
+
+**约定（四项；②③ 由 `check-gate.py P8` 机械校验，① 是它们共同依据的常量，④ 由 P8 卡收尾检查单承载）**：
+
+1. **名称固定** = `<项目根>/.agate-tmp/`（与 `.agate-version` 同族命名；`AGATE_TMP_DIR` 可覆盖，供既有项目沿用旧名）
+2. **强制被 VCS 忽略**：`git check-ignore -q .agate-tmp` 必须为真。片段见 `assets/templates/gitignore-fragment.txt`；`check-gate.py P8` 对「该目录存在却未被忽略」出 **WARNING**（不阻断）。**触发条件是「目录存在」**——即它只在项目采纳本约定后才可能响，不会对未采纳的存量项目产生噪声；而该触发条件**历史上真实发生过**（某任务 `.agate-tmp/` 未被忽略 + 含明文凭证，见上表）
+3. **排除出测试收集面**：该目录内**不得**出现匹配常见收集模式的文件名——`*.spec.*` / `*.test.*` / `test_*.py` / `*_test.py` / `*_test.go`（`check-gate.py P8` 同样出 **WARNING**）。**理由**：它在项目树内，会被测试框架的默认 `include` 扫到。**实测实例**：某项目 `vitest.config.ts` 只设了 `exclude: ['e2e/**','node_modules/**']`、**未设 `include`** ⇒ 走 vitest 默认 include （`**/*.{test,spec}.?(c|m)[jt]s?(x)`）⇒ 落在 `.agate-tmp/` 下的 `*.spec.ts` 被收集，基线 `Test Files` 由 110 抬到 115（**5 failed**，因是加载失败而非用例失败）
+4. **清理时点** = P8/READY 收尾 —— **复用** P8 卡既有「临时资源清单」机制，不另造（该步由收尾检查单承载，非脚本判据）
+
+> **本仓已自应用**：agateon 自己的 `.gitignore` 已忽略 `.agate-tmp/`（协议定义者先遵守自己的约定）。
+
+**与 P4 卡「基础设施隔离」的关系（不冲突，是两层）**：
+
+| 产物类型 | 落点 | 依据 |
+|---|---|---|
+| **批内产出 / 证据**（要进 git、要可审计） | `{AGATE_WORKSPACE}/tasks/{Txxx}/P4-implementation/{pkg}/` | P4 卡「临时文件：各 subagent 写入 `P4-implementation/{pkg}/` 独立目录」 |
+| **探针 / 一次性脚本 / 抓取物**（scratch，不进 git） | `<项目根>/.agate-tmp/` | 本节 |
+
+**并行时 scratch 同样要按批隔离**：`<项目根>/.agate-tmp/<batch-id>/`（`batch-id` 用 P2 `dispatch_plan` 的批 id）。
+理由与 P4 卡「各 subagent 写入独立目录」完全相同——**否则两个并行 subagent 会在同一 scratch 目录里互相覆盖**；区别只是根落在 gitignored 的 scratch 下而非任务产出目录。**两条规则不冲突**：P4 管「要入库的批次产出」，本节管「不入库的 scratch」，各自按批隔离。
+
+### 二、长驻服务：存活跟随「发起它的那次调用」
+
+**事实（DSH 实测，权威源 `~/.dsh/env.md`「已知环境限制或坑」）**：DSH 的 bash 调用 / 后台 job 结束时**回收其派生的整个进程树**——`&` / `nohup` / `setsid` detach **均不保活**（与普通 shell 不同）。**其他平台是否有同样回收未经验证，勿假设通用**。
+
+**⚠️ 反模式：靠加长 `sleep` 托底**。某任务为保活 debug 服务，把托底时长逐次加长 **7200 → 14400 → 28800 → 43200 s（12 h）**，仍被跨越 **4 次**——每次都表现为 subagent 拿到 `ConnectTimeout` / `FATAL: 调试服务未运行`，**白跑一整轮**。根因是「**依赖持有者存活**」这个前提本身不可靠；延长只是把失效概率推后。
+
+**可移植做法（四步，不依赖任何平台细节）**：
+
+1. **单一责任方持有**：服务由主 Agent（或 P0-brief `debug_env` 声明的责任方）启动，**subagent 不自行启动**——既有机制见 P5 卡「环境准备职责边界」与 `dispatch-protocol.md`「verification_env 失败处理协议」
+2. **每次使用前探活**：判据是**端口 / 健康检查**（`curl -sf <health>` 或 `ss -ltn`），**不是 pidfile 存在**——出处：某项目 `AGENTS.md` 记录的实测「`/tmp/<svc>.pid` 有值但 `ss -ltn` 无监听」；另有任务记录「per-call tmpfs 下 pidfile 根本不可见 ⇒ `debug-stop` 看不到进程」
+3. **掉线即重启**：服务可重建，重启成本（秒级）远低于「整轮 subagent 白跑」（分钟级）⇒ **探活失败 → 重启 → 复验**，而不是报错退出
+4. **收尾即清理**：DSH 下 **job kill = 进程清理**（确定性），据此写 P8 卡的「临时资源清单」
+
+**DSH 的具体持有方式**：把服务挂在**持续 running 的后台 job** 下（如 `( make debug-start; sleep 3600 )` 提交为后台 job）——job 活多久服务活多久。**但仍须执行上面第 2/3 步**：job 仍可能到期，托底时长不是可靠性保证。
 
 ---
 

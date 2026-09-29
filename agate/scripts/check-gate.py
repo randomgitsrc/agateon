@@ -27,6 +27,7 @@ P0-P8 全部分支均已实现（2f-2 补齐 P5-P8），与 sh 版 check-gate.sh
 步骤 5 变更时必须同步更新本脚本。一致性检查脚本覆盖本文件。
 """
 
+import fnmatch
 import json
 import os
 import re
@@ -235,14 +236,20 @@ def _gate_p4_has_prior_code_commit(task_id):
     return False
 
 
-def _git(args):
-    """git 子进程（优先 agate_common.run_git，缺库时本地 subprocess 兜底）。"""
+def _git(args, cwd=None):
+    """git 子进程（优先 agate_common.run_git，缺库时本地 subprocess 兜底）。
+
+    `cwd`：仓库定位基准。**需要按「仓库根锚定」（DEBT0020 取向）时必须显式传**——
+    默认继承调用方 CWD，而 `cd` 到子目录或别的仓库后会定位到**错的仓库**
+    （TAG0041 评审实测：假阳性 + 跨仓库漏检并存）。
+    """
     if run_git is not None:
-        return run_git(args)
+        return run_git(args, cwd=cwd)
     try:
         proc = subprocess.run(
             ["git", *args],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
+            cwd=cwd,
         )
         return proc.returncode, proc.stdout
     except OSError:
@@ -1486,6 +1493,65 @@ def gate_p8(task_dir):
         if rc == 0 and not any(line for line in (tag_out or "").splitlines()):
             sys.stderr.write(
                 f"GATE P8 WARNING: tag {version_tag_prefix}{tag_version} 不存在。打 tag 后再推进到 READY。若 tag 前缀非 v，设置 VERSION_TAG_PREFIX 环境变量。\n"
+            )
+
+    # RM-AG0075（TAG0041）：canonical 临时产物目录的两条卫生告警——均 WARNING，不阻断。
+    # 触发条件是「项目根**存在**该目录」，故仅对采纳约定的项目生效，不误报存量项目；
+    # 而该条件历史上真实发生过（某任务 `.agate-tmp/` 未被忽略 + 含 10 个明文 token/cookie，
+    # release 的 `git add -A` 会把它写进 git 历史，**不可逆**）。
+    # 权威口径见 platform-notes.md「受限 harness 通用约束」。
+    # ⚠️ 仓库定位以 **task_dir** 为基准（不是调用方 CWD）——同一取向见上方 DEBT0020。
+    # 用 CWD 会双向出错（TAG0041 评审端到端复现）：`cd` 到子目录 → 已忽略的目录被误报
+    # "未被忽略"；CWD 在别的仓库 → 本任务所在仓库的真实凭证风险**静默漏检**。
+    rc_root, root_out = _git(["rev-parse", "--show-toplevel"], cwd=task_dir)
+    # `or` 而非 get 默认值：`AGATE_TMP_DIR=''` 会让 tmp_rel 为空串 ⇒ isdir(root+"") 恒真
+    # ⇒ 退化为扫描**整个仓库**并误报（评审实测）。
+    tmp_rel = os.environ.get("AGATE_TMP_DIR") or ".agate-tmp"
+    repo_root_out = (root_out or "").strip()
+    tmp_abs = os.path.join(repo_root_out, tmp_rel)
+    if rc_root == 0 and repo_root_out and os.path.isdir(tmp_abs):
+        # (a) 未被忽略 → release 的 git add -A 会把临时物（可能含明文凭证）一并提交。
+        # 传**绝对路径**：`check-ignore` 对相对路径的解析依赖 CWD（评审实测绝对路径在任意
+        # CWD 下均正确）。
+        rc_ig, _ = _git(["check-ignore", "-q", tmp_abs], cwd=repo_root_out)
+        if rc_ig != 0:
+            sys.stderr.write(
+                f"GATE P8 WARNING: {tmp_rel}/ 存在但**未被 .gitignore 忽略**——release 的 "
+                f"`git add -A` 会把它（可能含明文凭证）一并提交。可复制的忽略片段见 "
+                f"{{agate_root}}/assets/templates/gitignore-fragment.txt"
+                f"（自查：`git check-ignore -q {tmp_rel}`）\n"
+            )
+        # (b) 文件名命中测试收集模式 → 被测试框架默认 include 扫到、静默抬高基线
+        # （实测：并行评审的 `.agate-tmp/*.spec.ts` 把某项目基线从 110 抬到 115 files）。
+        # 上界 SCAN_CAP：防止临时目录异常膨胀时拖慢 commit gate（超界时**显式声明未扫全**，
+        # 不静默当作"已扫完无问题"——那正是本仓反复出现的真空通过模式）。
+        SCAN_CAP = 2000
+        collect_pats = ("*.spec.*", "*.test.*", "test_*.py", "*_test.py", "*_test.go")
+        hits, scanned = [], 0
+        truncated = False
+        for _dirpath, dirnames, filenames in os.walk(tmp_abs):
+            dirnames[:] = [x for x in dirnames if x != "__pycache__"]
+            for fn in filenames:
+                if scanned >= SCAN_CAP:
+                    truncated = True
+                    break
+                scanned += 1
+                if any(fnmatch.fnmatch(fn, pat) for pat in collect_pats):
+                    hits.append(fn)
+            if truncated:
+                break
+        if hits:
+            sys.stderr.write(
+                f"GATE P8 WARNING: {tmp_rel}/ 内有 {len(hits)} 个文件名匹配**测试收集模式**"
+                f"（如 {hits[0]}）——该目录在项目树内，会被测试框架默认 `include` 扫到，"
+                f"静默抬高基线。请改用不含 `spec`/`test` 的文件名"
+                + (f"（仅扫了前 {SCAN_CAP} 个文件，未扫全）" if truncated else "")
+                + "。\n"
+            )
+        elif truncated:
+            sys.stderr.write(
+                f"GATE P8 WARNING: {tmp_rel}/ 文件数超过 {SCAN_CAP}，**仅扫描了前 {SCAN_CAP} 个**"
+                f"（未发现收集模式文件名，但不能断定全部）——建议清理该目录。\n"
             )
 
     sys.stderr.write(

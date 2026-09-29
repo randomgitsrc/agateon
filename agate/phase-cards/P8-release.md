@@ -10,7 +10,7 @@
    1.1 写 P8-dispatch-context-implementer.md（派发指引：目标/约束/上游关联/输入文件 + 客观查证信息）
 2. releaser subagent 产出 P8-release.md，**不执行 git commit/tag**
 3. 主 Agent 执行 gate 验证 → 通过后执行 bump-version + CHANGELOG 更新 → 同一 commit + tag
-4. 主 Agent 执行 READY 收尾检查（参考 P8-release.md 临时资源清单）
+4. 主 Agent 执行 READY 收尾检查（参考 P8-release.md 临时资源清单）——**含 canonical 临时产物目录 `<项目根>/.agate-tmp/`**（受限 harness 下的探针/一次性脚本；其四项约定与「存在却未被忽略」的 P8 告警见 `platform-notes.md`「受限 harness 通用约束」，忽略片段见 `assets/templates/gitignore-fragment.txt`）
 5. git add {AGATE_WORKSPACE}/tasks/{Txxx}/（含 .state.yaml + P8-release.md，若 .gitignore 忽略需 git add -f）
    ⚠️ 此时 .state.yaml 的 phase 保持 READY，不要提前写 DONE——phase = 本 commit 的产出阶段；终态 DONE 收尾随任务终态 commit 一起
 
@@ -98,6 +98,13 @@ check-gate.py P8 $TASK_DIR
 
 参考 P8-release.md 临时资源清单执行清理。以上检查项无 gate 脚本自动验证（已知缺口），**必须逐项实际执行检查命令**（如 `ps aux | grep debug` 确认服务已停止、`git status` 确认工作区干净），不得仅凭记忆打勾。
 
+**提交前暂存面审查（凭证/临时物防泄漏，RM-AG0077⑤）**：
+- [ ] **`git diff --cached --name-only` 已过目**，确认不含未忽略的临时目录/敏感文件
+  - 背景：**项目侧** release 命令常直接 `git add -A`（如 `make bump-version`）。某任务实测它会 stage
+    **162** 条路径、其中 **158** 条在未忽略的临时目录下、含 **10 个明文 token/cookie** ⇒
+    **凭证入 git 历史不可逆**。协议侧无法改项目命令，故把这一步作为**提交前的显式检查**。
+  - 若发现非预期路径：先补 `.gitignore`（片段见 `assets/templates/gitignore-fragment.txt`）再 `git reset` 重来，**不要**带着它们提交
+
 **状态与版本**：
 - [ ] .state.yaml phase == READY
 - [ ] {AGATE_WORKSPACE}/tasks/active-tasks.md 任务行状态已更新
@@ -111,6 +118,11 @@ check-gate.py P8 $TASK_DIR
 - [ ] 调试服务/进程已停止
 - [ ] 临时数据已删除
 - [ ] 测试占用的端口已释放
+- [ ] **canonical 临时产物目录 `<项目根>/.agate-tmp/` 已清理**（或确认无需保留物、已空）
+  - 自查：`ls -A .agate-tmp 2>/dev/null`；含明文凭证/会话 token 的先删
+  - 约束（受限 harness）：该目录须**已被 `.gitignore` 忽略**（`git check-ignore -q .agate-tmp`）、
+    内部文件名**不得**匹配测试收集模式——两项均有 `check-gate.py P8` WARNING 兜底，
+    完整约定见 `platform-notes.md`「受限 harness 通用约束」、忽略片段见 `assets/templates/gitignore-fragment.txt`
 
 **开发环境已还原**：
 - [ ] 开发安装已卸载

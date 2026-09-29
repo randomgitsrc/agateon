@@ -26,6 +26,11 @@ __pycache__/
 .DS_Store
 .worktrees/
 
+# Agateon canonical 临时产物目录（探针 / 一次性脚本 / 抓取物；协议自应用，见
+# agate/platform-notes.md「受限 harness 通用约束」。本仓此前未忽略它——协议定义者
+# 自己不遵守，会让该约定看起来像「无消费方的声明」）
+.agate-tmp/
+
 # 发布产物（dist/ 忽略；version.txt 是发布版本文件，必须入库，不被任何规则误忽略）
 dist/
 !version.txt

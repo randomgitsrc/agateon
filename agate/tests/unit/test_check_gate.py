@@ -3799,3 +3799,96 @@ def test_tag0035_bdd_10_gate_p4_pure_doc_no_history_still_blocks(
         "BDD-10：纯文档、无代码历史、非回退场景，仍应 return 1（放宽不应削弱此拦截）。"
         f"实际 exit={result.returncode}, output={result.output!r}"
     )
+
+
+# ---- TAG0041（RM-AG0075）：canonical 临时产物目录须被忽略 -------------------
+#
+# 缺陷场景（实测代价）：受限 harness 下 agent 只能在项目树内落临时产物；该目录未被
+# .gitignore 忽略时，release 的 `git add -A` 会把临时物（含明文 token/cookie）一并提交，
+# **入 git 历史不可逆**。故 P8 对「目录存在却未被忽略」出 WARNING（不阻断）。
+
+_SCRATCH_DIR = ".agate-tmp"
+
+
+def test_t41_scratch_dir_not_ignored_warns(git_repo, task_dir, agate_scripts, python_exe, run_cli):
+    """目录存在且**未被忽略** → 须出 WARNING（且不阻断，仍 exit 2）。"""
+    td = task_dir()
+    _write_p8_release(td, _P8_COMPLIANT)
+    repo = _init_p8_repo(
+        git_repo, td, files={"package.json": "v0.1.0\n", "CHANGELOG.md": _P8_UNRELEASED}
+    )
+    (repo / _SCRATCH_DIR).mkdir()
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
+    assert result.returncode == 2, result.output[:300]
+    assert "未被 .gitignore 忽略" in result.output, result.output[:400]
+
+
+def test_t41_scratch_dir_ignored_no_warn(git_repo, task_dir, agate_scripts, python_exe, run_cli):
+    """负向对照：目录存在但**已被忽略** → 不得告警。"""
+    td = task_dir()
+    _write_p8_release(td, _P8_COMPLIANT)
+    repo = _init_p8_repo(
+        git_repo, td, files={"package.json": "v0.1.0\n", "CHANGELOG.md": _P8_UNRELEASED}
+    )
+    (repo / _SCRATCH_DIR).mkdir()
+    (repo / ".gitignore").write_text(f"{_SCRATCH_DIR}/\n", encoding="utf-8")
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
+    assert result.returncode == 2, result.output[:300]
+    assert "未被 .gitignore 忽略" not in result.output, result.output[:400]
+
+
+def test_t41_scratch_dir_absent_no_warn(git_repo, task_dir, agate_scripts, python_exe, run_cli):
+    """负向对照：未采用该约定的项目（目录不存在）→ 不得告警（防误报到既有项目）。"""
+    td = task_dir()
+    _write_p8_release(td, _P8_COMPLIANT)
+    repo = _init_p8_repo(
+        git_repo, td, files={"package.json": "v0.1.0\n", "CHANGELOG.md": _P8_UNRELEASED}
+    )
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
+    assert result.returncode == 2, result.output[:300]
+    assert "未被 .gitignore 忽略" not in result.output, result.output[:400]
+
+
+def test_t41_scratch_dir_collectible_filenames_warn(
+    git_repo, task_dir, agate_scripts, python_exe, run_cli
+):
+    """目录已被忽略，但内部文件名**命中测试收集模式** → 仍须 WARNING（第二重检查）。
+
+    实测代价：并行评审写入的 `.agate-tmp/*.spec.ts` 被 vitest 默认 `include` 扫到，
+    把某项目基线从 110 抬到 115 files，且**静默推翻**另一评审刚作出的"不影响基线"结论。
+    """
+    td = task_dir()
+    _write_p8_release(td, _P8_COMPLIANT)
+    repo = _init_p8_repo(
+        git_repo, td, files={"package.json": "v0.1.0\n", "CHANGELOG.md": _P8_UNRELEASED}
+    )
+    (repo / _SCRATCH_DIR).mkdir()
+    (repo / ".gitignore").write_text(f"{_SCRATCH_DIR}/\n", encoding="utf-8")
+    (repo / _SCRATCH_DIR / "probe.spec.ts").write_text("// probe\n", encoding="utf-8")
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
+    assert result.returncode == 2, result.output[:300]
+    assert "测试收集模式" in result.output, result.output[:400]
+
+
+def test_t41_scratch_dir_clean_filenames_no_warn(
+    git_repo, task_dir, agate_scripts, python_exe, run_cli
+):
+    """负向对照：已忽略 + 文件名不命中收集模式 → 两条 WARNING 都不得出现。"""
+    td = task_dir()
+    _write_p8_release(td, _P8_COMPLIANT)
+    repo = _init_p8_repo(
+        git_repo, td, files={"package.json": "v0.1.0\n", "CHANGELOG.md": _P8_UNRELEASED}
+    )
+    d = repo / _SCRATCH_DIR
+    d.mkdir()
+    (repo / ".gitignore").write_text(f"{_SCRATCH_DIR}/\n", encoding="utf-8")
+    (d / "probe.mjs").write_text("// probe\n", encoding="utf-8")
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
+    assert result.returncode == 2, result.output[:300]
+    assert "测试收集模式" not in result.output
+    assert "未被 .gitignore 忽略" not in result.output
