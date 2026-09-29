@@ -24,6 +24,7 @@
 
 - 全量 pytest **2450 passed / 2 failed / 2 skipped**（2 failed 为既有环境缺陷：`opencode` 不在 PATH、临时目录为独立 tmpfs 致 `git clone --bare --local` 跨设备链接；均非本批触及文件。另有一条 `test_bdd_13_6` 在本 workflow 改动**提交前**必然失败——它断言既有 workflow 无未提交改动，提交后即绿）
 - **兜底有效性双向实测**：干净仓 → exit 0；已提交账本被追加 / 新建未跟踪账本 / fixture 副本被写脏 → 各 exit 1；非 git 目录 → exit 2；**全量测试跑完后立即跑兜底 → exit 0**（误报实测，证明不会让 CI 误红）。**更正说明**：此项先前记录的 exit 0 系在**未含本债闭合编辑的树**上测得、对最终改动集不成立，已随 pathspec 修正后重测（见上）
+- **CI 实跑证据**：兜底步在真实 CI 上**确实执行**（非跳过）——PR #378 的 `pytest` job（Linux）日志含 `GATE LEDGER: 干净`，即**在 CI 里跑通并 exit 0**，required check `pytest` 绿
 - **负向控制**：把 pathspec 退回目录级写法 → 恰好 2 条新回归判据（`t43lb_11`/`t43lb_12`）转红，其余绿
 - consistency **0 ERROR / 386 WARNING**（与基线一致）；ruff 全绿
 
