@@ -46,6 +46,7 @@ def main():
     # v2.0 流 D（BDD-27）：不截取短前缀，直接用完整 task_id 作为搜索关键词。
     # 新格式 task_id（如 TAG0001）本身就是完整短标识（check-changelog.sh 迁移源保留此语义）。
     if not os.path.isfile(changelog_file):
+        sys.stderr.write(f"GATE SKIP: check-changelog: CHANGELOG 不存在（{changelog_file}），未校验\n")
         sys.exit(0)
 
     # 问题6 (T090)：post-bump 模式（bump-version 调用时）——检查新版本段落非空，而非 [Unreleased]

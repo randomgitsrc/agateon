@@ -16,7 +16,6 @@
 | 编号 | 任务名称 | 状态 | 阶段 | 优先级 | 依赖 | 创建日期 | 更新日期 |
 |------|----------|------|------|--------|------|----------|----------|
 | TAG0038 | 协议自我调节与自我认知（RM-AG0071 比例阀接线 + RM-AG0074 度量 + RM-AG0078 债务可见性） | ⬜ | P0 | 高 | — | 2026-09-29 | 2026-09-29 |
-| TAG0039 | 校验器健壮性批（RM-AG0077 + RM-AG0080）：真空通过根治 + 三处已复现缺陷 + P0-brief 四字段注入对齐 | ⬜ | P0 | 中 | — | 2026-09-29 | 2026-09-29 |
 | TAG0040 | 派发成本治理（RM-AG0072 面板重放/产物体量 + RM-AG0073 上下文供给） | ⬜ | P0 | 高 | — | 2026-09-29 | 2026-09-29 |
 | TAG0041 | 平台适配层卫生（RM-AG0075 临时产物/服务生命周期 + RM-AG0076 agent-team 定位） | ⬜ | P0 | 中 | — | 2026-09-29 | 2026-09-29 |
 
@@ -27,6 +26,7 @@
 
 | 编号 | 任务名称 | 状态 | 最终阶段 | 优先级 | 完成日期 |
 |------|----------|------|----------|--------|----------|
+| TAG0039 | 校验器健壮性批（RM-AG0077 + RM-AG0080）：**直改未走 P0-P8**——6 formatter 大输出承载 + 连带修二次方正则与无界超时 + 10 处静默跳出示明 + provenance 奇偶 + roadmap 列数告警 + 四字段对齐；子批 B 经全量扫描放弃 | ✅✅ | 直改（未走流程） | 中 | 2026-09-29 |
 | TAG0037 | 安装与多版本模型统一（RM-AG0066）：版本目录结构契约 + GitHub Release/本体安装包（portable）+ 三路径统一 + 修离线安装解析失效（P0 真 BUG） | ✅ | READY | 高 | 2026-09-20 |
 | TAG0036 | MVWU 阶段 1 试点（RM-AG0063）：`batches[].tests_filter` + `P4-evidence/{batch}.log` + 不阻断的 `check-mvwu.py`（四态 verdict）+ Q1/Q2/Q3 数据采集 | ✅ | READY | 中 | 2026-09-19 |
 | TAG0035 | gate 健壮性批（RM-AG0062 归并 + RM-AG0064 并入）：check-gate.py 未知阶段 fail-open→exit 1（BDD-1/2/3）+ 三处数字序号假设致非数字阶段名静默失效修复（check-gate.py 回退检测/check-state-transition.py phase_num/pre-commit-gate.py WARNING，BDD-4/5/6/7）+ _gate_p4 完整度判据放宽（DEBT0037，历史commit扫描，BDD-8/9/10）+ check-judge-verdict.py 黑白名单3处假阳性修复（DEBT0038，路径token化豁免，BDD-11/12/13/14）；DEBT0040/0041 已移出范围仍 open。4 子批 hunk 级精确 commit，14 BDD 全 PASS，P6.5 judge 两轮复核（首轮 needs-revision 因 BDD-3/7 缺全量证据→补证后 14/14 passed），P7 一致性 BLOCKER=0，2 条 DESIGN_GAP 均 REVIEWED → v0.71.1 | ✅✅ | READY | 中 | 2026-09-16 |

@@ -39,6 +39,7 @@ def main():
     file_path = args[0]
 
     if not os.path.isfile(file_path):
+        sys.stderr.write(f"GATE SKIP: check-frontmatter: 目标文件不存在（{file_path}），未校验\n")
         sys.exit(0)
 
     py_exit, errors, py_stderr = _run_check(file_path)

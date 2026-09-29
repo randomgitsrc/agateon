@@ -41,6 +41,9 @@ def main():
     state_file = args[0]
 
     if not os.path.isfile(state_file):
+        sys.stderr.write(
+            f"GATE SKIP: check-state-yaml: .state.yaml 不存在（{state_file}），未校验（exit 2）\n"
+        )
         sys.exit(2)
 
     errors = _run_check(state_file)

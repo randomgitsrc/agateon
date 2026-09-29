@@ -232,18 +232,24 @@ def main():
     # 只在 .state.yaml 有暂存变更时检查
     # tr -d '\r'：Git for Windows 的 diff 输出文件名可能带 CRLF 行尾，grep -qF 精确匹配会失败
     if run_git is None:
+        sys.stderr.write("GATE SKIP: check-state-transition: agate_common 不可导入（git 通道不可用），未校验\n")
         sys.exit(0)
     rc, name_only = run_git(["diff", "--cached", "--name-only"])
     if rc != 0:
+        sys.stderr.write("GATE SKIP: check-state-transition: git diff --cached 失败，未校验\n")
         sys.exit(0)
     lines = [line.rstrip("\r") for line in name_only.splitlines()]
     if not any(state_basename in line for line in lines):
+        sys.stderr.write(f"GATE SKIP: check-state-transition: 暂存区无 {state_basename}，未校验\n")
         sys.exit(0)
 
     old_phase = get_old_phase(state_file, state_basename)
     new_phase = get_new_phase(state_file)
 
     if new_phase in ("", "PAUSED", "READY", "DONE"):
+        sys.stderr.write(
+            f"GATE SKIP: check-state-transition: 非推进场景（new_phase={new_phase!r}），未校验\n"
+        )
         sys.exit(0)
 
     # old_phase 为空字符串（get_old_phase 的 git-show 失败回退）或控制态

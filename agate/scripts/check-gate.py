@@ -1365,9 +1365,24 @@ def _check_roadmap_done(task_id, roadmap_path):
     text = _read_text(roadmap_path)
     if not text or not task_id:
         return None
-    for line in text.splitlines():
+    for lineno, line in enumerate(text.splitlines(), 1):
         cols = [c.strip() for c in line.split("|")]
         if len(cols) != _ROADMAP_EXPECTED_COLS:
+            # 列数异常行**不再静默跳过**（RM-AG0077⑥，2026-09-29）：本函数对列数不符的行
+            # 整行 continue，而"无匹配行 → 返回 None → 不误拦"（BDD-6）⇒ 该行的 done 反查
+            # **静默失效**且零输出。实测两例长期隐形：RM-AG0056（11 列，单元格含字面 `|`）、
+            # RM-AG0059（12 列）。**`\|` 转义对 `split("|")` 无效**（反斜杠不参与转义），
+            # 故"加转义"这条看似合理的修法实际无效——须用 `&#124;` 等不含竖线的写法。
+            # 此处只**告警**（不改 return）：BDD-6「不误拦」语义与 exit code 一律不变。
+            # 只报**行号**与列数，**不回显该行的任何单元格内容**：错位行的 cell 取值本身
+            # 不可信（BDD-20 明确要求该行不产生任何取值、输出不含其 id——否则等于把
+            # "不要信任错位行"这条规则自己破掉）。
+            if re.match(r"^\|\s*RM-", line):
+                sys.stderr.write(
+                    f"GATE WARNING: roadmap 第 {lineno} 行列数异常（{len(cols)}，应为 "
+                    f"{_ROADMAP_EXPECTED_COLS}）——该行 done 反查被跳过；"
+                    "含字面 `|` 的单元格请改用 `&#124;`\n"
+                )
             continue
         rm_id, status, related_task = cols[1], cols[3], cols[5]
         if not rm_id.startswith("RM-"):

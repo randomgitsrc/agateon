@@ -675,6 +675,29 @@ def _fallback_json(exit_code, output):
     })
 
 
+FORMATTER_TIMEOUT_DEFAULT = 120
+
+
+def _formatter_timeout():
+    """formatter 子进程的有界超时（秒）；`AGATE_FORMATTER_TIMEOUT` 可覆盖。
+
+    formatter 是纯文本后处理，正常在毫秒级完成（实测 2MB 输出 ≈0.03s）。但**必须有上界**：
+    实测存在令 formatter 长时间不返回的路径——`.*(?:X).*` 型正则在超长单行上退化为 O(n²)
+    （32KB 单行 2.1s；1.8MB 单行外推约 1.8 小时，RM-AG0077 子批 D 实测暴露）。
+    而 formatter 挂起 = gate **永久卡死**（commit 无输出卡住，无任何信号）。
+    超时后走**既有**失败路径（`_fallback_json`），与「formatter 退出非 0 / 无法启动」同语义。
+    """
+    raw = os.environ.get("AGATE_FORMATTER_TIMEOUT", "")
+    if raw.strip():
+        try:
+            val = int(raw)
+            if val > 0:
+                return val
+        except ValueError:
+            pass
+    return FORMATTER_TIMEOUT_DEFAULT
+
+
 def run_test_with_formatter(cmd, fmt_path, timeout_secs=None):
     """跑测试命令并输出 JSON 结果（TDD 语义，P2 §3.1）。
 
@@ -705,11 +728,18 @@ def run_test_with_formatter(cmd, fmt_path, timeout_secs=None):
     if not fmt_path:
         return _fallback_json(exit_code, output)
 
+    fmt_timeout = _formatter_timeout()
     try:
         fmt_proc = subprocess.run(
             ["bash", fmt_path, str(exit_code)],
             input=output, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=fmt_timeout,
         )
+    except subprocess.TimeoutExpired:
+        sys.stderr.write(
+            f"TDD_CHECK: formatter 超时（{fmt_timeout}s），降级为原始输出：{fmt_path}\n"
+        )
+        return _fallback_json(exit_code, output)
     except OSError:
         return _fallback_json(exit_code, output)
     if fmt_proc.returncode != 0:

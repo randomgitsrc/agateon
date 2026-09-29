@@ -98,15 +98,29 @@ def extract(phase, task_dir):
         if os.path.isfile(p0):
             output += "### P0-brief 关键字段" + "\n"
             lines = _read_lines(p0)
+            # `task:` 的值在同一行 ⇒ `_grep`（只取键行）足够；
+            # `known_risks:` 是**跨行列表** ⇒ 必须 `_grep_after`（与下方 env_constraints 同口径）。
+            # 此前这里用 `_grep`，只回带裸键行、列表项全丢 ⇒ 注入的 known_risks 恒为空
+            # （RM-AG0080：同一函数内两种口径即缺陷来源）。
             task_line = _grep(lines, r"^task:")
             if task_line:
                 output += "- " + "\n".join(task_line) + "\n"
-            risks = _grep(lines, r"^known_risks:")
+            risks = _grep_after(lines, r"^known_risks:")
             if risks:
-                output += "- " + "\n".join(risks) + "\n"
+                output += "- known_risks:" + "\n" + "\n".join(risks) + "\n"
             env = _grep_after(lines, r"^env_constraints:")
             if env:
                 output += "- env_constraints:" + "\n" + "\n".join(env) + "\n"
+            # 可见性（与 RM-AG0077 子批 A 同哲学：静默的"空"会被读成"没问题"）：
+            # P0-brief 存在却一个字段都取不到 → 显式告警，而非只输出一个空标题。
+            # 实测先例：TAG0037 用 markdown 标题（`## task`）书写 ⇒ 注入长期为空且零提示。
+            if not (task_line or risks or env):
+                sys.stderr.write(
+                    "WARNING: agate-extract-context: P0-brief 存在但未取到 "
+                    "task/known_risks/env_constraints —— 须用**行首键**书写"
+                    "（`task:` / `known_risks:` / `env_constraints:`），"
+                    "markdown 标题（`## task`）不被识别\n"
+                )
     elif phase == "P2":
         p1 = os.path.join(task_dir, "P1-requirements.md")
         if os.path.isfile(p1):

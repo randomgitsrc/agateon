@@ -58,8 +58,10 @@ def main():
             file = arg
 
     if not file or not os.path.isfile(file):
+        sys.stderr.write(f"GATE SKIP: check-p6-format: 目标文件不存在（{file}），未校验\n")
         sys.exit(0)
     if os.path.basename(file) != "P6-acceptance.md":
+        sys.stderr.write(f"GATE SKIP: check-p6-format: 非 P6-acceptance.md（{os.path.basename(file)}），未校验\n")
         sys.exit(0)
 
     with open(file, encoding="utf-8") as f:

@@ -1,5 +1,5 @@
 {
- "_note": "TAG0034 BDD-39 回归护栏基线 sha256——P3 捕获。gate 机制（phases.yaml / check-gate.py / check-state-transition.py）+ agate-dispatch 渲染产物长期字节不变量守护，任何阶段使这些 hash 变化 = BDD-39 违反。state-machine.md 是叙事文档、非机制本体：2026-09-10 protocol-doc-refresh 批（经 SELF-GATE + protocol-alignment-review）刷新其正文（补 agate next / ceremony / cmdstream 指针，未改任何转移规则），基线已随之更新——此后再次变化仍需经 SELF-GATE 审查；2026-09-16 TAG0035（gate 健壮性批）修复 check-gate.py/check-state-transition.py 数处 fail-closed 判据缺陷（经 SELF-GATE + protocol-alignment-review，status: approved），基线已随之更新。",
+ "_note": "TAG0034 BDD-39 回归护栏基线 sha256——P3 捕获。gate 机制（phases.yaml / check-gate.py / check-state-transition.py）+ agate-dispatch 渲染产物长期字节不变量守护，任何阶段使这些 hash 变化 = BDD-39 违反。state-machine.md 是叙事文档、非机制本体：2026-09-10 protocol-doc-refresh 批（经 SELF-GATE + protocol-alignment-review）刷新其正文（补 agate next / ceremony / cmdstream 指针，未改任何转移规则），基线已随之更新——此后再次变化仍需经 SELF-GATE 审查；2026-09-16 TAG0035（gate 健壮性批）修复 check-gate.py/check-state-transition.py 数处 fail-closed 判据缺陷（经 SELF-GATE + protocol-alignment-review，status: approved），基线已随之更新。 2026-09-29（RM-AG0077 校验器健壮性批，直改未走 P0-P8；经 SELF-GATE protocol-alignment-review）：check-gate.py 增 roadmap 列数异常告警、check-state-transition.py 增跳过原因声明——两者均为**可观测性**改动（未改任何判据/exit code/转移规则），基线随同 commit 刷新（沿用 TAG0035 先例）。",
  "captured_phase": "P3",
  "task_id": "TAG0034",
  "files": {
@@ -8,12 +8,12 @@
    "bytes": 7009
   },
   "agate/scripts/check-gate.py": {
-   "sha256": "e6a4cf4a1b6b5b7fc8fe35e17a379a3ba335f5bb569fd6fdf06f199aa7a31a27",
-   "bytes": 74108
+   "sha256": "9a50256ed4ac6259dd5ac7e8ffa6f453c4e1d19721cd915e40e9071b6c340799",
+   "bytes": 75475
   },
   "agate/scripts/check-state-transition.py": {
-   "sha256": "88cee83a263f1a2c2ce049351e78c342c951cf2b9004b60754e61fa09de97faf",
-   "bytes": 16250
+   "sha256": "e0eec035fefd16e324a9d85f439451fb3f7e37921cebe9f5f8a97d3b18825336",
+   "bytes": 16733
   },
   "agate/state-machine.md": {
    "sha256": "7ea082b9527c9d99c666c4d6aba7a2644573b9011446ba19df552aa0ef6677ff",
