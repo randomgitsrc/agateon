@@ -1419,7 +1419,7 @@ closed_at: 2026-09-10
 id: DEBT0040
 category: protocol
 title: "append-only 事件账本（gate-events.jsonl）的写入测试无 tmp 隔离强制——单测真实调用 agate_common.append_event 写进仓库内 fixture 账本，跑测污染已提交文件"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate-workspace/tasks/TAG0034-dispatch-routing/retrospective.md
@@ -1432,6 +1432,18 @@ evidence:
     note: "RM-AG0057 测试副作用 / 环境还原 gate 已存在，但覆盖的是创建型 E2E 清理钩子，未覆盖 append-only 账本这类写入污染"
   - ref: "RM-AG0062"
     note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
+  - ref: agate/scripts/check-ledger-pollution.py
+    note: >-
+      **③ 已落实（2026-09-29，CI 改动经用户明确许可）**：新增事后污染兜底——单次 `git status --porcelain`
+      （pathspec 精确到三族**状态文件名**（`gate-events.jsonl` / `active-tasks.md` / `.state.yaml`）在两个落点下：
+      `agate-workspace/`（63 个）+ `agate/tests/fixtures/`（5 个夹具副本）= 68 个）。
+      **用 status 而非 diff**：`git diff --exit-code` 只报已跟踪文件，会漏掉跑测**新建**的未跟踪账本。
+      退出码 0=干净/1=污染/2=无法判定，**2 也按失败**（fail-closed：无法判定时声称通过正是本债要治的真空通过）。
+      反向登记：本脚本触发 `CHECK9-coverage`（实测），已登记进 `SCRIPT_ALIGNMENT_ANCHORS`，并借其 `callers` 字段
+      把「CI 真的有这一步」变成机械判据。出处标注：第 ③ 条由本批（TAG0043 CI 兜底，直改通道）完成，P5/P6 门禁
+      由等价的「全量 pytest 2449 passed + 独立评审」承担。
+  - path: .github/workflows/protocol-tests.yml
+    note: "pytest job 内全量测试步骤之后新增 `Ledger/state pollution backstop (DEBT0040)` 步（Linux 分支，含 docs-only 快路径）；不新增 job/runner，故不增加 CI 墙钟时间"
   - ref: agate/tests/unit/test_t42_p3_platform_selfcheck.py
     note: "新增哨兵 test_t42_ledgers_not_dirtied_by_test_suite（`git status --porcelain` 断言账本未变脏）；变异验证：注入一行账本变更 → 转红，`git checkout` 还原后绿。全量 pytest 跑前/跑后 20 个已提交账本哈希零变化。出处标注：本批为 **TAG0042-debt-batch 直改**（未走 P0-P8；P5/P6 门禁由等价的「全量 pytest + 独立评审」承担）"
 impact: "跑一次全量 pytest 就可能改动 3 个历史任务的 committed 账本（重复 judge_verdict 事件 + hash 链错位）；污染需人工发现并 git checkout 复原，漏掉则错误账本被提交、破坏 hash 链可审计性；CI 若在脏工作树跑亦可能误判"
@@ -1441,11 +1453,16 @@ closure_criteria:
   - "存在回归用例：把 append_event 目标指向仓库内账本的测试形态被 lint / fixture 约束拦截"
   - "CI 有 `git diff --exit-code` 账本兜底步（或等效机制），故意污染能被 CI 捕获"
   - "全量 pytest 全绿 + consistency 0 ERROR"
+closed_at: 2026-09-29
 source: retrospective
 created_at: 2026-09-10
 task_id: TAG0042-debt-batch
 closure_note: >-
-  **据实更正（独立评审指出初版夸大）**：closure_criteria 四条中 ①②④ 已落实、**③ 未落实**。 ① `test-designer.md` 与 `implementer.md` 均含隔离条文； ② 静态 lint 落地（`test_t42_tests_do_not_pass_repo_paths_to_state_writers`，扫源码禁止把仓库内路径传给 `append_event`/`write_state_yaml`/`write_gate_result`）——**刻意做成静态而非快照式**：初版哨兵用 `git status` 读当前脏状态，`-n auto` 下因执行顺序**静默漏报**（评审实测复现），且只认 `gate-events.jsonl` 一种文件名（注入 `active-tasks.md`/`.state.yaml` 均漏报）； ④ 全量 pytest 全绿 + consistency 0 ERROR。 **③「CI 有 `git diff --exit-code` 账本兜底步」未做**——CI 改动须用户许可（`AGENTS.md` 第 5 条），本批未请求。**本债按 `closure_criteria` 未全满足处理：改回 `open`**（不以 3/4 的完成度标 closed）。 当前实现层面已不复现污染（写类测试均走 `tmp_path`，全量跑前后 21 个已跟踪状态文件 md5 零变化）。
+  **据实更正（独立评审指出初版夸大）**：closure_criteria 四条中 ①②④ 已落实、**③ 未落实**。 ① `test-designer.md` 与 `implementer.md` 均含隔离条文； ② 静态 lint 落地（`test_t42_tests_do_not_pass_repo_paths_to_state_writers`，扫源码禁止把仓库内路径传给 `append_event`/`write_state_yaml`/`write_gate_result`）——**刻意做成静态而非快照式**：初版哨兵用 `git status` 读当前脏状态，`-n auto` 下因执行顺序**静默漏报**（评审实测复现），且只认 `gate-events.jsonl` 一种文件名（注入 `active-tasks.md`/`.state.yaml` 均漏报）； ④ 全量 pytest 全绿 + consistency 0 ERROR。
+  **【2026-09-29 ③ 已补齐 ⇒ 本债 closed】**：`closure_criteria` 四条**全部满足**。新增 `agate/scripts/check-ledger-pollution.py` + 挂在 `pytest` job 内、全量测试之后的兜底步（CI 改动经用户明确许可）。**验证（含一次被评审证伪后的更正）**：干净仓 exit 0；已提交账本被追加 / 新建未跟踪账本 / fixture 副本被写脏 → 各 exit 1；非 git 目录 exit 2；**跑完全量测试后立即跑兜底 exit 0**（2450 passed 后实测）。
+  ⚠️ **初版缺陷（由独立评审判定 MAJOR，已修）**：初版 pathspec 用**目录**（`agate-workspace`、`agate/tests/fixtures`），于是**任何**改到该子树下文档的提交都被判成污染——**包括本债自己的闭合记录**`agate-workspace/debt/tech-debt.md`，即引入它的那个 PR 会让自己红；该写法**只在「本来就没有任何东西需要检查」的树上才绿**，等于零覆盖。已改为 git magic glob 精确到三族**状态文件名**，正常文档编辑不再误报；并新增回归判据 2 条（`t43lb_11` 正常文档编辑须 exit 0、`t43lb_12` 禁止退回目录级写法），负向控制实测：退回目录写法时**仅这 2 条**转红。**据此，此前记录的「误报实测 exit 0」系在**未含本债闭合编辑的树**上测得，对最终改动集不成立，已作废重测**。
+  **CI 实跑证据（PR #378）**：该兜底步在真实 CI 上**确实执行**（非跳过）——`pytest` job（Linux）日志含 `GATE LEDGER: 干净（三族状态文件在两个落点下均无改动）`，即**在 CI 里跑通并 exit 0**、且 required check `pytest` 绿。故「干净树不误报」这一半已获**真实 CI 证据**（不再只是本机）。
+  **诚实边界**：① criterion 第 ③ 条要求「故意污染能被 CI 捕获」——本机只能证「干净树不误报」与「合成仓上污染必被捕获」，**真在 CI 上推一次污染提交反证**未做（不会为验证故意让 CI 变红）；② 本脚本只在 `pytest` job 内跑，**无 push/合并后**对应检查——状态文件被提交后合并即不再复查；③ 被 `.gitignore` 覆盖的 `.gate-result.json` / `.gate-history.jsonl` 不可见，也不可能污染已提交内容，**有意排除**（非遗漏）。以上残余不确定性如实登记，不以「已完整验证」表述。 **③「CI 有 `git diff --exit-code` 账本兜底步」未做**——CI 改动须用户许可（`AGENTS.md` 第 5 条），本批未请求。**本债按 `closure_criteria` 未全满足处理：改回 `open`**（不以 3/4 的完成度标 closed）。 当前实现层面已不复现污染（写类测试均走 `tmp_path`，全量跑前后 21 个已跟踪状态文件 md5 零变化）。
 
 ```
 

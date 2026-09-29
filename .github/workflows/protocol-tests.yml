@@ -151,6 +151,22 @@ jobs:
           python -m pytest agate/tests/ -m windows_smoke
         env:
           PYTHONIOENCODING: utf-8
+      # DEBT0040 ③：账本/状态文件**事后**污染兜底（append-only 事件账本写入测试无 tmp 隔离强制）。
+      # ⚠️ **必须放在本 job 内、全量测试之后**：GitHub Actions 每个 job 各有独立 runner 与独立
+      #    checkout，放进 gate-backstop 等独立 job 只会看到全新干净工作树，**在结构上不可能**
+      #    观测到 pytest 的副作用（那将只是「看起来有兜底」）。「位于 pytest job 内且在全量测试
+      #    步骤之后」由 agate/tests/unit/test_t43_ledger_pollution_backstop.py 机械守护。
+      # 成本：单次 `git status --porcelain`（pathspec 限定三个状态面），实测约 6ms——不新增 job，
+      #    不新增 runner，故不增加 CI 墙钟时间（相对新增一个 job 可省约 20s 的 runner 启动）。
+      - name: Ledger/state pollution backstop (DEBT0040)
+        if: runner.os == 'Linux'
+        run: |
+          if [ "${{ needs.detect-docs-only.outputs.docs_only }}" = "true" ]; then
+            echo "docs-only PR: ledger pollution backstop skipped (fast-pass)"
+            exit 0
+          fi
+          # fail-closed：exit 2（无法判定）同样判失败——不得把「没查」读成「查过了没问题」
+          python3 agate/scripts/check-ledger-pollution.py .
 
   platform-scan:
     needs: detect-docs-only

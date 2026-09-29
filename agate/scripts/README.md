@@ -83,6 +83,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-platform-assumptions.py` | 平台假设静态扫描器（R1-R5，扫描覆盖 .bats/.bash/.sh/.py）| 0=零命中, 1=有命中, 2=目标不存在 |
 | `check-debt.py` | 技术债登记校验：默认 FILE 模式=DEBT 条目 schema 校验（fail-closed）；`--retreat-coverage`=回退覆盖比对（`git log retreat:` 提交 vs `source: retreat` 条目，缺失 WARNING）| FILE 模式 0=通过, 1=校验失败；回退模式：依赖加载失败 exit 2（需主 Agent 自判），无 retreat 提交等有意跳过 exit 0 |
 | `check-mvwu.py` | MVWU 阶段 1 观测器（TAG0036）：读任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，每批输出一行 `MVWU_RESULT: <VERDICT> batch=<id>`（verdict = PASS/FAIL/EXPECTED_RED/UNKNOWN）；`--observe`=输出 7 列观察表行。仅观测、不阻断（不挂 gate/hook/CI）| 0=任一 verdict（含 FAIL/UNKNOWN，不阻断）, 2=用法/目标错误 |
+| `check-ledger-pollution.py` | 账本/状态文件**事后**污染兜底（DEBT0040③）：`git status --porcelain` 限定 `agate-workspace/` + `agate/tests/fixtures/`（三族已提交状态文件的两个落点），非空即报被污染路径。**须挂在 `pytest` job 内、全量测试之后**（独立 job 的干净 checkout 观测不到跑测副作用）| 0=干净, 1=发现污染, 2=无法判定（fail-closed，调用方按失败处理）|
 
 ### 公共库
 
