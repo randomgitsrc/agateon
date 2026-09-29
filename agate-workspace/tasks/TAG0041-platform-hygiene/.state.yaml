@@ -1,0 +1,6 @@
+task_id: TAG0041
+phase: P0
+status: active
+judge:
+  enabled: true
+retries: {}
