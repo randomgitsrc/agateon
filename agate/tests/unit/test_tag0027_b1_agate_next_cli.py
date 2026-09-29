@@ -353,3 +353,147 @@ def test_bdd_11_healthy_exit2_full_advance_no_resolution(
         ev.get("from") == "P5" and ev.get("to") == "P6" for ev in transitions
     ), "P5→P6 推进应记 state_transition 事件（BDD-11 证据面）"
     assert not list(td.glob("*-exit2-resolution.md")), "健康任务无 resolution 落盘（exit 2 正常通过）"
+
+
+# ── DEBT0045（TAG0042）：一条自称「不阻塞」的警告不得卡住 P6→P7 ──────────
+#
+# 缺陷形态：`check-p6-provenance.py` 对「缺 agent 字段（协作规范，**不阻塞**）」写 stderr
+# 后置 `warning_found=1`，末了 `sys.exit(2)`（脚本 README 的契约：0=通过/1=审计失败/2=WARNING）。
+# 但 `agate-next.py::_p6_pass` 只认 `rc == 0` ⇒ **被一条自称不阻塞的警告卡住**：
+# 表现为"验收异常"（不指出真因），且暂停时落盘占位 `P6-exit2-resolution.md`
+# （易被 `git add <任务目录>` 一并提交——TAG0036 实测）。
+#
+# 判据：**exit 2（WARNING）与 exit 0（通过）在推进判定上等价**；exit 1（审计失败）仍拦。
+
+
+def _write_p6_pass_fixture_without_agent(td):
+    """与 `_write_p6_pass_fixture` 相同，但产出的 md **全部缺 agent 字段** ⇒ 触发协作规范 WARNING。
+
+    这正是 TAG0036 的真实场景：审计（安全面）全过，只有自报字段缺失这条协作规范警告。
+    """
+    (td / "P6-acceptance.md").write_text(
+        "---\nphase: P6\ntask_id: T001\npass: 1\nfail: 0\n---\n"
+        "- PASS BDD-1: verified (e1.json)\n",
+        encoding="utf-8",
+    )
+    ev = td / "P6-evidence"
+    ev.mkdir(parents=True, exist_ok=True)
+    (ev / "e1.json").write_text("evidence\n", encoding="utf-8")
+    (td / "P1-requirements.md").write_text(
+        "#### BDD-1: test\n- Given g\n- When w\n- Then t\n", encoding="utf-8"
+    )
+
+
+def test_debt0045_warning_only_still_advances_p6_to_p7(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """只缺 agent 字段（协作规范 WARNING）→ P6→P7 **仍应推进**（不被警告卡住）。"""
+    td = task_dir()
+    _write_state(None, td, "P6")  # 无 judge 块 = 历史任务
+    _write_p6_pass_fixture_without_agent(td)
+
+    result = _run_next(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0, (
+        f"仅协作规范警告就阻断了推进；rc={result.returncode}\n{result.output[:400]}"
+    )
+    events = _ledger_events(td)
+    assert any(
+        ev.get("event") == "state_transition" and ev.get("from") == "P6" and ev.get("to") == "P7"
+        for ev in events
+    ), "缺 agent 字段（不阻塞）不应阻止 P6→P7 推进"
+    # 且不应落盘占位 resolution（那是"真暂停"的产物）
+    assert not (td / "P6-exit2-resolution.md").exists(), (
+        "警告不该落盘 exit2-resolution（会被 git add 一并提交）"
+    )
+
+
+def test_debt0045_audit_failure_still_blocks(task_dir, agate_scripts, python_exe, run_cli):
+    """负向对照：**审计失败（exit 1）必须仍然阻断**——修复不得把真失败也放行。"""
+    td = task_dir()
+    _write_state(None, td, "P6")
+    # PASS 行引用不存在的证据 → 审计 1（证据-结论对应）失败 ⇒ exit 1
+    (td / "P6-acceptance.md").write_text(
+        "---\nphase: P6\ntask_id: T001\nagent: verifier\npass: 1\nfail: 0\n---\n"
+        "- PASS BDD-1: verified (missing-e1.json)\n",
+        encoding="utf-8",
+    )
+    ev = td / "P6-evidence"
+    ev.mkdir(parents=True, exist_ok=True)
+    (ev / "e1.json").write_text("evidence\n", encoding="utf-8")
+    (td / "P1-requirements.md").write_text(
+        "---\nagent: test\n---\n#### BDD-1: test\n- Given g\n- When w\n- Then t\n", encoding="utf-8"
+    )
+
+    result = _run_next(agate_scripts, python_exe, run_cli, td)
+    # ⚠️ 本 CLI 的契约是「**不推进**」而非「非零退出」：审计失败时它 `sys.exit(0)` +
+    # stderr 提示「暂停转主 Agent 决策」，故判据落在**是否推进**（账本事件 + 产物），
+    # 不是 returncode。（初版误用 returncode 断言，当场被这条负向对照证伪。）
+    assert not any(
+        ev.get("event") == "state_transition" and ev.get("to") == "P7"
+        for ev in _ledger_events(td)
+    ), "审计失败时不得推进到 P7"
+    # 提示须**同时**说明：① 是审计失败（非警告）② 暂停待人工决策
+    assert "审计失败" in result.output, f"审计失败须明确措辞：{result.output[:300]}"
+    assert "暂停" in result.output, f"须说明暂停（否则静默停留）：{result.output[:300]}"
+
+
+def test_debt0045_audit_failure_relays_specific_reason(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """DEBT0045 closure_criteria #2：审计失败时**暂停信息须含 provenance 的具体原因行**。
+
+    回归来历：初版只改了 exit 2 分支，exit 1 仍只打「验收异常」——主 Agent 必须手动再跑一次
+    provenance 才知道原因（债的 impact 原文即此）。独立评审实测输出不含「不存在」等关键词，
+    据此判该 closure_criteria 未满足。
+    """
+    td = task_dir()
+    _write_state(None, td, "P6")
+    (td / "P6-acceptance.md").write_text(
+        "---\nphase: P6\ntask_id: T001\nagent: verifier\npass: 1\nfail: 0\n---\n"
+        "- PASS BDD-1: verified (missing-e1.json)\n",
+        encoding="utf-8",
+    )
+    ev = td / "P6-evidence"
+    ev.mkdir(parents=True, exist_ok=True)
+    (ev / "e1.json").write_text("evidence\n", encoding="utf-8")
+    (td / "P1-requirements.md").write_text(
+        "---\nagent: test\n---\n#### BDD-1: test\n- Given g\n- When w\n- Then t\n", encoding="utf-8"
+    )
+
+    result = _run_next(agate_scripts, python_exe, run_cli, td)
+    assert not any(
+        ev_.get("event") == "state_transition" and ev_.get("to") == "P7"
+        for ev_ in _ledger_events(td)
+    ), "审计失败不得推进"
+    # 关键：原因行须被转达（不必逐字匹配脚本实现，抓 provenance 前缀与缺失文件名即可）
+    assert "provenance" in result.output, f"未转达 provenance 原因：{result.output[:400]}"
+    assert "missing-e1.json" in result.output, (
+        f"未转达具体缺失项（主 Agent 仍须手动复跑才能定位）：{result.output[:400]}"
+    )
+
+
+def test_debt0045_renders_all_warnings_not_just_first(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """多条 WARNING 时**不得只转达第一条**（初版 `break` 会丢信息）。"""
+    td = task_dir()
+    _write_state(None, td, "P6")
+    # P6 与另一阶段产出同时缺 agent 字段 ⇒ 至少 2 条 WARNING
+    (td / "P6-acceptance.md").write_text(
+        "---\nphase: P6\ntask_id: T001\npass: 1\nfail: 0\n---\n"
+        "- PASS BDD-1: verified (e1.json)\n",
+        encoding="utf-8",
+    )
+    (td / "P2-design.md").write_text("---\nphase: P2\n---\n# design\n", encoding="utf-8")
+    ev = td / "P6-evidence"
+    ev.mkdir(parents=True, exist_ok=True)
+    (ev / "e1.json").write_text("evidence\n", encoding="utf-8")
+    (td / "P1-requirements.md").write_text(
+        "#### BDD-1: test\n- Given g\n- When w\n- Then t\n", encoding="utf-8"
+    )
+
+    result = _run_next(agate_scripts, python_exe, run_cli, td)
+    # 推进仍应发生（只是警告），但警告不得被截断成一条
+    assert result.output.count("缺 agent 字段") >= 2, (
+        f"多条 WARNING 被截断（初版 break 的缺陷）：{result.output[:500]}"
+    )

@@ -39,7 +39,7 @@ P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8 → READY → DONE
 
 ### P6 → P7
 - check-gate.py P6 exit 2（FAIL=0 / NC=0 / 证据非空）
-- check-p6-provenance.py exit 0（由审计 3 自动对照 BDD 总数，exit 1 硬阻，无过渡期兜底）
+- check-p6-provenance.py exit 0/2（由审计 3 自动对照 BDD 总数；**exit 2 = 协作规范 WARNING［缺 agent 字段］，不阻塞**；exit 1 硬阻，无过渡期兜底）
 - UI 任务 P6 双证据按 P1 vision 能力三态分档：available/supplementable（无声明默认 available）→
   vision YAML 引用 + blocker_count=0；GAP → 截图/帧序列 + 人工复核记录引用（不要求 vision YAML）；
   证据形式按渲染形态选择（常规布局型=截图/行为日志；渲染组件/时序特效型=帧序列/渲染输出对比/

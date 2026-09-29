@@ -260,7 +260,7 @@ LOOP:
 档位 C 的"推进均经 agate next 判定"落在这两个证据面，可二值判定。
 
 **P6 前进特例（A1 裁决，§3.1/§3.4）**：P6 恒 check-gate exit 2；`agate next` 在
-phase=P6 且 check-p6-provenance exit 0 时按 judge 裁决推进：
+phase=P6 且 check-p6-provenance exit 0/2（2 = 协作规范 WARNING，不阻塞）时按 judge 裁决推进：
 - judge 未启用（历史任务）→ gate_p65 早退 0 → 直推 P7；
 - judge 启用 → 跑 check-gate P6.5（= verdict 存在 + check-judge-verdict + check-events
   双 exit 0）：exit 0 → 推 P7；exit 1 → 停留 P6 有指引（不落盘 exit2-resolution，

@@ -48,6 +48,22 @@ agent: implementer
 - P4：P3 的测试从红灯变绿灯（不修改测试本身）
 - P8：**P2 声明的每个 package 都要** CHANGELOG 更新 + 版本 bump；commit message 列出变动文件
 
+## 写类代码与测试的仓库隔离（DEBT0040 教训）
+
+**凡写"会落盘到某个目录"的代码或测试，目标目录一律用隔离路径**（测试用 `tmp_path`、
+实现用调用方传入的路径），**不得默认或回退到仓库内已提交文件**。
+
+- **反面案例**：某测试真实调用 `append_event`，`task_dir` 指向**仓库内**路径 ⇒ 把事件追加进
+  **别的任务**已提交的 `gate-events.jsonl`（含哈希链），judge 在 fresh context 跑全量 pytest
+  时污染了三个历史任务的账本，需人工发现并 `git checkout` 复原。
+- **受影响面**：仓库内已提交的状态/账本文件共 68 个（`gate-events.jsonl` / `active-tasks.md` /
+  `.state.yaml` 三族）——被写脏即污染他人的任务记录。
+- **机械兜底**：`agate/tests/unit/test_t42_p3_platform_selfcheck.py::test_t42_tests_do_not_pass_repo_paths_to_state_writers`
+  **静态扫描**测试源码，禁止把仓库内路径传给 `append_event` / `write_state_yaml` / `write_gate_result`。
+  （该检查刻意做成**静态**而非"跑完对比 git status"——后者在 `-n auto` 下因执行顺序**会漏报**。）
+- **已知缺口（据实说明，不虚构保障）**：跑测**事后**是否写脏没有 CI 兜底步。
+  （`git diff --exit-code` 类 CI 检查需用户许可，未落地，见 DEBT0040 closure_criteria #3。）
+
 ## 自查≠gate
 写完代码后应自跑测试确认基本功能（自查），但自查≠P5 gate。不要声称"P5 已过"。
 

@@ -1,11 +1,11 @@
 {
- "_note": "TAG0034 BDD-39 回归护栏基线 sha256——P3 捕获。gate 机制（phases.yaml / check-gate.py / check-state-transition.py）+ agate-dispatch 渲染产物长期字节不变量守护，任何阶段使这些 hash 变化 = BDD-39 违反。state-machine.md 是叙事文档、非机制本体：2026-09-10 protocol-doc-refresh 批（经 SELF-GATE + protocol-alignment-review）刷新其正文（补 agate next / ceremony / cmdstream 指针，未改任何转移规则），基线已随之更新——此后再次变化仍需经 SELF-GATE 审查；2026-09-16 TAG0035（gate 健壮性批）修复 check-gate.py/check-state-transition.py 数处 fail-closed 判据缺陷（经 SELF-GATE + protocol-alignment-review，status: approved），基线已随之更新。 2026-09-29（RM-AG0077 校验器健壮性批，直改未走 P0-P8；经 SELF-GATE protocol-alignment-review）：check-gate.py 增 roadmap 列数异常告警、check-state-transition.py 增跳过原因声明——两者均为**可观测性**改动（未改任何判据/exit code/转移规则），基线随同 commit 刷新（沿用 TAG0035 先例）。 2026-09-29（TAG0041 平台适配层卫生，直改未走 P0-P8）：check-gate.py 新增 P8 canonical 临时产物目录未忽略的 WARNING（可观测性改动，未改任何判据/exit code）——基线随同 commit 刷新（沿用 TAG0035 先例）。 2026-09-29（TAG0041 平台适配层卫生，直改；经 SELF-GATE protocol-alignment-review needs-revision → 逐条处置后复审）：check-gate.py 新增 canonical 临时产物目录的两条 WARNING（未忽略 / 文件名命中测试收集模式），并**修正其仓库定位**——原按调用方 CWD 定位，评审端到端复现出双向错误（`cd` 到子目录 → 已忽略被误报未忽略；CWD 在别的仓库 → 本任务仓库的真实凭证风险静默漏检），改为以 `task_dir` 锚定 + `check-ignore` 传绝对路径，与同一函数内 DEBT0020「仓库根锚定」取向对齐。**均为可观测性改动，未改任何判据/exit code**。（本次为第 5 次刷新；本护栏语义已在测试文件头更正为「绊线」而非「长期不变量」。）",
+ "_note": "TAG0034 BDD-39 回归护栏基线 sha256——P3 捕获。gate 机制（phases.yaml / check-gate.py / check-state-transition.py）+ agate-dispatch 渲染产物长期字节不变量守护，任何阶段使这些 hash 变化 = BDD-39 违反。state-machine.md 是叙事文档、非机制本体：2026-09-10 protocol-doc-refresh 批（经 SELF-GATE + protocol-alignment-review）刷新其正文（补 agate next / ceremony / cmdstream 指针，未改任何转移规则），基线已随之更新——此后再次变化仍需经 SELF-GATE 审查；2026-09-16 TAG0035（gate 健壮性批）修复 check-gate.py/check-state-transition.py 数处 fail-closed 判据缺陷（经 SELF-GATE + protocol-alignment-review，status: approved），基线已随之更新。 2026-09-29（RM-AG0077 校验器健壮性批，直改未走 P0-P8；经 SELF-GATE protocol-alignment-review）：check-gate.py 增 roadmap 列数异常告警、check-state-transition.py 增跳过原因声明——两者均为**可观测性**改动（未改任何判据/exit code/转移规则），基线随同 commit 刷新（沿用 TAG0035 先例）。 2026-09-29（TAG0041 平台适配层卫生，直改未走 P0-P8）：check-gate.py 新增 P8 canonical 临时产物目录未忽略的 WARNING（可观测性改动，未改任何判据/exit code）——基线随同 commit 刷新（沿用 TAG0035 先例）。 2026-09-29（TAG0041 平台适配层卫生，直改；经 SELF-GATE protocol-alignment-review needs-revision → 逐条处置后复审）：check-gate.py 新增 canonical 临时产物目录的两条 WARNING（未忽略 / 文件名命中测试收集模式），并**修正其仓库定位**——原按调用方 CWD 定位，评审端到端复现出双向错误（`cd` 到子目录 → 已忽略被误报未忽略；CWD 在别的仓库 → 本任务仓库的真实凭证风险静默漏检），改为以 `task_dir` 锚定 + `check-ignore` 传绝对路径，与同一函数内 DEBT0020「仓库根锚定」取向对齐。**均为可观测性改动，未改任何判据/exit code**。（本次为第 5 次刷新；本护栏语义已在测试文件头更正为「绊线」而非「长期不变量」。） 2026-09-29（DEBT0045 批，直改）：state-machine.md 的 P6→P7 门槛表述由「check-p6-provenance.py exit 0」改为「exit 0/2（2 = 协作规范 WARNING[缺 agent 字段]，不阻塞）」——**与 agate-next.py `_p6_pass` 的 `rc in (0,2)` 同步**。此行原写「必须 exit 0」而实现已在 2 时放行，属**文档-实现漂移**；本次为消除漂移而改文档，**未改任何转移规则**（同一行仍要求 exit 1 硬阻）。（第 6 次刷新。） 2026-09-29（DEBT0045 批复核轮，直改）：`phases.yaml` 的 P6 gate 声明补「exit 0/2（2 = 协作规范 WARNING[缺 agent 字段]，不阻塞）」——**独立评审指出这是本批漏改的两处最权威落点之一**（另一处 WORKFLOW.md 不在本基线保护面内）。改的是**门槛表述**，未改任何阶段定义/转移规则/retry 上限。（第 7 次刷新。）",
  "captured_phase": "P3",
  "task_id": "TAG0034",
  "files": {
   "agate/rules/phases.yaml": {
-   "sha256": "bdf7e510436bf8cb35f1068b6cb06643c2f3e6fe16afb675ff6b253d814ca4a1",
-   "bytes": 7009
+   "sha256": "7431ea07e60d384bec6c645680856992d38b3592b6552553b62a6867ef0cc956",
+   "bytes": 7087
   },
   "agate/scripts/check-gate.py": {
    "sha256": "c580caf8c96a07c348dd04696d11dcc42701bdbefb5d6f9e2f246da8d81ced84",
@@ -16,8 +16,8 @@
    "bytes": 16733
   },
   "agate/state-machine.md": {
-   "sha256": "7ea082b9527c9d99c666c4d6aba7a2644573b9011446ba19df552aa0ef6677ff",
-   "bytes": 52028
+   "sha256": "078915323d38884731afb0f5bd45ab7f13455a549aeeca5b04e162770216f221",
+   "bytes": 52100
   },
   "agate/tests/unit/test_tag0027_b2_agate_dispatch.py": {
    "sha256": "a92d547bb303b48ad97869d9c49ff47bfd32afa86db4f60254fed5bfc1395202",

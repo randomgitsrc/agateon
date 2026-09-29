@@ -136,7 +136,7 @@ P5 --[failed>0 && retry<MAX]--> P4 (retry+1)
 P5 --[有 PROD_TOUCHED]--> PAUSED（正确路由：上游问题需人工介入，非 agent 失败）
 P5 --[retry>=MAX]--> PAUSED（正确路由：上游问题需人工介入，非 agent 失败）
 
-P6 --[scripts/check-gate.py P6 exit 2（FAIL=0/证据非空）AND scripts/check-p6-provenance.py exit 0（证据-结论对应 + dispatch-context 审计 + BDD 总数对照由审计 3 自动执行，P1 `#### BDD-NN` 标题数与 P6 结果数不符时 exit 1 硬阻）]--> P6.5（judge 复核）
+P6 --[scripts/check-gate.py P6 exit 2（FAIL=0/证据非空）AND scripts/check-p6-provenance.py exit 0/2（证据-结论对应 + dispatch-context 审计 + BDD 总数对照由审计 3 自动执行，P1 `#### BDD-NN` 标题数与 P6 结果数不符时 exit 1 硬阻；**exit 2 = 协作规范 WARNING［缺 agent 字段］，不阻塞**）]--> P6.5（judge 复核）
      ⚠️ self-authored（降级缓解：provenance 审计，根治待 Phase 3 平台支持独立 git author）
      （验收 = 把 P1 的 BDD 条件逐条实际跑一遍，结果翻译成人能看懂的行为描述）
      （涉及显示/交互的 BDD 条件：必须 Playwright 实跑 + 截图佐证，不接受"应该能工作"）

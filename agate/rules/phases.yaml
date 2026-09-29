@@ -106,7 +106,7 @@ phases:
     outputs:
       - {file: P6-acceptance.md, required: true}
     gates:
-      - {check: "check-gate.py P6 exit 2 + check-p6-evidence.py / check-p6-provenance.py exit 0"}
+      - {check: "check-gate.py P6 exit 2 + check-p6-evidence.py / check-p6-provenance.py exit 0/2（2 = 协作规范 WARNING[缺 agent 字段]，不阻塞；exit 1 硬阻）"}
       - {check: "check-p6-format.py --fix 归一化（verifier 产出后、gate 前）"}
       - {check: "check-gate.py P6.5 $TASK_DIR（= check-judge-verdict.py + check-events.py 双 exit 0；历史任务自动跳过）"}
     retry_cap: 2
