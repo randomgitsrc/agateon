@@ -10,6 +10,29 @@
 
 ## [Unreleased]
 
+> TAG0044 债务清单逐条实测复核（14 条 open → 关闭 3 / 入 roadmap 11）。
+
+### 变更
+
+- **open 债务 14 → 10 条：4 条关闭、10 条入 roadmap**（DEBT0008/0015/0028/0029/0031/0033/0041/0043/0044/0047 → **RM-AG0082–RM-AG0092**，其中 RM-AG0086/0089 已在评审后撤销，见下）。
+  **方法：不按标题判，逐条回源实测**——但**我自己在过程中两次犯了「按字面/标题判」的错**，均由独立评审抓出并更正，如实登记：
+  - **DEBT0014 关闭（结论对，理由初版错，已更正）**：实测 5 条 criteria **在 `main` 上早已全部满足**，本债**只是从未被关闭**。
+    我初版写成「⑤ 由本批补齐，此前只有**文档断言**测试 ⇒ 实现改了但行为无锁」——**这是假的**：
+    `agate/tests/integration/test_pre_commit_hook.py` 早有**行为级** stub 测试（`_make_broken_python3_stub` 写 `#!/bin/sh\nexit 49` 模拟 Store 占位符，
+    `test_bdd_10_probe_skips_unexecutable_candidate` **parametrize 覆盖 3 个 hook** + `test_bdd_11_agate_python_explicit_override_skips_probe_loop`，由 `02785e6` 引入）。
+    **错因是我自己的方法失误**：`grep -rn "AGATE_PYTHON" agate/tests/ | head -6` 被 **`head -6` 截断**，隐藏了该文件的命中——
+    **违反了本仓 `AGENTS.md`「工具纪律」明写的"先看全输出再分析，不用 tail/head 截断"，同一个错误第二次发生**。
+    本批新增的测试文件因此**是冗余的**（已裁剪为仅保留一个**源码级**互补判据：断言 3 个薄壳都写了探测；建议删除，但删文件须用户许可）。
+  - **DEBT0032 关闭**：标题写「误判假暂停」，实测两条 criteria **均已满足**——① 已由 DEBT0045 批修复（`agate-next.py:258` `_P6_PROVENANCE_PASS = (0, 2)`）+ 有测试；② 我曾误读为「新建时不报路径」，实际 `_write_exit2_resolution` 两条分支**都**输出文件名。该条与 DEBT0045 是**同一问题的重复登记**。
+  - **DEBT0049 关闭（按观察项，非「已修复」）**：其 criteria 是**触发条件而非可交付物**，`status: open` 属登记形态错误。决策已落盘于 `adr.md` ADR-008 + `LIMITATIONS.md` 局限 3，并同步把两处「保持 open」改为「触发即重开」。**其 `task_id` 是批次标签且无任务目录**（`TAG0042-debt-batch` 有同样先例）——该偏离与前一轮「拒凑 task_id」的立场差异、以及 validator 靠 `P[56]` 子串启发式才通过这一事实，**已在条目内逐条交代并登记为 RM-AG0088**，不遮掩。
+  - **DEBT0030 关闭（② 判定为假阳性）**：我按**字面短语**「多路并行」检索得 0 命中即登记为缺口；独立评审指出 `P8-release.md:36-45`「多包发布拆批」节**实质已覆盖**（第 4 步明写「各包版本号不冲突」交叉核对）——
+    **我犯的正是本批宣称要纠正的同一个错误**。故关闭并撤销对应 RM。
+- **10 条确认是真问题**，含实测复现证据：`ABS_PATH_RE` 误伤 `/或`、`/P2`（DEBT0008）；`check-gate.py:940` 子串判定且**阻断性 return 1**（DEBT0029）；`check-debt` **零 gate/CI 挂载** + closed 证据是 `P[56]` 子串启发式（DEBT0033）；
+  `_gate_p2_dispatch_plan` 三处 `return None` 致 **fail-open**（DEBT0043）；`_two_sections` 无标签级终止符 + 斜杠阶段序列 `P0/P1/.../P5/` 被误判（DEBT0044）；
+  两处 `dirname(dirname())` 绕过 `resolve_workspace()` 的 `AGATE_WORKSPACE` 覆盖（DEBT0028）；`gate_commands` 引号/通配两个静默削弱陷阱（DEBT0047）；`check-gate.py` 对 `env_constraints` 零引用（DEBT0015）；
+  P1 `phases` 与正文裁剪无机械校验（DEBT0031）；**DEBT0041** 残留摩擦（工具**刻意**拒写 agent ⇒ releaser 须手写）——**归既有 RM-AG0065 承载，未另开 RM**（避免三处登记同一条）。
+- **RM-AG0068 内旧「零散债务续做清单」作废**：其分档对 DEBT0049/0032 的判断均被实测推翻，已替换为指向新条目的指针（不留两处权威）。
+
 > TAG0043 CI 账本污染兜底（DEBT0040③，**CI 改动经用户明确许可**）。
 
 ### 变更
