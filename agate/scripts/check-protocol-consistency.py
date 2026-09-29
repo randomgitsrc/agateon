@@ -762,6 +762,15 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         "script": "agate/scripts/check-dispatch-routing.py",
         "keywords": ["VALID_CLI", "VALID_EFFORT", "fallback"],
     },
+    {
+        "desc": "账本/状态文件事后污染兜底（DEBT0040③：跑测写脏仓库内已提交账本 → CI fail）",
+        "script": "agate/scripts/check-ledger-pollution.py",
+        "keywords": ["GATE LEDGER", "STATE_PATHS"],
+        # callers 让「CI 真的有这一步」成为机械判据——DEBT0040③ 的实质要求。
+        # 注意：挂在 workflow 上**必须与 pytest job 同 job**（独立 job 的干净 checkout
+        # 观测不到跑测副作用），该约束由 test_t43_ledger_pollution_backstop.py 守护。
+        "callers": [".github/workflows/protocol-tests.yml"],
+    },
 ]
 
 

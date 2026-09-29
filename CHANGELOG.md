@@ -10,6 +10,23 @@
 
 ## [Unreleased]
 
+> TAG0043 CI 账本污染兜底（DEBT0040③，**CI 改动经用户明确许可**）。
+
+### 变更
+
+- **账本/状态文件污染有了 CI 事后兜底**（DEBT0040③）：`append-only` 事件账本（`gate-events.jsonl`）的写入测试**无 tmp 隔离强制**——测试把 `task_dir` 指向仓库内已提交账本，跑测即写脏历史任务的账本（TAG0034 实测，需人工 `git checkout` 复原）。①②（角色文件条文 + 静态源码判据）已在 TAG0042 批完成，**③「CI 有兜底步」因需 CI 许可而长期空置**。现新增 `agate/scripts/check-ledger-pollution.py`：单次 `git status --porcelain -uall`（pathspec **精确到三族状态文件名**`gate-events.jsonl` / `active-tasks.md` / `.state.yaml`，覆盖 `agate-workspace/` 63 个 + `agate/tests/fixtures/` 5 个 = 68 个），非空即报被污染路径。**用 `status` 而非 `diff`**：`diff --exit-code` 只报已跟踪文件，会漏掉跑测**新建**的未跟踪账本（评审实测：新建未跟踪账本时 `diff` rc=0、`status` 能捕获）。**pathspec 必须精确到文件名而非目录**——初版用目录，把同子树下**任何**文档编辑（含本债自己的闭合记录 `tech-debt.md`）都判成污染，即引入它的 PR 会让自己红，该写法**只在「本来就没有任何东西需要检查」的树上才绿**（独立评审判定 MAJOR）；已修并加 2 条回归判据。退出码 0=干净 / 1=污染 / 2=无法判定，**2 亦按失败处理（fail-closed）**——无法判定时声称通过正是本债要治的真空通过。
+- **该兜底挂在 `pytest` job 内、全量测试之后**（不是新 job）：GitHub Actions 每个 job 各有独立 runner 与独立 checkout，放进 `gate-backstop` 等独立 job 只会看到全新干净工作树，**在结构上不可能**观测到 pytest 的副作用——那只是「看起来有兜底」。该约束被机械守护（判据含「位于 pytest job 内」与「在全量测试步骤之后」）。
+- **性能**：不新增 job、不新增 runner，故**不增加 CI 墙钟时间**（相比新增一个 job 可省约 20s runner 启动）；脚本侧单次 pathspec 限定 `git status` 查询**实测约 6ms**（本仓 3.6k 跟踪 / 21k 工作区文件）；**端到端约 31ms**（含 Python 解释器启动两次子进程，启动开销为主）——与新增一个 job 的约 20s 相比可忽略。并沿用同 job 既有的 docs-only 快路径（纯文档 PR 跳过，不因历史账本误红）。
+- **同类扫描修掉两处「已失效陈述」**：本批落地 ③ 后，`implementer.md`（「跑测**事后**是否写脏**没有** CI 兜底步」）与 `test_t42_p3_platform_selfcheck.py` 头注（同义表述）**由真变假**——已按新事实改写并点明「静态判据拦根因 / 事后兜底验结果」的分工。若只加机制不改这两处，仓库会同时留下「有兜底」与「没兜底」两种互相矛盾的陈述。
+- **登记面自证**：新脚本触发了本批刚建立的 `CHECK9-coverage` 机制（实测告警），已按新规登记进 `SCRIPT_ALIGNMENT_ANCHORS`——并借其 `callers` 字段加一道**弱**判据（`callers` 是子串匹配，注释提及即可满足；**真正的强制力在 workflow 步骤的机械判据上**——`test_t43_ledger_pollution_backstop.py` 断言步骤确在 `pytest` job 内且排在全量测试之后）。
+
+### 验证
+
+- 全量 pytest **2450 passed / 2 failed / 2 skipped**（2 failed 为既有环境缺陷：`opencode` 不在 PATH、临时目录为独立 tmpfs 致 `git clone --bare --local` 跨设备链接；均非本批触及文件。另有一条 `test_bdd_13_6` 在本 workflow 改动**提交前**必然失败——它断言既有 workflow 无未提交改动，提交后即绿）
+- **兜底有效性双向实测**：干净仓 → exit 0；已提交账本被追加 / 新建未跟踪账本 / fixture 副本被写脏 → 各 exit 1；非 git 目录 → exit 2；**全量测试跑完后立即跑兜底 → exit 0**（误报实测，证明不会让 CI 误红）。**更正说明**：此项先前记录的 exit 0 系在**未含本债闭合编辑的树**上测得、对最终改动集不成立，已随 pathspec 修正后重测（见上）
+- **负向控制**：把 pathspec 退回目录级写法 → 恰好 2 条新回归判据（`t43lb_11`/`t43lb_12`）转红，其余绿
+- consistency **0 ERROR / 386 WARNING**（与基线一致）；ruff 全绿
+
 > TAG0043 登记面批（DEBT0046）—— 承接 TAG0042 技术债批。
 
 ### 修复

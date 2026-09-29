@@ -61,8 +61,13 @@ agent: implementer
 - **机械兜底**：`agate/tests/unit/test_t42_p3_platform_selfcheck.py::test_t42_tests_do_not_pass_repo_paths_to_state_writers`
   **静态扫描**测试源码，禁止把仓库内路径传给 `append_event` / `write_state_yaml` / `write_gate_result`。
   （该检查刻意做成**静态**而非"跑完对比 git status"——后者在 `-n auto` 下因执行顺序**会漏报**。）
-- **已知缺口（据实说明，不虚构保障）**：跑测**事后**是否写脏没有 CI 兜底步。
-  （`git diff --exit-code` 类 CI 检查需用户许可，未落地，见 DEBT0040 closure_criteria #3。）
+- **事后兜底（DEBT0040 ③，2026-09-29 已落地）**：`agate/scripts/check-ledger-pollution.py` 在 CI 的 `pytest`
+  job 内、**全量测试之后**跑一次 `git status --porcelain -uall`（pathspec 精确到三族**状态文件名**），
+  非空即判失败。它挂在 `pytest` job 内而非独立 job——独立 job 的 checkout 是全新干净工作树，
+  **观测不到**跑测副作用。
+  （静态判据拦根因、事后兜底验结果，两者互补；**不要**用「跑完对比 git status」替代静态判据，
+  后者在 `-n auto` 下因执行顺序**会漏报**。另注：pathspec 必须精确到文件名而非目录——
+  目录写法会把本目录下的正常文档编辑误判为污染。）
 
 ## 自查≠gate
 写完代码后应自跑测试确认基本功能（自查），但自查≠P5 gate。不要声称"P5 已过"。

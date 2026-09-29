@@ -78,8 +78,9 @@ def test_t42_scan_is_runnable_and_clean_on_repo(agate_root, agate_scripts, pytho
 #
 # 范围（按评审建议如实收窄，不再声称"等价于关闭 DEBT0040"）：本检查覆盖
 # 「测试以仓库内路径调用写函数」这一**根因**；已提交状态文件共 68 个
-# （`gate-events.jsonl` / `active-tasks.md` / `.state.yaml` 三族），其**事后**是否被
-# 写脏**没有** CI 兜底——那属已知缺口，不在此处虚构保障。
+# （`gate-events.jsonl` / `active-tasks.md` / `.state.yaml` 三族），其**事后**是否被写脏，
+# 自 DEBT0040 ③ 起由 CI 兜底承担（`agate/scripts/check-ledger-pollution.py`，挂 pytest job 内、
+# 全量测试之后）——本文件只负责**根因**侧（静态扫描），两者互补、不重复。
 
 # 会把内容写进 `task_dir` 的函数（改这些函数的 task_dir 即可能写脏仓库）
 _WRITER_FNS = ("append_event", "write_state_yaml", "write_gate_result")
