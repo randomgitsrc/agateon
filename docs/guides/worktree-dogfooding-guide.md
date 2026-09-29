@@ -8,7 +8,33 @@
 
 ## 为什么需要这套流程
 
-agate 自身改造 = 用 agate 改造 agate（dogfooding）。涉及双工作区（稳定版 `~/.agate` vs 改造对象 worktree）、共享 hook、基线验证、交接单。步骤多且易错（T001/TAG0004 两次都踩过），固化后可 10 分钟内完成。
+agate 自身改造 = 用 agate 改造 agate（dogfooding）。
+
+> **⚠️ worktree 不是正确性要求（2026-09-29 更正）**
+>
+> 本流程诞生于 **`~/.agate` 还是指向本仓的软链**的年代（2026-08-13，TAG0004）。那时改开发 checkout 的 `agate/` 会**立即改变判定你自己 commit 的 gate**——所以必须用 worktree 把 WIP 隔开，避免"用未验证的新 gate 判自己"。
+>
+> **v0.73.0 版本布局起该耦合已结构性解除**（见下方「本机稳定版布局」表第 1 行——本指南自己也已记明「改开发 checkout 的 `agate/` **不再影响** hook 判定」）。实测确认：
+>
+> - hook 是 `~/.agate/scripts/pre-commit-gate.sh`（`readlink -f` 自定位），exec `~/.agate/scripts/resolve-entry.py`
+> - 解析链 = `AGATE_ROOT env` > `AGATE_HOME` > 项目 `.agate-version` > `current` 链；**无任何 cwd 相对回退**（`resolve_hook_root` 的兜底也只落到 `~/.agate/scripts/`）
+> - 本仓实测：`agate-resolve.py` → `AGATE_ROOT=/home/kity/.agate/v0.76.0/agate`，`reason=全局 current`
+>
+> **⇒ 在上述解析链下，判定的是已安装的稳定版，与你所在目录无关。**
+>
+> **⚠️ 前提（对抗性核实补入）**：该结论成立于 **`AGATE_ROOT` 未设置 且 版本链可解析**。两条路径**确实能**把判定指向 checkout，用前须排除：
+> ① 环境变量 `AGATE_ROOT`（优先级最高；实测 `AGATE_ROOT=<checkout>/agate agate-resolve.py` → 直接返回该路径）——而 `orchestrator-template.md` 恰教人**优先用 `$AGATE_ROOT`**
+> ② 版本链全部失败时的**脚本路径上溯**兜底（若 hook 指向 checkout 内脚本，兜底会返回 checkout）
+> **自检一条命令**：`python3 ~/.agate/scripts/agate-resolve.py` → 看 `AGATE_ROOT=` 是否在 `~/.agate/` 下（而非你的 checkout）；`REASON` 给出依据。**不在 `~/.agate/` 下就不要依赖本节的非必需结论**。
+>
+> **worktree 仍值得用的理由（按价值排序）**：
+> 1. **并行任务**——多个任务同时进行时各自需要独立工作目录（最强理由）
+> 2. **与 main 隔离**——main 需随时能接 hotfix / 合并他人 PR，任务 WIP 不占用它
+> 3. **探针/临时产物隔离**——`.agate-tmp/` 之类落进一次性目录，放弃时直接删
+>
+> **⇒ 单任务串行时可直接在开发 checkout 的分支上做。** 触发 SELF-GATE 的改动仍须独立评审——那是 `self-gate-review:` 提交信息机制，与 worktree 无关。
+
+涉及稳定版 `~/.agate` 与开发 checkout 的**工具选择**（不是目录选择）、共享 hook、基线验证、交接单。步骤多且易错（T001/TAG0004 两次都踩过），固化后可 10 分钟内完成。
 
 ## 前置条件
 
@@ -71,7 +97,7 @@ git rev-parse --git-path hooks          # 权威答案：worktree / core.hooksPa
 ls -la "$(git rev-parse --git-path hooks)" | grep -E 'pre-commit|commit-msg|pre-push' | grep -v sample
 ```
 
-预期：三个 hook 软链指向 `~/.agate/scripts/`。这是有意的——commit hook 用稳定版判定，避免"用未验证的新 gate 判自己"。
+预期：三个 hook 软链指向 `~/.agate/scripts/`。这是有意的——commit hook 用稳定版判定，避免"用未验证的新 gate 判自己"（**v0.73.0 后该风险已由版本布局结构性消除**，见文首更正；此处保留为设计意图说明）。
 
 > **新 worktree 不需要重装 hook**：共享目录已就位，新建的 worktree 直接继承（本机 hook 一直在**主 checkout** 的 `.git/hooks/`）。
 > 反过来说，`<worktree>/.git/hooks` 这种写法在 worktree 下**必然失败**——`.git` 是文件不是目录。
@@ -215,22 +241,31 @@ python3 ~/.agate/scripts/agate-resolve.py
 
 ## 改动通道：worktree 优先，hotfix 例外
 
-> **默认**：agate 自身改造任务（P0-P8）**必须**走 worktree。
+> ⚠️ **本节曾是"必须走 worktree"的依据，2026-09-29 已更正**——理由（稳定版与 checkout 解耦）已在文首说明。
 >
-> **hotfix 通道**：**不构成 agate 任务**的一次性修复，满足**全部**下列条件时**可不开 worktree**（直接在开发 checkout 改 → 分支 → PR）：
+> **先分开三件事**（混同会导致误判，`AGENTS.md`「改动通道」有同表）：
+>
+> | 轴 | 问题 | 由什么决定 |
+> |---|---|---|
+> | **A 立项** | 建不建任务目录 / 走不走 P0-P8 | 是 agate 任务 → 立项；一次性修复 → 不立项 |
+> | **B 工作目录** | 开不开 worktree | **隔离需要**（并行 / main 需空闲 / 探针隔离）——**与 A、C 无关** |
+> | **C 独立评审** | 要不要独立评审 | 碰 SELF-GATE 触发面 → 须独立评审；**留痕**由 `self-gate-review:` 检查（仅 WARNING 不拦截）——**与 B 无关** |
+>
+> **默认**：改动走**分支 + PR**。**默认开 worktree 用于隔离**——但它是**隔离选择**（理由见文首）。
+>
+> **hotfix 通道**：**不构成 agate 任务**的一次性修复，满足**全部**下列条件时**不立项**（直接在开发 checkout 改 → 分支 → PR）：
 >
 > | # | 条件 |
 > |---|------|
 > | 1 | 改动面 ≤2 文件、无跨模块影响 |
-> | 2 | **不触发 SELF-GATE**（不碰 `agate/` 下任何文件、`AGENTS.md`、`README.md`、`SELF-GATE.md`） |
-> | 3 | 不产生阶段产出（无 P0-brief/.state.yaml/P1-P8） |
-> | 4 | 有明确验证判据（单测 + 目标命令 exit code），不需多轮评审 |
+> | 2 | **不是 agate 任务**（无 P0-brief/.state.yaml/P1-P8）。**注意：这与是否触发 SELF-GATE 无关**——若碰 `agate/` 下文件或 `AGENTS.md`/`README.md`/`SELF-GATE.md`，仍须在提交信息写 `self-gate-review:` 留痕 |
+> | 3 | 有明确验证判据（单测 + 目标命令 exit code），不需多轮评审 |
 >
 > **典型**：配置 key 对齐上游 schema（如 DSH persona `text`→`prefix`，PR #325）、文案修正、单文件 bug、CI 配置微调。
 >
-> **不适用**：任何 `agate/` 协议本体/脚本改动（SELF-GATE）、需阶段产出的改动（= agate 任务）、跨子系统探索性设计。
+> **不适用 hotfix（必须立项为任务）**：需阶段产出的改动（= agate 任务）、跨子系统探索性设计、**`agate/` 协议本体/脚本改动（触发 SELF-GATE，须独立评审并留痕 `self-gate-review:`；是否另开 worktree 仍按轴 B 判断）**。
 >
-> **hotfix 也走 PR**（main 受保护），只是不开 worktree、不建任务目录。
+> **hotfix 也走 PR**（main 受保护），只是不立项、不建任务目录。
 
 ## 发布与合并：tag / PR / merge 策略（TAG0035 复盘补全）
 

@@ -14,7 +14,7 @@ known_risks:
   - "formatter 改动影响所有平台，须保持平台无关（Windows 无 mktemp 语义差异）"
   - "P0-brief 四字段格式（RM-AG0080）：extractor 读行首 YAML 键而先例用 markdown 标题 → 注入长期为空；同族第二面=_grep 对 known_risks 不回带列表"
 env_constraints:
-  debug_env: "无独立 debug 环境；验证=worktree 内 pytest + 对存量任务全量回归对账 + ≥1.5MB formatter 实测"
+  debug_env: "无独立 debug 环境；验证=本 checkout 内 pytest + 对存量任务全量回归对账 + ≥1.5MB formatter 实测"
   platform: "dsh"
   network: "full"
   consistency_baseline: "386 WARNING / 0 ERROR"
@@ -147,8 +147,8 @@ $ python3 agate/scripts/agate-extract-context.py P1 agate-workspace/tasks/TAG003
 ## env_constraints
 
 - 运行 agateon 只需系统 `python3` + `pyyaml`；开发另需 `ruff`（CI 锁 `0.16.4`）
-- **本机环境**：`~/.agate` 为版本管理布局（`current` 指针）；`~/.agate/scripts/` 是**稳定版**——**本任务改的正是 gate 脚本**，故双向工作区纪律尤其关键：**跑 gate 判定用 `~/.agate`（稳定版，判定本次 commit），改代码/跑测试在 worktree**
-- **`check-protocol-consistency.py` 必须用 worktree 自己的**（检查对象是 worktree 的协议文件）
+- **本机环境**：`~/.agate` 为**版本管理布局**（`current` 指针）。**稳定版来源 = `~/.agate/current/`，不是本 checkout**——hook 判定恒用稳定版（已实证：`agate-resolve.py` → `AGATE_ROOT=~/.agate/vX.Y.Z/agate`；解析链 `AGATE_ROOT env > AGATE_HOME > .agate-version > current`，**无 cwd 相对回退**），故**改本 checkout 的 `agate/` 不影响 gate 判定**（该耦合已在 v0.73.0 版本布局解除）。`~/.agate/scripts/` 与 hook 同源——**本任务改的正是 gate 脚本**，故该纪律尤其关键：**跑 gate 判定用 `~/.agate`（稳定版，与 hook 同源、判定本次 commit），改代码/跑测试在本 checkout**
+- **`check-protocol-consistency.py` 必须用本 checkout 自己的**（检查对象是本次改动的协议文件）
 - **平台无关是硬约束**：测试不得裸 `python3`、不得用 `/tmp`（用 `tmp_path`）、不得假设 POSIX symlink；DSH 下 `/tmp` 只读、pytest 需 `--basetemp`
 - 一致性基线：**386 WARNING / 0 ERROR**
 - 新增 `check-*.py` 须同步登记面（**RM-AG0077 之外**：`TAG0036` 复盘的 DEBT0046 已登记「新增 check 脚本无登记面清单」，本任务**不重复处理**，仅在新增脚本时遵守该清单）
@@ -156,8 +156,7 @@ $ python3 agate/scripts/agate-extract-context.py P1 agate-workspace/tasks/TAG003
 
 ## executor_env
 
-- **worktree**：`git worktree add .worktrees/agate-TAG0039 -b fix/TAG0039-checker-robustness`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0039.md`
-- **稳定版工具**：`~/.agate/scripts/`（勿动）
+- **工作目录**：**worktree 非必需**——v0.73.0 版本布局后稳定版（`~/.agate/current`）与任何 checkout 已解耦，hook 恒用稳定版判定（已实证：`agate-resolve.py` → `AGATE_ROOT=~/.agate/vX.Y.Z/agate`），故本任务可**直接在开发 checkout 的分支上做**。**何时仍建议 worktree**：① 与其他任务**并行**（工作目录互不干扰）② 需要与 main 的 hotfix/合并操作**隔离**。若用 worktree：`git worktree add .worktrees/agate-TAG0039 -b fix/TAG0039-checker-robustness`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0039.md`- **稳定版工具**：`~/.agate/scripts/`（勿动）
 - **证据来源**：`agate-workspace/roadmap/roadmap.md` 的 RM-AG0077 条目（含全部复现数据与行号）
 - **先例参照**：`TAG0029`（gate 命令解析器修复批——同类「同源多脚本强合并单 task」先例）、`TAG0031`（DEBT 存量修复批——低风险脚本修复批先例）、`TAG0035`（gate 健壮性批——含 fail-open→fail-closed 修复先例）
 - **关联外部证据**：peekview 项目登记簿 DEBT0014（formatter）/ DEBT0015（scope-resolved）/ DEBT0016（provenance）——三条均为 `category: protocol`、`task_id` 指向 TPV0099；本任务即其在 agateon 侧的落地

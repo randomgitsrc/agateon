@@ -130,7 +130,7 @@ TPV0098 `P0-brief` 明确将其列为任务关键约束：
 - 运行 agateon 只需系统 `python3` + `pyyaml`；开发另需 `ruff`（CI 锁 `0.16.4`）
 - **本机环境**：`~/.agate` 为版本管理布局；`~/.agate/scripts/` 为**稳定版**（勿动）
 - **写 `~/.dsh/` 需用户明确许可**（全局规则 5）——本任务若需实机验证 DSH 工具面收敛/预设行为，**须先取得许可**，且**不得擅自改用户 profile**
-- **`check-protocol-consistency.py` 必须用 worktree 自己的**
+- **`check-protocol-consistency.py` 必须用本 checkout 自己的**
 - **平台无关是硬约束**：测试不得裸 `python3`、不得用 `/tmp`、不得假设 POSIX symlink（本任务**恰恰涉及 `/tmp` 与路径约定**，须格外注意：**文档中出现的路径字面量可能被平台假设扫描器命中**——TPV0099 已踩过 `DEBT0048` 类陷阱）
 - 一致性基线：**386 WARNING / 0 ERROR**
 - **改动面全部触发 SELF-GATE**（`agate/**/*.md` / `agate/scripts/*.py`）→ 须独立评审 + `self-gate-review:` 引用
@@ -138,8 +138,7 @@ TPV0098 `P0-brief` 明确将其列为任务关键约束：
 
 ## executor_env
 
-- **worktree**：`git worktree add .worktrees/agate-TAG0041 -b feat/TAG0041-platform-hygiene`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0041.md`
-- **稳定版工具**：`~/.agate/scripts/`（勿动）
+- **工作目录**：**worktree 非必需**——v0.73.0 版本布局后稳定版（`~/.agate/current`）与任何 checkout 已解耦，hook 恒用稳定版判定（已实证：`agate-resolve.py` → `AGATE_ROOT=~/.agate/vX.Y.Z/agate`），故本任务可**直接在开发 checkout 的分支上做**。**何时仍建议 worktree**：① 与其他任务**并行**（工作目录互不干扰）② 需要与 main 的 hotfix/合并操作**隔离**。若用 worktree：`git worktree add .worktrees/agate-TAG0041 -b feat/TAG0041-platform-hygiene`，流程见 `docs/guides/worktree-dogfooding-guide.md`，交接单 `HANDOFF-TAG0041.md`- **稳定版工具**：`~/.agate/scripts/`（勿动）
 - **证据来源**：`agate-workspace/roadmap/roadmap.md` 的 RM-AG0075 / RM-AG0076 条目；外部样本 `peekview/agate-workspace/tasks/TPV0099-fullscreen-link/`（`.agate-tmp` 事件、并行探针污染）与 `TPV0098-e2e-local-sharding/P0-brief.md`（跨调用服务约束）
 - **先例参照**：`TAG0018` / `TAG0030`（DSH 平台接入——本任务在其交付的 `assets/templates/dsh/` 上补卫生约定与定位声明）、`TAG0033`（Codex 平台接入——同类平台能力差异处理）、`TAG0032`（v0.76.0 的 DSH preset **定界托管块**——`.gitignore` 模板的安全语义可参照该幂等/托管先例）
 - **关联条目**：`RM-AG0034`（平台扩展 epic——本任务约定应能被第四平台直接复用）
