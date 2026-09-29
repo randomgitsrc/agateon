@@ -10,6 +10,17 @@
 
 ## [Unreleased]
 
+> TAG0041 (RM-AG0075 受限 harness 临时产物与长驻服务生命周期 + RM-AG0076 DSH agent-team 定位)。
+
+### 新增
+
+- **受限 harness 通用约束成文**（`platform-notes.md` 新节，面向所有限制写权限的平台而非仅 DSH）：① **canonical 临时产物目录 `<项目根>/.agate-tmp/`**——名称固定 / `git check-ignore` 强制忽略 / 文件**不得**匹配测试收集模式（`*.spec.*` 等，否则被测试框架默认 `include` 扫到、静默抬高基线）/ 清理时点 = P8-READY（**②③ 由 `check-gate.py P8` 机械校验，④ 由 P8 卡收尾检查单承载**）；并澄清它与 P4 卡「基础设施隔离」是**两层不冲突**（批内产出→`P4-implementation/{pkg}/`，探针 scratch→`.agate-tmp/`），并行时 scratch 亦按 `batch-id` 隔离。② **`/tmp` 的真实约束是「per-call tmpfs」**（**可写**，但每次调用挂一份**全新空** tmpfs ⇒ 跨调用不可见；机制出处 `sandbox/src/roots.ts::writableRoots()` 把 `/tmp` 列入可写白名单、`sandbox-local/src/profiles.ts` 为 workspace-write 加 `--tmpfs /tmp`；本机实测跨调用文件消失）——**此前文档写作「`/tmp` 只读」与事实不符，已一并更正**（结论「用项目内 scratch」不变）。③ **长驻服务存活跟随「发起它的那次调用」**（DSH 回收整个进程树，`&`/`nohup`/`setsid` 均不保活）+ **反模式「加长 `sleep` 托底」**（实测逐次加长 7200→43200 s 仍被跨越 4 次）+ **四步可移植做法**（单一责任方 / 每次使用前探活[端口而非 pidfile] / 掉线即重启 / job kill 即清理）。
+- **忽略片段模板** `assets/templates/gitignore-fragment.txt`（可直接复制的 `.agate-tmp/` 行 + 为什么必须忽略）。
+- **`check-gate.py P8` 新增 WARNING（两条，均不阻断）**：canonical 临时目录**存在却未被忽略**、以及**内部文件名命中测试收集模式**——直指「release 的 `git add -A` 把临时物连同明文凭证提交、**入 git 历史不可逆**」这一实测风险；**仓库定位以 `task_dir` 锚定**（而非调用方 CWD）。
+- **P8 卡补两项提交前检查**：READY 收尾检查单纳入 `.agate-tmp/` 清理；新增**提交前暂存面审查**（`git diff --cached --name-only` 过目，防未忽略临时物/凭证随 release 提交，RM-AG0077⑤ 的 agateon 侧落地）。
+- **DSH SKILL 平台注意扩到 7 条**：补临时产物落点、服务探活、以及**显式声明不要启用 `agent-team` 组合包**（含自查判据 `dsh.profile.bundles`；`/tmp` 第 2 条的「只读」措辞同步更正为「per-call tmpfs」）。
+- **`agent-team` 冲突形态据上游原文更正，并落成可执行检测**：该组合包作用在**顶层**（注册 team 工具 + 禁用顶层 subagent），而本 preset 把四个委派控件挂在**预设作用域**；上游 README「已知限制」原文写明「顶层组合包**不会替换**这些注册」⇒ 实际后果是**两套委派面并存**，**不是**「preset 工具映射失效」（本仓曾两次写错该条，已在文档中留痕）。`agate-setup.py` 接入时读同目录 `package.json` 的 `dsh.profile.bundles`，命中即打印**不阻断**的冲突告警。
+
 > TAG0039 (RM-AG0077 校验器健壮性批 + RM-AG0080)：下图 7 条修复均出自该批。
 
 ### 修复

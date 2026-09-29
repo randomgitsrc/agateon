@@ -1,5 +1,5 @@
 {
- "_note": "TAG0034 BDD-39 回归护栏基线 sha256——P3 捕获。gate 机制（phases.yaml / check-gate.py / check-state-transition.py）+ agate-dispatch 渲染产物长期字节不变量守护，任何阶段使这些 hash 变化 = BDD-39 违反。state-machine.md 是叙事文档、非机制本体：2026-09-10 protocol-doc-refresh 批（经 SELF-GATE + protocol-alignment-review）刷新其正文（补 agate next / ceremony / cmdstream 指针，未改任何转移规则），基线已随之更新——此后再次变化仍需经 SELF-GATE 审查；2026-09-16 TAG0035（gate 健壮性批）修复 check-gate.py/check-state-transition.py 数处 fail-closed 判据缺陷（经 SELF-GATE + protocol-alignment-review，status: approved），基线已随之更新。 2026-09-29（RM-AG0077 校验器健壮性批，直改未走 P0-P8；经 SELF-GATE protocol-alignment-review）：check-gate.py 增 roadmap 列数异常告警、check-state-transition.py 增跳过原因声明——两者均为**可观测性**改动（未改任何判据/exit code/转移规则），基线随同 commit 刷新（沿用 TAG0035 先例）。",
+ "_note": "TAG0034 BDD-39 回归护栏基线 sha256——P3 捕获。gate 机制（phases.yaml / check-gate.py / check-state-transition.py）+ agate-dispatch 渲染产物长期字节不变量守护，任何阶段使这些 hash 变化 = BDD-39 违反。state-machine.md 是叙事文档、非机制本体：2026-09-10 protocol-doc-refresh 批（经 SELF-GATE + protocol-alignment-review）刷新其正文（补 agate next / ceremony / cmdstream 指针，未改任何转移规则），基线已随之更新——此后再次变化仍需经 SELF-GATE 审查；2026-09-16 TAG0035（gate 健壮性批）修复 check-gate.py/check-state-transition.py 数处 fail-closed 判据缺陷（经 SELF-GATE + protocol-alignment-review，status: approved），基线已随之更新。 2026-09-29（RM-AG0077 校验器健壮性批，直改未走 P0-P8；经 SELF-GATE protocol-alignment-review）：check-gate.py 增 roadmap 列数异常告警、check-state-transition.py 增跳过原因声明——两者均为**可观测性**改动（未改任何判据/exit code/转移规则），基线随同 commit 刷新（沿用 TAG0035 先例）。 2026-09-29（TAG0041 平台适配层卫生，直改未走 P0-P8）：check-gate.py 新增 P8 canonical 临时产物目录未忽略的 WARNING（可观测性改动，未改任何判据/exit code）——基线随同 commit 刷新（沿用 TAG0035 先例）。 2026-09-29（TAG0041 平台适配层卫生，直改；经 SELF-GATE protocol-alignment-review needs-revision → 逐条处置后复审）：check-gate.py 新增 canonical 临时产物目录的两条 WARNING（未忽略 / 文件名命中测试收集模式），并**修正其仓库定位**——原按调用方 CWD 定位，评审端到端复现出双向错误（`cd` 到子目录 → 已忽略被误报未忽略；CWD 在别的仓库 → 本任务仓库的真实凭证风险静默漏检），改为以 `task_dir` 锚定 + `check-ignore` 传绝对路径，与同一函数内 DEBT0020「仓库根锚定」取向对齐。**均为可观测性改动，未改任何判据/exit code**。（本次为第 5 次刷新；本护栏语义已在测试文件头更正为「绊线」而非「长期不变量」。）",
  "captured_phase": "P3",
  "task_id": "TAG0034",
  "files": {
@@ -8,8 +8,8 @@
    "bytes": 7009
   },
   "agate/scripts/check-gate.py": {
-   "sha256": "9a50256ed4ac6259dd5ac7e8ffa6f453c4e1d19721cd915e40e9071b6c340799",
-   "bytes": 75475
+   "sha256": "c580caf8c96a07c348dd04696d11dcc42701bdbefb5d6f9e2f246da8d81ced84",
+   "bytes": 79759
   },
   "agate/scripts/check-state-transition.py": {
    "sha256": "e0eec035fefd16e324a9d85f439451fb3f7e37921cebe9f5f8a97d3b18825336",

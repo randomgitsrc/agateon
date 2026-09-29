@@ -1,0 +1,19 @@
+# Agateon 临时产物忽略片段（canonical scratch dir）
+#
+# 用法：把下面两行加进**项目根**的 .gitignore（agateon 不自动改写你的文件——
+# .gitignore 是用户资产，隐式追加会与既有规则/顺序语义冲突）。
+#
+# 为什么必须忽略（不是洁癖，实测代价）：
+#   受限 harness（DSH workspace-write / Codex -s workspace-write 等）把写权限限制在
+#   会话工作区内 ⇒ agent 只能在**项目树内**落临时产物。若该目录未被忽略：
+#     · release 流程的 `git add -A` 会把临时物一并提交——某任务实测 `.agate-tmp/`
+#       涨到 76 MB、含 10 个明文 token/cookie ⇒ **凭证入 git 历史不可逆**；
+#     · 探针文件名若命中测试收集面（`*.spec.*` 等）还会被测试框架默认 include 扫到，
+#       静默抬高基线。
+#
+# 权威口径见 {agate_root}/platform-notes.md「受限 harness 通用约束」。
+# 校验：`git check-ignore -q .agate-tmp && echo ok`；`check-gate.py P8` 对
+#        「目录存在却未被忽略」出 WARNING。
+
+# ── Agateon 临时产物（探针 / 一次性脚本 / 抓取物；非任务产出，不入库）──
+.agate-tmp/

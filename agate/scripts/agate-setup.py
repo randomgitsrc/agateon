@@ -36,6 +36,7 @@ Codex = skill），用户须逐条执行、跨平台易漏、Windows 需自行�
 
 import argparse
 import contextlib
+import json
 import os
 import re
 import shutil
@@ -173,6 +174,32 @@ def _install_hook(proto_root, dry_run):
     return 0
 
 
+def _dsh_agent_team_conflict(patch_path):
+    """该 DSH profile 是否启用了 agent-team 组合包（RM-AG0076）。返回 bool。
+
+    **为什么不阻断、只告警**：它是用户对自身 DSH 环境的选择，agateon 无权替其决定；
+    但它是**可判定的冲突**，值得在接入时告知。
+
+    **冲突形态（据上游 README「已知限制」原文，非本仓推断）**：该组合包启用后**顶层**
+    注册 team 工具（`spawn_teammate` / `wait_agent` / `team_task_*`）并禁用**顶层**的
+    subagent 控件；而本 preset 把 `subagent` / `subagent_fork` 挂在 **预设作用域**
+    （`config.plugins`），上游原文明确「顶层组合包**不会替换**这些注册」
+    ⇒ 结果是**两套委派面并存**（team 工具 + preset 内 subagent），编排者需自行判断用哪套；
+    且团队任务板与 `.state.yaml` 形成**第二个协调基质**，与「单一权威 + 阶段门禁 + 单一作者」竞争。
+    agateon 侧已有等价能力：批量并行 = `workflow`；独立 fresh 复核 = `ralph`；跨轮续跑 = `goal`。
+    """
+    pkg = os.path.join(os.path.dirname(patch_path), "package.json")
+    try:
+        with open(pkg, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    profile = data.get("dsh") or {}
+    profile = profile.get("profile") or {}
+    bundles = profile.get("bundles") or []
+    return any("agent-team" in str(b) for b in bundles)
+
+
 def _register_dsh_preset(proto_root, dry_run):
     """把 Agateon 编排者写成 DSH **声明式** preset（profile patch 托管块）。返回 (ok, fail)。
 
@@ -197,6 +224,16 @@ def _register_dsh_preset(proto_root, dry_run):
         return 0, 1
     ok = 0
     for patch in patches:
+        if _dsh_agent_team_conflict(patch):
+            sys.stderr.write(
+                "  ⚠️  该 DSH profile 启用了 **agent-team 组合包**——与 agateon 委派模型冲突：\n"
+                "      顶层注册 team 工具（spawn_teammate / wait_agent / team_task_*）并禁用顶层 subagent；\n"
+                "      而本 preset 的 subagent / subagent_fork 挂在**预设作用域**、不受影响\n"
+                "      ⇒ **两套委派面并存**，编排者须自行判断用哪套（且团队任务板与 .state.yaml 竞争）。\n"
+                "      agateon 已有等价能力（workflow / ralph / goal），建议从该 profile 的\n"
+                "      package.json 的 dsh.profile.bundles 中移除该包。详见 platform-notes.md DSH 章。\n"
+                "      （仅提示，不阻断：这是你对该 profile 的选择。）\n"
+            )
         text = _read_text(patch)
         new = agate_common.dsh_apply_block(text, block)
         if dry_run:

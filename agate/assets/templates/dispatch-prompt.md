@@ -57,7 +57,8 @@
 - 必须用 Write 工具写入上述路径
 - 不得将产出文件写入 /tmp、工作区根目录、或其他自选路径
 - 写到其他位置 = 未产出，主 Agent 只检查上述路径
-- /tmp 可用于中间临时文件（如 gate-runner 落盘 traceback），但产出文件必须写入约定路径
+- 中间临时文件（如 gate-runner 落盘 traceback）放 **`<项目根>/.agate-tmp/`**，产出文件必须写入约定路径。
+  ⚠️ **不要用 `/tmp`**：它虽**可写**，但在受限 harness（DSH 等）下是 **per-call tmpfs**——**跨调用不可见**（你这一轮写的探针/pidfile，下一轮就没了）。canonical 目录在项目树内，因此须**已被 .gitignore 忽略**、文件名**不得**匹配测试收集模式（`*.spec.*` / `*.test.*` 等，否则被测试框架默认 `include` 扫到、静默抬高基线）。完整约定见 `{agate_root}/platform-notes.md`「受限 harness 通用约束」
 
 ## 产出文件字段填写
 用 `agate-md-field-set` 填写产出文件的 frontmatter 字段（先 `--list` 看本阶段应填字段清单；

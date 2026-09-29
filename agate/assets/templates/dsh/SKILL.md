@@ -63,9 +63,12 @@ judge 需要 fresh context（只看标准、不看实现者自述）——DSH �
 ## 平台注意（DSH 特有，务必遵守）
 
 1. **沙箱只读区**：DSH 默认 workspace-write，只覆盖会话工作区。协议本体目录（`{agate_root}`）对沙箱**只读**——gate 脚本若写仓库内文件会 `Errno 30`。任务工作区放可写位置（如 `dsh-workspace` 下）
-2. **/tmp 只读**：pytest 等需要临时目录的工具要用 `--basetemp` 指向可写目录（`TMPDIR` 环境变量亦可）
+2. **`/tmp` 是 per-call tmpfs**（**可写但跨调用不可见**）：本轮写的文件下一轮读不到——故 scratch 放项目内 `<项目根>/.agate-tmp/`（见第 5 条）。pytest 等需要临时目录的工具用 `--basetemp` 指向项目内可写目录。（⚠️ 本条此前写作「`/tmp` 只读」，与 `~/.dsh/env.md` 的 `/tmp ✅ 可写` 及实测不符，已更正；结论不变、论据更正）
 3. **审批策略**：审批被禁用时沙箱拒绝即终局，不可升级——gate 命令设计成不触发需审批的操作
 4. **bash 纪律**：长命令外层 `timeout`；读文件用 read/grep/glob 工具而非 bash（避免 bash 挂起）
+5. **临时产物落 `<项目根>/.agate-tmp/`**（不能用 `/tmp`——见第 2 条）：该目录须**已被 .gitignore 忽略**，且其中**文件名不得匹配测试收集模式**（`*.spec.*` / `*.test.*` / `test_*.py` 等——它在项目树内，会被测试框架默认 `include` 扫到，静默抬高基线）。完整四项约定（名称/忽略/收集面/清理时点）见 `{agate_root}/platform-notes.md`「受限 harness 通用约束」
+6. **长驻服务存活跟随「发起它的那次调用」**：DSH 在调用/后台 job 结束时回收其派生的**整个进程树**——`&` / `nohup` / `setsid` detach **均不保活**。要跨调用使用服务，须挂在**持续 running 的后台 job** 下托底（如 `( make debug-start; sleep 3600 )` 提交为后台 job），**并且每次使用前探活**（端口/健康检查，不是 pidfile）——托底时长**不是**可靠性保证（实测逐次加长到 12h 仍被跨越 4 次）。⚠️ **不要靠加长 `sleep`**，掉线即重启。完整四步做法见 `{agate_root}/platform-notes.md`「受限 harness 通用约束」
+7. **不要启用 `agent-team` 组合包**：它作用在**顶层**（注册 team 工具 + 禁用顶层 subagent），而本 preset 的 `subagent` / `subagent_fork` 挂在**预设作用域**——上游「已知限制」明确「顶层组合包**不会替换**这些注册」⇒ 启用后是**两套委派面并存**（不是本 preset 失效），编排者须自行判断用哪套；团队任务板还与 `.state.yaml` 形成第二个协调基质，与「单一权威 + 阶段门禁 + 单一作者」竞争。**agateon 已有等价能力**：批量并行 = `workflow`；独立 fresh 复核 = `ralph`；跨轮续跑 = `goal`。**自查**：`~/.dsh/profiles/<profile>/package.json` 的 `dsh.profile.bundles`（`agate-setup.py` 接入时也会检测并提示）。详见 `{agate_root}/platform-notes.md` DSH 章
 
 ## 验证清单（接入后第一次跑任务前）
 
@@ -74,3 +77,5 @@ judge 需要 fresh context（只看标准、不看实现者自述）——DSH �
 - [ ] 能读到 `{agate_root}/phase-cards/P0-orchestrator.md`
 - [ ] 派发一个空跑 subagent 成功（验证 subagent 工具可用）
 - [ ] `check-gate.py P1` 在无任务时行为符合预期（exit 2 语义）
+- [ ] 项目根 `.agate-tmp/`（若采用）已被忽略：`git check-ignore -q .agate-tmp`
+- [ ] `~/.dsh/profiles/<profile>/package.json` 的 `dsh.profile.bundles` **不含** agent-team
