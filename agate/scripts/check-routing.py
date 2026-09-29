@@ -74,12 +74,16 @@ def main():
 
     # ① P1 缺失分支：exit 2（对齐同链 check-pruning；与"不声明=standard"的 exit 0 明确区分）
     if not os.path.isfile(p1_file):
+        sys.stderr.write(
+            "GATE SKIP: check-routing: 无 P1-requirements.md，ceremony 路由未校验（exit 2，交人工）\n"
+        )
         sys.exit(2)
 
     ceremony = _md_field("ceremony", p1_file).strip()
 
     # 不声明 ceremony（存量/新任务缺字段）→ standard，不拦截（BDD-8）
     if not ceremony:
+        sys.stderr.write("GATE SKIP: check-routing: P1 未声明 ceremony（按 standard 处理），未做路由校验\n")
         sys.exit(0)
 
     # 非法值兜底（frontmatter-check enums 已先拦，此处双保险，BDD-6）

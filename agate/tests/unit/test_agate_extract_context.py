@@ -233,3 +233,43 @@ def test_ec_16_p6_failed_sum_without_bc_simulation(
     result = _run(agate_scripts, python_exe, run_cli, "P6", str(tmp_path), env=env)
     assert result.returncode == 0
     assert "P5 failed 参考: 3" in result.output
+
+
+# ---- RM-AG0080：known_risks 跨行列表必须被带回（2026-09-29）----
+#
+# 缺陷：同一函数内两种口径——`task:`/`known_risks:` 用 `_grep`（只回裸键行），
+# 而 `env_constraints:` 用 `_grep_after`（回键行 + 后续行）。于是 P0-brief 按卡内
+# 推荐的 YAML **块状列表**书写时，known_risks 的列表项**全丢**（注入只剩一行裸键）。
+
+
+def test_ec_17_p1_known_risks_block_list_items_included(agate_scripts, python_exe, run_cli, tmp_path):
+    """块状 known_risks 的**列表项**须出现在注入输出中（修复前只剩裸键行）。"""
+    (tmp_path / "P0-brief.md").write_text(
+        "task: fix login timeout\n"
+        "known_risks:\n"
+        "  - \"session expiry may break refresh\"\n"
+        "  - \"db migration is irreversible\"\n"
+        "env_constraints:\n"
+        "  debug_env: make debug\n",
+        encoding="utf-8",
+    )
+    result = _run(agate_scripts, python_exe, run_cli, "P1", str(tmp_path))
+    assert result.returncode == 0
+    assert "session expiry may break refresh" in result.output, result.output[:400]
+    assert "db migration is irreversible" in result.output, result.output[:400]
+
+
+def test_ec_18_p1_warns_when_p0_brief_has_no_line_start_keys(
+    agate_scripts, python_exe, run_cli, tmp_path
+):
+    """P0-brief 用 markdown 标题（历史先例 TAG0037）⇒ 取不到字段时须**告警**而非静默空。
+
+    负向对照：修复前输出只有空标题、stderr 无任何提示。
+    """
+    (tmp_path / "P0-brief.md").write_text(
+        "# P0-brief\n\n## task\n\n做点事\n\n### known_risks\n\n- 风险一\n",
+        encoding="utf-8",
+    )
+    result = _run(agate_scripts, python_exe, run_cli, "P1", str(tmp_path))
+    assert result.returncode == 0
+    assert "未取到" in result.stderr, f"未告警：{result.output[:300]}"

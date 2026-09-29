@@ -132,6 +132,9 @@ def main():
     p6_file = os.path.join(task_dir, "P6-acceptance.md")
 
     if not os.path.isfile(p6_file):
+        sys.stderr.write(
+            "GATE SKIP: check-p6-evidence: 无 P6-acceptance.md，证据审计无对象，未校验（exit 2）\n"
+        )
         sys.exit(2)
 
     try:

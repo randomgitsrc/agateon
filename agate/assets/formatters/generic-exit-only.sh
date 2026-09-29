@@ -2,8 +2,11 @@
 set -euo pipefail
 
 EXIT_CODE="${1:-1}"
-OUTPUT="$(cat)"
-export EXIT_CODE OUTPUT
+# 本 formatter **不使用**测试输出（只回传 exit_code）——故不建临时文件，
+# 仅排空 stdin（避免写端 EPIPE）。此前把整份输出 `export` 进环境，
+# 足以让下面 python3 的 execve 因 E2BIG 失败（RM-AG0077 子批 D）。
+cat > /dev/null
+export EXIT_CODE
 
 python3 <<'PYEOF'
 import sys, json, os

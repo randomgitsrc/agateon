@@ -261,6 +261,13 @@ def main():
     evidence_dir = os.path.join(task_dir, "P6-evidence")
 
     p6_exists = os.path.isfile(p6_file)
+    if not p6_exists:
+        # 六道审计全部以 P6-acceptance.md / P6-evidence/ 为对象；对象缺席时此前**静默 exit 0**，
+        # 与「已审计且通过」不可区分——且本脚本位于 agate-next.py 的 P6→P7 推进路径上
+        # （RM-AG0077 子批 A：独立评审指出的逃逸站点）。仅加可见性，exit code 不变。
+        sys.stderr.write(
+            "GATE SKIP: check-p6-provenance: 无 P6-acceptance.md，六道审计无对象，未校验\n"
+        )
     p6_text = ""
     p6_lines = []
     pass_lines = []
@@ -368,18 +375,22 @@ def main():
                 continue
             if not in_card:
                 stripped.append(line)
-        # 删文件顶部第一对 "---" 定界的 frontmatter 块（sed '/^---$/,/^---$/d'）
-        filtered = []
-        i = 0
-        while i < len(stripped):
-            if stripped[i] == "---":
-                i += 1
-                while i < len(stripped) and stripped[i] != "---":
-                    i += 1
-                i += 1
+        # 只剥离**文件顶部第一对** `---` 定界的 frontmatter（原实现「遇到 `---` 就向后
+        # 配对下一个 `---`」在 **奇数个 `---`** 时会让最后一个 `---` 吞掉其后**至 EOF**
+        # → 尾部区间静默逃过本审计，同一违规因**位置不同判定相反**（RM-AG0077 子批 C）。
+        # 爆炸半径实测：706 个存量 dispatch-context 中 11 个含奇数 `---`，本修复后
+        # **新增命中 0** ⇒ 不改动任何既有判定。
+        filtered = list(stripped)
+        if filtered and filtered[0] == "---":
+            for _j in range(1, len(filtered)):
+                if filtered[_j] == "---":
+                    filtered = filtered[_j + 1:]
+                    break
             else:
-                filtered.append(stripped[i])
-                i += 1
+                # 找不到闭合对 ⇒ **不剥离**（宁可多审，不可吞正文）并显式告警
+                sys.stderr.write(
+                    "GATE PROVENANCE: frontmatter 起始 `---` 无闭合对，未剥离（避免吞掉正文）\n"
+                )
         prejudice = sum(1 for line in filtered if re.search(r"^\s*- (PASS|FAIL)\b", line))
         if prejudice > 0:
             sys.stderr.write(f"GATE PROVENANCE: {os.path.basename(dispatch_ctx)} 含 {prejudice} 处验收结论预判\n")

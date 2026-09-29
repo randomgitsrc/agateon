@@ -153,3 +153,153 @@ def test_bdd_35f_pytest_name_errors_field(agate_assets, run_cli, bash):
     result = _run_formatter(agate_assets, bash, run_cli, "pytest.sh", output, 2)
     data = _json(result)
     assert len(data["name_errors"]) == 1
+
+
+# ---- 大输出承载能力（RM-AG0077 子批 D，2026-09-29）----
+#
+# 缺陷形态（实测复现）：formatter 第 5-6 行 `OUTPUT="$(cat)"; export OUTPUT` 把整份
+# 测试输出经**环境变量**交给 python3。本仓前端全量输出约 1.5 MB，超 execve 的
+# MAX_ARG_STRLEN(131072) 逾 11 倍 → `参数列表过长`（E2BIG）→ formatter exit 126 →
+# agate_common.run_test_with_formatter 回退 `_fallback_json(raw_output=全量)` →
+# check-tdd-red 命中「exit_code==2 且 raw_output 含 matching」的 A 类分支 →
+# **误判为假红灯**（exit 1）；且 ci-gate-backstop 对 tdd_exit==1 判 FAIL ⇒
+# 本仓任何前端任务的 P3 在 CI 上都会被误判。
+#
+# 同族扫描：**6 个 formatter 全部**是同一形态（不止被报告的 vitest.sh）——
+# 其中 5 个真的读 output，`generic-exit-only.sh` 不读却照样 export（即"白导出"，
+# 但足以让 python3 的 execve 失败）。故本组测试覆盖全部 6 个。
+
+_FORMATTERS_ALL = (
+    "generic-exit-only.sh",
+    "generic-junit-xml.sh",
+    "generic-tap.sh",
+    "go-test.sh",
+    "pytest.sh",
+    "vitest.sh",
+)
+
+# ≈1.83 MB：远超 MAX_ARG_STRLEN，量级与"本仓前端全量输出"同档
+_LARGE_OUTPUT = "Tests  3 failed\n" + ("x" * 60 + "\n") * 30000 + "Tests  7 passed\n"
+
+
+@pytest.mark.windows_smoke
+@pytest.mark.parametrize("formatter", _FORMATTERS_ALL)
+def test_fmt_large_output_survives_exec_arg_limit(agate_assets, bash, run_cli, formatter):
+    """6 个 formatter 均须承载 ≥1.5MB 输出（不得因 E2BIG 崩掉）。
+
+    判据：大输入下 exit 0 且 stdout 仍是可解析 JSON、exit_code 原样透传。
+    """
+    result = _run_formatter(agate_assets, bash, run_cli, formatter, _LARGE_OUTPUT, 2)
+    assert result.returncode == 0, (
+        f"{formatter} 未承载大输出（returncode={result.returncode}）：{result.stderr[:300]}"
+    )
+    assert _json(result)["exit_code"] == 2
+
+
+def test_fmt_large_output_content_actually_parsed(agate_assets, bash, run_cli):
+    """大输入下内容仍被**真正解析**——防「跳过解析也算通过」的假绿。
+
+    负向对照意图：只断言"没崩"不足以证明输出送达了 python（丢弃输出后返回空
+    JSON 同样"不崩"）。故此处断言解析出的计数与构造输入一致。
+    """
+    result = _run_formatter(agate_assets, bash, run_cli, "vitest.sh", _LARGE_OUTPUT, 1)
+    data = _json(result)
+    assert data["failed"] == 3
+    assert data["passed"] == 7
+    assert data["total"] == 10
+
+
+# ---- 超长单行不得触发二次方退化（RM-AG0077 子批 D 连带发现）----
+#
+# 修好 E2BIG 后，输出**第一次真正到达 python**，随即暴露 5 处 `.*(?:X).*` 的
+# 二次方退化（vitest/go-test/pytest 三个 formatter）：`.*` 在每个起点向前找 X → O(n²)。
+# 实测量级：32KB 单行 2.1s（2× 尺寸 → 4× 耗时）⇒ 本仓 1.8MB 单行 ≈1.8 小时。
+# 更糟的是 agate_common.run_test_with_formatter 调 formatter **没设超时**，
+# 挂起即 gate 永久卡死（commit 卡住）。
+#
+# 判据分两层：① 内容仍被**正确解析**（防"改成跳过扫描"的假绿）；② 有界耗时。
+
+_ONE_LONG_LINE = 150000  # 单行 150KB（> E2BIG 阈值，故旧 env 版本会先崩，见上组测试）
+
+
+def test_fmt_single_long_line_marker_still_detected(agate_assets, bash, run_cli):
+    """超长单行内的语法错误标记仍须被检出（验证逐行扫描未破坏「整行匹配」语义）。"""
+    payload = "x" * _ONE_LONG_LINE + " SyntaxError: boom\n"
+    result = _run_formatter(agate_assets, bash, run_cli, "vitest.sh", payload, 1)
+    data = _json(result)
+    assert len(data["syntax_errors"]) == 1
+    # message 是**整行** strip 后的内容（与旧 `.*(?:X).*` 的 m.group(0).strip() 一致）
+    assert data["syntax_errors"][0]["message"].endswith("SyntaxError: boom")
+
+
+def test_fmt_single_long_line_is_linear_not_quadratic(agate_assets, bash, run_cli):
+    """超长单行须**有界耗时**完成——二次方实现下本用例会超时（150KB ≈ 46s）。"""
+    import time
+
+    payload = "x" * _ONE_LONG_LINE + "\n" + "y" * _ONE_LONG_LINE + "\n"
+    t0 = time.time()
+    result = _run_formatter(agate_assets, bash, run_cli, "vitest.sh", payload, 0)
+    elapsed = time.time() - t0
+    assert _json(result)["exit_code"] == 0
+    assert elapsed < 10, f"疑似二次方退化：150KB×2 单行耗时 {elapsed:.1f}s（线性实现应 <1s）"
+
+
+# ---- formatter 挂起必须有界（RM-AG0077 子批 D 连带发现）----
+#
+# agate_common.run_test_with_formatter 调 formatter 时**未设 timeout** ——
+# 一旦 formatter 挂起（上面那组二次方退化就是真实触发路径：1.8MB 单行 ≈1.8 小时），
+# gate 会**永久卡死**（commit 卡住，无任何输出）。
+# 设计：复用既有失败路径——超时即降级 `_fallback_json(raw_output=…)`，
+# 与「formatter 退出非 0 / 无法启动」同语义，不新增分支。
+# 超时秒数可由 `AGATE_FORMATTER_TIMEOUT` 覆盖（沿用仓库 `AGATE_*` env 惯例）。
+
+
+def test_formatter_hang_is_bounded_not_infinite(python_exe, run_cli, agate_scripts, tmp_path):
+    """假 formatter 睡 8s；设 AGATE_FORMATTER_TIMEOUT=2 ⇒ 须在 ~2s 内降级返回。
+
+    负向对照：未加超时兜底时本用例耗时≈8s（假 formatter 睡满）且无 raw_output ⇒ 失败。
+    """
+    import time
+
+    hang_fmt = tmp_path / "hang.sh"
+    hang_fmt.write_text("#!/usr/bin/env bash\nsleep 8\n", encoding="utf-8")
+
+    code = (
+        "from agate_common import run_test_with_formatter;"
+        f"print(run_test_with_formatter('echo x', {str(hang_fmt)!r}, timeout_secs=10))"
+    )
+    t0 = time.time()
+    result = run_cli(
+        python_exe, "-c", code,
+        env={"PYTHONPATH": str(agate_scripts), "AGATE_FORMATTER_TIMEOUT": "2"},
+    )
+    elapsed = time.time() - t0
+
+    assert result.returncode == 0, result.output[:400]
+    assert "raw_output" in result.stdout, f"未降级到既有失败路径：{result.stdout[:300]}"
+    assert elapsed < 6, f"formatter 挂起未被超时兜底：{elapsed:.1f}s"
+
+
+def test_fmt_works_with_readonly_tmpdir(agate_assets, bash, run_cli, tmp_path):
+    """formatter **不得依赖可写 TMPDIR**（受限沙箱：`/tmp` 只读）。
+
+    回归来历（TAG0039 独立评审发现）：本批修 E2BIG 的**第一版**改用 `mktemp` 经临时文件
+    传递，在只读 `TMPDIR` 下 `mktemp` 失败 + `set -e` → formatter `exit 1` → 上游回退
+    `raw_output` → **复活了本批正要消灭的 A 类假红灯路径**（HEAD 原版在同样条件下反而
+    `exit 0`）。而本机 `AGENTS.md` 已登记「受限 harness：`/tmp` 只读」，非纯理论。
+    现实现改为**数据经 fd 3 直连 python 的 stdin**，无临时文件、无 TMPDIR 依赖。
+
+    （Windows 上 chmod 不产生真实只读语义，本用例退化为普通调用，无害。）
+    """
+    ro = tmp_path / "readonly_tmp"
+    ro.mkdir()
+    ro.chmod(0o555)
+    payload = "Tests  3 failed\nTests  7 passed\n"
+    result = run_cli(
+        bash, str(agate_assets / "formatters" / "vitest.sh"), "2",
+        input=payload, env={"TMPDIR": str(ro)},
+    )
+    assert result.returncode == 0, f"只读 TMPDIR 下 formatter 失败：{result.stderr[:250]}"
+    data = _json(result)
+    assert data["failed"] == 3, f"只读 TMPDIR 下未能解析内容：{result.stdout[:200]}"
+    assert data["passed"] == 7

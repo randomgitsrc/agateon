@@ -140,6 +140,9 @@ def main():
     task_dir = sys.argv[1]
     p1_file = os.path.join(task_dir, "P1-requirements.md")
     if not os.path.isfile(p1_file):
+        sys.stderr.write(
+            "GATE SKIP: check-pruning: 无 P1-requirements.md，裁剪条件未校验（exit 2，交人工）\n"
+        )
         sys.exit(2)
 
     risk_level = _md_field("risk_level", p1_file)

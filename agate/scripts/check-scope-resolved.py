@@ -81,6 +81,9 @@ def main():
 
     scope_found = _scan_scope_plus(task_dir)
     if not scope_found:
+        sys.stderr.write(
+            "GATE SKIP: check-scope-resolved: 未检出 [SCOPE+]（行首形态），SCOPE_RESOLVED 校验未执行\n"
+        )
         sys.exit(0)
 
     if not os.path.isfile(p1_file):

@@ -10,7 +10,17 @@
 
 ## [Unreleased]
 
-（暂无——下个版本的变更在此累积。）
+> TAG0039 (RM-AG0077 校验器健壮性批 + RM-AG0080)：下图 7 条修复均出自该批。
+
+### 修复
+
+- **内置测试 formatter 无法承载大输出 → 上游误判「假红灯」且 CI 判 FAIL**（`agate/assets/formatters/*.sh`）：6 个 formatter **全部**把整份测试输出经**环境变量**交给 `python3`（`OUTPUT="$(cat)"; export OUTPUT`）。输出超过 execve 的 `MAX_ARG_STRLEN`（128 KB）时 `python3` 启动即失败（`参数列表过长`，退出码 126）→ `agate_common.run_test_with_formatter` 回退 `raw_output` → `check-tdd-red.py` 命中 A 类分支**误判为红灯**，而 `ci-gate-backstop.py` 对 `tdd_exit == 1` 判 **FAIL**，即**任何前端任务的 P3 在 CI 上都会被误判**（本仓前端全量输出约 1.5 MB，超限 11 倍）。现改为数据经 **fd 3 直连 python 的 stdin**（`3<&0` 把原始 stdin 复制到 fd3，heredoc 只占 fd0）——**零临时文件、零环境变量承载**；不读输出的 `generic-exit-only.sh` 则直接丢弃无用的 `export`。（注：改 E2BIG 的第一版曾用 `mktemp` 经临时文件传递，但那样**新增了 TMPDIR 可写依赖**——只读 `/tmp` 的受限沙箱下反而由 HEAD 的 `exit 0` 变为 `exit 1`，复活了本条要消灭的误判路径，故改为 fd 3；已加回归用例固化。）**CLI 契约不变**（`<formatter>.sh <exit_code>` + stdin）——任务级 formatter（`$task_dir/.agate/formatters/`）这个官方扩展点已在野外使用，改契约会打断它们。
+- **formatter 内 5 处正则二次方退化 → 大输出的正常路径挂死**（`vitest.sh` / `go-test.sh` / `pytest.sh`）：`.*(?:X).*` 在每个起点向前搜关键字，退化为 O(n²)——实测 32 KB 单行 2.1 s、尺寸翻倍耗时×4，按本仓 1.8 MB 单行外推约 **1.8 小时**；**恰恰是「无关键字命中」的正常路径最慢**。改为逐行扫描（与 MULTILINE 下「整行匹配」语义等价），实测 1.6 MB 单行 **5250 s → 0.031 s**。该缺陷是上面那条修好后才暴露的——此前输出根本到不了 `python`。
+- **`run_test_with_formatter` 调 formatter 未设超时 → 挂起即 gate 永久卡死**（`agate_common.py`）：formatter 挂住时 commit 无输出卡住、无任何信号。现设有界超时（`AGATE_FORMATTER_TIMEOUT` 可覆盖，默认 120 s），超时走**既有** `_fallback_json` 失败路径，不新增分支与退出码。
+- **校验器「跳过」与「通过」在退出码上不可区分（真空通过）**（`check-changelog` / `check-debt` / `check-p6-format` / `check-routing` / `check-scope-resolved` / `check-state-transition`）：多处在其校验对象缺席时静默 `exit 0`，输出为空 ⇒「没查」被读成「查过了没问题」（TPV0099 实证被误读一次：主 Agent 把 `check-scope-resolved.py` 的 exit 0 当作 SCOPE+ 已闭环的证据）。现 **16 处（11 个脚本）**CLI 级站点输出 `GATE SKIP: <脚本>: <原因>`，**退出码一律不变**；另 3 处静默为**有意例外**（`check-debt` 依 BDD-10 明文契约；`check-platform-assumptions` 扫空目录属正确通过；`check-retrospective` 为 advisory 型），已在测试中注明理由。**一处例外**：`check-debt.py` FILE 模式对「文件不存在」保持静默——BDD-10 明文契约「无文件 → exit 0 无输出」的向后兼容要求，已在测试中显式记录为例外（而非因测试变红就改测试）。
+- **`check-p6-provenance.py` 剥离 frontmatter 时奇数个 `---` 吞掉其后至 EOF**：原实现「遇到 `---` 就向后配对下一个 `---`」，奇数个时最后一个会删到文件末尾 ⇒ 尾部区间**静默逃过审计 2**（行首 PASS/FAIL 预判扫描），**同一违规因位置不同判定相反**。现改为只剥离**文件顶部第一对** `---`；找不到闭合对时**不剥离**并告警（宁可多审，不可吞正文）。爆炸半径先做过全量扫描：706 个存量 `dispatch-context` 中 11 个含奇数 `---`，本修复后**新增命中 0**。
+- **`_check_roadmap_done` 对 roadmap 列数异常行静默跳过**（`check-gate.py`，RM-AG0043）：列数 ≠ 9 的行被整行跳过，而「无匹配行 → 不误拦」⇒ 该类行的 done 反查**静默失效且零输出**（实测两例长期隐形：`RM-AG0056` 11 列、`RM-AG0059` 12 列——单元格里写了字面 `|`，而 **`\|` 转义对 `split("|")` 无效**，须用 `&#124;`）。现输出 WARNING，且**只报行号、不回显错位单元格**（错位行的取值本身不可信，回显等于把「不要信任错位行」这条规则自己破掉）。**不改变任何阻断语义**（BDD-6 不误拦、exit code 不变）。
+- **P0-brief 的 `known_risks` 注入长期为空**（`agate-extract-context.py`）：同一函数内两种口径——`task:` / `known_risks:` 用只回裸键行的 `_grep`，而 `env_constraints:` 用会带回后续行的 `_grep_after` ⇒ 按卡内推荐的 YAML **块状列表**书写时 `known_risks` 的列表项**全丢**。现统一为 `_grep_after`；并在 P0-brief 存在却一个字段都取不到时**告警**（历史先例 `TAG0037` 用 markdown 标题书写，注入长期为空且零提示）。
 
 ## [0.76.0] - 2026-09-24
 

@@ -74,6 +74,7 @@ def _retreat_coverage(repo_root):
         ["log", "--all", "--format=%H%x09%s", "--grep=^retreat:"], cwd=repo_root
     )
     if rc != 0 or not retreats.strip():
+        sys.stderr.write("GATE SKIP: check-debt(--retreat-coverage): 无 retreat 提交，未核对\n")
         return 0
 
     covered = _covered_hashes(debt_file)
@@ -106,6 +107,9 @@ def main():
 
     file_path = mode
     if not os.path.isfile(file_path):
+        # 此处**有意保持静默**：BDD-10 明文规定「无文件 → exit 0 无输出」为向后兼容契约
+        # （存量项目可能尚无 debt 文件），故不按 RM-AG0077 子批 A 的通则加跳过声明。
+        # 代价：登记簿路径配错时无人察觉——已作为已知局限登记在 RM-AG0077，留待显式决策。
         sys.exit(0)
 
     # fail-closed 薄壳（同 check-frontmatter.sh）：校验器非零退出（自身崩溃）→ exit 1；

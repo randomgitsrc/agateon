@@ -110,6 +110,42 @@ gate_commands:
 
 内置 formatter 均使用内联 python3 解析，可作为参考实现。
 
+### ⚠️ 两个必看的实现陷阱（`TAG0039` 实测，两者都曾造成静默故障）
+
+**① 不要把整份输出经环境变量传给 `python3`。** 常见写法 `OUTPUT="$(cat)"; export OUTPUT` 在输出超过 execve 的 `MAX_ARG_STRLEN`（128 KB，见 `getconf ARG_MAX` 相关限制）时会让 `python3` **启动即失败**（`参数列表过长`，退出码 126）。真实规模：某前端项目全量输出约 1.5 MB，超限 11 倍 → formatter 失败 → 上游 `check-tdd-red.py` 回退 `raw_output` 并**误判为红灯**，`ci-gate-backstop.py` 据此判 **FAIL**。
+
+正确做法是经**临时文件**传递（内置 formatter 现在都是这个写法）：
+
+```bash
+TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
+cat > "$TMP"
+python3 - "$TMP" <<'PYEOF'
+import sys
+with open(sys.argv[1], "r", encoding="utf-8", errors="replace") as fh:
+    output = fh.read()
+...
+PYEOF
+```
+
+（若 formatter **不需要**输出，就别读它——`cat > /dev/null` 排空 stdin 即可；多余的 `export` 同样会让 `python3` 因 E2BIG 启动失败。）
+
+**② 别用 `.*(?:关键字).*` 这类前置 `.*` 正则在整份输出上搜。** `.` 不跨 `\n`，所以它等价于"整行匹配"，但在**超长单行**上会退化为 **O(n²)**：实测 32 KB 单行 2.1 s、尺寸翻倍耗时 ×4，1.8 MB 单行外推约 **1.8 小时**——而且**恰恰是"没有命中"的正常路径最慢**（找到就提前返回）。`run_test_with_formatter` 对 formatter 设了有界超时（`AGATE_FORMATTER_TIMEOUT`，默认 120 s），超时会降级为原始输出，但那是兜底、不是许可。
+
+改成**逐行扫描**即线性（`.` 本就不跨 `\n`，故扫描面与旧式一致）：
+
+> **⚠️ 取「首个」还是「末个」匹配会改变结果**：旧式 `.*(?:关键字).*` 的 `.*` 会**回溯到末个起点**，
+> 所以捕获组取的是**最后一个**匹配；逐行改写若顺手用 `re.search`（取**首个**）就是**语义变化**，
+> 不是等价替换（`TAG0039` 独立评审的实测反例：单行含两个 `NameError` 时，`symbol` 由
+> `myapp.a` 变成 `x`）。有捕获组时须显式取末个：`list(re.finditer(pat, raw))[-1]`。
+> 只取整行（`m.group(0).strip()`、无捕获组）时首个/末个都产出同一行，不受此影响。
+
+```python
+for raw in output.split("\n"):
+    if "关键字" not in raw:
+        continue
+    line = raw.strip()   # 无捕获组时与旧 `m.group(0).strip()` 等价（见上方取首个/末个说明）
+```
+
 ## 内置 formatter 清单
 
 | 脚本 | 解析策略 |

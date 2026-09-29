@@ -788,3 +788,53 @@ def test_audit7_only_missing_task_dir_arg_exit1(agate_scripts, python_exe, run_c
         "--audit7-only",
     )
     assert result.returncode == 1
+
+
+# ---- 奇数 `---` 不得吞掉尾部区间（RM-AG0077 子批 C，2026-09-29）----
+#
+# 缺陷：剥离 frontmatter 用「遇 `---` 就向后配对下一个 `---`」——**奇数个 `---`** 时
+# 最后一个 `---` 之后直到 EOF 全被删除 ⇒ 尾部区间**静默逃过审计 2**（行首 PASS/FAIL
+# 预判扫描），**同一违规因位置不同判定相反**。
+# 爆炸半径实测：706 个存量 dispatch-context 中 11 个含奇数 `---`，修复后新增命中 0。
+
+
+def test_pv_odd_dashes_tail_still_audited(task_dir, agate_scripts, python_exe, run_cli):
+    """剥离 CARD 后含**奇数**个 `---` 时，尾部区间仍须参与审计 2（修复前漏检）。"""
+    td = task_dir()
+    (td / "P6-dispatch-context-subtask.md").write_text(
+        "---\nphase: P6\n---\n"   # 顶部 frontmatter（第一对）
+        "正文\n"
+        "---\n"                    # 第 3 个 `---` ⇒ 奇数（旧实现从这里吞到 EOF）
+        "- PASS BDD-99: 尾部违规\n",
+        encoding="utf-8",
+    )
+    result = _run_prov(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 1, f"尾部区间被吞掉（漏检）：{result.output[:300]}"
+    assert "P6-dispatch-context" in result.output
+
+
+def test_pv_odd_dashes_no_violation_no_false_prejudge(task_dir, agate_scripts, python_exe, run_cli):
+    """负向对照：奇数 `---` 但**无判定词** ⇒ 审计 2 **不得**误报。
+
+    只断言审计 2 的结论（不绑整体 exit code）：本夹具刻意最小化，其他审计（证据引用等）
+    可能各自判红，与本修复无关——绑 rc 会把无关审计的失败误读成本修复的误报。
+    """
+    td = task_dir()
+    (td / "P6-dispatch-context-subtask.md").write_text(
+        "---\nphase: P6\n---\n正文\n---\n- 正常的说明行，不是判定词\n",
+        encoding="utf-8",
+    )
+    result = _run_prov(agate_scripts, python_exe, run_cli, td)
+    assert "验收结论预判" not in result.output, f"审计 2 误报：{result.output[:300]}"
+
+
+def test_pv_unclosed_frontmatter_not_stripped(task_dir, agate_scripts, python_exe, run_cli):
+    """起始 `---` 无闭合对 ⇒ **不剥离**并告警（宁可多审，不可吞正文）。"""
+    td = task_dir()
+    (td / "P6-dispatch-context-subtask.md").write_text(
+        "---\nphase: P6\n- PASS BDD-99: 无闭合对时的违规\n",
+        encoding="utf-8",
+    )
+    result = _run_prov(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 1, f"未闭合 frontmatter 吞掉了正文：{result.output[:300]}"
+    assert "无闭合对" in result.output
