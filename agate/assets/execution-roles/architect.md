@@ -230,6 +230,7 @@ P2 方案含多个独立子任务（多包 / 多模块 / 高复杂度）时，**
 - [ ] **批次边界对齐影响面梳理的文件分组**：同一文件不跨批次被改两轮；跨批共享件（类型 / 接口 / 配置 / 权威源文档）单列，由主 Agent 在所有批次返回后统一处理
 - [ ] **资源密集型批次已判定串行**：批次的 gate 命令属全量测试 xdist / E2E 浏览器 / 构建安装类时，默认串行（判据见 dispatch-protocol.md「派发编排机制」并行规则第 4 条"资源密集型默认串行"），要并行须先分配隔离参数
 - [ ] **长命令已声明 `{key}_timeout_seconds`**：`gate_commands` 里耗时较长的 key（E2E / 构建 / 全量回归）按 per-key 形式声明预期耗时上限（如 `P5_e2e_timeout_seconds: 300`）。字段规则四点（排除 P3 / per-key 声明 / 三档默认基准表 / 缺字段向后兼容）的权威定义在 P2 卡片「gate_commands 声明」的 `{key}_timeout_seconds` 字段规则，本节只做声明位提醒，不重复展开基准表细节
+- [ ] **新增/改名脚本的登记面已实测**（DEBT0046）：若本任务在 `agate/scripts/` 下新增或改名文件，按 `agate/scripts/README.md`「新增脚本登记面」节逐项判定并**实测**——该节区分**机械门禁**（① CHECK 9 覆盖、② SG.6，两者共用同一判据 `uncovered_gate_scripts()`）与**团队约定**（README 索引行 / tests README 映射 / CHANGELOG 等）。**只按推理判"不处理"已被证伪**（TAG0036 M18：P1 推理判不处理，P2 评审实跑才发现 SG.6 由绿转红）
 
 ### 批切分判据与 tests_filter 写法（TAG0036）
 

@@ -1603,7 +1603,7 @@ closure_note: >-
 id: DEBT0046
 category: technical
 title: "新增 agate/scripts/check-*.py 的登记面无清单——既有 test_sg_6 与 CHECK 9 反向覆盖会令新脚本红灯/告警，P1 同类扫描凭推理判『不处理』，直到 P2 评审实测才发现"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate/tests/integration/test_protocol_alignment_review.py
@@ -1612,6 +1612,8 @@ evidence:
     note: "805 行起 GATE_SCRIPT_EXEMPT / check_anchor_coverage：新 check-*.py 未入锚点表且未入豁免集 → CHECK9-coverage WARNING；TAG0036 M18 加一行豁免"
   - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P2-review.md
     note: "B1：P1 §4.3『本次不处理』是推理未实测；P2 评审实测发现并由主 Agent 以 [BASELINE_CHANGE] 纠正"
+  - ref: agate/tests/unit/test_t43_check_registration_surface.py
+    note: "本批（TAG0043-check-registration 直改通道）新增 12 条测试：判据函数存在性 / 真实仓库零未覆盖 / 合成树负向 / 注释不足以构成登记 / 告警文案两路 / README 清单与门禁约定之分 / P1-P2-architect 三处实测要求。**出处标注：本批为直改**（未走 P0-P8，故无 P5/P6 阶段产物；P5/P6 为本仓门禁阶段名，此处以其等价物「全量 pytest 2439 passed + P5 级独立评审」代替）"
 impact: "凡新增 check-*.py 的任务都会踩到同一坑；协议没有『新增脚本要同步哪些登记面』的权威清单（脚本 README、tests README 计数、CHANGELOG、CONTEXT、CHECK 9 锚点/豁免、CHECK 10 引用、SG.6），只能靠同类扫描人工回忆，且 P1/P2 卡要求的同类扫描没有强制『实测而非推理』。"
 recommendation: "在 architect.md / P2 卡「影响面梳理」处新增『新增脚本登记面清单』（含 SG.6 与 CHECK 9 两项，并要求在临时副本放空脚本实跑一次相关测试）；或在 scripts/README.md 头部维护登记面表。改协议文档走 worktree + SELF-GATE。"
 closure_criteria:
@@ -1620,7 +1622,44 @@ closure_criteria:
   - "consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-19
-task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+closed_at: 2026-09-29
+closure_note: >-
+  采用 recommendation 的第二条路 + 第一条路的三处流程要求，均已完成。
+  ① **单一判据**：check-protocol-consistency.py 抽出 `uncovered_gate_scripts(root)` 并让
+  gate（check_anchor_coverage）与 SG.6 **共用同一函数**——修掉实测发现的空洞：SG.6 旧断言
+  `name in consistency_text` 是**子串**判定，在一致性脚本里写一行**注释**提及脚本名即可让它
+  变绿，而 CHECK9-coverage 的集合判据仍告警（实测复现，两处对同一事实结论相反）。
+  ② **告警文案**同时点名两种登记方式（SCRIPT_ALIGNMENT_ANCHORS 锚点表 / GATE_SCRIPT_EXEMPT
+  豁免集）——原文只说前者，会对观测型脚本误配；并指向登记面权威清单。
+  ③ **权威清单落盘** agate/scripts/README.md「新增脚本登记面」节：逐面标注**门禁 / 约定**之分，
+  含自证命令。实测修正了原文的选材——原文点名 7 处，实跑复核后仅 **2 处**是真门禁
+  （① CHECK 9 覆盖、② SG.6）；CHECK 10 **方向相反**（只报文档引用了不存在的脚本，新增文件
+  本身不触发），scripts README / tests 计数 / CHANGELOG / CONTEXT 均为**非机械门禁**的约定
+  （实测当前 7 个 check-*.py 无 README 索引行而全量全绿；count-tests.sh 是下界语义）。
+  ④ **实测要求入卡**：P1-requirements.md「同类扫描」新增第 5 条、P2-design.md「影响面梳理」
+  新增第 4 条、architect.md 批次设计前置检查项各新增一条，三处均要求"把文件真放进仓库跑一遍、
+  记录实际变红/告警的面"，并明确指出"凭推理判不处理"已被 TAG0036 M18 证伪。
+  ⑤ **测试**：新增 agate/tests/unit/test_t43_check_registration_surface.py（12 条，覆盖判据函数
+  存在性/真实仓库零未覆盖/合成树负向/注释不足以构成登记/告警文案两路/README 清单与门禁约定之分/
+  P1-P2-architect 三处实测要求）；重写 SG.6 判据。
+  验证：全量 pytest 2439 passed（+12）/ 2 failed（均为**既有环境缺陷**：opencode 不在 PATH；
+  git clone --bare --local 因临时目录为独立 tmpfs 报跨设备链接）/ 2 skipped；
+  check-protocol-consistency.py **0 ERROR / 386 WARNING**（与基线一致）；
+  ruff 全绿；tag0034 绊线基线 6 文件 sha256 无漂移。
+  诚实补充：closure_criteria 第 1 条要求「**点名 SG.6 / CHECK 9 / CHECK 10**」，且指定位置为
+  「P2 卡或 architect.md」。初版只在 `scripts/README.md` 点名 CHECK 10 ⇒ **字面未满足**
+  （由独立评审指出）。已整改：**P2 卡「影响面梳理」第 4 条现已三处齐名**（CHECK 9 / SG.6 /
+  CHECK 10），并加机械判据 `test_t43_9b_*` 固化"P2 卡须三处齐名"。注意：点名 CHECK 10 的
+  **结论**是「它方向相反、不属于新增脚本的登记面」——与原文预设（当作一处要同步的登记面）
+  不同，但 criterion 只要求"点名"，故现已**字面与实质同时满足**。
+  **独立评审（2026-09-29）**：APPROVE WITH NITS，1 MAJOR + 2 MINOR + 2 NIT，**全部已处置**——
+  MAJOR 为 roadmap 行自相矛盾（状态改 done 而同行的创建列仍写「保持 backlog 不标 done」）；
+  MINOR 为 `scripts/README.md` 登记面表第④行「无机械校验」**不准确**（`test_doc_sweep.py:210`
+  对 `agate_package.py`/`agate-release.py` 确有断言），已限定适用范围并**同类扩展到第⑤行**
+  （`test_mvwu_protocol_docs.py:720` 对 `check-mvwu` 行有断言）；另一 MINOR 即上述 CHECK 10 定位。
+  两个 NIT 为 `test_t43_4` docstring 越界声称、`test_t43_2` 缺非真空自证——均已修，
+  现「判据被架空」突变下由 3 个用例失败增至 **5 个**（含 SG.6）。
+task_id: TAG0043-check-registration   # 直改通道批次名（RM-AG0068，2026-09-29）——触 agate/ 协议本体与脚本，SELF-GATE 已走独立评审，未走 P0-P8
 ```
 
 ## DEBT0047

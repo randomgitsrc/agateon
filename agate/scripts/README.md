@@ -6,6 +6,44 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 
 > **Windows 用户**：agate 的 gate 脚本已全部 Python 化，不再依赖 bash + GNU coreutils。仅 3 个 hook 薄壳需要 sh 执行（Git for Windows 自带）。脚本可直接 `python3 ~/.agate/scripts/xxx.py` 运行。详见 `agate/platform-notes.md`「Windows 原生」章节。
 
+## 新增脚本登记面（权威清单）
+
+> **什么时候看**：往 `agate/scripts/` 加任何 `check-*.py` / `agate-*.py` 时。**先读本节，再动手**——
+> 否则会踩 DEBT0046：既有测试反向覆盖会令新脚本红灯或告警，而"要同步哪些面"过去没有清单，
+> 只能靠 P1/P2 同类扫描凭记忆回忆（TAG0036 M18 实测由绿转红）。
+
+> **⚠️ 本节的选材原则（2026-09-29 DEBT0046 实测修正）**：下表把**机械门禁**与**团队约定**分开标注。
+> DEBT0046 原文把两者混为一谈，点名了 7 处"登记面"，实测只有 **2 处**是真门禁；若照原文
+> 逐条去"登记"，会对观测型脚本产生误配（把不该进锚点表的脚本硬塞进锚点表）。
+> 实测方法：放一个**探针脚本**（形如 `check-<探针名>.py`，用完即删）实跑全量 pytest + consistency，看**实际**哪一处变红。
+> ⚠️ 探针脚本名不要写进本节——`agate/scripts/README.md` 属 CHECK 10 扫描面，写一个不存在的
+> 具体脚本名会被判 `CHECK10-scriptref` **ERROR**（实测踩过一次）。
+
+| # | 面 | 类型 | 增删脚本时的动作 | 判据来源 |
+|---|----|------|------------------|----------|
+| ① | **CHECK 9 覆盖（`CHECK9-coverage`）** | **门禁**（WARNING，不阻断） | 二选一：承载 gate 判定逻辑 → 进 `SCRIPT_ALIGNMENT_ANCHORS` 锚点表；**纯观测/调度类** → 进 `GATE_SCRIPT_EXEMPT` 并写理由 | `check-protocol-consistency.py::uncovered_gate_scripts()`（**单一判据**） |
+| ② | **SG.6**（`agate/tests/integration/test_protocol_alignment_review.py`） | **门禁**（pytest **会红**） | 与 ① **同一件事**：消费同一个 `uncovered_gate_scripts()`，不另设判据 | 同上（共用函数） |
+| ③ | `CHECK 10 协议文档脚本名引用漂移` | **非登记面（方向相反）** | **新增脚本无需动它**——它只报"协议文档引用了**不存在**的脚本"。**改名 / 退役**脚本时才要看 | `check_script_name_refs()` |
+| ④ | `agate/scripts/README.md` 脚本索引表（下文各表） | **约定**（有**特定**例外） | 建议补一行（用途 + 退出码语义）。⚠️ **不是完全无校验**：`agate/tests/unit/test_doc_sweep.py` 的 `test_bdd_49_4_*` 对**指定脚本**（TAG0037 的 `agate_package.py` / `agate-release.py`）**机械断言**索引行存在（删行即红）。除此之外的脚本（**实测**：24 个 `check-*.py` 中 7 个无索引行）确实无校验 | 特定脚本见 `test_doc_sweep.py`；其余人工评审 |
+| ⑤ | `agate/tests/README.md` 用例映射表 | **约定**（有**特定**例外） | 建议补"测试文件 ↔ 用例数"行。⚠️ 同样**不是完全无校验**：`test_mvwu_protocol_docs.py::test_bdd_69_*` 对 `test_check_mvwu.py` **机械断言**该行存在（含用例数须等于 `--collect-only` 实数）。除此之外无校验 | 特定脚本见 `test_mvwu_protocol_docs.py`；其余人工评审 |
+| ⑥ | 测试用例总数（`agate/tests/scripts/count-tests.sh`） | **自动** | **无需动作**——`pytest --collect-only` 自动纳入，且该脚本是**下界**语义（"目标：≥ 749"），只增不减故永不因新增脚本转红 | 自动收集 |
+| ⑦ | `CHANGELOG.md` / `agate/CONTEXT.md` | **任务级约定** | 按任务需要写（CHANGELOG 由 `check-changelog.py` 校验 `[Unreleased]` 含 task_id，**不**校验"每个脚本一行"） | 任务流程 |
+
+**结论（可执行版）**：新增一个 `check-*.py` 的**最小必要动作** = 决定它属于 ①的哪一类，并在 ①/② 共用的
+`uncovered_gate_scripts()` 判据下转绿。其余各项按任务规模酌情补，**不补不会被门禁拦下**。
+
+**自证命令**（改完先跑，别等 P4）：
+
+```bash
+python3 agate/scripts/check-protocol-consistency.py          # ① 关注 CHECK9-coverage 新增告警
+python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q   # ② SG.6 must pass
+```
+
+> **历史教训（DEBT0046 实测）**：SG.6 旧版断言 `name in consistency_text` 是**子串**判定，
+> 在 `check-protocol-consistency.py` 里写一行**注释**提及脚本名即可让它变绿，而 ① 仍告警
+> ⇒ 两处判据对同一事实给出相反结论。现两处共用 `uncovered_gate_scripts()`，该矛盾已结构性消除。
+> 修改本节或该判据时，务必同步更新 `agate/tests/unit/test_t43_check_registration_surface.py`。
+
 ## 脚本清单
 
 ### Bash 薄壳（.sh — 仅 3 个 git hook 入口）

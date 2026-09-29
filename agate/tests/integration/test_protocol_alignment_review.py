@@ -5,8 +5,10 @@
 # bats `$BATS_TEST_DIRNAME/../../../SELF-GATE.md` = 仓库根 SELF-GATE.md（= agate_root.parent）。
 # windows_smoke：SG.1（文件首 @test，P3 §5.2 每文件第 1 用例打标）。
 
+import importlib.util
 import os
 import re
+from pathlib import Path
 
 import pytest
 
@@ -67,22 +69,44 @@ def test_sg_5_selfgate_has_checklist(agate_root):
     assert "HUMAN_CONFIRMED" in text
 
 
-def test_sg_6_check9_anchor_table_covers_all_gate_scripts(agate_scripts):
+def test_sg_6_check9_anchor_table_covers_all_gate_scripts(agate_root, agate_scripts, tmp_path):
     """SG.6：CHECK 9 锚点表覆盖全部 gate 脚本（check-*.py + pre-commit-gate 薄壳）。
 
-    每个 gate 脚本的 basename 都应出现在 check-protocol-consistency.py 锚点表中。
+    每个 gate 脚本都应已在 CHECK 9 锚点表**或** GATE_SCRIPT_EXEMPT 豁免集中。
+
+    ⚠️ 2026-09-29（DEBT0046）修正判据：旧版断言 `name in consistency_text` 是**子串**判定，
+    与本节自称的「锚点表覆盖」不等价——在 check-protocol-consistency.py 里写一行**注释**
+    提及脚本名即可让本测试变绿，而 CHECK9-coverage 仍告警（实测复现，两处结论相反）。
+    现改为消费被测脚本自己导出的单一判据 `uncovered_gate_scripts()`，与 gate 共用同一函数，
+    使「测试绿而 gate 告警」不可能再出现。
+
+    ⚠️ 但「共用同一函数」引入新的**真空风险**（2026-09-29 负向实测发现）：若该函数被改成
+    永远返回 `[]`，本测试会**静默变绿**。故先做**非真空自证**——在同构的合成树上确认判据
+    确实能报出未登记脚本；判据被架空时本测试与
+    `test_t43_3/4/5`（合成树负向）会一起红。
     """
     consistency_script = agate_scripts / "check-protocol-consistency.py"
     assert consistency_script.is_file()
-    consistency_text = consistency_script.read_text(encoding="utf-8")
-
-    script_names = sorted(
-        {p.name for p in agate_scripts.glob("check-*.py")}
-        | {p.name for p in agate_scripts.glob("pre-commit-gate.sh")}
-        | {p.name for p in agate_scripts.glob("pre-commit-gate.py")}
+    spec = importlib.util.spec_from_file_location("cpc_sg6", consistency_script)
+    cpc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cpc)
+    assert hasattr(cpc, "uncovered_gate_scripts"), (
+        "check-protocol-consistency.py 缺 uncovered_gate_scripts()——SG.6 与 CHECK9-coverage "
+        "须共用同一判据，否则会再出现「本测试绿而 gate 告警」的矛盾（DEBT0046 实测）"
     )
-    for name in script_names:
-        assert name in consistency_text, f"FAIL: {name} 不在 CHECK 9 锚点表中"
+
+    # —— 非真空自证：同构合成树上，未登记的 check-*.py 必须被判据报出 ——
+    probe_root = Path(tmp_path)
+    (probe_root / "agate" / "scripts").mkdir(parents=True)
+    (probe_root / "agate" / "scripts" / "check-sg6probe.py").write_text("# probe\n", encoding="utf-8")
+    assert "agate/scripts/check-sg6probe.py" in cpc.uncovered_gate_scripts(probe_root), (
+        "uncovered_gate_scripts 对未登记脚本返回了空——判据被架空（真空），SG.6 本身就失去意义"
+    )
+
+    uncovered = cpc.uncovered_gate_scripts(Path(agate_root).parent)
+    assert uncovered == [], (
+        f"FAIL: 以下 gate 脚本既不在 CHECK 9 锚点表、也不在豁免集中：{uncovered}"
+    )
 
 
 def test_sg_7_commit_msg_self_gate_exists_executable(agate_scripts):

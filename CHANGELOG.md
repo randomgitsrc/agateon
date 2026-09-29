@@ -10,6 +10,17 @@
 
 ## [Unreleased]
 
+> TAG0043 登记面批（DEBT0046）—— 承接 TAG0042 技术债批。
+
+### 修复
+
+- **「新增 check 脚本要同步哪些登记面」过去无权威清单，且两处判据互相矛盾**（DEBT0046，RM-AG0068 的另一半）：用探针脚本实跑复核后，**实测修正了原登记条目的选材**——原文点名 7 处「登记面」，实为**只有 2 处是真机械门禁**（① `CHECK9-coverage` WARNING、② SG.6 pytest），其余为约定或方向相反（③ `CHECK 10` 只报「文档引用了**不存在**的脚本」，新增脚本文件本身不触发，**改名/退役**才踩；④ `scripts/README.md` 索引行、⑤ `tests/README.md` 映射行、⑥ 用例计数、⑦ CHANGELOG/CONTEXT 对**新脚本**均无校验——实测当前 24 个 `check-*.py` 中 7 个无索引行而全量全绿。⚠️ ④⑤ **并非完全无校验**：`test_doc_sweep.py` 对 `agate_package.py`/`agate-release.py`、`test_mvwu_protocol_docs.py` 对 `check-mvwu` 各有**指名**断言，删行即红（初版写「无机械校验」表述失实，由独立评审以删行突变指出后改正），且 `count-tests.sh` 是**下界**语义「目标：≥ 749」，只增不减）。**修掉一处实测空洞**：SG.6 旧断言 `name in consistency_text` 是**子串**判定，与它自称的「锚点表覆盖」不等价——在 `check-protocol-consistency.py` 里写一行**注释**提及脚本名即可让它变绿，而 `CHECK9-coverage` 的集合判据仍告警（**两处对同一事实结论相反**，实测复现）。现抽出**单一判据** `uncovered_gate_scripts()`，让 gate 与 SG.6 **共用同一函数**，该矛盾结构性消除；`CHECK9-coverage` 的告警文案同时点名**两种**登记方式（锚点表 / 豁免集）——原文只说前者，会对观测型脚本误配。权威清单落盘 `agate/scripts/README.md`「新增脚本登记面」节（逐面标注**门禁/约定** + 自证命令）。新增 12 条测试（`test_t43_check_registration_surface.py`）。
+
+### 变更
+
+- **「同类扫描」由推理改为强制实测**（DEBT0046）：TAG0036 M18 实证——P1 同类扫描凭推理判「本次不处理」，直到 P2 评审实跑才发现 SG.6 由绿转红（主 Agent 以 `[BASELINE_CHANGE]` 纠正）。现 P1 卡「同类扫描」新增第 5 条、P2 卡「影响面梳理」新增第 4 条、`architect.md` 批次设计前置检查项新增一条，**三处均要求把新文件真放进仓库跑一遍、记录实际变红/告警的面**，并指向登记面权威清单（P2 卡该条按 closure_criteria 要求点名 **SG.6 / CHECK 9 / CHECK 10** 三处，并对 CHECK 10 注明"方向相反"）。
+- **独立评审驱动的 5 项整改**（同批，评审结论 APPROVE WITH NITS）：① **MAJOR** roadmap RM-AG0068 行自相矛盾（状态已改 `done`，同行创建列仍写「保持 backlog 不标 done」）——改为过去时叙述并明写"现已 done"，同时把 DEBT0046 移出 A 档待办；② **MINOR** 本文件登记面表第④行原写「**无机械校验**」**不准确**——`agate/tests/unit/test_doc_sweep.py` 对 `agate_package.py`/`agate-release.py` 确有索引行断言（删除即红，评审实测复现），已限定适用范围并**同类扩展到第⑤行**（`test_mvwu_protocol_docs.py` 对 `check-mvwu` 行有断言）；③ **MINOR** closure_criteria 指定的位置是「P2 卡或 architect.md」，初版只在 `scripts/README.md` 点名 CHECK 10 ⇒ 字面未满足，现 P2 卡三处齐名并加判据 `test_t43_9b_*`；④⑤ 两个 NIT（`test_t43_4` docstring 越界声称"证明旧子串判据被骗"而实际未执行旧判据、`test_t43_2` 缺非真空自证）已修——「判据被架空」突变下失败用例由 3 个增至 **5 个**（含 SG.6）。
+
 > TAG0042 技术债批（DEBT0045 + DEBT0048 + DEBT0040）。
 
 ### 修复
