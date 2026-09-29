@@ -1,0 +1,2 @@
+{"cmd":"check-gate.py P0","event":"gate_run","exit":2,"phase":"P0","prev_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","runner":"pre-commit","ts":"2026-09-29T04:54:17.906833Z"}
+{"event":"state_transition","from":"","phase":"P0","prev_hash":"b67b33cfb5c7a4ab950f1985f521a5cf393a622c5e5f85e989aa23b18e1761bd","to":"P0","ts":"2026-09-29T04:54:17.906943Z"}
