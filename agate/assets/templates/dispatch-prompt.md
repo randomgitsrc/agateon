@@ -107,10 +107,26 @@ set 报错但改不明白 → 报告主 Agent，不要绕过 set 直接手改文
 ### Review 角色特别指令
 ```
 ## Review 角色特别指令
-如果你的角色是评审/验收角色（review / design-review / plan-eng-review / plan-design-review / plan-ceo-review / cso / qa / requirements-review / consistency-reviewer）：
+如果你的角色是评审/验收角色（review / design-review / plan-eng-review / plan-design-review / plan-ceo-review / cso / qa / requirements-review / consistency-reviewer / protocol-alignment-review / judge）：
 - 产出文件的 Header `status:` 字段初始为 `draft`
 - 评审/验收完成后，**必须将 `status:` 改为 `approved` / `rejected` / `needs-revision`**
 - gate 脚本读的是 Header 的 `status:` 字段，不是你的返回摘要——两者必须一致
+
+**只读纪律（强制，不可省——2026-09-29 实证数据丢失事故后新增，RM-AG0081）**
+评审是**只读角色**：你的产出是**评审结论**，不是代码改动。被评审的改动集**可能尚未提交**，
+任何写仓操作都会**销毁他人的工作**。
+- **禁止**任何破坏性或写仓命令：`git checkout -- .` / `git restore` / `git reset` / `git stash` /
+  `git clean` / `git add` / `git commit` / `git switch -f` / 直接编辑或删除被评审文件
+- 需要跑验证、做变异测试（mutation test）时，**只在仓外或可丢弃的副本上做**：
+  - 优先 `git worktree add <仓外路径>`（用完 `git worktree remove`）；或
+  - 复制到**一次性临时目录**，并把「创建 → 操作 → 清理」放进**同一次 bash 调用**
+    （受限 harness 的 scratch 语义见 `platform-notes.md`「受限 harness 通用约束」——
+    **部分 harness 的临时目录是逐调用重建的，跨调用不保留**，分两次调用会落空）
+- scratch 操作失败时（目录不存在、权限拒绝等）**如实上报**，
+  **不得**转而"修好"被评审的仓库——那是把评审失败升级成数据丢失
+- 事故实例（勿重犯）：某次 SELF-GATE 评审的 scratch 目录跨调用落空，评审者遂在仓库内执行
+  `git checkout -- .`，**丢弃了尚未提交的改动集**；恢复不完整，事后又发生在其 diff 捕获之后的
+  3 处改动被一并丢弃。主 Agent 据 `git reflog` 才定位。登记为 RM-AG0081。
 ```
 
 ### P2 派发追加

@@ -123,3 +123,81 @@ def test_sg_8_selfgate_has_recursion_termination(agate_root):
     text = selfgate_file.read_text(encoding="utf-8")
     assert "递归终止" in text
     assert "ALIGNED" in text
+
+
+# ---------------------------------------------------------------------------
+# SG.9 —— 评审角色的「只读纪律」（RM-AG0081，2026-09-29 实证数据丢失事故）
+# ---------------------------------------------------------------------------
+#
+# 缺陷形态（实测事故）：某次 SELF-GATE 评审的 scratch 目录**跨调用落空**（受限 harness 的
+# 临时目录为逐调用重建），评审者遂在**被评审的仓库内**执行 `git checkout -- .` ——
+# **丢弃了尚未提交的改动集**，并产生游离提交；主 Agent 据 `git reflog` 才定位，
+# 且恢复不完整（事故后又发生的 3 处改动一并丢失）。
+#
+# 两个独立缺口，本组各锁一个：
+#   ① 评审角色文件**没有只读约束**（未禁破坏性 git 命令）；
+#   ② 「scratch 目录跨调用不保留」这条 harness 事实**只写给执行角色**，评审角色未继承。
+#
+# 判据取「条文存在 + 点名到具体命令/具体机制」——仅断言"有只读二字"会被空话满足。
+
+
+def test_sg_9a_dispatch_template_has_readonly_discipline(agate_root):
+    """SG.9a：共享派发模板的 Review 角色指令节含**只读纪律**，且点名声明的禁止命令。"""
+    tpl = agate_root / "assets" / "templates" / "dispatch-prompt.md"
+    assert tpl.is_file()
+    sec = tpl.read_text(encoding="utf-8").split("### Review 角色特别指令", 1)
+    assert len(sec) == 2, "派发模板结构已变：找不到「Review 角色特别指令」节"
+    body = sec[1].split("\n### ", 1)[0]
+    assert "只读" in body, "Review 角色指令未声明只读纪律（RM-AG0081）"
+    # 必须点名具体禁止命令——否则「禁止写仓」这种泛化表述会被绕过式满足
+    for cmd in ("checkout", "reset", "stash", "clean"):
+        assert cmd in body, f"只读纪律未点名禁止命令 `git {cmd}`（清单一漏就有缺口）"
+    # 必须含「同一次调用」的 scratch 用法（缺口②）
+    assert "同一次" in body, "未说明 scratch 的建/用/清须在**同一次调用**内（跨调用不保留）"
+
+
+def test_sg_9d_readonly_block_is_inside_a_code_fence(agate_root):
+    """SG.9d：只读纪律必须落在**代码围栏内**（它是要注入 subagent 的 prompt 块）。
+
+    ⚠️ 本条来自一次真实自伤（2026-09-29）：初版把只读条文写成 `### 只读纪律` 小节，
+    而模板自身用 `### ` 作为「阶段特定提示」的节分隔符 ⇒ 解析在标题处即截断，
+    条文**掉到围栏外**（prompt 里根本不会带上它），而 SG.9a 只查文本存在、照样绿。
+    ⇒ 判据补上「在围栏内」这一维度：**存在 ≠ 生效**。
+    """
+    tpl = agate_root / "assets" / "templates" / "dispatch-prompt.md"
+    lines = tpl.read_text(encoding="utf-8").splitlines()
+    # 找「### Review 角色特别指令」后的第一个 ``` 开栏，与配对的闭栏
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("### Review 角色特别指令"))
+    open_idx = next(i for i in range(start, len(lines)) if lines[i].startswith("```"))
+    close_idx = next(i for i in range(open_idx + 1, len(lines)) if lines[i].startswith("```"))
+    inside = "\n".join(lines[open_idx + 1 : close_idx])
+    assert "只读" in inside, (
+        "只读纪律不在「Review 角色特别指令」的代码围栏内——它不会被注入 subagent 的 prompt"
+        "（初版曾误写成 `### 小节`，被模板的 `### ` 节分隔约定截断；存在 ≠ 生效）"
+    )
+    assert "checkout" in inside, "围栏内的只读纪律未点名禁止命令"
+
+
+def test_sg_9b_selfgate_role_file_has_readonly_discipline(agate_root):
+    """SG.9b：SELF-GATE 评审角色文件本身也须含只读纪律（它就是出事故的那个角色）。"""
+    role = _role_file(agate_root)
+    text = role.read_text(encoding="utf-8")
+    assert "只读" in text, "protocol-alignment-review 角色文件未含只读纪律（RM-AG0081）"
+    assert "checkout" in text, "未点名禁止 `git checkout`（正是事故命令）"
+    assert "未提交" in text or "尚未提交" in text, (
+        "未说明**为什么**只读——须讲清「被评审的改动集可能尚未提交，写仓会销毁他人工作」"
+    )
+
+
+def test_sg_9c_platform_notes_has_cross_call_scratch_rule(agate_root):
+    """SG.9c：`platform-notes.md` 受限 harness 节须含「跨调用不保留 ⇒ 建/用/清同一次调用」约定。"""
+    text = (agate_root / "platform-notes.md").read_text(encoding="utf-8")
+    sec = text.split("## 受限 harness 通用约束", 1)
+    assert len(sec) == 2, "platform-notes 结构已变：找不到「受限 harness 通用约束」节"
+    body = sec[1].split("\n## ", 1)[0]
+    assert "同一次调用" in body, (
+        "受限 harness 节未含「建/用/清须在同一次调用内」（RM-AG0081 缺口②：该事实未覆盖评审角色）"
+    )
+    assert "评审" in body, (
+        "该节未说明**同样适用于评审角色**——初版只写给执行角色，评审角色未继承而踩坑"
+    )

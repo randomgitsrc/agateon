@@ -61,7 +61,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | 脚本 | 用途 | 退出码语义 |
 |------|------|-----------|
 | `pre-commit-gate.py` | hook 主程序：按顺序调度 9 项检查 + PROD_TOUCHED 检测 + dispatch-context hash 校验 + write_gate_result | 0=通过, 1=拦截, 2=WARNING |
-| `commit-msg-self-gate.py` | commit-msg 主程序：self-gate 触发面检测 | 0=通过, 1=拦截 |
+| `commit-msg-self-gate.py` | commit-msg 主程序：self-gate 触发面检测；**并校验 `self-gate-review:` 的路径真实存在**（磁盘或 index，防「虚假留痕」——该缺陷曾连续两次发生）| 0=通过（含所有告警路径）, 1=用法错误 |
 | `pre-push-gate.py` | pre-push 主程序：alignment 审查阈值判定 | 0=通过, 1=拦截 |
 | `check-state-yaml.py` (P2.15) | `.state.yaml` 格式校验 | 0=通过, 1=格式错, 2=无文件 |
 | `check-gate.py` (P1.1) | 各阶段脚本化 gate | 0=通过, 1=未通过, 2=需自判 |

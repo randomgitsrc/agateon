@@ -542,7 +542,7 @@ title: Windows Store python3 占位符命中 hook 探测循环导致 Windows 用
 status: closed
 priority: medium
 evidence:
-  - ref: agate/tests/unit/test_t43_debt0014_store_placeholder.py
+  - ref: agate/tests/integration/test_pre_commit_hook.py
     note: >-
       **⑤ 早在 main 上就已被满足——本债只是从未被关闭（2026-09-29 独立评审更正）**：
       `agate/tests/integration/test_pre_commit_hook.py` 早已含 **行为级** stub 测试
@@ -551,8 +551,9 @@ evidence:
       与 `test_bdd_11_agate_python_explicit_override_skips_probe_loop`，均由 `02785e6 wf(TAG0017-P3)` 引入、
       `main` 上已在跑；独立评审实测：删掉探测行 → **这 2 个测试 3 个参数共 3 例转红**（比本批新增文件更强）。
       ⇒ **我初判「此前只有文档断言测试、实现改了但行为无锁」是错的**——错因见下「方法失误」。
-      本批另加的 `agate/tests/unit/test_t43_debt0014_store_placeholder.py` 因此**是冗余的**（其在 3 shell 上做
-      `-c ""` 的**源码级**断言，仅有「防止将来只改一个薄壳」的边际价值）；**建议删除，待用户许可**（删文件须许可）。
+      我在 TAG0044 批曾另加 `agate/tests/unit/test_t43_debt0014_store_placeholder.py`，但经上述复核确认它
+      **是冗余的**（与 `test_bdd_10`/`test_bdd_11` 重复，仅剩「3 个薄壳都写了探测」的源码级边际价值）。
+      **已于 2026-09-29 经用户许可删除**——本债的 ⑤ 由上述既有行为测试承担，无需自建第二把锁。
       **方法失误（如实登记）**：我当初用 `grep -rn "AGATE_PYTHON" agate/tests/ | head -6` 找既有测试，
       **`head -6` 把 `test_pre_commit_hook.py` 的命中截掉了**，遂误判「只有文档断言」。这违反了本仓
       `AGENTS.md`「工具纪律」明写的「先看全输出再分析，不用 tail/head 截断（count-tests 教训）」——
