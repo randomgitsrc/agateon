@@ -84,6 +84,7 @@
 3. `bash agate/tests/scripts/count-tests.sh` 确认用例数未漂移
 4. 新 bug 先写 `regression/` 测试再修
 5. 暂存区含 self-gate 触发文件时，commit message 须含 `self-gate-review:` 路径或 `self-gate-skip:` 理由（commit-msg hook 检查，WARNING 不拦截）；触发文件面见 `SELF-GATE.md`
+6. **新增 / 改名 `agate/scripts/` 下文件时**：先读 `agate/scripts/README.md`「新增脚本登记面」节——该节逐面标注**机械门禁**与**团队约定**（真门禁只有 `CHECK9-coverage` 与 SG.6，两者共用同一判据 `uncovered_gate_scripts()`）。⚠️ `agate/scripts/README.md` 属 CHECK 10 扫描面：**别在该文件里写不存在的脚本名**，会判 ERROR（2026-09-29 实测踩过一次）
 
 ## Gate 脚本分层
 

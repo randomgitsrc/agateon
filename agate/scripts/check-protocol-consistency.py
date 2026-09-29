@@ -809,40 +809,49 @@ GATE_SCRIPT_EXEMPT = {
 }
 
 
-def check_anchor_coverage(root: Path, rep: Report) -> None:
-    """反向检查：每个 gate 脚本（check-*.py + pre-commit-gate.{sh,py} + ci-gate-backstop.py）至少在一条锚点里被引用。
+def uncovered_gate_scripts(root: Path) -> list[str]:
+    """单一判据：返回既不在 CHECK 9 锚点表、也不在豁免集中的 gate 脚本（相对路径，已排序）。
 
-    锚点表本身可能漏——有人加了 check-newrule.py 忘了加锚点，
-    正向检查（CHECK 9 主逻辑）只能盯死锚点表里有的，无法发现"该有但没列"。
-    本检查做反向兜底：遍历 gate 脚本目录，确认每个都在锚点表里有对应锚点。
+    **本函数是「新增 gate 脚本是否登记」的唯一权威判据**，被两处消费：
+      1. `check_anchor_coverage()`（CHECK9-coverage WARNING，本文件内）
+      2. `agate/tests/integration/test_protocol_alignment_review.py::test_sg_6_*`（真门禁，会红）
+
+    为什么不各自实现：2026-09-29 实测发现两处判据**不等价**——SG.6 旧版用子串判定
+    （`name in consistency_text`），在脚本里写一行**注释**提及脚本名即可变绿，而本函数
+    的集合判据仍报未覆盖 ⇒ 同一事实两处结论相反（DEBT0046 实测空洞）。共用本函数后，
+    「测试绿而 gate 告警」的结构性矛盾不再可能。
     """
     scripts_dir = root / "agate" / "scripts"
     if not scripts_dir.exists():
-        return
-    gate_scripts = sorted(
-        str(p.relative_to(root))
+        return []
+    gate_scripts = [
+        str(p.relative_to(root)).replace(os.sep, "/")
         for p in scripts_dir.glob("check-*.py")
         if p.is_file()
-    )
-    pre_commit = root / "agate" / "scripts" / "pre-commit-gate.sh"
-    if pre_commit.exists():
-        gate_scripts.append("agate/scripts/pre-commit-gate.sh")
-    pre_commit_py = root / "agate" / "scripts" / "pre-commit-gate.py"
-    if pre_commit_py.exists():
-        gate_scripts.append("agate/scripts/pre-commit-gate.py")
-    ci_backstop = root / "agate" / "scripts" / "ci-gate-backstop.py"
-    if ci_backstop.exists():
-        gate_scripts.append("agate/scripts/ci-gate-backstop.py")
+    ]
+    for extra in ("pre-commit-gate.sh", "pre-commit-gate.py", "ci-gate-backstop.py"):
+        if (scripts_dir / extra).exists():
+            gate_scripts.append(f"agate/scripts/{extra}")
 
-    covered = {anchor["script"] for anchor in SCRIPT_ALIGNMENT_ANCHORS}
-    for script in gate_scripts:
-        if script in GATE_SCRIPT_EXEMPT:
-            continue
-        if script not in covered:
-            rep.warn("CHECK9-coverage",
-                     f"gate 脚本 {script} 未纳入 CHECK 9 锚点表"
-                     "——新增 gate 脚本需在 SCRIPT_ALIGNMENT_ANCHORS 加对应锚点",
-                     loc=script)
+    covered = {anchor["script"] for anchor in SCRIPT_ALIGNMENT_ANCHORS} | set(GATE_SCRIPT_EXEMPT)
+    return sorted(s for s in set(gate_scripts) if s not in covered)
+
+
+def check_anchor_coverage(root: Path, rep: Report) -> None:
+    """反向检查：每个 gate 脚本（check-*.py + pre-commit-gate.{sh,py} + ci-gate-backstop.py）都已登记。
+
+    锚点表本身可能漏——有人加了 check-newrule.py 忘了加锚点，
+    正向检查（CHECK 9 主逻辑）只能盯死锚点表里有的，无法发现"该有但没列"。
+    本检查做反向兜底，判据取自 `uncovered_gate_scripts()`（与 SG.6 共用，防止两处判据漂移）。
+    """
+    for script in uncovered_gate_scripts(root):
+        rep.warn("CHECK9-coverage",
+                 f"gate 脚本 {script} 既未纳入 CHECK 9 锚点表，也未列入豁免集"
+                 "——新增 gate 脚本**两种**登记方式二选一：承载 gate 判定逻辑 → 在"
+                 " SCRIPT_ALIGNMENT_ANCHORS 加对应锚点；纯观测/调度类 → 加入"
+                 " GATE_SCRIPT_EXEMPT（须写理由）；完整登记面清单见 agate/scripts/README.md"
+                 "「新增脚本登记面」节",
+                 loc=script)
 
 
 # ── CHECK 10: 协议文档脚本名引用漂移 ─────────────────────────────────────
