@@ -10,6 +10,18 @@
 
 ## [Unreleased]
 
+> TAG0042 技术债批（DEBT0045 + DEBT0048 + DEBT0040）。
+
+### 修复
+
+- **一条自称「不阻塞」的警告把 P6→P7 卡住**（DEBT0045）：`check-p6-provenance.py` 对「缺 agent 字段（协作规范，**不阻塞**）」经 stderr 告警后 `exit 2`（该脚本 README 的契约：0=通过 / 1=审计失败 / 2=WARNING），而 `agate-next.py::_p6_pass` **只认 `rc == 0`** ⇒ P6→P7 被这条不阻塞的警告阻断，表现为「验收异常」（不指出真因），并落盘占位 `P6-exit2-resolution.md`（易被 `git add <任务目录>` 一并提交——TAG0036 实测）。现按既定契约消费：**`rc ∈ {0, 2}` 均视为通过**，只有 1（审计失败）才拦（**独立评审用 9 种真失败输入穷尽实测**：全部仍为 exit 1，真失败与警告共存时 failure 优先）。同时把 **6 处**仍写「provenance exit 0」的落点与实现对齐——`state-machine.md` / `rules/state-transitions.md` / `loop-orchestration.md` / `dispatch-protocol.md` 四处散文，外加**两处最权威落点** `WORKFLOW.md`（主阶段总览 P6 行）与 `rules/phases.yaml`（**机器可读的 gate 声明**；初版漏改此二者，由评审指出），并加测试守护（清单含全部 6 处）防再次漂移。**另**：`agate-next` 原先在 exit 1 路径只打「验收异常」、**不转达 provenance 的具体原因**（主 Agent 须手动复跑才能定位）；现 `exit 1` 与 `exit 2` 两条分支**都转达具体原因行**，且多条警告不截断（初版只转达第一条）。
+- **实现者角色补仓库隔离条文**（DEBT0040）：`implementer.md` 新增「写类代码与测试的仓库隔离」节——凡会落盘的代码/测试，目标目录一律用隔离路径（测试 `tmp_path`、实现由调用方传入），不得默认或回退到仓库内已提交文件；并披露「跑测**事后**是否写脏没有 CI 兜底」这一已知缺口。
+- **P3 无平台假设自查**（DEBT0048）：P3 只查「红灯对不对」，测试文件里的平台假设（最常见 = **注释里的系统临时目录字面量**）要到 **P4 全量 pytest** 才由 `check-platform-assumptions.py` 的 bdd-8 抓出 ⇒ 多一个「收口小修」回合（TAG0036 实测；**本仓 2026-09-29 两批修复各自又踩一次**）。现 P3 卡推进条件、派发模板 P3 自检节、`test-designer.md` 交付前自查**三处**均要求先跑该扫描（含「注释里的字面量同样计命中」与运行时拼接的修法示例）。
+
+### 变更
+
+- **P6→P7 门槛表述对齐实现**：`state-machine.md` 等 4 处由「provenance exit 0」改为「exit 0/2（2 = 协作规范 WARNING，不阻塞）」——消除「文档说必须 0、实现已在 2 时放行」的静默漂移。
+
 > TAG0041 (RM-AG0075 受限 harness 临时产物与长驻服务生命周期 + RM-AG0076 DSH agent-team 定位)。
 
 ### 新增

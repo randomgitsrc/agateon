@@ -253,12 +253,46 @@ def _write_exit2_resolution(task_dir, phase, state, gate_rc):
          "（机器可读，frontmatter + 触发/客观证据/解决三节）")
 
 
+# check-p6-provenance.py 的退出码契约（见 agate/scripts/README.md）：
+#   0 = 通过 / 1 = 审计失败 / 2 = WARNING（协作规范类，**不阻塞**）
+_P6_PROVENANCE_PASS = (0, 2)
+
+
 def _p6_pass(state, task_dir):
-    """P6 前进特例判定：check-p6-provenance exit 0（gate_p6 exit 2 = FAIL=0/证据非空
-    由 provenance 机械确认——审计 1 证据-结论对应 + 审计 2 dispatch-context + 审计 3 BDD 计数）。
+    """P6 前进特例判定：check-p6-provenance 是否**通过**。
+
+    **判据含 exit 2**（DEBT0045）：该脚本对「缺 agent 字段（协作规范，**不阻塞**）」
+    经 stderr 告警后 `exit 2`，而本函数原先只认 `rc == 0` ⇒ **一条自称不阻塞的警告把
+    P6→P7 卡住**，且表现为"验收异常"（不指出真因），并落盘占位
+    `P6-exit2-resolution.md`（易被 `git add <任务目录>` 一并提交——TAG0036 实测）。
+    现按脚本 README 的既定契约消费：**2 = WARNING = 通过**；只有 1（审计失败）才拦。
+    exit 1 的拦截语义由下方 `else` 分支保持（不推进 + 提示），未被放宽。
     """
-    rc, _out = _run_cmd([sys.executable, CHECK_PROVENANCE, task_dir])
-    return rc == 0
+    rc, out = _run_cmd([sys.executable, CHECK_PROVENANCE, task_dir])
+    _p6_relay_provenance(rc, out)
+    return rc in _P6_PROVENANCE_PASS
+
+
+def _p6_relay_provenance(rc, out):
+    """把 provenance 的具体原因行转达给主 Agent（**exit 1 与 exit 2 都转达**）。
+
+    DEBT0045 的 closure_criteria 第 2 条要求「暂停信息含 provenance 的具体原因行」——
+    原先**两条分支都不转达**：exit 2 只打"验收异常"、exit 1 同样只打"验收异常"，
+    主 Agent 必须手动再跑一次 provenance 才知道原因（债的 impact 原文即此）。
+
+    **不做截断**（初版只转达第一条且不告知总数 ⇒ 多警告时信息丢失）：列出全部非空行，
+    行数多时给总数提示。
+    """
+    lines = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]
+    if not lines:
+        return
+    tag = {1: "provenance 审计失败", 2: "provenance WARNING"}.get(rc, f"provenance exit {rc}")
+    if len(lines) == 1:
+        _log(f"  [{tag}] {lines[0]}")
+    else:
+        _log(f"  [{tag}] 共 {len(lines)} 条：")
+        for ln in lines:
+            _log("    " + ln)
 
 
 def _p6_judge_advance(task_dir, state, phases, repo_root):
@@ -368,9 +402,11 @@ def main():
             # P6 条件式推进特例（A1，§3.1/§3.4）：gate exit 2 ∈ pass_set + provenance exit 0
             # 才进入裁决；provenance exit 1（验收异常）→ 真暂停落盘 resolution
             if not _p6_pass(state, task_dir):
+                # 原因行已在 _p6_pass → _p6_relay_provenance 里转达（DEBT0045 closure #2）
                 _write_exit2_resolution(task_dir, phase, state, rc)
-                _log(f"{phase} gate exit 2 ∈ pass_set 但 check-p6-provenance 未过（验收异常）→ "
-                     "暂停转主 Agent 决策（不推进；硬中断不自动 retry）")
+                _log(f"{phase} gate exit 2 ∈ pass_set 但 check-p6-provenance **审计失败**（非警告）→ "
+                     "暂停转主 Agent 决策（不推进；硬中断不自动 retry）；"
+                     "**具体原因见上方 provenance 行**")
             else:
                 _p6_judge_advance(task_dir, state, phases, repo_root)
             sys.exit(0)

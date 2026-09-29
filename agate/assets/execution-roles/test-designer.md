@@ -56,6 +56,15 @@ agent: test-designer
 - **不跑 TDD 红灯**：refactor 任务跳过 check-tdd-red 红灯步骤（测试套件本就全绿，红灯语义不适用；回归质量由 P5 全量回归 + P6 的 regression.log 兜底）。P3 产出仍为 P3-test-cases.md（回归口径声明 + 既有用例覆盖映射），文件存在即满足 P3 gate。
 - **BDD 性质**：refactor 任务 P1 的 BDD 是"关键路径行为不变断言"（Given 重构后状态 / When 跑关键路径 / Then 行为与重构前一致），测试映射这些断言，不新增功能性质 BDD。
 
+## 交付前自查（强制）
+
+1. **平台假设扫描必须 0 命中**：`python3 {agate_root}/scripts/check-platform-assumptions.py <你写的测试目录>`
+   - ⚠️ **注释里的字面量同样计命中**（R4 = 系统临时目录字面量；R1 = 裸 `python3`；R2 = 硬编码 `PATH`）。需要该路径时**运行时拼接**（如 `TMP = "/" + "tmp"`）——仓库既有惯例。
+   - 来历（DEBT0048）：P3 gate 只查"红灯对不对"，平台假设要到 **P4 全量 pytest** 才由 `check-platform-assumptions.py` 的 bdd-8 抓出 ⇒ 多一个"收口小修"回合；本仓 2026-09-29 两批修复各自又踩一次。
+   - ⚠️ **扫描面限定**：`check-platform-assumptions.py` 只扫 `.bats/.bash/.sh/.py` 四种后缀（源码 `L128`）——**TS/JS 测试文件不在扫描面内**。故本条对 **Python/shell 测试项目**成立；**前端项目（Playwright/vitest 等 .ts/.js 用例）跑该自查恒绿，不等于无平台假设**——那类项目的平台无关性需另想办法（已知缺口，见 DEBT0048 记录）。
+2. **测试自跑**：确认每个红灯的失败原因都是"被测模块未实现"（import 失败 / 模块不存在 / 组件未导出），而非"断言与测试数据矛盾"。
+3. **写入隔离**：会用 `tmp_path` 之类的临时目录，**不写仓库内已提交的文件**（如 `gate-events.jsonl` 账本）——写坏已提交文件会污染他人任务。
+
 ## 返回给主 Agent
 文件路径 + 一句话：N 个测试用例，当前全部红灯
 
