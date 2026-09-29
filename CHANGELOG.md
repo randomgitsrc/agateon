@@ -10,6 +10,17 @@
 
 ## [Unreleased]
 
+> TAG0044 债务清单逐条实测复核（14 条 open → 关闭 3 / 入 roadmap 11）。
+
+### 变更
+
+- **open 债务从 14 条清到 11 条：3 条关闭、11 条逐条实测后入 roadmap**（DEBT0008/0015/0028/0029/0030/0031/0033/0041/0043/0044/0047 → **RM-AG0082–RM-AG0092**）。**方法：不按标题判，逐条回源实测**——结果证明按标题猜会错得离谱：
+  - **DEBT0014 关闭**：标题写「protocol 层未防护」，实测**修复早已落地**（探测循环加逐候选可执行性小测试 + `AGATE_PYTHON` 覆盖 + `platform-notes.md` 已知限制条 + `AGENTS.md` 说明），**只差 ⑤「模拟回归用例」**——本批补 3 条**行为级**回归（模拟 `command -v` 命中但执行非零退出的 Store 占位符 → 断言薄壳跳过它并回退到真实候选；`AGATE_PYTHON` 覆盖跳过整个探测循环；3 个薄壳都含探测源码判据），负向控制：去掉探测行 → 2 条转红。此前该债只有**文档断言**测试，故「实现改了但行为无锁」。
+  - **DEBT0032 关闭**：标题写「误判假暂停」，实测两条 closure_criteria **均已满足**——① 已由 DEBT0045 批修复（`_p6_pass` 认 `rc ∈ {0,2}`）+ 有测试；② **我曾误读**为「新建时不报路径」，实际两条分支**都**输出文件名。该条与 DEBT0045 是**同一问题的重复登记**。
+  - **DEBT0049 关闭（按观察项，非「已修复」）**：其 closure_criteria 是**触发条件而非可交付物**，即它**不是待办**——`status: open` 属登记形态错误。决策（`adr.md` ADR-008 增补 + `LIMITATIONS.md` 局限 3）已落盘且明确「防线归人工评审」，故归档为触发式观察项（**触发即重开**），并同步更新 `adr.md`/`LIMITATIONS.md` 里「保持 open」的表述。
+  - **11 条确认是真问题**，含实测复现证据：`ABS_PATH_RE` 误伤 `/或`、`/P2`（DEBT0008）；`check-gate.py:940` 子串判定且**阻断性 return 1**（DEBT0029）；`check-debt` **零 gate/CI 挂载** + closed 证据是 `P[56]` 子串启发式（DEBT0033）；`agate-md-field-set.py` **拒绝**给 P3 写 `agent`（DEBT0041）；`_gate_p2_dispatch_plan` 三处 `return None` 致 **fail-open**（DEBT0043）；`_two_sections` 无标签级终止符 + 斜杠阶段序列 `P0/P1/.../P5/` 被误判（DEBT0044）；两处 `dirname(dirname())` 绕过 `resolve_workspace()` 的 `AGATE_WORKSPACE` 覆盖（DEBT0028）；`gate_commands` 引号/通配两个静默削弱陷阱（DEBT0047）；`check-gate.py` 对 `env_constraints` 零引用（DEBT0015）；P8 卡缺并行版本协调节（DEBT0030）；P1 `phases` 与正文裁剪无机械校验（DEBT0031）。
+- **RM-AG0068 内旧「零散债务续做清单」作废**：其分档对 DEBT0049/0032 的判断均被实测推翻，已替换为指向 RM-AG0082–RM-AG0092 的指针（不留两处权威）。
+
 > TAG0043 CI 账本污染兜底（DEBT0040③，**CI 改动经用户明确许可**）。
 
 ### 变更

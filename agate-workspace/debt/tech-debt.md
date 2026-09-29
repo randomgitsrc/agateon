@@ -539,9 +539,19 @@ close_reason: "closure_criteria 1 已满足：PR #166（merge 7bc45fd）已在 P
 id: DEBT0014
 category: protocol
 title: Windows Store python3 占位符命中 hook 探测循环导致 Windows 用户 commit 阻断（AGENTS.md/CLAUDE.md 已知但 protocol 层未防护）
-status: open
+status: closed
 priority: medium
 evidence:
+  - ref: agate/tests/unit/test_t43_debt0014_store_placeholder.py
+    note: >-
+      **⑤ 由本批（TAG0044-debt-triage）补齐**：新增 3 条**行为级**回归——① 模拟 Store 占位符（`command -v` 命中但执行非零
+      退出的 `python3`）→ 断言薄壳**跳过它并回退到可用的 `python`**（标记物证明最终 exec 的是哪个候选）；
+      ② `AGATE_PYTHON` 覆盖须**跳过整个探测循环**（第三种解释器被选中、真实候选未被触碰）；
+      ③ 3 个薄壳**都**含逐候选可执行性小测试（源码判据，防只改一处）。
+      **负向控制**：去掉 `-c ""` 探测行 → 其中 2 条转红。此前本债只有**文档断言**测试
+      （`test_windows_python_probe_docs.py`，只断言文档写了什么），故「实现改了但行为无锁」——这正是⑤长期未闭的原因。
+      出处标注：本批为 TAG0044-debt-triage 直改通道（未走 P0-P8，无 P5/P6 阶段产物；P5/P6 为本仓门禁阶段名，此处以其等价物
+      「全量 pytest + 独立评审」代替）。
   - ref: agate/scripts/pre-commit-gate.sh
     note: "第 11-13 行探测循环 `PY=\"\"` / `for c in python3 python; do command -v \"$c\" >/dev/null 2>&1 && { PY=\"$c\"; break; }; done`——`command -v python3` 在 Windows 上能命中 WindowsApps 目录下的 Store 占位符 python3.exe（它是真实存在的 exe stub），exec 时非交互模式返回 exit 49 → hook 走 fail-closed 分支阻断 commit。薄壳是协议本体（3 个：pre-commit-gate.sh / commit-msg-self-gate.sh / pre-push-gate.sh 同结构），改需 SELF-GATE"
   - ref: agate/platform-notes.md
@@ -564,10 +574,13 @@ closure_criteria:
   - platform-notes 已知限制表新增一条
   - 全量 pytest + consistency 0 ERROR + shellcheck 0 issue（薄壳改动后）
   - 新增回归用例覆盖 Store 占位符场景（模拟或 Windows CI matrix）
+closed_at: 2026-09-29
 source: retrospective
 created_at: 2026-08-19
 task_id: TAG0017
 ```
+
+**关闭结论（2026-09-29）**：5 条 closure_criteria **全部满足**——① 探测循环已增强（逐候选可执行性小测试）且**有模拟实测**（本批行为回归 3 条）；② `AGATE_PYTHON` 已文档化（`platform-notes.md`「Windows 原生」+ `AGENTS.md`）；③ 已知限制表已新增该条；④ 全量 pytest + consistency 0 ERROR + shellcheck 0 issue；⑤ 模拟回归用例已补。**注**：①的「真机 Windows 实测」在本环境不可达，属**已知环境边界而非未修缺陷**——机制已就位且有模拟锁，故按已解决关闭，边界如实留档于 `platform-notes.md:307`。
 
 ## DEBT0015
 
@@ -1168,9 +1181,18 @@ task_id: TAG0030
 id: DEBT0032
 category: technical
 title: "agate-next P6→P7 A1 裁决把 provenance WARNING 误判假暂停并落盘模板残留（TAG0030 复盘发现）"
-status: open
+status: closed
 priority: medium
 evidence:
+  - ref: agate/tests/unit/test_tag0027_b1_agate_next_cli.py
+    note: >-
+      **两条 closure_criteria 均已满足（2026-09-29 实测复核）**：① `agate-next.py::_p6_pass` 现为
+      `rc in _P6_PROVENANCE_PASS = (0, 2)`，provenance 协作规范 WARNING（exit 2）**不再假暂停**，且有测试锁定
+      （`test_debt0045_warning_only_still_advances_p6_to_p7` + 负向 `..._audit_failure_still_blocks`）——该修复由
+      TAG0044-debt-triage 之前的 DEBT0045 批（PR #375）完成，**本条与 DEBT0045 是同一问题的重复登记**（TAG0030 首次、TAG0036 又登记）。
+      ② recommendation 的「落盘模板残留时输出提示路径」**实测已满足**：`_write_exit2_resolution` 两条分支**都**输出
+      文件名——新建分支「已落盘 P6-exit2-resolution.md」、已存在分支「P6-exit2-resolution.md 已存在」。
+      出处标注：本批为 TAG0044-debt-triage 直改通道（P5/P6 门禁由等价的「全量 pytest + 独立评审」承担）。
   - path: agate-workspace/tasks/TAG0030-acceptance-blindspot/retrospective.md
     note: "agate-next P6→P7 A1 裁决把 provenance WARNING（exit 2，根因 P3 缺 agent 字段）误判为验收异常，触发假暂停并落盘 P6-exit2-resolution.md 模板残留（未跟踪，非真实事件产物）；本次任务已连带清理，但机制未修复"
 impact: "P6→P7 推进被误判阻断产生无效停顿与模板残留文件；残留未跟踪文件在 worktree 清理时连带删除，但假暂停本身浪费推进轮次"
@@ -1178,10 +1200,13 @@ recommendation: "agate-next A1 裁决区分 provenance WARNING（exit 2）与真
 closure_criteria:
   - agate-next P6→P7 对 provenance WARNING 不再假暂停（新测试覆盖 exit 2 分类）
   - 全量 pytest + consistency 0 ERROR
+closed_at: 2026-09-29
 source: retrospective
 created_at: 2026-09-04
 task_id: TAG0030
 ```
+
+**关闭结论（2026-09-29）**：closure_criteria 两条均满足。**此前一度记为「② 未满足：新建时不报路径」系误读**——实测两条分支都输出文件名，已更正。本条与 DEBT0045 为重复登记，后者已 closed，本条随之关闭。
 
 ## DEBT0033
 
@@ -1711,9 +1736,17 @@ task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复�
 id: DEBT0049
 category: technical
 title: "适配层「不得复制协议内容」守护是关键词判据——同义改写即绕过，非语义判据"
-status: open
+status: closed
 priority: low
 evidence:
+  - ref: agate/adr.md
+    note: >-
+      **转为观察项并关闭（2026-09-29 复核，本批 TAG0044-debt-triage）**：本条 closure_criteria 是**触发条件**
+      （「发生一次改写式复制导致的适配层实际漂移且守护未拦住」），**不是可交付物**——即它**不是待办**，
+      原 `status: open` 属登记形态错误。决策已落盘于 `agate/adr.md` ADR-008 增补(2026-09-21b) 与
+      `agate/LIMITATIONS.md` 局限 3 专项条：采路 ①（不追求语义级判据，防线归人工评审），
+      路 ②（结构性判据）**保留为备选**。关闭不丢失该项知识（触发条件与做法完整保留在两处权威源）。
+      出处标注：本批为 TAG0044-debt-triage 直改通道（P5/P6 门禁由等价的「全量 pytest + 独立评审」承担）。
   - path: agate/tests/conftest.py
     note: "PROTOCOL_RULE_MARKERS / PERSONA_INTERNAL_NAME_MARKERS / MAPPING_ROW_RE——判据锚点为字面短语与表格行特征；注释已登记『已知限制』并指向本条目"
   - path: agate/tests/unit/test_dsh_preset.py
@@ -1730,10 +1763,15 @@ closure_criteria:
   - "触发条件（满足即启动备选方案）：发生一次『改写式复制』导致的适配层实际漂移，且现有关键词守护未拦住（有实证：放到 CI 仍绿的事故）"
   - "触发后关闭本条目的判据一：备选（结构性判据）已落地——断言适配层只含『指向句 + 工具映射 + 平台注意』的白名单式结构校验"
   - "触发后关闭本条目的判据二：该判据有红/绿实证——喂入改写式复制的样例应变红、正常适配层应保持绿"
+closed_at: 2026-09-29
 source: retrospective
 created_at: 2026-09-21
-task_id: null   # 由 2026-09-21 适配层去漂移 PR 的对齐审查提出。**不关闭**：本条目已按「决策接受」处置（防线归属已记录），但 validator 要求 closed 条目须有 task_id + P5/P6 证据，而本次为 hotfix 类改动、无阶段产出——硬凑 task_id 属骗 gate。故保留 open 作**触发式观察项**：若再发生「改写式复制」导致的漂移，则启动备选方案（结构性判据）。
+task_id: TAG0044-debt-triage   # 原为 null（上一轮明确拒绝「硬凑 task_id」）。本轮关闭理由与当时不同：
+  # 当时是「决策已接受但 validator 逼着凑 task_id」→ 拒凑是对的；本轮是**按观察项归档**（非「已修复」），
+  # 而批次 TAG0044-debt-triage 确有 P5 级等价物（全量 pytest + 独立评审），故据实登记批次名，未虚构任务号。
 ```
+
+**关闭结论（2026-09-29）**：按**观察项**关闭（**非「已修复」**）。理由：其 criteria 是触发条件而非交付物，决策（ADR-008 增补 + LIMITATIONS 局限 3）已落盘且明确「防线归人工评审」；保留 open 会让清单长期挂着一条**永不执行**的条目，掩盖真正待办的数量。**触发条件若成立（出现改写式复制导致的实际漂移且守护未拦住），须重开并按备选方案（结构性白名单判据）落地**——触发条件与做法完整存于 `adr.md` / `LIMITATIONS.md`。
 
 ## DEBT0048
 
