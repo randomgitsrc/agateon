@@ -63,7 +63,16 @@ _EXEMPT_EXACT_FILES = (
 )
 
 _SCAN_INCLUDE_EXTS = {".md", ".py", ".sh", ".yml", ".yaml"}
-_SCAN_EXCLUDE_DIRS = {".git", ".worktrees"}
+# canonical scratch（platform-notes「受限 harness 通用约束」约定 1：`<项目根>/.agate-tmp/`，
+# `AGATE_TMP_DIR` 可覆盖）**必须排除**：其内容按定义被 VCS 忽略、且常含**整仓副本**（变异测试用），
+# 副本里的历史旧 URL 会污染本扫描 ⇒ 本机红而 CI 绿（2026-09-30 实测）。
+# 与 check-protocol-consistency.py::iter_md_files 的同类排除保持一致。
+# scratch 目录名：与 `check-protocol-consistency.py` 的解析**同源**——
+# `AGATE_TMP_DIR` 非空取 basename，否则回退 `.agate-tmp`（`or` 兜底，与
+# `check-gate.py` 的 `_tmp_dir_rel()` 同款；本仓反例 7 的教训：
+# 用 `os.environ[...]` 直取会在值非法/为空时与脚本行为分歧）。
+_SCRATCH_DIR_NAME = os.path.basename(os.environ.get("AGATE_TMP_DIR") or ".agate-tmp")
+_SCAN_EXCLUDE_DIRS = {".git", ".worktrees", ".agate-tmp", _SCRATCH_DIR_NAME}
 
 
 @pytest.fixture(scope="session")

@@ -706,3 +706,48 @@ def test_check13_no_released_version_warns(agate_scripts, tmp_path):
     cpc.check_upgrading_section(root, rep)
     assert _check13_errors(rep) == []
     assert any(w["check"] == "CHECK13-upgrading" for w in rep.warnings)
+
+
+# ── canonical scratch 目录不得被扫描（2026-09-30 实测缺陷） ──
+#
+# 缺陷形态（本次实测，非推理）：评审/开发者按约定把 scratch 放进 `<项目根>/.agate-tmp/`
+# （platform-notes「受限 harness 通用约束」约定 1），其中常含**整仓副本**（用于变异测试）。
+# 而 `iter_md_files` 用 `root.rglob("*.md")` ⇒ 把那些副本里的 .md 一并扫入 ⇒
+# 本机 consistency 报 **3072 ERROR**（引用不存在等），而 **CI（干净 checkout，无该目录）全绿**。
+#
+# ⇒ 这是「**本机环境决定红绿**」——与本仓在 `conftest._run_cli_impl` 里隔离 HOME 所对抗的
+# 正是同一类问题。修法：按约定排除 scratch 目录（其内容按定义**必须被 VCS 忽略**、非协议正文）。
+
+
+def test_bdd_scratch_dir_is_excluded_from_md_scan(agate_scripts, tmp_path):
+    """`<root>/.agate-tmp/**/*.md` 不得被 iter_md_files 扫入。"""
+    cpc = _load_cpc(agate_scripts)
+    root = Path(tmp_path)
+    (root / "agate").mkdir(parents=True, exist_ok=True)
+    (root / "keep.md").write_text("# keep\n", encoding="utf-8")
+    scratch = root / ".agate-tmp" / "audit" / "base"
+    scratch.mkdir(parents=True, exist_ok=True)
+    (scratch / "CHANGELOG.md").write_text("# scratch copy\n", encoding="utf-8")
+    (root / ".agate-tmp" / "probe.md").write_text("# probe\n", encoding="utf-8")
+
+    rels = {str(f.relative_to(root)).replace(os.sep, "/") for f in cpc.iter_md_files(root)}
+    assert "keep.md" in rels, "正常 .md 被误排除（判据过宽）"
+    assert not any(r.startswith(".agate-tmp/") for r in rels), (
+        f"scratch 目录被扫入 ⇒ 本机 consistency 会被 scratch 副本污染（CI 绿而本机红）：{sorted(rels)}"
+    )
+
+
+def test_bdd_scratch_dir_env_override_is_honored(agate_scripts, tmp_path, monkeypatch):
+    """`AGATE_TMP_DIR` 覆盖 scratch 目录名时同样排除（约定 1 允许改名）。"""
+    cpc = _load_cpc(agate_scripts)
+    root = Path(tmp_path)
+    (root / "my-scratch" / "sub").mkdir(parents=True, exist_ok=True)
+    (root / "my-scratch" / "sub" / "x.md").write_text("# x\n", encoding="utf-8")
+    (root / "keep.md").write_text("# keep\n", encoding="utf-8")
+    monkeypatch.setenv("AGATE_TMP_DIR", "my-scratch")
+
+    rels = {str(f.relative_to(root)).replace(os.sep, "/") for f in cpc.iter_md_files(root)}
+    assert "keep.md" in rels
+    assert not any(r.startswith("my-scratch/") for r in rels), (
+        f"AGATE_TMP_DIR 覆盖后未排除：{sorted(rels)}"
+    )
