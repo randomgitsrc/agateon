@@ -101,6 +101,7 @@ bash agate/tests/scripts/count-tests.sh
 | 新增脚本登记面（DEBT0046）| unit/test_t43_check_registration_surface.py | 12 |
 | 账本污染 CI 兜底（DEBT0040）| unit/test_t43_ledger_pollution_backstop.py | 10 |
 | 派发成本度量（RM-AG0074）| unit/test_agate_dispatch_cost.py | 11 |
+| self-gate 留痕完整性（虚假留痕防线）| unit/test_selfgate_trailer_integrity.py | 8 |
 | 框架自检 | test_sanity.py | 6 |
 | **总计** | | **以 `count-tests.sh` 输出为准** |
 
