@@ -282,3 +282,155 @@ def test_sg_path_4_skip_trailer_needs_no_path_check(
     assert "未含 self-gate-review" not in result.output, (
         f"已给 self-gate-skip 却仍报缺 trailer：{result.output!r}"
     )
+
+
+# ── trailer 存在性校验：**清单式写法**与**时机盲窗**（2026-09-29） ──
+#
+# 两个缺陷合在一处修：
+#  ① **清单式误报**（存量扫描发现 8 条）：历史上有 `self-gate-review: README.md, CHANGELOG.md, ...`
+#     这种**被评审文件清单**写法（不是报告路径）。旧实现只取**第一个 token** 并当路径判存在 ⇒
+#     对这类写法**误报**（"README.md 不存在"——荒谬）。修法：**取全部 token，任一存在即通过**。
+#  ② **时机盲窗**（评审查明，本缺陷已复犯 5 次）：守卫 `test_selfgate_trailer_integrity.py`
+#     取 `origin/main..HEAD`，而 **pre-commit 时该范围为空** ⇒ 只在提交之后生效。
+#     本 hook 的 commit-msg 阶段**能拿到 message**，故判定**在提交前**发生（人可当场修）。
+
+
+def _stage_trigger(git_repo):
+    repo = git_repo.path
+    (repo / "agate" / "scripts").mkdir(parents=True, exist_ok=True)
+    (repo / "agate" / "scripts" / "test-file.sh").write_text("test\n", encoding="utf-8")
+    git_repo.stage("agate/scripts/test-file.sh")
+    return repo
+
+
+def test_bw_1_list_style_trailer_is_not_a_false_positive(
+    git_repo, agate_scripts, agate_root, run_cli, bash, tmp_path
+):
+    """清单式 trailer（多个真实文件，逗号分隔）⇒ **不得误报**。
+
+    这是存量 8 条历史写法的形态；旧实现只取首 token，会把 `README.md` 当报告路径判缺失。
+    """
+    repo = _stage_trigger(git_repo)
+    for rel in ("README.md", "CHANGELOG.md", "AGENTS.md"):
+        (repo / rel).write_text("x\n", encoding="utf-8")
+    git_repo.commit("seed")
+
+    msg = tmp_path / "m"
+    msg.write_text(
+        "feat: x\nself-gate-review: README.md, CHANGELOG.md, AGENTS.md\n", encoding="utf-8"
+    )
+    # 换到 message 文件（seed 提交已存在，故用新 stage 的触发文件）
+    (repo / "agate" / "scripts" / "another.sh").write_text("y\n", encoding="utf-8")
+    git_repo.stage("agate/scripts/another.sh")
+
+    result = _run_csg(run_cli, bash, agate_scripts, agate_root, msg, repo)
+    assert result.returncode == 0
+    assert "不存在" not in result.output, (
+        f"清单式 trailer 被误报（旧实现只取首 token 当路径）：{result.output!r}"
+    )
+
+
+def test_bw_2_phantom_trailer_warns_at_commit_msg_time(
+    git_repo, agate_scripts, agate_root, run_cli, bash, tmp_path
+):
+    """**盲窗修复的核验**：报告未暂存也未提交 ⇒ commit-msg 阶段即告警（须能当场发现）。
+
+    重放 5 次复犯的形态：写报告路径但（忘了 `git add`）⇒ 提交后才发现。
+    """
+    repo = _stage_trigger(git_repo)
+    (repo / "seed.txt").write_text("s\n", encoding="utf-8")
+    git_repo.commit("seed")
+    (repo / "agate" / "scripts" / "another.sh").write_text("y\n", encoding="utf-8")
+    git_repo.stage("agate/scripts/another.sh")
+
+    msg = tmp_path / "m"
+    msg.write_text(
+        "feat: x\nself-gate-review: agate-workspace/reviews/not-added-yet.md\n",
+        encoding="utf-8",
+    )
+    result = _run_csg(run_cli, bash, agate_scripts, agate_root, msg, repo)
+    assert result.returncode == 0, "提示型 hook 不得拦截（契约不变）"
+    assert "不存在" in result.output, "幽灵 trailer 在 commit-msg 阶段未被发现（盲窗仍在）"
+    assert "not-added-yet" in result.output, "告警未回显具体路径（读者无法定位）"
+
+
+def test_bw_3_staged_report_passes_at_commit_msg_time(
+    git_repo, agate_scripts, agate_root, run_cli, bash, tmp_path
+):
+    """**关键边界**：报告**已暂存**（index）⇒ 无告警——正常流程不得误报。
+
+    本仓常态是报告与代码**同处一个 commit**，提交时报告只在 index、不在 HEAD；
+    只查 HEAD 的实现会对正常工作流**全面误报**（这是本设计的核心边界）。
+    """
+    repo = _stage_trigger(git_repo)
+    report = repo / "agate-workspace" / "reviews" / "staged-ok.md"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text("---\nstatus: approved\n---\n", encoding="utf-8")
+    git_repo.stage("agate-workspace/reviews/staged-ok.md")
+
+    msg = tmp_path / "m"
+    msg.write_text(
+        "feat: x\nself-gate-review: agate-workspace/reviews/staged-ok.md\n", encoding="utf-8"
+    )
+    result = _run_csg(run_cli, bash, agate_scripts, agate_root, msg, repo)
+    assert result.returncode == 0
+    assert "不存在" not in result.output, (
+        f"已暂存的报告被误判为不存在 ⇒ 会对本仓正常工作流全面误报：{result.output!r}"
+    )
+
+
+def test_bw_4_all_report_refs_missing_lists_each(
+    git_repo, agate_scripts, agate_root, run_cli, bash, tmp_path
+):
+    """全部**报告指向**的 token 皆不存在 ⇒ 告警并**逐条列出**。
+
+    （2026-09-29 修正输入形态：初版用 `r/ghost-a.md` 这类**不像报告路径**的值，
+    在新规则下本就不该被判定——`_is_report_reference` 只认 `reviews/` 或
+    `agate-workspace/**.md`。改用真实报告形态，测的才是目标行为。）
+    """
+    repo = _stage_trigger(git_repo)
+    (repo / "seed.txt").write_text("s\n", encoding="utf-8")
+    git_repo.commit("seed")
+    (repo / "agate" / "scripts" / "another.sh").write_text("y\n", encoding="utf-8")
+    git_repo.stage("agate/scripts/another.sh")
+
+    msg = tmp_path / "m"
+    msg.write_text(
+        "feat: x\nself-gate-review: agate-workspace/reviews/ghost-a.md, "
+        "agate-workspace/reviews/ghost-b.md\n",
+        encoding="utf-8",
+    )
+    result = _run_csg(run_cli, bash, agate_scripts, agate_root, msg, repo)
+    assert result.returncode == 0
+    assert "ghost-a" in result.output and "ghost-b" in result.output, (
+        f"未逐条列出全部缺失 token：{result.output!r}"
+    )
+
+
+def test_bw_5_phantom_report_beside_existing_file_still_warns(
+    git_repo, agate_scripts, agate_root, run_cli, bash, tmp_path
+):
+    """**F4 回归锁**：`<存在的清单文件>, <幽灵报告>` ⇒ 仍须告警。
+
+    这是独立评审实证的攻击：初版「任一 token 存在即通过」下，
+    `self-gate-review: README.md, <从未写过的报告>.md` **静默放行**——原幽灵留痕攻击重新可行。
+    正确规则是**只判报告指向的 token**（`reviews/` 或 `agate-workspace/**.md`），
+    故清单项存在**不能**为幽灵报告背书。
+    """
+    repo = _stage_trigger(git_repo)
+    (repo / "README.md").write_text("real\n", encoding="utf-8")
+    git_repo.commit("seed")
+    (repo / "agate" / "scripts" / "another.sh").write_text("y\n", encoding="utf-8")
+    git_repo.stage("agate/scripts/another.sh")
+
+    msg = tmp_path / "m"
+    msg.write_text(
+        "feat: x\nself-gate-review: README.md, "
+        "agate-workspace/reviews/never-written.md\n",
+        encoding="utf-8",
+    )
+    result = _run_csg(run_cli, bash, agate_scripts, agate_root, msg, repo)
+    assert result.returncode == 0, "提示型 hook 不得拦截"
+    assert "never-written" in result.output, (
+        f"幽灵报告被同行的清单文件背书而放行（F4 攻击重新可行）：{result.output!r}"
+    )

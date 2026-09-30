@@ -10,6 +10,32 @@
 
 ## [Unreleased]
 
+> TAG0049 trailer 盲窗（时机）+ 判据统一 + 清单式误判修正。
+
+### 修复
+
+- **trailer 存在性校验补时机**（`commit-msg-self-gate.py`）：`self-gate-review:` 指向的报告**在该提交里不存在**
+  即「虚假留痕」。后置守卫（`test_selfgate_trailer_integrity.py`）取 `origin/main..HEAD`，而 **pre-commit 时该范围为空**
+  ⇒ 只在**提交之后**生效 ⇒ **该缺陷已复犯 6 次**。现将同一存在性判据（查**磁盘 或 index**）接入 **commit-msg 阶段**：
+  message 已存在、报告若与代码同处一提交则**已在 index** ⇒ **当场告警**，作者可立即 `git add` 重试。
+  - **⚠️ 生效范围（据实说明，勿误读）**：本机 `commit-msg` hook 经 `resolve-entry.py` 解析到**稳定版**
+    （本机 `AGATE_ROOT=~/.agate/v0.76.0/agate`，该版本**无此校验**）⇒ **本改动要等下一次 release 装上才在本机生效**；
+    CI 侧由 pytest 守卫强制。**不新增 `.agate-version` 钉版**——那会让 gate 判定指向未验证的 checkout（`AGENTS.md` 明确警告）。
+  - **不改成阻断**：该 hook 既有契约是提示型；进 main 的强制网仍是 CI 那道守卫。
+- **判据统一**（真同源）：守卫改为**导入** hook 的判定函数。此前只共用了正则、**未共用通过规则**
+  ⇒ 两者对同一输入会给出**相反结论**（独立评审 F3 实证）。
+- **修「清单式 trailer」处理**：`self-gate-review: README.md, CHANGELOG.md, …` 是本仓既有写法（存量 44 条，
+  实测**全部不含 `reviews/`**，即与「报告指向」是**两种互不重叠用法**）。
+  初版为兼容它采用「**任一 token 存在即通过**」，但实测该规则**重新打开了原攻击**：
+  `README.md, <从未写过的报告>.md` **静默放行**（独立评审 F4 实证）。
+  现改为**先判 token 是否意在指向报告**（含 `reviews/`，或 `agate-workspace/**.md`），**只对报告指向判存在**。
+  新增回归锁 `bw_5`。**更正**：我原先称旧实现"对清单式误报"**不准确**——旧实现取首 token，首项存在时**静默通过**，
+  并不误报（F5 实证）。
+
+### 变更
+
+- **`_REVIEW_RE` 取整行值**（原 `(\S+)` 只捕获首 token，实测 `r/a.md, r/b.md` → 只得 `r/a.md,`）。
+
 > TAG0047 评估落地：文档入库 + 虚假留痕防线 + 评估建议入 roadmap。
 
 ### 新增
