@@ -17,14 +17,25 @@
 # 判据核心：**「在那一提交里存在」，不是「现在存在」**——这是本条最容易被写错的地方
 # （文件可能事后被删/改名，而提交当时的断言仍应成立；反之现在存在的文件也不能替当时的缺失背书）。
 
-import re
+import importlib.util
 import subprocess
+from pathlib import Path
 
 import pytest
 
 import helpers_tag_repo as H
 
-_TRAILER_RE = re.compile(r"^self-gate-review:\s*(\S+)", re.MULTILINE)
+# **与 hook 同源**（2026-09-29 修正判据漂移）：
+# 初版此处用 `(\S+)`（只取首个 token），而 `commit-msg-self-gate.py` 已改为取**整行值**再切 token
+# ⇒ 两处对**清单式** trailer（本仓既有 8 条写法）会给出**相反结论**（首项不存在而后项存在时：
+# 守卫误报、hook 不报）。本仓 DEBT0046 的教训正是「判据必须只有一份」，故改为**导入 hook 的实现**，
+# 不再各写一份正则。
+_HOOK_SPEC = importlib.util.spec_from_file_location(
+    "csg_unified", str(Path(__file__).resolve().parents[2] / "scripts" / "commit-msg-self-gate.py")
+)
+_HOOK = importlib.util.module_from_spec(_HOOK_SPEC)
+_HOOK_SPEC.loader.exec_module(_HOOK)
+_TRAILER_RE = _HOOK._REVIEW_RE
 
 
 def _run(repo, *args):
@@ -40,8 +51,15 @@ def _run(repo, *args):
 
 
 def trailer_paths(message: str) -> list:
-    """提取 commit message 里全部 `self-gate-review:` 的路径（行首锚定，与 hook 同判据）。"""
-    return _TRAILER_RE.findall(message)
+    """提取 commit message 里全部 `self-gate-review:` 的 **token**（与 hook **同一实现**）。
+
+    返回**逐 token**（而非整行）——这正是 hook 的语义：清单式写法应逐项判存在，
+    **任一存在即通过**（见 `missing_trailer_paths`）。
+    """
+    out = []
+    for raw in _TRAILER_RE.findall(message):
+        out.extend(_HOOK._review_trailer_tokens(raw))
+    return out
 
 
 def missing_trailer_paths(repo, commit: str) -> list:
@@ -52,7 +70,11 @@ def missing_trailer_paths(repo, commit: str) -> list:
     msg = _run(repo, "log", "-1", "--format=%B", commit).stdout
     missing = []
     for path in trailer_paths(msg):
-        # 目录尾斜杠等归一：cat-file 不认尾斜杠，去掉后再判
+        # **与 hook 同一通过规则**：只判「报告指向」的 token（`_is_report_reference`），
+        # 且**每一个**都必须存在。初版只共用了正则、没共用规则 ⇒ 两者对同一输入结论相反
+        # （实测：`README.md, ghost.md` 下 hook 通过、守卫失败）——独立评审 F3 指出。
+        if not _HOOK._is_report_reference(path):
+            continue
         probe = path.rstrip("/")
         rc = _run(repo, "cat-file", "-e", f"{commit}:{probe}").returncode
         if rc != 0:
