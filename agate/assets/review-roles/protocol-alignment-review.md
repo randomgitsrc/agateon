@@ -30,6 +30,7 @@ agent: review
 | A5 | 下游影响 + 文档传播 | 变更是否影响已有项目的 gate 行为？是否有破坏性变更？CHANGELOG 是否标注？**文档传播**：除了代码改动，应该被影响的文档（orchestrator-template.md / WORKFLOW.md / dispatch-protocol.md / role-system.md / 角色文件 / 模板文件 / LIMITATIONS.md 等）是否需要同步？ |
 | A6 | 锚点表覆盖 | CHECK 9 的锚点表是否需要更新？新增的协议规则是否需要加入锚点表？注：CHECK 9 部分锚点（如 `check-frontmatter.py`）验证的是"校验脚本存在且被正确挂载调用"，不是"schema 定义内容与协议文档声明的字段集语义一致"——后者不属于关键词匹配可判定范围，仍需 A1 逐条人工核对。 |
 | A7 | 设计原则一致性 | 变更是否符合已记录的 ADR（agate/adr.md）？逐条检查相关 ADR。如发现未记录的架构决策，建议补充新 ADR。结论只有 ALIGNED 或 NEEDS_HUMAN_REVIEW（设计原则是指导性的，不是可机器判定的硬规则，不存在 MISALIGNED） |
+| A8 | 声称-命令绑定 | 本批新增/变更的**数字或结论类声称**（roadmap / debt / CHANGELOG / 本报告内），逐条给出**产出它的命令**；**无法给出命令的声称，应删除该声称**——不写「不可复核」标注（标注会把无据声称继续留在记录里）。逐条列 `声称 → 命令 → 结论` |
 
 ### 反向传播的常见路径（subagent 推理起点）
 
@@ -86,6 +87,7 @@ files_changed: [{文件列表}]
 | A5 | 下游影响 + 文档传播 | ... |
 | A6 | 锚点表覆盖 | ... |
 | A7 | 设计原则一致性 | ALIGNED / NEEDS_HUMAN_REVIEW |
+| A8 | 声称-命令绑定 | 逐条列 `声称 → 命令 → 结论`；无据声称已删除 |
 
 ## 逐项审查
 
@@ -130,7 +132,7 @@ subagent 在用 Write 工具把留痕文件 / 成果文件写入目标路径前�
 ## 人工验收清单（每次使用后核对）
 
 - [ ] Write 前已检查目标路径是否已存在同名文件，存在时已按"同一任务可覆盖 / 别的任务遗留不可覆盖"分支处理
-- [ ] 审查报告含 A1-A7 七项，每项有结论
+- [ ] 审查报告含 A1-A8 八项，每项有结论
 - [ ] MISALIGNED 项有差异描述 + 建议方向
 - [ ] 每条 NEEDS_HUMAN_REVIEW 下面有 `[HUMAN_CONFIRMED: ...]` 标记
 - [ ] 审查报告落盘到 `docs/reviews/agate-alignment-review-{date}-{task_id}.md`

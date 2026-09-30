@@ -158,6 +158,15 @@ def iter_md_files(root: Path):
             continue
         if "node_modules" in rel_parts:
             continue
+        # canonical scratch 目录（platform-notes「受限 harness 通用约束」约定 1：
+        # `<项目根>/.agate-tmp/`，`AGATE_TMP_DIR` 可覆盖）——其内容按定义**必须被 VCS 忽略**、
+        # 且非协议正文 ⇒ **不得扫描**。
+        # 实测代价（2026-09-30）：评审者在该目录留下的**整仓副本**使其 .md 被扫入 ⇒
+        # 本机 consistency 报 3072 ERROR，而 CI（干净 checkout）全绿 ⇒
+        # 「本机环境决定红绿」——与本仓在 conftest 隔离 HOME 所对抗的是同一类问题。
+        scratch = os.path.basename(os.environ.get("AGATE_TMP_DIR") or ".agate-tmp")
+        if scratch in rel_parts:
+            continue
         # bats 框架自身（CI 克隆到仓库根的 bats/ 目录，含自带 docs/README 引用非 agate 文件）
         if "bats" in rel_parts:
             continue

@@ -33,11 +33,50 @@ def test_sg_1_role_file_exists_with_required_frontmatter(agate_root):
     assert re.search(r"^agent:", text, re.MULTILINE)
 
 
-def test_sg_2_role_file_has_a1_a6_checklist(agate_root):
-    """SG.2：角色文件含 A1-A6 审查清单。"""
+def test_sg_2_role_file_has_a1_a8_checklist(agate_root):
+    """SG.2：角色文件含 A1-A8 审查清单。
+
+    **2026-09-29（RM-AG0094）扩为 A1..A8**：原版只查 A1–A6，而角色文件当时已有 A7 ⇒
+    **既有守护本身漏了一项**（实测函数名即 `..._a1_a6_checklist`）。新增 A8 时一并补齐，
+    避免「同类守护两套标准」（独立评审建议：不再单开 SG.10）。
+    """
     text = _role_file(agate_root).read_text(encoding="utf-8")
-    for marker in ("A1", "A2", "A3", "A4", "A5", "A6"):
-        assert marker in text
+    # **断言主清单表的表格行**（2026-09-29 两轮加固）：
+    # ① 初版用 `marker in text` → 删掉 A8 整行后**仍绿**（「A1-A8」引用里就含 "A8"）；
+    # ② 改为宽匹配 `^\|\s*A<N>\s*\|` 后仍不够——**输出格式汇总表**也有一行 `| A8 | ... |`，
+    #    故**只删主清单的 A8 行时依旧绿**（独立评审复现）。⇒ 先切出主清单表区段再逐项断言。
+    main = re.search(
+        r"^\|\s*#\s*\|\s*审查项\s*\|\s*说明\s*\|.*?(?=\n\n)",
+        text, re.MULTILINE | re.DOTALL,
+    )
+    assert main, "角色文件主清单表（表头含「说明」）结构已变——请同步本测试"
+    block = main.group(0)
+    for n in range(1, 9):
+        marker = f"A{n}"
+        assert re.search(rf"^\|\s*{marker}\s*\|", block, re.MULTILINE), (
+            f"角色文件**主清单表**缺审查项 {marker}（汇总表里有不算——那会让主清单行悄悄消失）"
+        )
+
+
+def test_sg_2b_a8_mentions_command_binding(agate_root):
+    """SG.2b：A8 条文须点名「命令」与「删除」两个要点（防只写个空标题）。
+
+    边界：本条只证明**条文在**，不证明 A8 被执行——后者不可机械化（设计 §3.3）。
+    """
+    text = _role_file(agate_root).read_text(encoding="utf-8")
+    # **必须限定到「主清单表」**（表头含「说明」的那张）——初版用宽匹配 `^\|\s*A8\s*\|`，
+    # 实测**只删主清单的 A8 行时它仍绿**：因为输出格式**汇总表**也有一行 `| A8 | ... |`
+    # （独立评审 2026-09-29 复现）。故先切出主清单表区段再在其中找 A8 行。
+    main = re.search(
+        r"^\|\s*#\s*\|\s*审查项\s*\|\s*说明\s*\|.*?(?=\n\n)",
+        text, re.MULTILINE | re.DOTALL,
+    )
+    assert main, "角色文件主清单表（表头含「说明」）结构已变——请同步本测试"
+    m = re.search(r"^\|\s*A8\s*\|(.*)$", main.group(0), re.MULTILINE)
+    assert m, "主清单表缺 A8 行（A8 = 声称-命令绑定；汇总表里有不算）"
+    row = m.group(1)
+    assert "命令" in row, "A8 未点名「命令」（核心要求：声称须指向产出它的命令）"
+    assert "删除" in row, "A8 未点名「删除」（无法给出命令的声称应删除，而非标注「不可复核」）"
 
 
 def test_sg_3_role_file_has_needs_human_review_loop(agate_root):
