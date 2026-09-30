@@ -8,7 +8,11 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 
 ## 新增脚本登记面（权威清单）
 
-> **什么时候看**：往 `agate/scripts/` 加任何 `check-*.py` / `agate-*.py` 时。**先读本节，再动手**——
+> **什么时候看**：往 `agate/scripts/` 加任何脚本时。**先读本节，再动手**——
+> ⚠️ **实测更正（2026-09-29）**：① 的机械判据 `uncovered_gate_scripts()` **只 glob `check-*.py`**
+> （+ `pre-commit-gate.{sh,py}` + `ci-gate-backstop.py`）——**`agate-*.py` 不在门禁覆盖面内**。
+> 本节初版写「加任何 `check-*.py` / `agate-*.py` 时」是**过度声称**（实测：新建一个 `agate-*.py`
+> 不触发任何 CHECK9-coverage 告警）。`agate-*.py` 为工具/观测类，登记属**约定**（④⑤ 行）。
 > 否则会踩 DEBT0046：既有测试反向覆盖会令新脚本红灯或告警，而"要同步哪些面"过去没有清单，
 > 只能靠 P1/P2 同类扫描凭记忆回忆（TAG0036 M18 实测由绿转红）。
 
@@ -21,7 +25,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 
 | # | 面 | 类型 | 增删脚本时的动作 | 判据来源 |
 |---|----|------|------------------|----------|
-| ① | **CHECK 9 覆盖（`CHECK9-coverage`）** | **门禁**（WARNING，不阻断） | 二选一：承载 gate 判定逻辑 → 进 `SCRIPT_ALIGNMENT_ANCHORS` 锚点表；**纯观测/调度类** → 进 `GATE_SCRIPT_EXEMPT` 并写理由 | `check-protocol-consistency.py::uncovered_gate_scripts()`（**单一判据**） |
+| ① | **CHECK 9 覆盖（`CHECK9-coverage`）**（**仅 `check-*.py`**） | **门禁**（WARNING，不阻断） | 二选一：承载 gate 判定逻辑 → 进 `SCRIPT_ALIGNMENT_ANCHORS` 锚点表；**纯观测/调度类** → 进 `GATE_SCRIPT_EXEMPT` 并写理由 | `check-protocol-consistency.py::uncovered_gate_scripts()`（**单一判据**） |
 | ② | **SG.6**（`agate/tests/integration/test_protocol_alignment_review.py`） | **门禁**（pytest **会红**） | 与 ① **同一件事**：消费同一个 `uncovered_gate_scripts()`，不另设判据 | 同上（共用函数） |
 | ③ | `CHECK 10 协议文档脚本名引用漂移` | **非登记面（方向相反）** | **新增脚本无需动它**——它只报"协议文档引用了**不存在**的脚本"。**改名 / 退役**脚本时才要看 | `check_script_name_refs()` |
 | ④ | `agate/scripts/README.md` 脚本索引表（下文各表） | **约定**（有**特定**例外） | 建议补一行（用途 + 退出码语义）。⚠️ **不是完全无校验**：`agate/tests/unit/test_doc_sweep.py` 的 `test_bdd_49_4_*` 对**指定脚本**（TAG0037 的 `agate_package.py` / `agate-release.py`）**机械断言**索引行存在（删行即红）。除此之外的脚本（**实测**：24 个 `check-*.py` 中 7 个无索引行）确实无校验 | 特定脚本见 `test_doc_sweep.py`；其余人工评审 |
@@ -84,6 +88,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-debt.py` | 技术债登记校验：默认 FILE 模式=DEBT 条目 schema 校验（fail-closed）；`--retreat-coverage`=回退覆盖比对（`git log retreat:` 提交 vs `source: retreat` 条目，缺失 WARNING）| FILE 模式 0=通过, 1=校验失败；回退模式：依赖加载失败 exit 2（需主 Agent 自判），无 retreat 提交等有意跳过 exit 0 |
 | `check-mvwu.py` | MVWU 阶段 1 观测器（TAG0036）：读任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，每批输出一行 `MVWU_RESULT: <VERDICT> batch=<id>`（verdict = PASS/FAIL/EXPECTED_RED/UNKNOWN）；`--observe`=输出 7 列观察表行。仅观测、不阻断（不挂 gate/hook/CI）| 0=任一 verdict（含 FAIL/UNKNOWN，不阻断）, 2=用法/目标错误 |
 | `check-ledger-pollution.py` | 账本/状态文件**事后**污染兜底（DEBT0040③）：`git status --porcelain` 限定 `agate-workspace/` + `agate/tests/fixtures/`（三族已提交状态文件的两个落点），非空即报被污染路径。**须挂在 `pytest` job 内、全量测试之后**（独立 job 的干净 checkout 观测不到跑测副作用）| 0=干净, 1=发现污染, 2=无法判定（fail-closed，调用方按失败处理）|
+| `agate-dispatch-cost.py` | 派发成本度量（RM-AG0074 前置）：统计任务目录的 `*dispatch-context*.md` 份数/字节、`-revN` 修订**整份重发**占比、AGATE_CARD 注入占比及其**纯重复**占比（同卡第 2..N 次）。阶段耗时**仅当 `.state.yaml` 的 `history` 覆盖任务全部阶段时**才给数值，否则报 `duration_available: false` 并说明原因（实测 TPV0099 history 仅 7 条、缺 P3-P7 ⇒ 不可算）——**拒绝把不可判定伪装成可判定**。仅观测、不阻断 | 0=成功, 2=用法错误/目标非目录 |
 
 ### 公共库
 
