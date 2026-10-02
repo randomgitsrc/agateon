@@ -716,29 +716,30 @@ def test_bdd_69_scripts_readme_row_for_check_mvwu():
     assert re.search(r"\b0\s*=", row) and re.search(r"\b2\s*=", row), "行内缺 exit 0=/2= 约定"
 
 
-def test_bdd_69_tests_readme_row_matches_collected_count():
-    """BDD-69：tests/README.md 映射表含 check-mvwu 测试文件行，用例数 = pytest --collect-only 实数。count-tests.sh 总数 ≥ 1668+N 由 P5_count 承担。"""
+def test_bdd_69_tests_readme_row_maps_check_mvwu():
+    """BDD-69：tests/README.md 映射表含 check-mvwu 测试文件行——**只要求映射，不要求用例数**。
+
+    **本用例 2026-10-02 改写**（原为 `test_bdd_69_tests_readme_row_matches_collected_count`）。
+    原用例断言该行的「用例数」== `pytest --collect-only` 实数，是**针对逐文件用例数的漂移守护**。
+    该数字列已被**整体删除**（`docs/guides/doc-freshness-guide.md` §2/§3）——理由：
+
+      · 这类数字**必然漂移**：原表 68 行实测 **30 行已漂移（44%）**（`check-gate.py` 声称 144、实际 203）；
+      · **守护式方案在覆盖率上失败**：本用例只守 68 行中的 **1 行**，其余 67 行无守护 ⇒ 漂移照旧；
+      · 且该数字**无消费方**（看总数用 `count-tests.sh`，看单文件用 `pytest --collect-only`）。
+
+    ⇒ 删掉数字列即根治；本用例随之从「**数字一致性**守护」降级为「**映射存在性**守护」——
+    后者有价值且**不会漂**（脚本与测试文件的对应关系不随用例增减而变）。
+    """
     tfile = AGATE / "tests" / "unit" / "test_check_mvwu.py"
     assert tfile.is_file(), "agate/tests/unit/test_check_mvwu.py 不存在（script 半边产出）"
     rows = [ln for ln in _read(TESTS_README).splitlines() if ln.startswith("|") and "test_check_mvwu.py" in ln]
-    assert rows, "tests/README.md 无 test_check_mvwu.py 行"
+    assert rows, "tests/README.md 无 test_check_mvwu.py 行（映射缺失）"
     cells = [c.strip() for c in rows[0].strip().strip("|").split("|")]
-    nums = [c for c in cells if c.isdigit()]
-    assert nums, f"行内无用例数列：{rows[0]}"
-    env = os.environ.copy()
-    env.pop("PYTEST_ADDOPTS", None)
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-o", "addopts=", str(tfile)],
-        cwd=str(REPO),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=120,
-        env=env,
+    assert any(c.endswith("test_check_mvwu.py") for c in cells), f"行内未列出测试文件名：{rows[0]}"
+    # 反向护栏：该行**不得**再出现裸用例数（防"顺手又写回去"）
+    assert not any(c.isdigit() for c in cells), (
+        f"tests/README.md 的映射行不应含用例数（会漂移）：{rows[0]}"
     )
-    collected = sum(1 for ln in proc.stdout.splitlines() if "::" in ln)
-    assert collected > 0, proc.stdout + proc.stderr
-    assert int(nums[-1]) == collected, f"README 用例数 {nums[-1]} != 实际收集 {collected}"
 
 
 def test_bdd_69_changelog_mentions_tag0036():

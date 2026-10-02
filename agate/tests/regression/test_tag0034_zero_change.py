@@ -1,58 +1,29 @@
-# tests/regression/test_tag0034_zero_change.py — TAG0034 回归证明（零改动 + 不配置 = 逐字节现状）
-#   BDD-39 / BDD-40
+# tests/regression/test_tag0034_zero_change.py — TAG0034 回归证明（BDD-40）
 #
-# 性质：**绊线（tripwire）**——不是「长期不变量」。
+# ⚠️ **2026-10-02：BDD-39 的「字节零改动绊线」已删除**，本文件只保留 BDD-40。
 #
-#   ⚠️ 语义更正（2026-09-29，TAG0041 独立评审判定）：本文件原先自称「长期不变量：gate / 状态机 /
-#   phases.yaml 结构零改动」，但**实现是字节哈希比对 + 基线可刷新**，而基线已被刷新 **4 次**
-#   （文档批 ×2 / TAG0035 / TAG0039），本次 TAG0041 为第 5 次。故它的**真实语义**是：
+#   删除理由（本文件原注释已自陈该绊线的缺陷，此处据以执行）：
+#     · **过严**：注释、WARNING 文案等**行为无关**的字节变化同样触发 ⇒ 每次都要人工判断 +
+#       刷新基线 + 写 `_note`。基线累计被刷新 **9 次**，其中末两次（2026-10-02）都是同一会话内的
+#       **纯注释**改动。
+#     · **过松**：真正的判据回归可混在同一次刷新里蒙混 ⇒ 它只保证「有人注意到并申报」，
+#       **不保证「行为未变」**（原注释原话）。
+#     · **申报已被别处承担**：`_note` 是没人读的 JSON 散文；「改了什么、为什么」本就由
+#       CHANGELOG + PR 描述承担 ⇒ 该绊线边际价值 ≈ 0。
+#     · **行为不变已被覆盖**：4 个受护文件各有判据测试（全量套件约 2500 用例）。
+#     · 原注释提的改进方向（「行为不变」自动断言 + 变更申报两层）若将来要做，应**重新设计**，
+#       不是复活字节哈希。
+#   随之删除：`agate/tests/fixtures/tag0034_regression_baseline.json`（基线夹具，仅该绊线消费）。
 #
-#     「改动 check-gate.py / check-state-transition.py / phases.yaml / state-machine.md 时，
-#      必须显式刷新基线并在 `_note` 里说明**改了什么、为什么**」——一道**留痕绊线**。
+# BDD-40（保留）→ 仓库无 `dispatch-routing.yaml`、无机器级绑定文件、协议出厂默认全 standard 时：
+#   ① 加载器 `load_config` 返回空配置；② `resolve` 对全阶段返回 `form=default` 且无 chain；
+#   ③ 现状任务账本 `gate-events.jsonl` 中 `dispatch_route` 事件条数 = 0（机制引入前的回归基线）。
 #
-#   其**有效边界**（据实陈述，不夸大）：
-#     · 过严：注释、WARNING 文案等**行为无关**的字节变化同样触发（每次都要人工判断+留痕）
-#     · 过松：**真正的判据回归可以混在同一次刷新里蒙混**——没有任何机制检查「判据是否变了」
-#     · 即：它保证「有人注意到并申报」，**不保证「行为未变」**
-#
-#   改进方向（已登记，未在本批实现——它需要设计，属独立议题）：两层结构 =
-#   ① 「行为不变」自动断言（全阶段 exit code 快照 + 既有判据测试）
-#   ② 「变更申报」留痕。后者本文件已有，前者缺。
-#
-#   BDD-39 → **P3 绿属预期，非 TDD 违规**（在 P3-test-cases.md 显式标注）。基线 sha256 于 P3
-#     捕获（agate/tests/fixtures/tag0034_regression_baseline.json），断言「当前内容 hash == 基线 hash」。
-#     使这些文件字节变化 → 本用例转红 ⇒ **须刷新基线 + 在 _note 说明理由**（而非「不许改」）。
-#   BDD-40 → 端到端「跑完整 P1→P8 无配置」依赖路由机制存在 + 加载器「无 dispatch-routing.yaml
-#     时返回出厂默认」——该部分 **P3 红**（B 类：agate_dispatch_route 模块 / 加载器待建）；
-#     「dispatch_route 事件条数 = 0」的账本部分 P3 绿（回归基线）。整体：BDD-40 至少一个断言红。
-#
-# 平台无关：hashlib + read_bytes；importlib 在测试体内（B 类红，非 collection error）。
+# 平台无关：纯文件读取 + importlib；无 shell / 无路径分隔符假设。
 
-import hashlib
 import importlib
 import json
 import sys
-
-
-def _baseline(agate_root):
-    p = agate_root / "tests" / "fixtures" / "tag0034_regression_baseline.json"
-    return json.loads(p.read_text(encoding="utf-8"))
-
-
-def test_bdd_39_gate_state_machine_phases_yaml_zero_byte_change(agate_root):
-    """BDD-39：本任务全部改动已提交后，check-gate.py / check-state-transition.py /
-    phases.yaml / 状态机定义（state-machine.md）逐字节不变；agate-dispatch.py 的既有
-    dispatch-context 渲染产物（test_tag0027_b2_agate_dispatch.py +
-    test_tag0027_b2_audit2_dual_anchor.py）零改动仍绿。
-    [回归护栏 — P3 绿属预期]"""
-    repo_root = agate_root.parent
-    base = _baseline(agate_root)
-    for rel, meta in base["files"].items():
-        b = repo_root.joinpath(rel).read_bytes()
-        actual = hashlib.sha256(b).hexdigest()
-        assert actual == meta["sha256"], (
-            f"BDD-39 违反：{rel} 字节面已变（基线 {meta['sha256'][:12]}… → 当前 {actual[:12]}…）"
-        )
 
 
 def test_bdd_40_no_config_equals_byte_for_byte_status_quo(agate_root, agate_scripts, task_dir):

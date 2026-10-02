@@ -29,86 +29,89 @@ python3 -m pytest agate/tests/ -n auto
 
 ## 覆盖度
 
+**本表只记「哪个测试覆盖哪个脚本」的映射，不记用例数**——逐文件用例数会随代码漂移，
+写死在文档里必然过期（2026-10-02 实测：原表 68 行中 **30 行已漂移**，如 `check-gate.py`
+声称 144、实际 203）。要看数量请现场跑：
+
 ```bash
-# 自动生成（pytest --collect-only 收集计数）
-bash agate/tests/scripts/count-tests.sh
+bash agate/tests/scripts/count-tests.sh          # 全树总数
+python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单个文件
 ```
 
-| 脚本 | 测试文件 | 用例数 |
-|------|---------|-------|
-| check-pruning.py | unit/test_check_pruning.py | 29 |
-| agate-risk-score.py | unit/test_agate_risk_score.py | 11 |
-| check-routing.py | unit/test_check_routing.py | 13 |
-| ceremony 文档条文（TAG0019）| unit/test_docs_assertions.py | 4 |
-| check-gate.py | unit/test_check_gate.py | 144 |
-| check-gate.py 集成锚点 | unit/test_check_gate_p1_review.py | 9 |
-| check-gate.py P5 命令 diff | unit/test_check_gate_p5_diff.py | 13 |
-| agate-next-card.py | unit/test_agate_next_card.py | 22 |
-| agate-render-dispatch-prompt.py | unit/test_agate_render_dispatch_prompt.py | 20 |
-| check-p6-evidence.py | unit/test_check_p6_evidence.py | 45 |
-| check-p6-format.py | unit/test_check_p6_format.py | 16 |
-| check-p6-provenance.py | unit/test_check_p6_provenance.py | 40 |
-| check-p6-provenance.py | unit/test_review_role_docs.py（UI/UX 机制文档条文，TAG0006）| 14 |
-| check-scope-resolved.py | unit/test_check_scope_resolved.py | 19 |
-| rules/markers.yaml + agate_markers.py + agate-mark.py | unit/test_marker_single_source.py（形态单源守护 mk_1~mk_6）| 32 |
-| check-frontmatter.py | unit/test_check_frontmatter.py | 14 |
-| check-state-yaml.py | unit/test_check_state_yaml.py | 9 |
-| check-state-transition.py | unit/test_check_state_transition.py | 30 |
-| check-changelog.py | unit/test_check_changelog.py | 8 |
-| check-retrospective.py | unit/test_check_retrospective.py | 15 |
-| agate-feedback.py | unit/test_agate_feedback.py | 7 |
-| 复盘协议文档条文 | unit/test_retrospective_protocol_docs.py | 13 |
-| check-tdd-red.py | unit/test_check_tdd_red.py | 43 |
-| formatters | unit/test_check_tdd_red_formatter.py | 13 |
-| ci-gate-backstop.py | unit/test_ci_gate_backstop.py | 11 |
-| agate-json-get.py | unit/test_agate_json_get.py | 8 |
-| agate-read-p5-commands.py | unit/test_agate_read_p5_commands.py | 4 |
-| agate-state-get.py | unit/test_agate_state_get.py | 6 |
-| agate-retreat-state.py | unit/test_agate_retreat_state.py | 4 |
-| agate-md-field-get.py | unit/test_agate_md_field_get.py | 16 |
-| dispatch_plan 编排字段契约 | unit/test_dispatch_orchestration.py | 10 |
-| agate-state-yaml-check.py | unit/test_agate_state_yaml_check.py | 3 |
-| agate-changelog-unreleased.py | unit/test_agate_changelog_unreleased.py | 2 |
-| agate-card-inject.py | unit/test_agate_card_inject.py | 2 |
-| agate-vision-blocker.py | unit/test_agate_vision_blocker.py | 2 |
-| agate-evidence-consistency.py | unit/test_agate_evidence_consistency.py | 2 |
-| agate-image-check.py | unit/test_agate_image_check.py | 4 |
-| agate-gate-missing-cmds.py | unit/test_agate_gate_missing_cmds.py | 2 |
-| agate-gate-p5-count.py | unit/test_agate_gate_p5_count.py | 3 |
-| agate-extract-context.py | unit/test_agate_extract_context.py | 16 |
-| agate-migrate-workspace.py | unit/test_agate_migrate_workspace.py | 9 |
-| agate-retreat-to.py | unit/test_agate_retreat_to.py | 5 |
-| agate-archive-stale-outputs.py | unit/test_agate_archive_stale_outputs.py | 7 |
-| agate-capture-env-baseline.py | unit/test_agate_capture_env_baseline.py | 15 |
-| agate-debt-check.py | unit/test_agate_debt_check.py | 21 |
-| agate-scripts-encoding.py（守卫）| unit/test_agate_scripts_encoding.py | 2 |
-| agate-workspace-resolve.py | unit/test_agate_workspace_resolve.py | 10 |
-| dispatch-context warning | unit/test_dispatch_context_warning.py | 1 |
-| 测试 helper（PYTHON 探测）| unit/test_helpers_python.py | 3 |
-| check-platform-assumptions.py | agate/tests/scripts/test_check_platform_assumptions.py | 16 |
-| check-mvwu.py（MVWU 观测器）| unit/test_check_mvwu.py | 111 |
-| MVWU 协议文档断言（TAG0036）| unit/test_mvwu_protocol_docs.py | 65 |
-| 文档/CI 断言（shellcheck/ruff/matrix）| unit/test_env_adapt_docs.py | 9 |
-| DSH 平台模板结构（TAG0018）| unit/test_dsh_preset.py | 8 |
-| 回归 (R1-R5) | regression/ | 17 |
-| commit-msg-self-gate | unit/test_commit_msg_self_gate.py | 4 |
-| commit-msg-self-gate（集成）| integration/test_commit_msg_self_gate_integration.py | 6 |
-| pre-commit-hook | integration/test_pre_commit_hook.py | 48 |
-| dispatch-context card | integration/test_dispatch_context_card.py | 8 |
-| pre-push-hook | integration/test_pre_push_hook.py | 4 |
-| install-hook | unit/test_install_hook.py | 6 |
-| 协议一致性 | integration/test_consistency.py | 11 |
-| self-gate | integration/test_protocol_alignment_review.py | 8 |
-| 新增脚本登记面（DEBT0046）| unit/test_t43_check_registration_surface.py | 12 |
-| 账本污染 CI 兜底（DEBT0040）| unit/test_t43_ledger_pollution_backstop.py | 10 |
-| 派发成本度量（RM-AG0074）| unit/test_agate_dispatch_cost.py | 11 |
-| self-gate 留痕完整性（虚假留痕防线）| unit/test_selfgate_trailer_integrity.py | 8 |
-| 声称-命令绑定 A8（RM-AG0094）| integration/test_protocol_alignment_review.py **SG.2 扩为 A1..A8 + SG.2b** | 2 新增（SG.2 为既有改造）|
-| trailer 盲窗关闭（清单式 + commit-msg 时机）| unit/test_commit_msg_self_gate.py（bw_1..bw_4）| 4 新增 |
-| 框架自检 | test_sanity.py | 6 |
-| **总计** | | **以 `count-tests.sh` 输出为准** |
+| 脚本 | 测试文件 |
+|------|---------|
+| check-pruning.py | unit/test_check_pruning.py |
+| agate-risk-score.py | unit/test_agate_risk_score.py |
+| check-routing.py | unit/test_check_routing.py |
+| ceremony 文档条文（TAG0019） | unit/test_docs_assertions.py |
+| check-gate.py | unit/test_check_gate.py |
+| check-gate.py 集成锚点 | unit/test_check_gate_p1_review.py |
+| check-gate.py P5 命令 diff | unit/test_check_gate_p5_diff.py |
+| agate-next-card.py | unit/test_agate_next_card.py |
+| agate-render-dispatch-prompt.py | unit/test_agate_render_dispatch_prompt.py |
+| check-p6-evidence.py | unit/test_check_p6_evidence.py |
+| check-p6-format.py | unit/test_check_p6_format.py |
+| check-p6-provenance.py | unit/test_check_p6_provenance.py |
+| check-p6-provenance.py | unit/test_review_role_docs.py（UI/UX 机制文档条文，TAG0006） |
+| check-scope-resolved.py | unit/test_check_scope_resolved.py |
+| rules/markers.yaml + agate_markers.py + agate-mark.py | unit/test_marker_single_source.py（形态单源守护 mk_1~mk_6） |
+| check-frontmatter.py | unit/test_check_frontmatter.py |
+| check-state-yaml.py | unit/test_check_state_yaml.py |
+| check-state-transition.py | unit/test_check_state_transition.py |
+| check-changelog.py | unit/test_check_changelog.py |
+| check-retrospective.py | unit/test_check_retrospective.py |
+| agate-feedback.py | unit/test_agate_feedback.py |
+| 复盘协议文档条文 | unit/test_retrospective_protocol_docs.py |
+| check-tdd-red.py | unit/test_check_tdd_red.py |
+| formatters | unit/test_check_tdd_red_formatter.py |
+| ci-gate-backstop.py | unit/test_ci_gate_backstop.py |
+| agate-json-get.py | unit/test_agate_json_get.py |
+| agate-read-p5-commands.py | unit/test_agate_read_p5_commands.py |
+| agate-state-get.py | unit/test_agate_state_get.py |
+| agate-retreat-state.py | unit/test_agate_retreat_state.py |
+| agate-md-field-get.py | unit/test_agate_md_field_get.py |
+| dispatch_plan 编排字段契约 | unit/test_dispatch_orchestration.py |
+| agate-state-yaml-check.py | unit/test_agate_state_yaml_check.py |
+| agate-changelog-unreleased.py | unit/test_agate_changelog_unreleased.py |
+| agate-card-inject.py | unit/test_agate_card_inject.py |
+| agate-vision-blocker.py | unit/test_agate_vision_blocker.py |
+| agate-evidence-consistency.py | unit/test_agate_evidence_consistency.py |
+| agate-image-check.py | unit/test_agate_image_check.py |
+| agate-gate-missing-cmds.py | unit/test_agate_gate_missing_cmds.py |
+| agate-gate-p5-count.py | unit/test_agate_gate_p5_count.py |
+| agate-extract-context.py | unit/test_agate_extract_context.py |
+| agate-migrate-workspace.py | unit/test_agate_migrate_workspace.py |
+| agate-retreat-to.py | unit/test_agate_retreat_to.py |
+| agate-archive-stale-outputs.py | unit/test_agate_archive_stale_outputs.py |
+| agate-capture-env-baseline.py | unit/test_agate_capture_env_baseline.py |
+| agate-debt-check.py | unit/test_agate_debt_check.py |
+| agate-scripts-encoding.py（守卫） | unit/test_agate_scripts_encoding.py |
+| agate-workspace-resolve.py | unit/test_agate_workspace_resolve.py |
+| dispatch-context warning | unit/test_dispatch_context_warning.py |
+| 测试 helper（PYTHON 探测） | unit/test_helpers_python.py |
+| check-platform-assumptions.py | agate/tests/scripts/test_check_platform_assumptions.py |
+| check-mvwu.py（MVWU 观测器） | unit/test_check_mvwu.py |
+| MVWU 协议文档断言（TAG0036） | unit/test_mvwu_protocol_docs.py |
+| 文档/CI 断言（shellcheck/ruff/matrix） | unit/test_env_adapt_docs.py |
+| DSH 平台模板结构（TAG0018） | unit/test_dsh_preset.py |
+| 回归 (R1-R5) | regression/ |
+| commit-msg-self-gate | unit/test_commit_msg_self_gate.py |
+| commit-msg-self-gate（集成） | integration/test_commit_msg_self_gate_integration.py |
+| pre-commit-hook | integration/test_pre_commit_hook.py |
+| dispatch-context card | integration/test_dispatch_context_card.py |
+| pre-push-hook | integration/test_pre_push_hook.py |
+| install-hook | unit/test_install_hook.py |
+| 协议一致性 | integration/test_consistency.py |
+| self-gate | integration/test_protocol_alignment_review.py |
+| 新增脚本登记面（DEBT0046） | unit/test_t43_check_registration_surface.py |
+| 账本污染 CI 兜底（DEBT0040） | unit/test_t43_ledger_pollution_backstop.py |
+| 派发成本度量（RM-AG0074） | unit/test_agate_dispatch_cost.py |
+| self-gate 留痕完整性（虚假留痕防线） | unit/test_selfgate_trailer_integrity.py |
+| 声称-命令绑定 A8（RM-AG0094） | integration/test_protocol_alignment_review.py **SG.2 扩为 A1..A8 + SG.2b** |
+| trailer 盲窗关闭（清单式 + commit-msg 时机） | unit/test_commit_msg_self_gate.py（bw_1..bw_4） |
+| 框架自检 | test_sanity.py |
 
-> 注：迁移基线为 TAG0011 的 749 用例（BDD-1，`--collect-only` 口径）。`count-tests.sh` 统计全树 pytest 用例（unit/regression/integration/sanity/scripts），以 `count-tests.sh` 输出为准。
+> 注：TAG0011 的 **749** 是**下界判据**（BDD-1，`--collect-only` 口径，`count-tests.sh` 据此报「≥ 749」），不是现状快照——它作为阈值长期有效，不随用例增长而变。
 
 ## CI
 
@@ -125,8 +128,7 @@ GitHub Actions workflow 在 `.github/workflows/protocol-tests.yml`：
 - 改 gate 规则 → **必须先加失败测试，再改脚本**
 - 写 gate 消费方测试夹具 → **必须走真实 gate 语义**（真实执行 gate 脚本并按真实 exit code 断言），不得 stub/mock 假 exit（DEBT0024）
 - 发现新 bug → **修脚本前先写回归测试**（regression/）
-- 协议文档声明新规则 → **必须新增对应 test_*.py 用例**
-- 章节标题数字漂移 → 跑 `count-tests.sh` 同步
+- 协议文档声明新规则 → **必须新增对应 test_*.py 用例**；**同时在本表补一行「脚本 → 测试文件」映射**（只加映射，**不要写用例数**——写了就会漂）
 - 发现平台假设（`PATH="/usr/bin:/bin"`/裸 `python3`/`[[ -L ]]` 单平台断言/`/tmp`）→ **修测试为平台无关**（探测或按平台分支），并在 Linux 上用模拟环境覆盖 Windows 分支——测试套件目标是平台无关（原则见 AGENTS.md「测试约定」）
 
 ## 已知风险

@@ -98,7 +98,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 | 操作 | 命令 / 入口 | 说明 |
 |------|------------|------|
 | 跑全量测试 | `python3 -m pytest agate/tests/ -n auto --reruns 1` | 对齐 CI 口径；Windows 冒烟用 `-m windows_smoke` |
-| 查用例数 | `bash agate/tests/scripts/count-tests.sh` | 章节标题数字漂移时同步 |
+| 查用例数 | `bash agate/tests/scripts/count-tests.sh` | **现状即查即得，文档不留数字**（逐文件数已删，见 `doc-freshness-guide.md` §2.1）|
 | 协议一致性 | `python3 agate/scripts/check-protocol-consistency.py` | docs-only PR 用 `--strict-errors-only` |
 | 结构一致性 | `python3 agate/scripts/check-structure-consistency.py` | rules/*.yaml ↔ md 双向（S-1~S-6）|
 | ruff 静态检查 | `ruff check agate/` | CI 锁 `ruff==0.16.4`，与本地 `~/.venvs/agate-dev` 对齐 |
