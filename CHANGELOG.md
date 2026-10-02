@@ -10,6 +10,34 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **删掉必然漂移的数字索引，并把「数字纪律」从举例式改为判据式**（`agate/tests/README.md` +
+  `docs/guides/doc-freshness-guide.md`）。**根因是设计问题，不是执行问题**：
+  - **删**：`agate/tests/README.md` 的「用例数」列（逐文件 68 行）。该类数字**必然漂移**——
+    实测 **30/68 行已漂移（44%）**（`check-gate.py` 声称 144、实际 203）。留着是**负资产**（误导 > 无用），
+    且**无消费方**（看总数用 `count-tests.sh`，看单文件用 `pytest --collect-only`）。**删掉即根治**。
+    保留「脚本 → 测试文件」映射——那部分有价值且不漂。
+  - **补纪律**（freshness guide §2.1 新增）：**证据类数字合法，但必须带时态锚**
+    （`@ <commit>` / `（实测于 <日期>）` / `（改动前实测）`）。原来的纪律只说"不写死"，
+    没区分「证据」与「现状描述」——而本会话反复踩的正是这个空隙：数字是当时真测的，
+    **错在没标时态**，于是后续读者（含我自己）反复当现状核对，制造多轮无效返工。
+  - **改判据式**（§3）：活文档原为**举例式**（"根 AGENTS.md、project-map.md、本指南"），
+    `tests/README.md` 不在例中 ⇒ **从未被覆盖**，数字一路漂到 44%。现改为判据：
+    「读者是现在/未来的执行者，且会随推进被再编辑」→ 活文档，**无论它在哪个目录**。
+  - **不做机械 CHECK（据实说明）**：实测在活文档白名单上只命中 7 处，其中 **5 处是纪律文档
+    自身的教学示例**（误报率 5/7）⇒ 门禁会是噪音源。**与 ADR-014 同一条教训：不造没人消费的门禁。**
+    真正的解法是**删除**（已做），不是检测。
+  - **发现并转化了一处既有守护（重要）**：`test_mvwu_protocol_docs.py` 里曾有一个用例
+    **机械断言该行的用例数 == `--collect-only` 实数**。它证明这类数字**确有守护先例**——
+    但**守护式方案在覆盖率上失败**：它只守 68 行中的 **1 行**，其余 67 行无守护，实测 30 行已漂移。
+    ⇒ 已改写为 `test_bdd_69_tests_readme_row_maps_check_mvwu`：断言**映射行存在**（不漂）
+    + **反向断言该行不含裸数字**（防顺手写回，变异实测转红）。`agate/scripts/README.md`
+    登记面 ⑤ 的旧建议（"补用例数行"）同步更正。
+  - **本 CHANGELOG 自身先兑现新纪律**：`[Unreleased]` 里既有的两处证据数字
+    （`unit 2309 passed` / `2279 passed`）**数字不动**（它们是各 PR 当时的真实实测），
+    只补**时态锚**（"该批实测于 PR #388 / #387 提交时"）——使其**不再可被误当现状**。
+
 ### 修复
 
 - **安装器 `git fetch` 失败被静默吞掉 → 误导性报错**（`agate-install.py::_ensure_repo`，掩盖真因类）：
@@ -68,7 +96,7 @@
   `mk_5` 配对指针不悬空且双向
 - **负向控制 6 组（均实测转红）**：消费方写回字面正则 → `mk_1` 红；`render` 生成非行首 → `mk_3`/`mk_3b` 红；
   配对指向未登记标记 → `mk_5`/`mk_5b` 红
-- unit **2309 passed** / 1 failed（既有 `opencode` 不在 PATH，非本批）+ 2 skipped；regression+integration **195 passed**
+- unit **2309 passed** / 1 failed（既有 `opencode` 不在 PATH，非本批）+ 2 skipped；regression+integration **195 passed**（**该批实测于 PR #388 提交时**——数字是当时证据、非现状；现状请现场跑 `count-tests.sh`）
 - consistency **0 ERROR / 386 WARNING**；structure-consistency S-1~S-6 全 OK；ruff 全绿；count-tests **2529**（+30）
 
 ### 独立评审查出并已修的 HIGH 缺陷（如实登记）
@@ -147,7 +175,7 @@
   「真正校验通过」，即该检查第一次覆盖它）
 - **负向控制（4 组）**：正则退回原版 → 3 条转红；单侧放宽 → 2 条转红；只补粗体+引用不补反引号 → 1 条转红；放宽覆盖标题/行首反引号 → 各 1 条边界锁转红
 - 分片全量：unit **2279 passed** / 1 failed（既有环境缺陷 `opencode` 不在 PATH）+ 2 skipped；
-  regression+integration **195 passed**
+  regression+integration **195 passed**（**该批实测于 PR #387 提交时**）
 - consistency **0 ERROR / 386 WARNING**（与基线一致）；ruff 全绿；count-tests **2499**（+2 = 两条新边界用例）
 - **三轮独立评审**（fresh context，SELF-GATE 要求）：首轮 `agate-alignment-review-2026-10-01-scope-plus-form.md`
   → NEEDS-REVISION（M1-M6/L1-L6，全在文档层）；复审 `…-rereview.md` → NEEDS-REVISION（又查出任期引入的 N1-N6）；

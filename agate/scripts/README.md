@@ -29,7 +29,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 | ② | **SG.6**（`agate/tests/integration/test_protocol_alignment_review.py`） | **门禁**（pytest **会红**） | 与 ① **同一件事**：消费同一个 `uncovered_gate_scripts()`，不另设判据 | 同上（共用函数） |
 | ③ | `CHECK 10 协议文档脚本名引用漂移` | **非登记面（方向相反）** | **新增脚本无需动它**——它只报"协议文档引用了**不存在**的脚本"。**改名 / 退役**脚本时才要看 | `check_script_name_refs()` |
 | ④ | `agate/scripts/README.md` 脚本索引表（下文各表） | **约定**（有**特定**例外） | 建议补一行（用途 + 退出码语义）。⚠️ **不是完全无校验**：`agate/tests/unit/test_doc_sweep.py` 的 `test_bdd_49_4_*` 对**指定脚本**（TAG0037 的 `agate_package.py` / `agate-release.py`）**机械断言**索引行存在（删行即红）。除此之外的脚本（**实测**：24 个 `check-*.py` 中 7 个无索引行）确实无校验 | 特定脚本见 `test_doc_sweep.py`；其余人工评审 |
-| ⑤ | `agate/tests/README.md` 用例映射表 | **约定**（有**特定**例外） | 建议补"测试文件 ↔ 用例数"行。⚠️ 同样**不是完全无校验**：`test_mvwu_protocol_docs.py::test_bdd_69_*` 对 `test_check_mvwu.py` **机械断言**该行存在（含用例数须等于 `--collect-only` 实数）。除此之外无校验 | 特定脚本见 `test_mvwu_protocol_docs.py`；其余人工评审 |
+| ⑤ | `agate/tests/README.md` 映射表 | **约定**（有**特定**例外） | 建议补**「脚本 → 测试文件」映射行**。⚠️ **不要写用例数**——2026-10-02 起该列已**整体删除**（必然漂移：原 68 行实测 30 行漂移；且守护只覆盖 1/68，见 `docs/guides/doc-freshness-guide.md` §2.1/§3）。⚠️ 同样**不是完全无校验**：`test_mvwu_protocol_docs.py::test_bdd_69_tests_readme_row_maps_check_mvwu` 对 `test_check_mvwu.py` **机械断言**映射行存在，且**反向断言该行不含裸数字**（防写回去）。除此之外无校验 | 特定脚本见 `test_mvwu_protocol_docs.py`；其余人工评审 |
 | ⑥ | 测试用例总数（`agate/tests/scripts/count-tests.sh`） | **自动** | **无需动作**——`pytest --collect-only` 自动纳入，且该脚本是**下界**语义（"目标：≥ 749"），只增不减故永不因新增脚本转红 | 自动收集 |
 | ⑦ | `CHANGELOG.md` / `agate/CONTEXT.md` | **任务级约定** | 按任务需要写（CHANGELOG 由 `check-changelog.py` 校验 `[Unreleased]` 含 task_id，**不**校验"每个脚本一行"） | 任务流程 |
 
