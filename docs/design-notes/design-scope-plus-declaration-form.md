@@ -4,6 +4,9 @@
 > **性质**：hotfix（直改 + 分支 + PR，不立项）——`RM-AG0077⑦` 遗留项的收尾
 > **改动面**：14 个已跟踪文件（2 个脚本 + 6 处协议文档/角色文件 + 1 个测试文件 + 基线刷新 + CHANGELOG + roadmap + tests/README）+ 本文件（新增）；逐行清单见 §6
 > **触 SELF-GATE**（改 `agate/scripts/*.py` 与 `agate/**/*.md`）
+> **⚠️ 后继（2026-10-02）**：本文件讨论的形态判据**已单源化**——形态权威源迁移至
+> `agate/rules/markers.yaml`，消费方经 `agate_markers.py` 取值。本文件保留为**决策记录与代价登记**
+> （未覆盖面的量化取舍），**判据以 markers.yaml 为准**。见 `design-marker-single-source.md`。
 
 ---
 

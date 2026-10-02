@@ -78,6 +78,26 @@ DEFAULT_ROLES_YAML = (
     "  - {script: check-yaml-schema.py, path: scripts/check-yaml-schema.py}\n"
 )
 
+# markers.yaml（正文标记形态单源；2026-10-02）。
+# 假协议树须**镜像真协议结构**——check-yaml-schema.py 的 _RULES 声明了 markers，
+# 假树缺之会误报「文件缺失」。此处为最小可过 schema 的子集（不必等同真注册表全量）。
+DEFAULT_MARKERS_YAML = r"""schema_version: 1
+lead: '^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?'
+lead_variants:
+  blockquote_ok: '^\s*>?\s*-?\s*'
+markers:
+  - name: SCOPE+
+    purpose: 发现 P1 未覆盖的新隐含需求
+    phases: [P2, P4]
+    params: none
+    paired_with: SCOPE_RESOLVED
+  - name: SCOPE_RESOLVED
+    purpose: SCOPE+ 已纳入基线
+    phases: [P1]
+    params: optional_text
+    resolves: SCOPE+
+"""
+
 # WORKFLOW.md 阶段总览表（S-1/S-2 md 侧锚点）。
 # 含 READY 行：P2-review 发现 #1 要求 S-2 只匹配 P 数字前缀行，READY/表外行显式排除。
 DEFAULT_WORKFLOW_TABLE = (
@@ -262,6 +282,38 @@ def default_roles_schema():
     )
 
 
+def default_markers_schema():
+    """markers.schema.json 默认（假树用最小子集，与真 schema 的必填字段一致）。"""
+    return _schema_text(
+        ["schema_version", "lead", "lead_variants", "markers"],
+        {
+            "schema_version": {"type": "integer"},
+            "lead": {"type": "string"},
+            "lead_variants": {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            },
+            "markers": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["name", "purpose", "phases", "params"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "name": {"type": "string"},
+                        "purpose": {"type": "string"},
+                        "phases": {"type": "array", "items": {"type": "string"}},
+                        "params": {"type": "string"},
+                        "paired_with": {"type": "string"},
+                        "resolves": {"type": "string"},
+                        "accept_backtick": {"type": "boolean"},
+                    },
+                },
+            },
+        },
+    )
+
+
 # S-6 引用完整性需要真实存在的占位文件（内容空即可）
 _REFERENCED_FILES = (
     "scripts/check-gate.py",
@@ -287,6 +339,8 @@ def make_fake_root(
     phases_schema=None,
     dispatch_schema=None,
     roles_schema=None,
+    markers_text=None,
+    markers_schema=None,
     add_files=None,
     agate_scripts=None,
 ):
@@ -303,9 +357,13 @@ def make_fake_root(
     _write(root, "rules/phases.yaml", phases_text or DEFAULT_PHASES_YAML)
     _write(root, "rules/dispatch.yaml", dispatch_text or DEFAULT_DISPATCH_YAML)
     _write(root, "rules/roles.yaml", roles_text or DEFAULT_ROLES_YAML)
+    # markers.yaml：正文标记形态单源（2026-10-02）。假树须镜像真协议结构——
+    # check-yaml-schema.py 的 _RULES 声明了 markers，假树缺之会误报「文件缺失」。
+    _write(root, "rules/markers.yaml", markers_text or DEFAULT_MARKERS_YAML)
     _write(root, "rules/schema/phases.schema.json", phases_schema or default_phases_schema())
     _write(root, "rules/schema/dispatch.schema.json", dispatch_schema or default_dispatch_schema())
     _write(root, "rules/schema/roles.schema.json", roles_schema or default_roles_schema())
+    _write(root, "rules/schema/markers.schema.json", markers_schema or default_markers_schema())
     _write(root, "WORKFLOW.md", workflow_text or DEFAULT_WORKFLOW_TABLE)
     _write(root, "phase-cards/P2-design.md", card_text or DEFAULT_P2_CARD)
     for rel in _REFERENCED_FILES:

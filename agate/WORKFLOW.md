@@ -448,7 +448,12 @@ Then  过期时间是创建时刻起 15 天后
 
 写不出 BDD 条件，说明需求本身还不清楚——这本身就是需要 `[NEED_CONFIRM]` 的信号。
 
-### [SCOPE+]：任何阶段都能向上反馈新需求（行首声明格式：`^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?\[SCOPE+\]`——粗体 `**[SCOPE+]**` 与引用块 `> [SCOPE+]` 同为声明；**句中引用不触发**，**反引号包裹的 `[SCOPE+]` 也不触发**（视为引述/否定）。⚠️ 两个标记的边界**不对称**：`[SCOPE_RESOLVED]` 侧**接受**反引号包裹（存量有反引号写法，见 `check-scope-resolved.py` 常量注释）。）
+### [SCOPE+]：任何阶段都能向上反馈新需求（行首声明格式：`^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?\[SCOPE+\]`——粗体 `**[SCOPE+]**` 与引用块 `> [SCOPE+]` 同为声明；**句中引用不触发**，**反引号包裹的 `[SCOPE+]` 也不触发**（视为引述/否定）。⚠️ 两个标记的边界**不对称**：`[SCOPE_RESOLVED]` 侧**接受**反引号包裹（存量有反引号写法）。
+
+> **形态权威源 = `rules/markers.yaml`**（正文标记单源，2026-10-02）。本节是**面向人的说明书**（复述形态以便书写）；
+> **判据**由 `agate_markers.py` 从该注册表取值，消费方不自带正则副本（由 `test_marker_single_source.py::mk_1` 守护）。
+> **写标记时用生成器**（免记格式）：`python3 agate/scripts/agate-mark.py SCOPE+ "发现内容"` → `[SCOPE+] 发现内容`；
+> `python3 agate/scripts/agate-mark.py --list` 看全部已登记标记。设计记录：`docs/design-notes/design-marker-single-source.md`。
 
 P1 不可能预见所有隐含需求。P2 设计、P4 实现时，subagent 常会发现"前序阶段没覆盖、但技术上必须做"的事。这时 subagent 在产出文件中标注：
 

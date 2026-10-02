@@ -41,6 +41,10 @@ _RULES = (
     ("phases", "phases.yaml", "phases.schema.json"),
     ("dispatch", "dispatch.yaml", "dispatch.schema.json"),
     ("roles", "roles.yaml", "roles.schema.json"),
+    # markers.yaml：正文标记形态单源（设计 docs/design-notes/design-marker-single-source.md）。
+    # 纳入 S-5 的理由：它是**判据**的权威源——schema 形同虚设会让「注册表写错」静默传播到
+    # 所有消费方（条目字段写错 ⇒ agate_markers.pattern() 生成错正则，且无人发现）。
+    ("markers", "markers.yaml", "markers.schema.json"),
 )
 
 
