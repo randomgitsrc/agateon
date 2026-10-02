@@ -950,7 +950,7 @@ setTimeout(() => {
 - 命令本身跑不通（能力缺口）→ `[CAPABILITY_GAP]` 交人决策，不得自行降级为目测
 - T004 教训 B7：P6 子代理连续失败后，主 Agent 要求「不用 Playwright，纯命令行验证」—— 这是主 Agent 降级了 P2 已固化的验收标准，属于违规。
 
-**SCOPE+ / SCOPE_GAP 扫描**：每次 subagent 返回后，主 Agent 扫描产出是否含 `[SCOPE+]`（新隐含需求 → 增补 P1 基线 + 定向回补）或 `[SCOPE_GAP]`（prompt 漏了 P2 已声明的改动 → 修正 prompt 重派）。行首声明格式（`^\s*-?\s*\[SCOPE+\]`）。
+**SCOPE+ / SCOPE_GAP 扫描**：每次 subagent 返回后，主 Agent 扫描产出是否含 `[SCOPE+]`（新隐含需求 → 增补 P1 基线 + 定向回补）或 `[SCOPE_GAP]`（prompt 漏了 P2 已声明的改动 → 修正 prompt 重派）。行首声明格式（`^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?\[SCOPE+\]`；粗体 `**[SCOPE+]**` 与引用块 `> [SCOPE+]` 同样算声明；**句中引用与反引号包裹不触发**。⚠️ **两个标记边界不对称**：`[SCOPE_RESOLVED]` 侧**接受**反引号包裹。格式权威源 = `WORKFLOW.md` §[SCOPE+]）。
 
 **SCOPE+ 处理追踪（P2.11）**：产出含 [SCOPE+] 时，主 Agent 必须在 P1-requirements.md 增补对应条目并标记 [SCOPE_RESOLVED: 来源文件]。未标记 [SCOPE_RESOLVED] 的 [SCOPE+] → gate 不通过（scripts/check-scope-resolved.py）。
 

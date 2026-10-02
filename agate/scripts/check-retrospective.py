@@ -18,7 +18,14 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 AGATE_STATE_GET = os.path.join(SCRIPT_DIR, "agate-state-get.py")
 MAX_RETRY_MAP = "P1:3,P2:3,P3:2,P4:3,P5:2,P6:2,P7:2,P8:2"
-SCOPE_PLUS_RE = re.compile(r"^\s*-?\s*\[SCOPE\+\]", re.MULTILINE)
+# 行首声明形态（2026-10-01，RM-AG0077⑦ 遗留项 hotfix）：与 check-scope-resolved.py 的
+# SCOPE_PLUS_RE **语义等价**（一个用拼接常量、一个用字面量，判定必须一致）——两处对
+# 「什么算 SCOPE+ 声明」给出相反结论本身即缺陷（DEBT0046「两处判据相反」同族）。
+# 同步性由 test_check_scope_resolved.py::test_sc_14 对 14 个探针输入做**行为等价**守护。
+# 标题形态、行首反引号、行中出现均视为「提及」不触发（未覆盖面与代价见 check-scope-resolved.py 常量注释）。
+SCOPE_PLUS_RE = re.compile(
+    r"^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?\[SCOPE\+\]", re.MULTILINE
+)
 SKIP_NAME_RE = re.compile(r"dispatch-context|dispatch-prompt|progress")
 AGATE_CARD_RE = re.compile(r"<!-- AGATE_CARD_START -->.*?<!-- AGATE_CARD_END -->", re.DOTALL)
 OVERRIDE_RE = re.compile(r"^override:", re.MULTILINE)
@@ -92,7 +99,10 @@ def _scan_debt_roadmap_signal(task_dir, state_file):
 
 def _scan_scope_plus(task_dir):
     """扫描顶层 *.md 找行首 [SCOPE+]（排除 dispatch-context/dispatch-prompt/progress 文件
-    + 剥离 AGATE_CARD 块，同 sh sed 删除 + grep -qE）。返回首个命中文件 basename 或空串。"""
+    + 剥离 AGATE_CARD 块，同 sh sed 删除 + grep -qE）。返回首个命中文件 basename 或空串。
+
+    覆盖形态：裸 / 列表符 / 引用块 / 粗体（2026-10-01 起）。**不覆盖**标题形态、行首反引号、
+    行中出现——未覆盖面与量化代价见 `check-scope-resolved.py` 顶部常量注释（两处判据必须等价）。"""
     for name in sorted(os.listdir(task_dir)):
         if not name.endswith(".md"):
             continue
