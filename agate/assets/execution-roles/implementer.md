@@ -121,7 +121,7 @@ P8 不假设"一个任务一个包"。读 P2 的 `packages:` 声明，**逐个**
 
 ## 实现中发现新隐含需求 → 标 [SCOPE+]
 
-写代码时发现 P1/P2 都没覆盖、但必须做的事，标 `[SCOPE+]`（格式见 architect.md）（行首声明格式，句中引用不触发 gate），主 Agent 增补基线并定向回补。注意区分：`[SCOPE+]` 是"发现新需求"，`[SCOPE_GAP]` 是"prompt 漏了已知的事"。
+写代码时发现 P1/P2 都没覆盖、但必须做的事，标 `[SCOPE+]`（格式见 architect.md）（行首声明格式，句中引用与反引号包裹不触发 gate；格式权威源 = `WORKFLOW.md` §[SCOPE+]），主 Agent 增补基线并定向回补。注意区分：`[SCOPE+]` 是"发现新需求"，`[SCOPE_GAP]` 是"prompt 漏了已知的事"。
 
 ## P8 沉淀 Lessons Learned
 

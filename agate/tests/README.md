@@ -49,7 +49,7 @@ bash agate/tests/scripts/count-tests.sh
 | check-p6-format.py | unit/test_check_p6_format.py | 16 |
 | check-p6-provenance.py | unit/test_check_p6_provenance.py | 40 |
 | check-p6-provenance.py | unit/test_review_role_docs.py（UI/UX 机制文档条文，TAG0006）| 14 |
-| check-scope-resolved.py | unit/test_check_scope_resolved.py | 10 |
+| check-scope-resolved.py | unit/test_check_scope_resolved.py | 19 |
 | check-frontmatter.py | unit/test_check_frontmatter.py | 14 |
 | check-state-yaml.py | unit/test_check_state_yaml.py | 9 |
 | check-state-transition.py | unit/test_check_state_transition.py | 30 |

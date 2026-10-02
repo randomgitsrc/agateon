@@ -230,7 +230,7 @@ P8 gate 通过 ≠ 直接标记 READY。主 Agent 必须逐项检查：
   gate 判定方式：主 Agent 读 P1-requirements.md 的 phases 字段，确认跳过列表，按上述转移规则推进。
   若 P1 声明的 phases 列表与实际 gate 判定冲突（如声明跳过 P6 但 P5 发现行为不符需验收），主 Agent PAUSED 报告人工决策。
 
-特殊转移（SCOPE+ 定向回补）：（行首声明格式：`^\s*-?\s*\[SCOPE+\]`）
+特殊转移（SCOPE+ 定向回补）：（行首声明格式：`^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?\[SCOPE+\]`——粗体/引用块同为声明，句中引用与反引号包裹不触发；格式权威源 = `WORKFLOW.md` §[SCOPE+]）
 任意阶段 Pn 产出含 [SCOPE+] → 主 Agent 增补 P1 基线 → 判断影响范围 → 定向回补：
   Pn --[SCOPE+ 增补基线]--> P1（仅增补 requirements.md，不重跑 P1 分析）
   → 主 Agent 判断该新需求实际需要哪些阶段，定向回到最早受影响的阶段
