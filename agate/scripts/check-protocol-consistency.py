@@ -114,7 +114,14 @@ class Report:
         self.errors.append({"check": check, "msg": msg, "loc": loc})
 
     def warn(self, check: str, msg: str, loc: str = "") -> None:
-        self.warnings.append({"check": check, "msg": msg, "loc": loc})
+        # frozen：该条来自**冻结文件**（narrative/tasks/reviews/CHANGELOG 等）。
+        # 这类文件按设计**不改**（freshness-guide §3），其发现**永不收敛**——
+        # 实测：386 条 WARNING 中 383 条属此类，且 "0 ERROR / 386 WARNING" 在 CHANGELOG
+        # 出现 4 次并被标为「与基线一致」⇒ 已退化为需要长期对齐的噪音，不再是信号。
+        # 数据**照常保留**（计数/JSON/--strict 语义全不变），仅**打印时聚合**。
+        self.warnings.append({
+            "check": check, "msg": msg, "loc": loc, "frozen": is_frozen_loc(loc),
+        })
 
     def ok(self, check: str) -> None:
         self.passed.append(check)
@@ -193,6 +200,19 @@ def is_protocol_file(relpath: str) -> bool:
 
 def is_narrative_file(relpath: str) -> bool:
     return any(relpath.startswith(d) for d in NARRATIVE_DIRS)
+
+
+def is_frozen_loc(loc: str) -> bool:
+    """loc（如 `agate-workspace/tasks/X/P2-design.md:254`）是否指向**冻结文件**。
+
+    冻结 = 按 freshness-guide §3 属"历史快照、保留不动"的路径（NARRATIVE_DIRS 全部）。
+    这类文件的发现**永不收敛**（改了反而失真），故其告警默认**聚合打印**而非逐条刷屏。
+    loc 为空（无位置的全局告警）→ False（照常逐条显示，因为无处可归属）。
+    """
+    if not loc:
+        return False
+    path = loc.rsplit(":", 1)[0]          # 去掉 :lineno
+    return is_narrative_file(path)
 
 
 def extract_code_blocks(text: str, lang: str):
@@ -1422,6 +1442,10 @@ def main() -> int:
         help="仅 ERROR 判失败，WARNING 不视为失败（与 --strict 互斥）",
     )
     ap.add_argument("--json", action="store_true", help="JSON 输出")
+    ap.add_argument(
+        "--show-frozen-warnings", action="store_true",
+        help="逐条展开【冻结文件】的 WARNING（默认聚合为一行；冻结文件按设计不改，其发现永不收敛）",
+    )
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -1459,10 +1483,28 @@ def main() -> int:
                 loc = f" [{e['loc']}]" if e["loc"] else ""
                 print(f"    ❌ {e['msg']}{loc}")
         if rep.warnings:
+            frozen = [w for w in rep.warnings if w.get("frozen")]
+            live = [w for w in rep.warnings if not w.get("frozen")]
             print(f"\n  WARNING ({len(rep.warnings)}):")
-            for w in rep.warnings:
+            for w in live:
                 loc = f" [{w['loc']}]" if w["loc"] else ""
                 print(f"    ⚠️  {w['msg']}{loc}")
+            if frozen:
+                if args.show_frozen_warnings:
+                    for w in frozen:
+                        loc = f" [{w['loc']}]" if w["loc"] else ""
+                        print(f"    ⚠️  {w['msg']}{loc}")
+                else:
+                    # 聚合打印：冻结文件的发现永不收敛（见 is_frozen_loc），逐条刷屏只会
+                    # 训练读者忽略本检查的输出。数据未丢——本 flag 可展开。
+                    by_check: dict = {}
+                    for w in frozen:
+                        by_check[w["check"]] = by_check.get(w["check"], 0) + 1
+                    detail = "、".join(f"{k} {v} 条" for k, v in sorted(by_check.items()))
+                    print(f"    ⚠️  【冻结文件】{len(frozen)} 条（{detail}）")
+                    print("        ↳ 来源为 tasks/、reviews/、CHANGELOG 等**按设计不改**的历史文件，"
+                          "其发现永不收敛；")
+                    print("        ↳ 明细用 `--show-frozen-warnings` 展开（数据未丢弃）。")
         print()
         if not rep.errors and not rep.warnings:
             print("  🎉 全部检查通过，协议结构一致性无问题。")
