@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "agate/rules/markers.yaml schema (draft-07 subset)",
+  "type": "object",
+  "required": ["schema_version", "lead", "lead_variants", "markers"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1]},
+    "lead": {"type": "string", "minLength": 1},
+    "lead_variants": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "exclude": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "markers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "purpose", "phases", "params"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_+]*$"},
+          "purpose": {"type": "string", "minLength": 1},
+          "phases": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^P[0-8](\\.5)?$"}
+          },
+          "params": {"type": "string", "enum": ["none", "optional_text", "required_text"]},
+          "paired_with": {"type": "string"},
+          "resolves": {"type": "string"},
+          "accept_backtick": {"type": "boolean"},
+          "lead_variant": {
+            "oneOf": [
+              {"type": "string", "enum": ["default"]},
+              {"type": "array", "items": {"type": "string"}, "minItems": 1}
+            ]
+          },
+          "judged_by": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

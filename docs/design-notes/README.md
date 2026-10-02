@@ -31,5 +31,6 @@
 | `design-orchestration-evolution-analysis.md` | 编排模型演进分析（阶段屏障 → DAG？）：实测 13 任务事件流 / 490 条批级 commit / 34 任务 dispatch_plan + PeekView 94 任务跨项目验证 → DAG 收益被三重天花板压缩（真依赖 / P5 全量验证不可切片 / judge 全局屏障），收益池 11/34，关键路径弹性 ≈0；确立「并行执行 ≠ 可独立验证 ≠ 可独立归属」；提出 MVWU 为下一层抽象 | 研究完成（三轮外部评审，见 `docs/reviews/review-260915-2300.md` / `review-260615-2339.md` / `review-260916-0828.md`）；DAG 降为条件触发（`E_pipeline` 超阈值） |
 | `design-mvwu-protocol.md` | MVWU（Minimum Verifiable Work Unit）协议设计：把既有 batch 实践升格为协议原语——四不变量（Boundary/Verification/Provenance/Composability）+ 最小契约（`P2-design.md` frontmatter 的 `batches[].tests_filter` + `P4-evidence/{batch}.log`）+ 字段预算（既有权 2 + 新增 ≤3）+ 四态 verdict（`UNKNOWN ≠ PASS`）+ 三阶段实施（阶段 1 零内核改动）；含 I1 可归属性的同轴口径实证（16 个多批任务仅 2 个 = 13% 逐批 commit） | 设计定稿，待立项（TAG-MVWU-001 试点方案见 §7） |
 | `design-scope-plus-declaration-form.md` | SCOPE+ 行首声明形态的判据与文档对齐（为何必须**双侧协同**放宽 `SCOPE_PLUS_RE`/`SCOPE_RESOLVED_RE`；为何**刻意不覆盖**标题形态与行首反引号形态——含量化取舍（标题 4／反引号 5 个任务转红）与仍未覆盖的真声明如实登记） | 已落地（2026-10-01 hotfix，RM-AG0077⑦ 遗留项收尾）|
+| `design-marker-single-source.md` | **正文标记形态单源**：形态判据收敛为 `rules/markers.yaml` + `agate_markers.py`（取值）+ `agate-mark.py`（生成）；动机是实测发现同一「行首」概念已有 3 套实现（6 种形态 3 种分叉，粗体 `**[DESIGN_GAP: x]**` 静默计 0）。含 mk_1~mk_5 守护、非目标划界（不统一语法/不消灭文档复述/不机械化语义判断） | 已落地（2026-10-02）|
 
 新增决策记录时，按这个格式写：问题是什么 → 讨论过哪些方案及为何否决 → 最终采纳的方案及理由 → 状态（已决策待落地 / 已落地，落地位置写清楚）。

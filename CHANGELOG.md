@@ -10,6 +10,68 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **正文标记形态单源**（设计 `docs/design-notes/design-marker-single-source.md`）：把「一个标记该怎么写」
+  从散落的 N 处判据收敛为**一处权威源** `agate/rules/markers.yaml`，并交付取值库与生成器：
+  - `agate_markers.py`（**取值侧**）：`pattern/find/is_declaration/render/describe`；消费方**取值**而非复制正则
+  - `agate-mark.py`（**写入侧**）：`--list` 列举全部标记 / `<NAME> [参数]` **生成合法写法** / `--check FILE` 校验
+  - **动机（实测）**：同一「行首」概念本仓已有 **3 套互不相同**的实现——`check-scope-resolved.py`
+    接受粗体/星号列表符，而 `agate_common.py` 的 `DESIGN_GAP` 不接受。**逐形态实测 6 种里 3 种分叉**：
+    `* [X]` / `+ [X]` / `**[X]**` 在 SCOPE+ 侧检出、在 DESIGN_GAP 侧**静默计 0 且不告警**
+    （粗体是 `WORKFLOW.md` 允许的合法写法）⇒ 与 RM-AG0077⑦ 同类问题，只是换了个标记、尚未被踩到。
+  - **新加标记的成本从 N 处降到 1 行**（实测：注册表加 1 条 → 生成/`--list`/守护**零代码改动**自动可用）。
+    对照：`DESIGN_GAP` 现状判据散在 **32 处**；PR #387 改 1 个标记的形态动了 **14 个文件、漏改 5 处**。
+  - **非目标（明确划界）**：不统一标记语法（存量 45 种、跨项目在用）；**不消灭文档复述**（协议文档必须对
+    人讲清怎么写，只保证**判据**单源）；不把「声明 vs 提及」的语义判断机械化。
+  - **8 个标记首批登记**（有成对关系或有判据者）：`SCOPE+`/`SCOPE_RESOLVED`、`DESIGN_GAP`/`DESIGN_GAP_REVIEWED`、
+    `NEED_CONFIRM`/`NO_NEED_CONFIRM`、`PROD_TOUCHED`/`PROD_NOT_TOUCHED`；其余按需增量登记。
+
+### 变更
+
+- **两个消费方改为取值**：`check-scope-resolved.py` / `check-retrospective.py` 不再自带正则副本
+  （此前两处靠 `test_sc_14` 的 14 探针守护一致性；单源后该分叉**结构上不可能**再发生）。
+- **`check-yaml-schema.py` 纳入 `markers.yaml`**（S-5 第 4 个 schema）：它是**判据**权威源，schema 形同虚设
+  会让「注册表写错」静默传播到所有消费方。
+- 文档传播：`WORKFLOW.md` §[SCOPE+] 加权威源指针与生成器用法；`scripts/README.md` / `tests/README.md` 登记新脚本与用例。
+
+### 验证
+
+- **批次 B 硬门禁（V1）通过**：改造消费方后，存量 **41 任务判定与 PR #387 基线逐任务一致**
+  （通过 9 / 跳过 32 / 失败 0），且 SCOPE+ 与 SCOPE_RESOLVED 在全仓 `tasks/*/*.md` 上**差异文件数 = 0**
+- **守护 mk_1~mk_6（32 用例）**：`mk_1` 消费方不得自带副本 / `mk_2` 注册表↔冻结基准等价 /
+  **`mk_3` `render()` 产物必被 `pattern()` 命中（生成器与判据不可能分叉）** / `mk_4` 非法形态 fail-closed /
+  `mk_5` 配对指针不悬空且双向
+- **负向控制 6 组（均实测转红）**：消费方写回字面正则 → `mk_1` 红；`render` 生成非行首 → `mk_3`/`mk_3b` 红；
+  配对指向未登记标记 → `mk_5`/`mk_5b` 红
+- unit **2309 passed** / 1 failed（既有 `opencode` 不在 PATH，非本批）+ 2 skipped；regression+integration **195 passed**
+- consistency **0 ERROR / 386 WARNING**；structure-consistency S-1~S-6 全 OK；ruff 全绿；count-tests **2529**（+30）
+
+### 独立评审查出并已修的 HIGH 缺陷（如实登记）
+
+- **`pattern("DESIGN_GAP")` 与既有 `agate_common` 判据不等价**（HIGH-1，独立评审查出，已修）：
+  注册表被 `judged_by` / S-5 schema / CHECK9 锚点**三处正式声明**为 DESIGN_GAP 的判据权威源，
+  但该判据**更宽**——① **前缀吞并**：命中 `[DESIGN_GAP_REVIEWED: x]`（`_` 满足旧边界）；
+  ② **冒号可选**：`[DESIGN_GAP]`（无参）被误计，而 `agate_common` 用字面冒号。
+  实测后果：逐 P7 文件对账 **59 vs 121（2.05×）**。
+  **修复**：`required_text` 分支冒号**必填**（**载荷点**）+ 本体后加 `(?!\w)`（防御性冗余）。
+  **载荷点经「分约束变异 + 全仓计数」实测确认**：只去边界仍 116（等价）；只去冒号必填则 **124**（偏多）。
+  **验证**：逐形态 8/8 等价；全仓语料 **116 vs 116、差异文件数 0**。
+  **守护**：新增 `mk_6a`（已登记标记两两互斥）/ `mk_6b`（与 `agate_common` 真实语料等价），
+  在忠实的 HIGH-1 复现下**实测转红**。
+  **教训（本设计最该记取的）**：**声明单源 ≠ 已经单源**——权威源必须与既有实现**逐条对账**
+  并加等价守护；初版因「该判据当时零消费方 + 无等价断言」而未被发现，属结构性定时炸弹。
+- **评审同时指出 `mk_3` 只覆盖「判据过严」方向**（生成器产出判据不认），**不覆盖「判据过宽」**——
+  后者由 `mk_6a`/`mk_6b` 承担。已收窄文档表述：两方向都需守护，缺一不可。
+
+### 落地中据实更正的两处（设计未预见，实测发现）
+
+- **两个标记的参数语义本来就不一样**：初版用统一规则 ⇒ 批次 B 门禁**当场变红**（通过 11/跳过 30）。
+  `params: none` 要求 `]` 紧跟（`[SCOPE+ 观察]` 不命中）；带参形态不要求闭合 `]`（允许**跨行参数**，
+  存量 3 处）。**教训：单源的前提是先如实刻画差异，不是先统一。**
+- `check-yaml-schema.py` 的 `_RULES` 加 markers 后，测试的**最小假协议树**缺该文件 → 2 个既有 schema 用例转红；
+  已修（假树补 markers 默认值）——这是「假树须镜像真协议结构」的显式化，非改测试迁就实现。
+
 ### 修复
 
 - **SCOPE+ 行首声明形态与文档不一致 → 粗体写法被静默跳过**（RM-AG0077⑦ 遗留项 hotfix，直改）：

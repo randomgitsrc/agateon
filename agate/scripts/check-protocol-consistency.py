@@ -580,6 +580,20 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         "keywords": ["SCOPE_RESOLVED"],
     },
     {
+        # 正文标记形态单源（设计 docs/design-notes/design-marker-single-source.md）：
+        # markers.yaml 是**判据**权威源，agate_markers.py 供消费方取值，agate-mark.py 生成写法。
+        # 三者是同一机制的三面，同属一个锚点（分隔登记会让 CHECK9-coverage 漏掉其一）。
+        "desc": "正文标记形态单源（注册表 + 取值库 + 生成器）",
+        "script": "agate/scripts/agate_markers.py",
+        "keywords": ["markers.yaml", "agate_markers"],
+        "callers": ["agate/scripts/agate-mark.py"],
+    },
+    {
+        "desc": "正文标记生成器（写入侧）",
+        "script": "agate/scripts/agate-mark.py",
+        "keywords": ["agate_markers", "render"],
+    },
+    {
         "desc": "DESIGN_GAP 配对",
         "script": "agate/scripts/check-gate.py",
         "keywords": ["DESIGN_GAP"],

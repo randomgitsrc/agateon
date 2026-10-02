@@ -1,0 +1,120 @@
+# agate/rules/markers.yaml — 正文标记形态权威源（单一来源）
+#
+# 职责边界（与 phases.yaml / dispatch.yaml / roles.yaml 同层）：YAML 只承载**可判定的形态**
+# ——标记名、行首前缀变体、参数形态、配对关系、适用阶段。**叙事**（为什么有这个标记、
+# 怎么用、示例）留在 md（WORKFLOW.md / phase-cards / 角色文件）。
+#
+# 为什么需要本文件（设计依据 docs/design-notes/design-marker-single-source.md）：
+#   同一「行首声明」概念在本仓曾有三套互不相同的正则实现（check-scope-resolved.py 接受
+#   粗体/星号列表符；agate_common.py 的 DESIGN_GAP 不接受）——逐形态实测 6 种里 3 种分叉：
+#   `* [X]` / `+ [X]` / `**[X]**` 在 SCOPE+ 侧检出、在 DESIGN_GAP 侧静默计 0 且不告警。
+#   本文件把「行首」收敛为**一处定义**，消费方取值而非复制。
+#
+# 一致性 gate（计划中，见设计 §3.5）：test_marker_single_source.py 的 mk_1~mk_5。
+#   最强一条 mk_3：render() 产物必被 pattern() 命中 —— 使「生成器」与「判据」不可能分叉。
+#
+# 登记范围（D1 决策 = 8 个）：只登记**有成对关系或有机械判据**的标记。
+#   其余标记（BLOCKER / SUGGEST / COL_* / CODE_MAP_* 等）**无判据也无配对**，登记了不产生
+#   任何收益，故暂不登记——按需增量登记（避免"为通用而全登记"的形式主义）。
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# 行首形态基元（**唯一权威**）
+# ---------------------------------------------------------------------------
+# lead：一条「声明」允许的行首前缀。所有标记共用，改这里全体一起变。
+#   覆盖：前导空白 / 列表符（- * +）/ 引用块（>）/ 粗体包裹（** __）
+#   ⚠️ 这是 2026-10-01 PR #387 的结论固化：SCOPE+ 侧实测需要粗体与引用块
+#      （TPV0099 的 P2-design.md:120 正是粗体形态）。
+lead: '^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?'
+
+# 口径变体：个别标记**确实需要**不同的行首口径（真实语义差异，非历史遗留）。
+#   在注册表内显式表达，而不是让消费方各写一份正则（那正是漂移的来源）。
+lead_variants:
+  # P7 口径：允许引用块前缀（P7-consistency.md 常在引用块内登记 DESIGN_GAP）
+  blockquote_ok: '^\s*>?\s*-?\s*'
+  # P4 转抄核对口径：仅空白 + 短横线（与 grep -cE 等价，历史兼容）
+  dash_only: '^\s*-?\s*'
+
+# 显式排除的形态（判为「提及」而非「声明」）——保守边界的单源化。
+#   代价已量化登记在 docs/design-notes/design-scope-plus-declaration-form.md §3。
+exclude:
+  # 行首反引号 = 引述/否定为主，但**存在真声明反例**（TAG0004:50）。
+  #   纳入会新增 5 个任务转红（1 真声明 : 4 引述/否定）⇒ 刻意不纳入。
+  backtick: '`'
+  # 标题 = 容器（正文才是状态，如 TAG0012:402「## 8. [SCOPE+] 声明」下正文是「无」）。
+  #   纳入会新增 4 个任务转红 ⇒ 刻意不纳入。
+  heading: '^#{1,6}\s'
+
+# ---------------------------------------------------------------------------
+# 标记注册表
+# ---------------------------------------------------------------------------
+markers:
+  - name: SCOPE+
+    purpose: 发现 P1 未覆盖的新隐含需求（→ 主 Agent 增补基线）
+    phases: [P2, P3, P4, P5, P6, P7]
+    params: none
+    paired_with: SCOPE_RESOLVED
+    lead_variant: default
+    judged_by: [check-scope-resolved.py, check-retrospective.py]
+
+  - name: SCOPE_RESOLVED
+    purpose: 声明某条 SCOPE+ 已纳入 P1 基线
+    phases: [P1]
+    params: optional_text
+    resolves: SCOPE+
+    lead_variant: default
+    # 与 SCOPE+ **不对称**：SCOPE_RESOLVED 侧额外接受反引号包裹。
+    #   实测依据：TAG0021 的 P1-requirements.md:231 首字节为 `（旧正则 0 命中、新正则 1 命中），
+    #   若不放宽，PR #387 放宽 SCOPE+ 会让该任务假红。
+    accept_backtick: true
+    judged_by: [check-scope-resolved.py]
+
+  - name: DESIGN_GAP
+    purpose: 因 P2 设计歧义/缺口而自主做出的决策（待 P7 审查）
+    phases: [P4]
+    params: required_text
+    paired_with: DESIGN_GAP_REVIEWED
+    # 两套口径都真实在用（P7 允许引用块 / P4 转抄核对仅短横线），显式登记
+    lead_variant: [blockquote_ok, dash_only]
+    judged_by: [agate_common.py]
+
+  - name: DESIGN_GAP_REVIEWED
+    purpose: P7 对 DESIGN_GAP 的审查结论（配对标记）
+    phases: [P7]
+    params: required_text
+    resolves: DESIGN_GAP
+    lead_variant: blockquote_ok
+    judged_by: [agate_common.py]
+
+  - name: NEED_CONFIRM
+    purpose: 需人工确认的未决项（→ PAUSED）
+    phases: [P1, P2, P3, P4]
+    params: none
+    paired_with: NO_NEED_CONFIRM
+    lead_variant: default
+    judged_by: []
+
+  - name: NO_NEED_CONFIRM
+    purpose: 显式声明无待确认项（配对标记）
+    phases: [P1, P2, P3, P4]
+    params: none
+    resolves: NEED_CONFIRM
+    lead_variant: default
+    judged_by: []
+
+  - name: PROD_TOUCHED
+    purpose: 意外触达生产环境（→ 立即 PAUSED）
+    phases: [P1, P2, P3, P4, P5, P6, P7, P8]
+    params: optional_text
+    paired_with: PROD_NOT_TOUCHED
+    lead_variant: default
+    judged_by: []
+
+  - name: PROD_NOT_TOUCHED
+    purpose: 显式声明未触达生产环境（配对标记）
+    phases: [P1, P2, P3, P4, P5, P6, P7, P8]
+    params: optional_text
+    resolves: PROD_TOUCHED
+    lead_variant: default
+    judged_by: []

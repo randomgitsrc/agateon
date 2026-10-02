@@ -16,16 +16,17 @@ import subprocess
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 AGATE_STATE_GET = os.path.join(SCRIPT_DIR, "agate-state-get.py")
 MAX_RETRY_MAP = "P1:3,P2:3,P3:2,P4:3,P5:2,P6:2,P7:2,P8:2"
-# 行首声明形态（2026-10-01，RM-AG0077⑦ 遗留项 hotfix）：与 check-scope-resolved.py 的
-# SCOPE_PLUS_RE **语义等价**（一个用拼接常量、一个用字面量，判定必须一致）——两处对
-# 「什么算 SCOPE+ 声明」给出相反结论本身即缺陷（DEBT0046「两处判据相反」同族）。
-# 同步性由 test_check_scope_resolved.py::test_sc_14 对 14 个探针输入做**行为等价**守护。
-# 标题形态、行首反引号、行中出现均视为「提及」不触发（未覆盖面与代价见 check-scope-resolved.py 常量注释）。
-SCOPE_PLUS_RE = re.compile(
-    r"^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?\[SCOPE\+\]", re.MULTILINE
-)
+# 形态判据**单源**（设计 docs/design-notes/design-marker-single-source.md）：
+# 与 check-scope-resolved.py **共用同一取值**，本脚本不再自持正则副本。
+# 历史（2026-10-01 PR #387）：两处曾各自持有语义等价但源码不同的字面量，靠
+# test_sc_14 对 14 个探针做行为等价守护；单源后该分叉**结构上不可能**再发生。
+import agate_markers  # noqa: E402 — 同目录单源库
+
+SCOPE_PLUS_RE = agate_markers.pattern("SCOPE+")
 SKIP_NAME_RE = re.compile(r"dispatch-context|dispatch-prompt|progress")
 AGATE_CARD_RE = re.compile(r"<!-- AGATE_CARD_START -->.*?<!-- AGATE_CARD_END -->", re.DOTALL)
 OVERRIDE_RE = re.compile(r"^override:", re.MULTILINE)

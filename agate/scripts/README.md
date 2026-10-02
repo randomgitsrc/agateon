@@ -78,8 +78,10 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-pruning.py` (P2.7-P2.9) | 裁剪条件 + override 校验 | 0=通过, 1=不一致 |
 | `check-routing.py` (2j.1/2.7.1) | ceremony 路由校验（TAG0019 D3，BDD-7/8/9/10）：声明 ceremony 与算分 tier 一致性（单向 fail-closed）+ thin 四要素 checklist（coupling_checklist 流式 / 跳过风险 / P5/P6 保留）+ 不声明回退 standard | 0=通过, 1=拦截（四要素缺一 / 声明薄于算分 / thin 且 git_ok:false），2=P1-requirements.md 缺失（任务目录破损，交人工）|
 | `agate-risk-score.py` | 客观信号算分（TAG0019 D1，BDD-1..5）：四信号分级（文件类型 / 敏感路径 / 改动规模 / 影响面）+ risk_score + tier（thin/standard/full）+ 逐信号证据行；信号来自 `git diff --cached` 客观事实（`agate_common.run_git` 通道，不可伪造）；提供可 import 的 `score_task(task_dir) -> dict` + CLI 薄壳（`agate-risk-score.py TASK_DIR`，输出 risk_score/tier/四信号/domain-markers/git_ok 行）| 0=成功, 1=参数缺失（CLI）|
-| `check-scope-resolved.py` (P2.11) | `[SCOPE+]` 标记追踪 | 0=通过, 1=未标记 |
+| `check-scope-resolved.py` (P2.11) | `[SCOPE+]` 标记追踪（形态取值自 `agate_markers`，不自带正则）| 0=通过, 1=未标记 |
 | `check-retrospective.py` (P2.12) | 异常模式提醒（不阻塞）；另检测到 DEBT/roadmap 已登记本任务（机制缺口信号，TAG0015）→ 追加提醒 | 0=总是通过 |
+| `agate_markers.py` | **正文标记形态单源库**（读取/判定侧）：取值自 `rules/markers.yaml`，提供 `pattern/find/is_declaration/render/describe`；被 `check-scope-resolved.py` / `check-retrospective.py` / `agate-mark.py` import | 0=成功, 1=用法错（`--list`/`--check FILE`/`<NAME> [params]`）|
+| `agate-mark.py` | **正文标记生成器**（写入侧）：`--list` 列出全部标记 / `<NAME> [参数]` 生成合法写法 / `--check FILE` 校验文件内形态；带参缺参或未登记标记 → fail-closed | 0=成功, 1=用法/参数错误 |
 | `agate-feedback.py` | 跨项目反馈提取（AG0021，opt-in，AGATE_FEEDBACK=on）| 手动触发，非 gate/非 pre-commit |
 | `check-frontmatter.py` | 阶段文件 frontmatter 校验 | 0=通过, 1=校验失败 |
 | `check-p6-format.py` | P6 验收结果格式 --check/--fix 归一化 | 0=通过, 1=格式错 |
