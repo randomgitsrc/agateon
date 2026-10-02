@@ -71,12 +71,22 @@
 
 ### 1.5 ⚠️ 同一概念「行首」已有**三套互不相同**的实现（本设计最强的动机，实测）
 
-| 消费方 | 「行首」正则 | 覆盖形态 |
-|---|---|---|
-| `check-scope-resolved.py:40` | `^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*｜__)?` | 空白 / 列表符 / 引用 / **粗体** |
-| `agate_common.py:1449`（`DESIGN_GAP`，`allow_blockquote=True`） | `^\s*>?\s*-?\s*` | 空白 / 引用 / 短横线（**不接受 `*`/`+` 列表符，不接受粗体**） |
-| `agate_common.py:1449`（`DESIGN_GAP`，`False`） | `^\s*-?\s*` | 空白 / 短横线（**连引用都不接受**） |
-| `agate_common.py:1463`（`CODE_MAP_*`） | `^\s*-?\s*` | 空白 / 短横线 |
+| 消费方 | 覆盖形态 |
+|---|---|
+| `check-scope-resolved.py:40` | 空白 / 列表符 / 引用 / **粗体** |
+| `agate_common.py:1449`（`DESIGN_GAP`，`allow_blockquote=True`） | 空白 / 引用 / 短横线（**不接受 `*`/`+` 列表符，不接受粗体**） |
+| `agate_common.py:1449`（`DESIGN_GAP`，`False`） | 空白 / 短横线（**连引用都不接受**） |
+| `agate_common.py:1463`（`CODE_MAP_*`） | 空白 / 短横线 |
+
+四者的行首正则原文（**放代码块而非表格单元格**：正则含 `|`，而表格单元格里的转义写法
+在 code span 内不被解码——两套渲染器下均不可靠；详见 `agate/adr.md` ADR-014 同款说明）：
+
+```text
+check-scope-resolved.py:40                    ^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?
+agate_common.py:1449 (allow_blockquote=True)  ^\s*>?\s*-?\s*
+agate_common.py:1449 (allow_blockquote=False) ^\s*-?\s*
+agate_common.py:1463 (CODE_MAP_*)             ^\s*-?\s*
+```
 
 **⇒ 同一个「行首声明」概念，本仓有 3 套写法，覆盖面各不相同。**
 
