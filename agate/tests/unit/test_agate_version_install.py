@@ -777,3 +777,81 @@ def test_bdd_35_runtime_stderr_steps_identical_between_installer_and_resolver(ag
     assert inst.returncode == 1 and res.returncode == 1
     assert _migration_steps(inst.stderr) == _migration_steps(res.stderr)
     assert all(v is not None for v in _migration_steps(res.stderr).values())
+
+
+# --- fetch 失败不得静默（掩盖真因类缺陷，2026-10-02）---------------------------
+#
+# 缺陷：`_ensure_repo` 对已有 repo 调 `git fetch` 但**完全丢弃结果**——`run_git` 只返回
+# (rc, stdout)，stderr 被丢掉，且 rc 未判。后果是可复现的**误导性报错**：
+#   fetch 静默失败（离线 / remote 不可达 / 凭证失效）→ 本地无目标 tag
+#   → 下游报 `fatal: Not a valid object name vX.Y.Z`（指向「版本不存在」这一**假因**）
+#   → 用户去查版本号/网络，而真因是 fetch 失败。
+#
+# 定性：**保留 fail-open**（离线重装已有版本必须仍可用，见 BDD-4 判据 2），
+# 但必须**出声**——把 git 的 stderr 作为 WARNING 输出，并让下游缺失的 tag 报错
+# 带上「可能因 fetch 失败」的因果提示。即：fail-open 不等于 fail-silent。
+#
+# 为什么需要测试：该缺陷**零输出**，无测试则下次重构极易回归（HIGH 级掩盖真因）。
+
+
+def _install_with_broken_remote(run_cli, python_exe, agate_scripts, home, git_repo, py_path, version):
+    """先正常装一次（建立 repo 副本），再把 origin 改坏，模拟联网失败后重装。"""
+    first = _run_install(run_cli, python_exe, agate_scripts, home, "latest",
+                         repo_url=py_path(git_repo.path))
+    assert first.returncode == 0, first.stderr
+    clone = home / ".agate" / "repo"
+    assert clone.is_dir(), "首次安装应建立 repo 副本"
+    git_exe = shutil.which("git")
+    assert git_exe, "需要 git"
+    _git(git_exe, "-C", str(clone), "remote", "set-url", "origin", str(home / "nonexistent-upstream"))
+    return _run_install(run_cli, python_exe, agate_scripts, home, version,
+                        repo_url=py_path(git_repo.path))
+
+
+def test_fetch_failure_is_reported_not_silent(
+    git_repo, python_exe, run_cli, agate_scripts, tmp_path, py_path
+):
+    """fetch 失败须输出 WARNING（含 git 的原因），**不得零输出**。
+
+    fail-open 保留（仍尝试继续安装已有版本），但真因必须可见。
+    """
+    _tag_upstream(git_repo)
+    home = tmp_path / "home"
+    home.mkdir()
+    result = _install_with_broken_remote(
+        run_cli, python_exe, agate_scripts, home, git_repo, py_path, "v0.43.0"
+    )
+    combined = result.stdout + result.stderr
+    assert "WARNING" in combined, (
+        "fetch 失败被静默吞掉（fail-silent）——真因不可见，下游只会报 'Not a valid object name' 这种假因。"
+        f"实际输出: {combined!r}"
+    )
+    assert "fetch" in combined.lower(), f"WARNING 未点明是 fetch 失败: {combined!r}"
+    # **最重的不回归项**：fail-open 必须保留——离线重装**已有**版本要能成功（BDD-4 判据 2）。
+    # 这条断言不可省：只测"出声"而不测"仍成功"，会把「改成 fail-closed」误判为通过，
+    # 而那恰恰破坏离线重装（本次修复的第一原则是"出声，不是变严"）。
+    assert result.returncode == 0, (
+        f"fail-open 被破坏（离线重装已有版本应成功，实际 rc={result.returncode}）: {combined!r}"
+    )
+
+
+def test_missing_version_error_mentions_fetch_failure(
+    git_repo, python_exe, run_cli, agate_scripts, tmp_path, py_path
+):
+    """本地无目标 tag 时报错须**归因到 fetch 失败**，而非仅 'Not a valid object name'。
+
+    这是可复现的误导链：真因（fetch 失败）被下游的假因（版本不存在）覆盖。
+    """
+    _tag_upstream(git_repo)
+    home = tmp_path / "home"
+    home.mkdir()
+    # 装一个上游**没有**的 tag：本地必然缺失，且此时 fetch 已失败
+    result = _install_with_broken_remote(
+        run_cli, python_exe, agate_scripts, home, git_repo, py_path, "v9.9.9"
+    )
+    assert result.returncode != 0, "不存在的版本应当失败"
+    combined = result.stdout + result.stderr
+    assert "fetch" in combined.lower(), (
+        "报错未归因到 fetch 失败——用户会去查版本号（假因），而真因是拉取失败。"
+        f"实际输出: {combined!r}"
+    )

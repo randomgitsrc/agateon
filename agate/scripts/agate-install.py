@@ -154,14 +154,50 @@ def _resolve_pointer(agate_home, name):
     return None
 
 
+def _run_git_capture(args, cwd):
+    """调 git 并**同时**拿到 rc / stdout / stderr。
+
+    为什么不能复用 `agate_common.run_git`：它只返回 `(rc, stdout)`，**stderr 被丢弃**——
+    正是这个丢弃让 fetch 失败变成**静默**（2026-10-02 实测：真因不可见，下游只报
+    `fatal: Not a valid object name vX.Y.Z` 这一假因）。诊断类调用必须能看到 stderr。
+    """
+    try:
+        proc = subprocess.run(
+            ["git", *args], cwd=cwd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+    except OSError as exc:
+        return 1, "", f"git 不可用: {exc}"
+    return proc.returncode, proc.stdout or "", (proc.stderr or proc.stdout or "").strip()
+
+
 def _ensure_repo(agate_home, url):
-    """repo 单克隆（首次）：已有 repo 直接复用；clone 失败 fail-closed exit 1。"""
+    """repo 单克隆（首次）：已有 repo 直接复用；clone 失败 fail-closed exit 1。
+
+    **返回 `(repo, fetch_warning)`**：`fetch_warning` 为 None 或一段人类可读的失败原因。
+    调用方须把它透传到下游报错，使「拉取失败」这一**真因**不被「版本不存在」这一**假因**覆盖。
+
+    为什么 **fail-open 但必须出声**（2026-10-02）：
+      · fail-open 是正确的——离线重装**已有**版本必须仍可用（BDD-4 判据 2）；
+      · 但 **fail-open ≠ fail-silent**。原实现丢弃 fetch 的 rc 与 stderr，导致可复现的误导链：
+        fetch 静默失败 → 本地无目标 tag → 下游报 `Not a valid object name vX.Y.Z`
+        → 用户去查版本号/网络，而真因是拉取失败。
+      ⇒ 保留 fail-open，但把 git 的 stderr 作为 WARNING 输出并**返回**给调用方。
+    """
     repo = os.path.join(agate_home, "repo")
     if os.path.isdir(os.path.join(repo, ".git")):
         # 已有 repo：拉取上游新 tag/commit，令重跑 latest 能跟随更高版本（BDD-4 判据 2）。
-        # 离线/失败非致命——保留既有本地 tag 继续（fail-open on fetch）。
-        run_git(["fetch", "--tags", "--force", "--prune", "origin"], cwd=repo)
-        return repo
+        # 离线/失败非致命——保留既有本地 tag 继续（fail-open on fetch），但**不静默**。
+        rc, _, err = _run_git_capture(["fetch", "--tags", "--force", "--prune", "origin"], cwd=repo)
+        if rc != 0:
+            detail = err.splitlines()[0] if err else f"git fetch 退出码 {rc}"
+            warn = f"git fetch 失败（{detail}）"
+            sys.stderr.write(
+                f"WARNING: 无法从上游拉取新版本——{warn}；"
+                "将使用**本地已有的** tag 继续。若接下来报「版本不存在」，真因是本次拉取失败而非版本号写错。\n"
+            )
+            return repo, warn
+        return repo, None
     os.makedirs(agate_home, exist_ok=True)
     try:
         proc = subprocess.run(
@@ -175,7 +211,7 @@ def _ensure_repo(agate_home, url):
         err = proc.stderr.strip() or proc.stdout.strip()
         sys.stderr.write(f"错误: git clone 失败（{url}）：{err}\n")
         sys.exit(1)
-    return repo
+    return repo, None
 
 
 def _latest_tag(repo):
@@ -204,7 +240,7 @@ def _cleanup_container(home, container):
         shutil.rmtree(container, ignore_errors=True)
 
 
-def _install_version(agate_home, repo, version):
+def _install_version(agate_home, repo, version, fetch_warning=None):
     """装指定版本本体（TAG0037：git plumbing 构建器取代 git worktree add，只装 agate/ + 登记根文件）。
 
     幂等（BDD-3）：程序先判版本目录/指针存在，存在即跳过（含旧 worktree 整仓形态），不依赖 git 报错。
@@ -221,6 +257,13 @@ def _install_version(agate_home, repo, version):
         entries = agate_package.list_package(repo, version)
     except agate_package.PackageError as exc:
         sys.stderr.write(f"错误: 无法从 {version} 构建本体包：{exc}\n")
+        # 真因优先：若本次 fetch 失败，本地可能根本没有该 tag —— 必须点明，
+        # 否则用户会去查版本号/发布状态（假因），而真因是拉取失败（2026-10-02）。
+        if fetch_warning:
+            sys.stderr.write(
+                f"  真因提示：本地 tag 可能已过期——{fetch_warning}。\n"
+                "  请确认网络/仓库地址可达后重试；或核对版本号是否真实存在。\n"
+            )
         sys.exit(1)
     container = None
     try:
@@ -408,17 +451,19 @@ def _cmd_install(agate_home, version=None):
         sys.exit(2)
     _reject_symlink_home(agate_home)
     url = os.environ.get("AGATE_REPO_URL", "") or DEFAULT_REPO_URL
-    repo = _ensure_repo(agate_home, url)
+    repo, fetch_warning = _ensure_repo(agate_home, url)
     if version is None:
         tag = _latest_tag(repo)
         if tag is None:
             sys.stderr.write("错误: 版本源仓库没有可用的 vX.Y.Z tag\n")
+            if fetch_warning:
+                sys.stderr.write(f"  真因提示：{fetch_warning}——本地可能只是尚未拉到任何 tag。\n")
             sys.exit(1)
-        _install_version(agate_home, repo, tag)
+        _install_version(agate_home, repo, tag, fetch_warning)
         _register(agate_home, tag, move_pointers=True)
         print(f"已安装 latest → {tag}")
     else:
-        _install_version(agate_home, repo, version)
+        _install_version(agate_home, repo, version, fetch_warning)
         _register(agate_home, version, move_pointers=False)
         print(f"已安装 {version}")
     # 装完即告知**装到哪**与**怎么卸**——位置可经 AGATE_HOME 覆盖，写死 ~/.agate 会误导；

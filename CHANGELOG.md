@@ -10,8 +10,32 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **安装器 `git fetch` 失败被静默吞掉 → 误导性报错**（`agate-install.py::_ensure_repo`，掩盖真因类）：
+  对已有 repo 调 fetch 时**丢弃 rc 与 stderr**（`agate_common.run_git` 只回 `(rc, stdout)`），
+  ⇒ fetch 静默失败（离线 / remote 不可达 / 凭证失效）→ 本地无目标 tag → 下游报
+  `fatal: Not a valid object name vX.Y.Z`（指向「版本不存在」这一**假因**），用户去查版本号/发布状态，
+  而真因是拉取失败（本机 v0.77.0 升级时实际踩到：手动把 `fetch` 拆出来单独跑才看见真因）。
+  **修法：fail-open 保留，但 fail-open ≠ fail-silent**——新增 `_run_git_capture()`（能拿到 stderr，
+  与 `run_git` 的分工在 docstring 写明），fetch 失败输出 WARNING（含 git 原始原因）**并返回给调用方**；
+  `_install_version` / latest 分支在缺 tag 时报错**附真因提示**。实测：不存在的版本 exit 1 且输出含 fetch 原因；
+  **离线重装已有版本仍成功（fail-open 未被破坏）**。新增 2 条回归测试（先红后绿）。
+- **发布清单 G-5 判据缺 `--abbrev=0`**（`AGENTS.md` 第 6 条）：原写
+  `git describe --tags origin/main == vN.N.0`——**不带 `--abbrev=0` 时该判据恒不成立**
+  （v0.77.0 实测得 `v0.77.0-3-gd666d4b`），且与同文件「release PR 必须普通 merge」条及
+  `check-protocol-consistency.py` CHECK 7 **互相矛盾**。已对齐为 `--abbrev=0` 并加实测注记。
+  **失准范围据实收窄**（独立评审指出我初稿的「全仓其余引用均用」是**过度声称**）：
+  **活等式判据面**上仅此一处；但历史任务记录里有多处同款副本
+  （`tasks/{TAG0020,0027,0028,0029,0030}*/P8-release.md` 等 + 归档 HANDOFF），
+  属 frozen 快照、本次不回改，但会被照抄——已在 `AGENTS.md` 点名警示。
+
 ### 新增
 
+- **ADR-014「判据单一权威源——判据必须单源，文档可以复述」**（`agate/adr.md`）：
+  沉淀本批引入的架构模式及其边界。核心三条：① 判据（机器读）必须单源；② 文档（人读）可复述但须指权威源；
+  ③ 形态判据不做语义判断。**并如实记录最该记取的教训：声明单源 ≠ 已经单源**——权威源必须与既有实现
+  **逐条对账**并加**等价回归守护**，不能靠「零消费方」维持安全（本批 HIGH-1 即此）。
 - **正文标记形态单源**（设计 `docs/design-notes/design-marker-single-source.md`）：把「一个标记该怎么写」
   从散落的 N 处判据收敛为**一处权威源** `agate/rules/markers.yaml`，并交付取值库与生成器：
   - `agate_markers.py`（**取值侧**）：`pattern/find/is_declaration/render/describe`；消费方**取值**而非复制正则
