@@ -380,7 +380,7 @@ python3 agate/scripts/agate-mark.py --check FILE    # 校验文件内标记是�
 | `agate/rules/schema/markers.schema.json` | draft-07 子集 schema |
 | `agate/scripts/agate_markers.py` | 取值库：`pattern/find/is_declaration/render/describe` + `--list/--check/<NAME>` CLI |
 | `agate/scripts/agate-mark.py` | 生成器：`--list` / `<NAME> [参数]` / `--check FILE` / `--json` |
-| `agate/tests/unit/test_marker_single_source.py` | mk_1~mk_5 守护（30 用例） |
+| `agate/tests/unit/test_marker_single_source.py` | mk_1~mk_6 守护（32 用例） |
 | 改造 | `check-scope-resolved.py` / `check-retrospective.py` 改为取值；`check-yaml-schema.py` 纳入 markers；`check-protocol-consistency.py` 锚点登记；`scripts/README.md` / `tests/README.md` / `WORKFLOW.md` 文档传播 |
 
 ### 10.2 批次 B 硬门禁结果（**V1 通过**）
@@ -404,7 +404,10 @@ python3 agate/scripts/agate-mark.py --check FILE    # 校验文件内标记是�
 ```
 
 - `params: none`（如 `SCOPE+`）→ 本体 `\[NAME\]`，**`]` 必须紧跟**。故 `[SCOPE+ 观察]` / `[SCOPE+: x]` **不**命中。
-- `params: optional_text / required_text`（如 `SCOPE_RESOLVED`）→ 本体 `\[NAME($|[^a-z])`，**不要求紧跟 `]`**，因而**允许跨行参数**（存量 3 处：`TAG0027/P7:48`、`TAG0031/P1:371`、`TAG0031/P7:60`）。
+- `params: optional_text / required_text`（如 `SCOPE_RESOLVED`）→ 本体 `\[NAME($|[^a-z])`，**不要求紧跟 `]`**，因而**允许跨行参数**。
+  **判据**：标记**起始行不含 `]`**；此口径下全仓实测 **3 处**（`TAG0027/P7:48`、`TAG0031/P1:371`、`TAG0031/P7:60`）。
+  > ⚠️ **引用时必须附判据**：换更宽口径（「所有 `[SCOPE_RESOLVED` 出现」等）会得到 5 / 11 / 98 等不同数字——
+  > 同一事实"换个口径就换个数字"，正是本设计 §1.2 要治的病。
 
 **⇒ 教训**：把两个"看起来同类"的标记套用统一规则是错的——**单源的前提是先如实刻画差异**，不是先统一。
 
@@ -444,8 +447,8 @@ python3 agate/scripts/agate-mark.py --check FILE    # 校验文件内标记是�
 
 | 项 | 结果 |
 |---|---|
-| mk_1~mk_5 守护 | **30 passed** |
-| 负向控制（3 组，均实测转红） | ① 消费方写回字面正则 → `mk_1` 红；② `render` 生成非行首 → `mk_3`/`mk_3b` 红；③ 配对指向未登记标记 → `mk_5`/`mk_5b` 红 |
+| mk_1~mk_6 守护 | **32 passed** |
+| 负向控制（**6 组**，均实测转红） | ① 消费方写回字面正则 → `mk_1`；② `render` 生成非行首 → `mk_3`/`mk_3b`；③ 配对指向未登记标记 → `mk_5`/`mk_5b`；④ 注册表**退回 HIGH-1 状态** → `mk_6a`/`mk_6b`（双向已证）；⑤ 只去 `(?!\\w)` → 全绿（证明其非载荷）；⑥ 只去冒号必填 → `mk_6b` 报 124≠116 |
 | unit 分片 | **2309 passed** / 1 failed（既有 `opencode` 不在 PATH，非本批）+ 2 skipped |
 | regression + integration | **195 passed** |
 | consistency | 0 ERROR / 386 WARNING（与基线一致） |

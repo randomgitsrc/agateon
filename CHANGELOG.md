@@ -39,10 +39,10 @@
 
 - **批次 B 硬门禁（V1）通过**：改造消费方后，存量 **41 任务判定与 PR #387 基线逐任务一致**
   （通过 9 / 跳过 32 / 失败 0），且 SCOPE+ 与 SCOPE_RESOLVED 在全仓 `tasks/*/*.md` 上**差异文件数 = 0**
-- **守护 mk_1~mk_5（30 用例）**：`mk_1` 消费方不得自带副本 / `mk_2` 注册表↔冻结基准等价 /
+- **守护 mk_1~mk_6（32 用例）**：`mk_1` 消费方不得自带副本 / `mk_2` 注册表↔冻结基准等价 /
   **`mk_3` `render()` 产物必被 `pattern()` 命中（生成器与判据不可能分叉）** / `mk_4` 非法形态 fail-closed /
   `mk_5` 配对指针不悬空且双向
-- **负向控制 3 组（均实测转红）**：消费方写回字面正则 → `mk_1` 红；`render` 生成非行首 → `mk_3`/`mk_3b` 红；
+- **负向控制 6 组（均实测转红）**：消费方写回字面正则 → `mk_1` 红；`render` 生成非行首 → `mk_3`/`mk_3b` 红；
   配对指向未登记标记 → `mk_5`/`mk_5b` 红
 - unit **2309 passed** / 1 failed（既有 `opencode` 不在 PATH，非本批）+ 2 skipped；regression+integration **195 passed**
 - consistency **0 ERROR / 386 WARNING**；structure-consistency S-1~S-6 全 OK；ruff 全绿；count-tests **2529**（+30）
