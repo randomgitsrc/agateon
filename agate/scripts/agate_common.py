@@ -1614,32 +1614,42 @@ def is_new_task_for_evidence_ref(task_dir, script_path=None):
 _REF_TOKEN_RE = re.compile(r"^[\w.\-/]+\.[A-Za-z][A-Za-z0-9]{0,7}$")
 # 逗号项内混入的元数据前缀（`vision:` / `ref:`），非证据。
 
-# 结论行（judge verdict）专用的**严格**整组判据：与 `_REF_TOKEN_RE` 的差异**有意为之**。
-#   · 相同点：同样不容空格、同样走 `PAREN_OPEN/PAREN_CLOSE` 单源常量。
-#   · 不同点：允许**逗号分隔的路径列表整体**匹配（结论行是判据正文，一条可引多份证据）。
-#   **为什么不干脆共用 `_REF_TOKEN_RE`**：结论行要求「括号内容**整体**是路径」，
-#   而 `extract_evidence_refs` 是「按逗号切分后逐项判定」——两者是**不同的判据**，
-#   不是同一判据的两份副本。但为守 ADR-014（判据分叉是必拦类），
-#   本常量与 `extract_evidence_refs` 的**每一项**必须由 `_REF_TOKEN_RE` 判定，
-#   避免"judge 认 `v0.99.0` 是路径、PASS 行不认"这类分叉（2026-10-03 评审查出）。
-_CONCLUSION_REF_LIST_RE = re.compile(
-    r"[\w./\-]+\.[A-Za-z][A-Za-z0-9]{0,7}"
-    r"(?:\s*,\s*[\w./\-]+\.[A-Za-z][A-Za-z0-9]{0,7})*"
-)
+# 结论行判据（F7 修复后**不再自持整组正则**）：与 `extract_evidence_refs` 共用
+# `_split_ref_items` + `_REF_TOKEN_RE` 做**逐项**判定，仅额外要求「整组非空且全部是路径」。
+# 原 `_CONCLUSION_REF_LIST_RE`（整组匹配）已删——它与逐项判定分叉（实测：全角逗号
+# `(a.json，b.json)` 两侧结果相反），属 ADR-014 意义上的判据分叉。
 
 
 def extract_conclusion_refs(line):
     """提取**结论行**（`- PASS BDD-N: …`）括号内的证据引用列表。
 
-    与 `extract_evidence_refs` 同源（共用括号常量与 token 判据），
-    差别仅在「整组必须是**路径列表**」这一更强约束（结论行是判据正文）。
+    **F7 修复（2026-10-03 实施评审）**：与 `extract_evidence_refs` **共用同一套逐项判据**
+    （`_split_ref_items` + `_REF_TOKEN_RE`），差别仅在**额外要求「整组非空且全部是路径」**
+    （结论行是判据正文，故整组须是纯路径列表）。
+
+    原实现自带 `_CONCLUSION_REF_LIST_RE` 做**整组**匹配，与 PASS 侧的**逐项**判定分叉，实测两例：
+      · `(a.json，b.json)`（**全角逗号**）：PASS 侧取到 2 个，judge 侧取到 **0** 个；
+      · `(note (a.log) more)`（组内含内层括号）：PASS 侧 0 个，judge 侧取到 **1** 个。
+    两仓语料影响为 0（560 条结论行），但**分叉本身即 ADR-014 意义上的缺陷**，且
+    judge 侧漏取会表现为「未被引用」的报错（可见），故一并消除。
     """
     out = []
-    for m in re.finditer(PAREN_OPEN + "(" + PAREN_INNER + "*)" + PAREN_CLOSE, line):
-        content = m.group(1).strip()
-        if content and _CONCLUSION_REF_LIST_RE.fullmatch(content):
-            out.extend(p.strip() for p in content.split(","))
+    for m in re.finditer(PAREN_OPEN + "([^（()）]*(?:[（(][^（()）]*[）)])?[^（()）]*)"
+                         + PAREN_CLOSE, line):
+        items = _split_ref_items(m.group(1))
+        # 整组必须是**非空**的纯路径列表（更强约束，结论行专用）
+        if items and all(_REF_TOKEN_RE.match(t) for t in items):
+            out.extend(items)
     return out
+
+
+def _split_ref_items(content):
+    """把括号组内容切成候选引用项：**逗号（全角/半角）分隔** + 去空白 + 去元数据项。
+
+    两个提取器共用（F7）——保证「同一括号组，两侧切出同一批候选」。
+    """
+    items = [t.strip() for t in re.split(r"[,，]\s*", (content or "").strip()) if t.strip()]
+    return [t for t in items if not _META_ITEM_RE.match(t)]
 _META_ITEM_RE = re.compile(r"^(?:vision|ref)\s*[:：]", re.I)
 # 括号内的**元数据标记**（**不是证据引用**）——协议自身的标记，须先剥离/排除：
 #   `(vision: …)` 视觉元数据；`(manual-review: <file>)` 人工复核记录（provenance 审计 5 读它）。
@@ -1689,8 +1699,7 @@ def extract_evidence_refs(line):
     #   三次构造反例均失败 ⇒ **A2（加规则覆盖）实测收益为 0**。
     for m in re.finditer(PAREN_OPEN + "([^（()）]*(?:[（(][^（()）]*[）)])?[^（()）]*)"
                          + PAREN_CLOSE, text):
-        items = [t.strip() for t in re.split(r"[,，]\s*", m.group(1).strip()) if t.strip()]
-        items = [t for t in items if not _META_ITEM_RE.match(t)]                        # 步骤 3
+        items = _split_ref_items(m.group(1))                        # 步骤 3
         if items and all(_REF_TOKEN_RE.match(t) for t in items):                        # 步骤 4
             out.extend(items)
     seen, uniq = set(), []

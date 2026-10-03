@@ -748,3 +748,65 @@ def test_ahash_4_nonimage_file_misalign_temporal_exempt_exit_0(
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0
     assert "average hash 相同" not in result.output
+
+
+# --- 无引用政策三态（F8：评审指出原先**没有存量任务用例**）---------------------
+#
+# fixture 默认 `created="2026-10-03"`（= 截止日）⇒ 既有用例全是**新任务**。
+# 本组补齐另两态：存量任务（WARNING 不阻断，**exit 2**）与 created 缺失（fail-open）。
+
+def test_policy_historical_task_warns_exit_2(task_dir, agate_scripts, python_exe, run_cli):
+    """存量任务（created < 截止）无引用 ⇒ **exit 2 + 告警可见**，不阻断。
+
+    `exit 2` 而非 0 的理由（F3）：`pre-commit-gate.py:502` 只在 rc∈{1,2} 时打印捕获输出；
+    rc=0 会让这条告警**被静默丢弃**。
+    """
+    td = task_dir(created="2026-01-01")
+    _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1: works (no reference here)\n")
+    ev = td / "P6-evidence"
+    ev.mkdir()
+    (ev / "a.json").write_text("x\n", encoding="utf-8")
+    result = _run_evidence(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 2, "存量任务应 WARNING（exit 2），不得阻断"
+    assert "未能提取证据引用" in result.output
+    assert "历史任务" in result.output, "须标明是存量任务的 WARNING"
+
+
+def test_policy_missing_created_fails_open(task_dir, agate_scripts, python_exe, run_cli):
+    """created **缺失** ⇒ fail-open，按存量任务处理（exit 2，不阻断）。
+
+    裁决 §4 明示这是**有意的选择**：不因缺元数据而阻断历史任务。
+    """
+    td = task_dir(created=None)
+    _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1: works (no reference here)\n")
+    ev = td / "P6-evidence"
+    ev.mkdir()
+    (ev / "a.json").write_text("x\n", encoding="utf-8")
+    result = _run_evidence(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 2, "created 缺失应 fail-open（存量口径 ⇒ exit 2）"
+
+
+def test_policy_new_task_blocks_exit_1(task_dir, agate_scripts, python_exe, run_cli):
+    """新任务（created ≥ 截止）无引用 ⇒ **exit 1**（对照组，锁定三态并存）。"""
+    td = task_dir(created="2026-10-10")
+    _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1: works (no reference here)\n")
+    ev = td / "P6-evidence"
+    ev.mkdir()
+    (ev / "a.json").write_text("x\n", encoding="utf-8")
+    result = _run_evidence(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 1, "新任务应阻断"
+
+
+def test_bdd_9b_chinese_filename_with_space_is_no_reference(task_dir, agate_scripts, python_exe, run_cli):
+    """**反例**（F8）：**含空格**的中文文件名**不**被当作引用（B1 决策）。
+
+    与 `test_bdd_9_chinese_filename_exit_0`（不含空格，应通过）构成一对：
+    保住中文能力，同时拒绝含空格形态（实测两仓 1,739 个证据文件中含空格者 0）。
+    """
+    td = task_dir(created="2026-10-10")
+    _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1 (截图 验证通过.png)\n")
+    ev = td / "P6-evidence"
+    ev.mkdir()
+    (ev / "截图 验证通过.png").write_text("img\n", encoding="utf-8")
+    result = _run_evidence(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 1, "含空格文件名不构成引用（B1）"

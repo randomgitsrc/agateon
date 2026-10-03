@@ -373,10 +373,20 @@ def test_mk_7b_registry_matches_real_consumer_on_corpus(agate_scripts):
             ("[PROD_TOUCHED]", True),
         ],
     }
+    # **F9 修复**（2026-10-03 实施评审查出）：原先此处**写死**消费方正则副本，
+    # 不读消费方源码 ⇒ 消费方一改，本守护会**悄悄失效**（正是最终结论 §6 提醒的守护形态）。
+    # 现改为**从消费方源码实际取值**：
+    #   · agate_common 的 `_NC_RE` / `_NO_NEED_RE`（模块级常量，可直接 import）
+    #   · pre-commit-gate.py 的 PROD_TOUCHED 正则（内联在函数里，从源码抽取）
+    sys.path.insert(0, str(agate_scripts))
+    import agate_common as _ac
+    gate_src = (agate_scripts / "pre-commit-gate.py").read_text(encoding="utf-8")
+    _m = re.search(r're\.match\(r"([^"]*\\\[PROD_TOUCHED\\\][^"]*)"', gate_src)
+    assert _m, "未能从 pre-commit-gate.py 抽到 PROD_TOUCHED 的消费方正则"
     consumer = {
-        "NEED_CONFIRM": re.compile(r"^\s*`*-?\s*`*\[NEED_CONFIRM\]"),
-        "NO_NEED_CONFIRM": re.compile(r"^\s*`*-?\s*`*\[NO_NEED_CONFIRM\]"),
-        "PROD_TOUCHED": re.compile(r"^\s*-?\s*\[PROD_TOUCHED\]"),
+        "NEED_CONFIRM": _ac._NC_RE,
+        "NO_NEED_CONFIRM": _ac._NO_NEED_RE,
+        "PROD_TOUCHED": re.compile(_m.group(1)),
     }
     for name, rows in cases.items():
         for line, want in rows:
