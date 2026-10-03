@@ -998,7 +998,9 @@ def test_g6_9_failure_not_counted_exit_2(task_dir, agate_scripts, python_exe, ru
 def test_bdd_1_p1_gate_accepts_refactor_exit_2(
     task_dir, agate_scripts, python_exe, run_cli
 ):
-    td = task_dir()
+    # created=None：本用例不涉及 evidence_ref_required_since 判据，
+    # 但原来就没有 created（conftest 默认 2026-10-03 会触发 judge_required_since 分支）。
+    td = task_dir(created=None)
     add_p1_field(td, "change_type", "refactor")
     (td / "P1-review.md").write_text(
         "---\n"
@@ -1121,7 +1123,7 @@ def test_bdd_6b_p6_no_behavior_change_with_evidence_exit_2(
 def test_bdd_7_refactor_backfill_walk_p1_p3_p6(
     task_dir, agate_scripts, python_exe, run_cli
 ):
-    td = task_dir()
+    td = task_dir(created=None)
     add_p1_field(td, "change_type", "refactor")
     with open(td / "P1-requirements.md", "a", encoding="utf-8") as fh:
         fh.write(
@@ -3064,7 +3066,7 @@ def test_bdd_7_gate_p1_historical_no_created_fail_open_exit_2(
 ):
     """BDD-7：历史任务（无 created 字段）无 judge 块 → fail-open 不拦（exit 2）。
     回归守卫：P3 现状即绿。"""
-    td = task_dir()
+    td = task_dir(created=None)   # 本用例即测「历史任务（无 created）」
     _write_p1_review_approved(td)
     _write_state_yaml_p1(td)
 
@@ -3092,7 +3094,7 @@ def test_bdd_7_gate_p1_judge_non_dict_malformed_fail_open_exit_2(
     """BDD-7（TG-2）：.state.yaml judge 为 bool（judge: true，非 dict）→ 按缺失处理（fail-open 不拦）。
     断言口径：dispatch-context「judge 非 dict → 按缺失处理（fail-open）」；P1 created 缺失 → 更不会拦。
     回归守卫：P3 现状即绿。"""
-    td = task_dir()
+    td = task_dir(created=None)   # 本用例断言「created 缺失 ⇒ 不拦」
     _write_p1_review_approved(td)
     _write_state_yaml_p1(td, judge_block="judge: true")
 

@@ -54,10 +54,8 @@ import sys
 # 同款；append_event 是账本唯一写路径（P2 候选 C1）。
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agate_common import (
-    PAREN_CLOSE,
-    PAREN_INNER,
-    PAREN_OPEN,
     append_event,
+    extract_conclusion_refs,
     read_judge_verdict,
     resolve_evidence,
     split_frontmatter,
@@ -542,20 +540,16 @@ def main():
     # 6. 证据交叉核对（BDD-6）——引用收敛到明确证据路径形态（I-2 修复）：
     #    仅取"括号内容整体为文件路径形态"的组（可逗号分隔多文件），描述中的
     #    任意括号（如 "(as discussed)"）不再被误取为首个引用 token
-    # ③ 括号走单源常量（agate_common）；**提取规则**此处更严（内容须整体是路径），
-    #    与 `extract_evidence_refs`（任意位置、只要像文件名）**有意不同**：
-    #    结论行是判据正文，须严格；PASS 行/清单是叙述，须宽松。
-    _REF_GROUP_RE = re.compile(PAREN_OPEN + "(" + PAREN_INNER + "*)" + PAREN_CLOSE)
-    _REF_PATH_FULL_RE = re.compile(
-        r"[\w./\-]+\.[a-zA-Z0-9]+(?:\s*,\s*[\w./\-]+\.[a-zA-Z0-9]+)*")
+    # ③ 结论行提取**走单源**（`agate_common.extract_conclusion_refs`）——
+    #    2026-10-03 独立评审查出：原实现只单源了**括号常量**，**提取规则仍自带副本**
+    #    （`_REF_GROUP_RE` + `_REF_PATH_FULL_RE`），属 ADR-014 意义上的判据分叉。
+    #    实测分叉点：judge 原判据把 `(v0.99.0)` 当路径（无"扩展名以字母开头"约束），
+    #    而 PASS 行侧不认 ⇒ 同一概念两套口径。现判据来自 agate_common，不可能再分叉。
     concl_refs = []
     for line in verdict_text.splitlines():
         if not _CONCLUSION_RE.match(line):
             continue
-        for m in _REF_GROUP_RE.finditer(line):
-            content = m.group(1).strip()
-            if _REF_PATH_FULL_RE.fullmatch(content):
-                concl_refs.extend(part.strip() for part in content.split(","))
+        concl_refs.extend(extract_conclusion_refs(line))
     rc6, err6 = _check_evidence(task_dir, v_evidence, concl_refs)
     if rc6 != 0:
         sys.stderr.write("\n".join(err6) + "\n")

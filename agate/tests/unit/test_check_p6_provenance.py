@@ -70,12 +70,29 @@ def test_pv_3_vision_stripped_exit_0(task_dir, agate_scripts, python_exe, run_cl
     assert result.returncode == 0
 
 
-def test_pv_4_last_paren_taken_exit_0(task_dir, agate_scripts, python_exe, run_cli):
+def test_pv_4_both_parens_are_refs_missing_one_blocks(task_dir, agate_scripts, python_exe, run_cli):
+    """**决策 C2**：一行内**全部**纯路径组都是引用 ⇒ 缺 `a.png` 应拦。
+
+    原用例名 `test_pv_4_last_paren_taken_exit_0`、断言 exit 0，记录的是**旧语义**
+    「只取末组」（故 `a.png` 缺失被忽略）。2026-10-03 按普查规则改为「**全部纯路径组**」，
+    本用例随之反转断言。
+
+    **C2 的存量差分**（独立评审代做，我采纳其结论选 C1 于**其它**方面）：
+      · C2（全路径组）相对旧规则的**新增拦截 = 7 行 / 6 任务**
+      · 其中**新假红 6 行**（`agate_common.py`×2、`protocol-tests.yml`、三个 URL）、
+        **旧规则漏检的真违规 1 行**（T047:33 引用源码 `src/utils.py`）
+      · 而 C2 换来的覆盖**同样是 0 个真实证据**
+    ⇒ 最终裁决为 **C2**（全部纯路径组的并集）：两仓 main 与 C2 的差异行 **265**（我复核一致），
+      而 C1（按 main 做法）与 C2 差 **107 行 / 多 140 引用**（裁决实测）⇒ **C2 变动面更小**。
+      本用例的形态：`(a.png) (b.png)` **两组都是路径**，
+      不属"非末组多为命令注记"（那是 65% 多括号行的主流，但**不是全部**）。
+      两组皆路径时全取是普查规则的直接结论；真实数据中该形态 0 例，不产生存量影响。
+    """
     td = task_dir()
     _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1 (a.png) (b.png)\n")
     _add_evidence(td, "b.png", 1000)
     result = _run_prov(agate_scripts, python_exe, run_cli, td)
-    assert result.returncode == 0
+    assert result.returncode == 1, "a.png 不存在 ⇒ 应拦（两组都是路径形态）"
 
 
 def test_pv_4b_all_missing_exit_1(task_dir, agate_scripts, python_exe, run_cli):
@@ -297,15 +314,22 @@ def test_pv_17_dispatch_context_task_section_exit_0(
     assert result.returncode == 0
 
 
-def test_pv_18_nested_parens_exit_0(task_dir, agate_scripts, python_exe, run_cli):
+def test_pv_18_nested_parens_is_no_reference(task_dir, agate_scripts, python_exe, run_cli):
+    """**决策 A1**：组内容是「path — 注释」⇒ 整组不是路径 ⇒ 该行「无引用」。
+
+    原用例名 `..._exit_0`、断言 exit 0（旧规则把该组当引用）。2026-10-03 改为断言
+    新语义：新任务（fixture 默认 created=截止日）⇒ **exit 1**，文案「未能提取证据引用」。
+    A1 依据：两仓含内层括号的括号组 26 处，逐一 isfile **26/26 命中 0**（裁决复核一致）。
+    """
     td = task_dir()
     _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1 (screenshots/b07.png — element: .katex nth(1))\n")
     _add_evidence(td, "screenshots/b07.png", 5000)
     result = _run_prov(agate_scripts, python_exe, run_cli, td)
-    assert result.returncode == 0
+    assert result.returncode == 1, "A1：注释组不构成引用 ⇒ 新任务应报无引用"
+    assert "未能提取证据引用" in result.output
 
 
-def test_pv_19_nested_parens_vision_exit_0(task_dir, agate_scripts, python_exe, run_cli):
+def test_pv_19_nested_parens_vision_is_no_reference(task_dir, agate_scripts, python_exe, run_cli):
     td = task_dir()
     (td / "P2-design.md").write_text("---\nagent: test\n---\nui_affected: true\n", encoding="utf-8")
     (td / "vision.yaml").write_text("vision_analysis:\n  summary:\n    blocker_count: 0\n", encoding="utf-8")
@@ -315,17 +339,22 @@ def test_pv_19_nested_parens_vision_exit_0(task_dir, agate_scripts, python_exe, 
     )
     _add_evidence(td, "screenshots/b07.png", 5000)
     result = _run_prov(agate_scripts, python_exe, run_cli, td)
-    assert result.returncode == 0
+    # A1：嵌套注释组不构成引用（vision 组已被剥离，剩下的仍是注释组）
+    assert result.returncode == 1
+    assert "未能提取证据引用" in result.output
 
 
-def test_pv_20_nested_parens_missing_path_exit_1(task_dir, agate_scripts, python_exe, run_cli):
+def test_pv_20_nested_parens_missing_path_is_no_reference(task_dir, agate_scripts, python_exe, run_cli):
+    """**裁决 §5.1 #4 明确**：期望值改为「无引用」报错，**不再是**「文件不存在」。
+
+    原因：A1 下该组整体不被提取 ⇒ 根本走不到"查存在性"那一步。
+    """
     td = task_dir()
     _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1 (screenshots/missing.png — element: .katex nth(1))\n")
     (td / "P6-evidence" / "screenshots").mkdir(parents=True)
     result = _run_prov(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 1
-    assert "证据文件不存在" in result.output
-    assert "screenshots/missing.png" in result.output
+    assert "未能提取证据引用" in result.output, "A1：该组不构成引用 ⇒ 报无引用（而非文件不存在）"
 
 
 def test_pv_21_log_exit_code_1_exit_1(task_dir, agate_scripts, python_exe, run_cli):

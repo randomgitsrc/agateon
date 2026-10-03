@@ -177,13 +177,29 @@ def test_ev_v9c_mid_line_prefixed_path_extracted(agate_scripts):
     详见 `agate_common.extract_evidence_refs` docstring 的 (c) 否决记录。
     """
     C = _common(agate_scripts)
-    line = "- PASS BDD-1: works (screenshots/b07.png — element: .katex nth(1))"
-    refs = C.extract_evidence_refs(line)
+    # ⚠️ 2026-10-03 按**决策 A1** 更正：原用例用的形态含**内层括号**
+    #    （`… nth(1)`），该形态经裁决确认为**已接受边界**（不提取）——
+    #    见 test_ev_v9c_nested_parens_is_boundary。此处改测真正的
+    #    「行中目录前缀路径」（**无**内层括号）。
+    refs = C.extract_evidence_refs("- PASS BDD-1: works (screenshots/b07.png) — 后跟说明文字")
     assert "screenshots/b07.png" in refs, f"行中目录前缀路径未被提取：{refs}"
-    # 反向锁：行中无前缀的纯文件名**不**取（防后人"顺手放宽"重蹈 701 次误解析）
-    assert C.extract_evidence_refs("- PASS BDD-1: x (bdd-1.log) — 说明") == [], (
-        "行中无目录前缀的纯文件名不应被当引用（实测会造大面积假红）"
-    )
+    # 注：census 规则对「行中**整体是路径**的括号组」**会**提取——
+    #   `(bdd-1.log) — 说明` 属此类（组内项整体是路径），故**应当**取到。
+    #   真正被否决的是「行中**任意**括号组都算引用」（含命令注记），那会造成
+    #   517 行多出引用 / 701 次解析不到（见 extract_evidence_refs docstring）。
+    assert C.extract_evidence_refs("- PASS BDD-1: x (bdd-1.log) — 说明") == ["bdd-1.log"]
+
+
+def test_ev_v9c_nested_parens_is_boundary(agate_scripts):
+    """**决策 A1**：含内层括号的注释组是**已接受边界**，不构成引用。
+
+    实测依据（裁决复核一致）：两仓含内层括号的括号组 26 处，
+    逐一对两处基址 isfile ⇒ **26/26 全部命中 0**；A2（加规则覆盖）收益为 0。
+    """
+    C = _common(agate_scripts)
+    assert C.extract_evidence_refs(
+        "- PASS BDD-1: works (screenshots/b07.png — element: .katex nth(1))"
+    ) == [], "A1：注释组不应被提取"
 
 
 def test_ev_metadata_markers_are_not_refs(agate_scripts):
@@ -284,6 +300,12 @@ def test_ev_v8_consumers_share_constants_by_value(agate_scripts):
         # 不得再出现只认 ASCII 括号的旧字面量（那是本批要消灭的分叉源头）
         assert r'r"\([^()]*' not in src, f"{consumer} 仍带 ASCII-only 括号字面量"
         assert r'"[^()]"' not in src, f"{consumer} 仍带 ASCII-only 括号字面量"
-        # 至少以某种方式消费单源（直接常量 或 extract_evidence_refs）
-        consumed = ("PAREN_OPEN" in src or "extract_evidence_refs" in src)
-        assert consumed, f"{consumer} 未消费括号单源（既无 PAREN_OPEN 也无 extract_evidence_refs）"
+        # 至少以某种方式消费**提取单源**——2026-10-03 裁决后三个消费方**全部**走
+        # agate_common 的提取函数（judge 也改走 extract_conclusion_refs，
+        # 原先它自持 _REF_GROUP_RE，属 ADR-014 意义上的判据分叉，已被评审查出并修掉）。
+        consumed = ("extract_evidence_refs" in src or "extract_conclusion_refs" in src)
+        assert consumed, f"{consumer} 未消费提取单源"
+        # 只查**代码行**（去注释），否则会把自己的说明性注释误判为副本
+        code = "\n".join(_ln for _ln in src.splitlines()
+                          if not _ln.lstrip().startswith("#"))
+        assert "_REF_GROUP_RE" not in code, f"{consumer} 仍自带提取正则副本"

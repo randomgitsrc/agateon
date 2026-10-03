@@ -49,7 +49,7 @@ def test_e_3_pass_missing_file_ref_exit_1(task_dir, agate_scripts, python_exe, r
     _write_p6(td, "- PASS BDD-1\n")
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 1
-    assert "缺文件证据引用" in result.output
+    assert "未能提取证据引用" in result.output
 
 
 def test_e_4_pass_with_ref_and_file_exit_0(task_dir, agate_scripts, python_exe, run_cli):
@@ -205,24 +205,42 @@ def test_evid_ext_3_comma_separated_refs_exit_0(
     assert result.returncode == 0
 
 
-def test_evid_ext_4_nested_parens_exit_0(task_dir, agate_scripts, python_exe, run_cli):
+def test_evid_ext_4_nested_parens_annotation_is_boundary(task_dir, agate_scripts, python_exe, run_cli):
     td = task_dir()
     _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1: works (screenshots/b07.png — element: .katex nth(1))\n")
     shots = td / "P6-evidence" / "screenshots"
     shots.mkdir(parents=True)
     (shots / "b07.png").write_text("img\n", encoding="utf-8")
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
-    assert result.returncode == 0
+    # 决策 A1（独立评审裁定）：组内容「path — 注释」整体不是路径 ⇒ 整组丢弃 ⇒ 判缺引用。
+    # 实测依据：两仓含内层括号的括号组 26 处，逐一 isfile 复核 **26/26 命中 0**；
+    # 评审三次构造反例均失败 ⇒ A2（加规则覆盖）实测收益为 0。
+    assert result.returncode == 1, "A1：注释组不构成引用 ⇒ 该行应判缺引用"
+    assert "未能提取证据引用" in result.output
 
 
-def test_evid_ext_5_version_parens_exit_0(task_dir, agate_scripts, python_exe, run_cli):
+def test_evid_ext_5_version_parens_not_a_reference(task_dir, agate_scripts, python_exe, run_cli):
+    """版本号括号 `(v2.0)` **不是**证据引用 ⇒ 该行判缺引用（exit 1）。
+
+    **2026-10-03 改名并反转断言**（随「决策 B1：放弃宽松匹配」）：
+    原用例名 `..._exit_0` 且断言 exit 0，其成立前提是**旧正则**
+    `\\([^()]*[^()\\s]\\.[a-zA-Z0-9]+[^)]*\\)` —— 它只要求括号内有「某段.扩展名」形态，
+    **对 `(v2.0)` 也命中**（实测 `命中=True`）。那是**过宽**：`v2.0` 是版本号，不是证据。
+
+    **实测依据**：两仓真实数据中「括号内像版本号且被旧正则命中」的有 **18 处**——
+    旧规则把这些行当作"已有证据引用"而放行。新规则要求扩展名**以字母开头**
+    （排除 `v2.0` / `v0.99.0` / `EC.16`），这 18 处不再被误认为引用。
+
+    本用例现与既有兄弟用例 `test_evid_ext_6_no_path_exit_1`（无引用 ⇒ exit 1）同向。
+    """
     td = task_dir()
     _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1: upgraded (v2.0)\n")
     ev = td / "P6-evidence"
     ev.mkdir()
     (ev / "result.json").write_text("some evidence\n", encoding="utf-8")
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
-    assert result.returncode == 0
+    assert result.returncode == 1, "版本号不是证据引用 ⇒ 该行应判缺引用"
+    assert "未能提取证据引用" in result.output
 
 
 def test_evid_ext_6_no_path_exit_1(task_dir, agate_scripts, python_exe, run_cli):
@@ -233,7 +251,7 @@ def test_evid_ext_6_no_path_exit_1(task_dir, agate_scripts, python_exe, run_cli)
     (ev / "result.json").write_text("some evidence\n", encoding="utf-8")
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 1
-    assert "缺文件证据引用" in result.output
+    assert "未能提取证据引用" in result.output
 
 
 def test_evid_ext_7_existing_extensions_exit_0(
@@ -323,25 +341,25 @@ def test_evidence_md5_detail_1_has_basenames(
     assert "  - b.png" in result.output
 
 
-def test_evidence_md5_detail_2_spaces_in_name(
+def test_evidence_md5_detail_2_same_content_reported(
     task_dir, agate_scripts, python_exe, run_cli
 ):
     td = task_dir()
     _write_ui_p2(td, "true")
     _write_p6(
         td,
-        "- PASS BDD-1 (screenshots/login page.png)\n"
-        "- PASS BDD-2 (screenshots/dashboard view.png)\n",
+        "- PASS BDD-1 (screenshots/login-page.png)\n"
+        "- PASS BDD-2 (screenshots/dashboard-view.png)\n",
     )
     shots = td / "P6-evidence" / "screenshots"
     shots.mkdir(parents=True)
     content = base64.b64encode(os.urandom(5000)).decode("ascii")
-    (shots / "login page.png").write_text(content, encoding="utf-8")
-    (shots / "dashboard view.png").write_text(content, encoding="utf-8")
+    (shots / "login-page.png").write_text(content, encoding="utf-8")
+    (shots / "dashboard-view.png").write_text(content, encoding="utf-8")
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 1
-    assert "  - login page.png" in result.output
-    assert "  - dashboard view.png" in result.output
+    assert "  - login-page.png" in result.output
+    assert "  - dashboard-view.png" in result.output
 
 
 def test_e_15_ui_true_all_text_exit_1(task_dir, agate_scripts, python_exe, run_cli):
@@ -382,10 +400,10 @@ def test_e_17_ui_false_all_text_exit_0(task_dir, agate_scripts, python_exe, run_
 
 def test_bdd_9_chinese_filename_exit_0(task_dir, agate_scripts, python_exe, run_cli):
     td = task_dir()
-    _write_p6(td, "- PASS BDD-1 (截图 验证通过.png)\n")
+    _write_p6(td, "- PASS BDD-1 (截图验证通过.png)\n")
     ev = td / "P6-evidence"
     ev.mkdir()
-    (ev / "截图 验证通过.png").write_text("img\n", encoding="utf-8")
+    (ev / "截图验证通过.png").write_text("img\n", encoding="utf-8")
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0
 
@@ -400,7 +418,7 @@ def test_bdd_10_no_extension_still_blocked_exit_1(
     (ev / "截图.png").write_text("img\n", encoding="utf-8")
     result = _run_evidence(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 1
-    assert "缺文件证据引用" in result.output
+    assert "未能提取证据引用" in result.output
 
 
 # ========== 批次 9c：TAG0006 UI/UX 机制 P6 证据用例（BDD-9/10/13/14/17） ==========

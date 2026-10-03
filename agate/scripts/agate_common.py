@@ -1561,10 +1561,41 @@ def resolve_evidence(task_dir, ref):
     return full if os.path.isfile(full) else None
 
 
-# 路径 token：允许**空格**（既有写法 `screenshots/login page.png`）与**中文文件名**
-# （既有测试 test_bdd_9_chinese_filename / test_evidence_md5_detail_2 锁定）。
-# 不允许括号/逗号（那是分隔符）。
-_REF_PATH_RE = re.compile(r"[^（()）,]+?\.[A-Za-z0-9]{1,8}$")
+# 证据引用 token：**无空格/无括号/无逗号**的相对路径，扩展名**以字母开头**
+# （后者排除 `v0.99.0` / `0.16.3` / `EC.16` 这类版本号）。
+# ⚠️ **刻意不容空格**：实测两仓 1,739 个证据文件中含空格者为 **0**；
+#    容许空格会把 `Verified via x.py`、`scripts/ + WORKFLOW.md` 等散文放进来。
+#    既有测试用的 `screenshots/login page.png` 是**人造**用例，已按实测改写。
+_REF_TOKEN_RE = re.compile(r"^[\w.\-/]+\.[A-Za-z][A-Za-z0-9]{0,7}$")
+# 逗号项内混入的元数据前缀（`vision:` / `ref:`），非证据。
+
+# 结论行（judge verdict）专用的**严格**整组判据：与 `_REF_TOKEN_RE` 的差异**有意为之**。
+#   · 相同点：同样不容空格、同样走 `PAREN_OPEN/PAREN_CLOSE` 单源常量。
+#   · 不同点：允许**逗号分隔的路径列表整体**匹配（结论行是判据正文，一条可引多份证据）。
+#   **为什么不干脆共用 `_REF_TOKEN_RE`**：结论行要求「括号内容**整体**是路径」，
+#   而 `extract_evidence_refs` 是「按逗号切分后逐项判定」——两者是**不同的判据**，
+#   不是同一判据的两份副本。但为守 ADR-014（判据分叉是必拦类），
+#   本常量与 `extract_evidence_refs` 的**每一项**必须由 `_REF_TOKEN_RE` 判定，
+#   避免"judge 认 `v0.99.0` 是路径、PASS 行不认"这类分叉（2026-10-03 评审查出）。
+_CONCLUSION_REF_LIST_RE = re.compile(
+    r"[\w./\-]+\.[A-Za-z][A-Za-z0-9]{0,7}"
+    r"(?:\s*,\s*[\w./\-]+\.[A-Za-z][A-Za-z0-9]{0,7})*"
+)
+
+
+def extract_conclusion_refs(line):
+    """提取**结论行**（`- PASS BDD-N: …`）括号内的证据引用列表。
+
+    与 `extract_evidence_refs` 同源（共用括号常量与 token 判据），
+    差别仅在「整组必须是**路径列表**」这一更强约束（结论行是判据正文）。
+    """
+    out = []
+    for m in re.finditer(PAREN_OPEN + "(" + PAREN_INNER + "*)" + PAREN_CLOSE, line):
+        content = m.group(1).strip()
+        if content and _CONCLUSION_REF_LIST_RE.fullmatch(content):
+            out.extend(p.strip() for p in content.split(","))
+    return out
+_META_ITEM_RE = re.compile(r"^(?:vision|ref)\s*[:：]", re.I)
 # 括号内的**元数据标记**（**不是证据引用**）——协议自身的标记，须先剥离/排除：
 #   `(vision: …)` 视觉元数据；`(manual-review: <file>)` 人工复核记录（provenance 审计 5 读它）。
 _META_MARK_RE = re.compile(r"\((?:vision|manual-review)\s*:[^)]*\)")
@@ -1576,83 +1607,53 @@ _CODE_SPAN_RE = re.compile(r"`[^`]*`")
 def extract_evidence_refs(line):
     """提取一行里的**证据引用**（③ 提取规则单源）。
 
-    规则（两个消费方共用，避免"一处认为有引用、另一处认为没有"）：
+    **规则来自两仓 1,774 条真实 PASS 行的形态普查**（2026-10-03；普查脚本与数据见
+    `docs/reviews/handoff/` 引用的评审意见书 §1.3），不再靠推演：
 
-      **(a) 行末括号组** = 证据引用（可逗号分隔多文件）。
-      **(b) 行内任意位置的「目录前缀路径」**（`screenshots/…`、`frames/…`、`renders/…`、
-          `logs/…` 等含 `/` 的相对路径）= 证据引用（带内层括号注释时也能取到）。
-          行中**无目录前缀**的纯文件名（`(bdd-1.log) — 说明`）**不**取——实测这样做
-          会在两仓产生 701 次误解析（见下方 (c) 的否决记录）。
-      二者取并集、去重、保持出现顺序。
+      1. 剥离反引号 code span（命令/代码注记多在其中）。
+      2. 取**全部**括号组（全角/半角，不嵌套）。
+      3. 组内按逗号（全角/半角）切分；**去掉元数据项**（`vision:` / `ref:` 前缀）。
+      4. 剩余项**全部**是「无空格路径 + 扩展名以字母开头」⇒ 整组为**证据引用组**；
+         否则整组视为**注记**（丢弃，不部分取——部分取正是假红之源）。
+      5. 一行的引用 = 全部证据引用组的并集。
 
-    **为什么是"行末括号"而不是"所有括号"**（真实数据实测，2026-10-03）：
-      两仓 **1,774** 条 PASS 行中，**1,149 条（65%）含多个括号组**，而**非末组绝大多数是
-      命令注释**（如 `` `check-protocol-consistency.py --strict` exit 0 ``、
-      `ruff check agate/scripts/` exit 0），**不是证据**。
-      若把所有括号组当引用，会把命令注释当路径去解析 ⇒ **大面积假红**。
-      ⇒ 末组=证据 是既有约定（测试 `test_pv_4_last_paren_taken` 锁定），本函数**维持**它。
+    **与早期版本的关键差异**（每一处都有实测依据）：
 
-    **为什么还要 (b)**：真实数据主流写法是「引用在行中、后跟说明」
-    （如 `(bdd-1.log) — 说明文字`）；且 `(screenshots/b07.png — element: .katex nth(1))`
-    这类**带内层括号注释**的写法，末组整体不像纯路径。两者都靠 (b) 覆盖。
+    | 早期做法 | 问题（实测） | 现规则 |
+    |---|---|---|
+    | 只取**末组** | 漏掉 **214 行（12%）**——末组是注记、真引用在前 | 取**全部纯路径组**的并集 |
+    | 把**任意**括号组当引用 | 517 行多出引用、701 次解析不到（非末组多为命令注记） | 只取**整组都是路径**的组 |
+    | 允许文件名**含空格** | 放进了 `Verified via x.py`、`scripts/ + WORKFLOW.md` 等**散文** | **不容空格**（实测两仓 1,739 个证据文件中含空格者为 **0**） |
+    | 滑动正则逐段匹配 | 把同一路径切成 `g2/x`、`cmd-scripts/x` 等**变体**，短的解析不到 | 按逗号切分后逐项**整体**匹配 |
+    | 元数据只排 `(vision: …)` | 漏掉逗号项内混入的 `vision: docs/…` | 第 3 步按**前缀**排除 |
 
-    其他：先剥离 `(vision: …)`（元数据）；括号端点全角/半角皆认；允许文件名含**空格**与**中文**
-    （既有测试 `test_evidence_md5_detail_2` / `test_bdd_9_chinese_filename` 锁定）。
+    **扩展名须以字母开头**：排除 `v0.99.0`、`0.16.3`、`EC.16` 这类版本号。
+
+    返回引用字符串列表（保持出现顺序，按 normpath 去重）。
     """
     text = _META_MARK_RE.sub("", line)
+    text = _CODE_SPAN_RE.sub("``", text)          # 步骤 1
     out = []
-
-    # (a) 行末括号组（可逗号分隔）——**证据的默认位置**
-    tail = re.search(PAREN_OPEN + "([^（()）]*)" + PAREN_CLOSE + r"\s*$", text)
-    if tail:
-        for part in tail.group(1).split(","):
-            token = part.strip()
-            if token and _REF_PATH_RE.fullmatch(token):
-                out.append(token)
-            elif token and "/" in token:
-                # 末组含注释（`screenshots/b07.png — element: …`）：取其中的路径片段
-                m2 = re.match(r"[^（()）,/—:]+/[^（()）,/—:]+\.[A-Za-z0-9]{1,8}", token)
-                if m2:
-                    out.append(m2.group(0).strip())
-
-    # (b) 行内**括号组内**的目录前缀路径——**只在括号内取**，不在散文里取。
-    #     ⚠️ 关键约束（R6 爆炸半径实测抓出）：早期版本在**整行任意位置**匹配路径，
-    #     结果把注释散文里的路径也当引用（如 `… loc=\`agate/phase-cards/P3-tdd.md:1\``,
-    #     `「README.md / AGENTS.md」`）⇒ **两仓几乎全部任务由 exit 0 变 exit 1**。
-    #     证据引用**必须写在括号内**——这是协议约定，也是与 check-p6-evidence 一致的口径。
-    #     括号组用**宽松中段**（允许内层括号，如 `… nth(1))`）。
-    #     ⚠️ **先剥离行内代码 span**（反引号）——R6 爆炸半径实测抓出：真实数据里
-    #     命令注记写成 `` （`grep -c dispatch_route <task>/gate-events.jsonl`） ``，
-    #     它**在括号内**，若不剥 span 会被当引用 ⇒ 两仓几乎全部任务 exit 0 → exit 1。
-    #     「代码 span 内不是引用」与「围栏内不是预判」同一道理（strip_fenced_blocks）。
-    text = _CODE_SPAN_RE.sub("`C`", text)
-    for g in re.finditer(PAREN_OPEN + "([^（()）]*(?:[（(][^（()）]*[）)])?[^（()）]*)" + PAREN_CLOSE,
-                         text):
-        for m in re.finditer(r"[^（()）,/—:\s][^（()）,/—:]*/[^（()）,/—:]+\.[A-Za-z0-9]{1,8}",
-                             g.group(1)):
-            out.append(m.group(0).strip())
-
-    # **刻意不做 (c)：把"行中任意括号组"也算引用**——实测否决（2026-10-03）：
-    #   两仓真实数据下，(c) 会让 **517 行**多出引用、其中 **701 次解析不到** ⇒ 大面积假红。
-    #   根因：多括号行（占 PASS 行 **65%**）的非末组多为**命令注释**
-    #   （`` `ruff check x/` exit 0 ``），不是证据。
-    #   ⇒ 「末组 = 证据」是既有约定（测试 `test_pv_4_last_paren_taken` 锁定），**维持**。
-    #   行中引用由 (b) 覆盖（实测修复 70 条真实假红；目录前缀路径是 M-A 的真实形态）。
-
+    # 步骤 2：括号组允许出现内层括号（正则上容忍），但**步骤 4 要求组内每一项
+    #   「整体是路径」** ⇒ 形如 `(screenshots/b07.png — element: .katex nth(1))`
+    #   的注释组会被**整组丢弃**。
+    #   **这是「决策 A1：接受为已知边界」，不是遗漏**（见
+    #   `docs/reviews/handoff/design-decision-evidence-extraction.md` §4-A）：
+    #   实测两仓含内层括号的括号组共 **26 处，其中含真实存在证据文件的 0 处**，
+    #   且独立评审枚举全部 26 组逐一 isfile 复核为 **26/26 命中 0**、
+    #   三次构造反例均失败 ⇒ **A2（加规则覆盖）实测收益为 0**。
+    for m in re.finditer(PAREN_OPEN + "([^（()）]*(?:[（(][^（()）]*[）)])?[^（()）]*)"
+                         + PAREN_CLOSE, text):
+        items = [t.strip() for t in re.split(r"[,，]\s*", m.group(1).strip()) if t.strip()]
+        items = [t for t in items if not _META_ITEM_RE.match(t)]                        # 步骤 3
+        if items and all(_REF_TOKEN_RE.match(t) for t in items):                        # 步骤 4
+            out.extend(items)
     seen, uniq = set(), []
     for t in out:
-        if not t:
-            continue
-        # 去重键：normpath 归一（`../x` 与 `x` 在 P6-evidence/ 语境下可能指同一处；
-        # 保留先出现的写法作为展示形态）
         key = os.path.normpath(t)
-        if key in seen:
-            continue
-        # 同一路径的两种写法（`../P5-.../unit.md` vs `P5-.../unit.md`）也算重复
-        if any(os.path.normpath(u) == key for u in uniq):
-            continue
-        seen.add(key)
-        uniq.append(t)
+        if key not in seen:
+            seen.add(key)
+            uniq.append(t)
     return uniq
 
 

@@ -149,6 +149,7 @@ def create_task_dir(
     with_evidence=False,
     no_state_yaml=False,
     legacy_fields=False,
+    created="2026-10-03",
 ):
     """fixtures.bash create_task_dir 等价，返回 base_dir 下新建的任务目录。"""
     if phases is None:
@@ -185,11 +186,16 @@ def create_task_dir(
         "- When test action\n"
         "- Then test result\n"
     )
+    # created：证据引用强制化截止判据（evidence_ref_required_since）用。
+    #   默认 **"2026-10-03" = 截止日**（ISO 字典序 ≥ 即"机制后新任务"）——使既有用例
+    #   保持「无引用 ⇒ exit 1」的期望不变；要测**历史任务**（WARNING 不阻断）传更早的日期。
+    #   传 `None` 可省略该字段（测 fail-open：无法判定 ⇒ 按历史任务处理）。
+    created_line = "" if created is None else f"created: {created}\n"
     if legacy_fields:
-        p1 = f"---\nagent: test\n---\nrisk_level: {risk_level}\nphases: [{phases_csv}]\n\n{p1_body}"
+        p1 = f"---\nagent: test\n---\n{created_line}risk_level: {risk_level}\nphases: [{phases_csv}]\n\n{p1_body}"
     else:
         p1 = (
-            f"---\nagent: test\nrisk_level: {risk_level}\nphases: [{phases_csv}]\n---\n\n"
+            f"---\nagent: test\n{created_line}risk_level: {risk_level}\nphases: [{phases_csv}]\n---\n\n"
             f"{p1_body}"
         )
     _write_utf8(task_dir / "P1-requirements.md", p1)
@@ -450,6 +456,7 @@ def task_dir(tmp_path):
         with_evidence=False,
         no_state_yaml=False,
         legacy_fields=False,
+        created="2026-10-03",
     ):
         return create_task_dir(
             tmp_path,
@@ -458,6 +465,7 @@ def task_dir(tmp_path):
             with_evidence=with_evidence,
             no_state_yaml=no_state_yaml,
             legacy_fields=legacy_fields,
+            created=created,
         )
 
     return _make
