@@ -36,6 +36,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 try:
     from agate_common import (
         extract_evidence_refs,
+        is_new_task_for_evidence_ref,
         read_vision_tri_state,
         resolve_evidence,
     )
@@ -43,6 +44,7 @@ except ImportError:
     read_vision_tri_state = None
     resolve_evidence = None
     extract_evidence_refs = None
+    is_new_task_for_evidence_ref = None
 
 
 def _run_script(script, args, env_extra):
@@ -131,49 +133,10 @@ def _is_temporal_shot(name):
 
 
 
-# ── 最终裁决 §4「无引用政策」辅助（2026-10-03 合并条件 2）─────────────────────
-# 判据：P1-requirements.md 的 `created` ≥ rules/dispatch.yaml 的
-#       evidence_ref_required_since ⇒ 机制后新任务；否则（含 created 缺失/非 ISO）
-#       ⇒ 历史任务，fail-open 走 WARNING。照搬 check-gate.py 的 judge_required_since 先例。
-_EVIDENCE_REF_CUTOFF_KEY = "evidence_ref_required_since"
-_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-
-def _p1_created(task_dir):
-    """读 P1-requirements.md frontmatter 的 created（经 agate-md-field-get.py；无则 ""）。"""
-    p1 = os.path.join(task_dir, "P1-requirements.md")
-    if not os.path.isfile(p1):
-        return ""
-    env = dict(os.environ)
-    env["FILE"] = p1
-    try:
-        proc = subprocess.run(
-            [sys.executable, os.path.join(SCRIPT_DIR, "agate-md-field-get.py"), "created"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
-        )
-    except OSError:
-        return ""
-    return (proc.stdout or "").strip() if proc.returncode == 0 else ""
-
-
-def _is_new_task_for_evidence_ref(task_dir):
-    """P1 created ≥ 截止 ⇒ True（机制后新任务）；无法判定 ⇒ False（**fail-open**，有意）。
-
-    照搬 check-gate.py 的 judge_required_since 先例（ISO 字典序比较）。
-    裁决 §4 明示：created 缺失或非 ISO ⇒ 按历史任务处理（fail-open），
-    这是**有意的选择**——理由同「不因缺少元数据而阻断历史任务」。
-    """
-    created = _p1_created(task_dir)
-    if not (isinstance(created, str) and _ISO_DATE_RE.match(created)):
-        return False
-    try:
-        sys.path.insert(0, SCRIPT_DIR)
-        from agate_common import read_rules_yaml, resolve_rules_root
-        rules = read_rules_yaml(resolve_rules_root(__file__), "dispatch")
-        cutoff = rules.get(_EVIDENCE_REF_CUTOFF_KEY) if isinstance(rules, dict) else None
-    except Exception:
-        return False
-    return isinstance(cutoff, str) and created >= cutoff
+# ── 证据引用政策（最终裁决 §4；F2 修复：判据已抽到 agate_common，两脚本共用）───
+# 本地不再重复实现 `_is_new_task_for_evidence_ref` —— 原先两脚本各写一份。
+# ⚠️ F3 修复：存量任务的无引用告警以 **exit 2** 收尾（脚本 README 规定 2=WARNING），
+#   否则 `pre-commit-gate.py:502` 只在 rc∈{1,2} 时打印捕获的输出 ⇒ 告警**被丢弃**。
 
 
 
@@ -221,7 +184,7 @@ def main():
     if pass_without_ref > 0:
         # 最终裁决 §4「无引用政策」：机制后新任务 exit 1，历史任务 WARNING（fail-open）。
         # ⚠️ **不得中途 sys.exit(2)**——那会跳过后面的 md5/截图/frames 检查（裁决明确约束）。
-        _new_task = _is_new_task_for_evidence_ref(task_dir)
+        _new_task = is_new_task_for_evidence_ref(task_dir, __file__)
         if _new_task:
             sys.stderr.write(
                 f"GATE P6-EVIDENCE: 有 {pass_without_ref} 条 PASS 未能提取证据引用"
@@ -235,6 +198,11 @@ def main():
             "（**历史任务**，按 evidence_ref_required_since 之前的截止口径给 WARNING，不阻断）\n"
             + pass_without_ref_details
         )
+
+    def _flush_warnings():
+        """F3：任何退出路径前都先输出已累积的存量告警（防后续检查失败时丢失）。"""
+        for _w in _evidence_ref_warnings:
+            sys.stderr.write(_w + "\n")
 
     if not os.path.isdir(evidence_dir) or not os.listdir(evidence_dir):
         sys.stderr.write("GATE P6-EVIDENCE: P6-evidence/ 目录不存在或为空\n")
@@ -482,10 +450,13 @@ def main():
                             sys.stderr.write(f"GATE P6-EVIDENCE: diff.json 缺量化度量字段（须含 pixel_diff_ratio / average_hash_distance 等）: {r}\n")
                             sys.exit(1)
 
-    # 最终裁决 §4：历史任务的「无引用」WARNING 在此**统一输出**（不中途退出，
-    # 保证 md5/截图/frames 检查都已跑完）。WARNING 不改变 exit code（仍 0）。
-    for _w in _evidence_ref_warnings:
-        sys.stderr.write(_w + "\n")
+    # 最终裁决 §4 + F3：存量任务的「无引用」WARNING 在此统一输出。
+    # **以 exit 2 收尾**（脚本 README：2 = WARNING 不阻塞但须可见）——
+    #   若维持 rc 0，`pre-commit-gate.py:502` 不会打印捕获输出 ⇒ 告警被静默丢弃（F3）。
+    if _evidence_ref_warnings:
+        for _w in _evidence_ref_warnings:
+            sys.stderr.write(_w + "\n")
+        sys.exit(2)
 
     sys.exit(0)
 

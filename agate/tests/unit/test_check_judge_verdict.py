@@ -414,6 +414,32 @@ def test_bdd_6_ref_not_in_evidence_exit_1(task_dir, agate_scripts, python_exe, r
     assert result.returncode == 1
 
 
+def test_f1_conclusion_ref_nonexistent_file_exit_1(task_dir, agate_scripts, python_exe, run_cli):
+    """**F1 回归锁**：结论行引用的文件**不存在**时，必须 exit 1（不得静默通过）。
+
+    2026-10-03 实施评审查出：`_check_evidence` 的 6c 把两侧引用解析成 realpath 后比集合，
+    解析失败的引用变成 `None` 键被**过滤**，`unresolved` 虽算出却**不在失败条件里**。
+    后果：结论行引用不存在的文件既不进 `refs_not_in_evidence`（None 被滤）、
+    也不进 `missing`（只覆盖 verdict_evidence）⇒ **静默通过**，端到端还会写一条
+    通过事件进账本。**本用例是相对 main 的回归锁**（main rc=1，本批曾 rc=0）。
+
+    ⚠️ 与 `test_bdd_6_ref_not_in_evidence_exit_1` 的区别：那个 fixture 同时还有
+    「未被引用」的错误，会**掩盖**这一项；本用例**只有这一处缺陷**（e1.json 已在清单里）。
+    """
+    td = task_dir()
+    _write_judge_fixture(
+        td,
+        verdict_kwargs={
+            "evidence": ["e1.json"],
+            "conclusions": ["- PASS BDD-1: verified (e1.json, ghost.json)"],
+        },
+    )
+
+    result = _run_judge(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 1, "结论行引用不存在的文件必须拦（F1 回归）"
+    assert "ghost.json" in result.output
+
+
 def test_bdd_6_evidence_not_referenced_exit_1(task_dir, agate_scripts, python_exe, run_cli):
     """BDD-6：verdict_evidence 存在未被任何结论引用的条目（引用不对称）→ exit 1。"""
     td = task_dir()
