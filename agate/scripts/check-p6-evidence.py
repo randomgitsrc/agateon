@@ -34,9 +34,15 @@ from collections import Counter
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 try:
-    from agate_common import read_vision_tri_state
+    from agate_common import (
+        extract_evidence_refs,
+        read_vision_tri_state,
+        resolve_evidence,
+    )
 except ImportError:
     read_vision_tri_state = None
+    resolve_evidence = None
+    extract_evidence_refs = None
 
 
 def _run_script(script, args, env_extra):
@@ -124,6 +130,53 @@ def _is_temporal_shot(name):
     return bool(re.search(r"-(?:t\d+|\d+)\.\w+$", name))
 
 
+
+# ── 最终裁决 §4「无引用政策」辅助（2026-10-03 合并条件 2）─────────────────────
+# 判据：P1-requirements.md 的 `created` ≥ rules/dispatch.yaml 的
+#       evidence_ref_required_since ⇒ 机制后新任务；否则（含 created 缺失/非 ISO）
+#       ⇒ 历史任务，fail-open 走 WARNING。照搬 check-gate.py 的 judge_required_since 先例。
+_EVIDENCE_REF_CUTOFF_KEY = "evidence_ref_required_since"
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _p1_created(task_dir):
+    """读 P1-requirements.md frontmatter 的 created（经 agate-md-field-get.py；无则 ""）。"""
+    p1 = os.path.join(task_dir, "P1-requirements.md")
+    if not os.path.isfile(p1):
+        return ""
+    env = dict(os.environ)
+    env["FILE"] = p1
+    try:
+        proc = subprocess.run(
+            [sys.executable, os.path.join(SCRIPT_DIR, "agate-md-field-get.py"), "created"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
+        )
+    except OSError:
+        return ""
+    return (proc.stdout or "").strip() if proc.returncode == 0 else ""
+
+
+def _is_new_task_for_evidence_ref(task_dir):
+    """P1 created ≥ 截止 ⇒ True（机制后新任务）；无法判定 ⇒ False（**fail-open**，有意）。
+
+    照搬 check-gate.py 的 judge_required_since 先例（ISO 字典序比较）。
+    裁决 §4 明示：created 缺失或非 ISO ⇒ 按历史任务处理（fail-open），
+    这是**有意的选择**——理由同「不因缺少元数据而阻断历史任务」。
+    """
+    created = _p1_created(task_dir)
+    if not (isinstance(created, str) and _ISO_DATE_RE.match(created)):
+        return False
+    try:
+        sys.path.insert(0, SCRIPT_DIR)
+        from agate_common import read_rules_yaml, resolve_rules_root
+        rules = read_rules_yaml(resolve_rules_root(__file__), "dispatch")
+        cutoff = rules.get(_EVIDENCE_REF_CUTOFF_KEY) if isinstance(rules, dict) else None
+    except Exception:
+        return False
+    return isinstance(cutoff, str) and created >= cutoff
+
+
+
 def main():
     if len(sys.argv) < 2:
         sys.stderr.write("用法: check-p6-evidence.py TASK_DIR\n")
@@ -150,22 +203,38 @@ def main():
         sys.exit(1)
 
     evidence_dir = os.path.join(task_dir, "P6-evidence")
+    _evidence_ref_warnings = []
 
-    # 每条 PASS 行必须含文件引用（括号内路径，S2 结构判定：文件名.扩展名）
-    ref_re = re.compile(r"\([^()]*[^()\s]\.[a-zA-Z0-9]+[^)]*\)")
+    # 每条 PASS 行必须含文件引用。
+    # **走单源提取器**（S1 + M-A）：不再自持正则——原写法只认 ASCII 括号，
+    # 全角 `（）` 会被判"无引用"⇒ 假红，且与 provenance 判据分叉（ADR-014）。
+    # 提取器同时覆盖：全角/半角、行中/行末、逗号分隔、以及
+    # `(screenshots/b07.png — element: .katex nth(1))` 这类**带内层括号的注释**
+    # （test_evid_ext_4 / test_pv_18 锁定）。
     pass_without_ref = 0
     pass_without_ref_details = ""
     for line in re.findall(r"^\s*- PASS\b.*", p6_text, re.MULTILINE):
-        if not ref_re.search(line):
+        if not extract_evidence_refs(line):
             pass_without_ref += 1
             pass_without_ref_details += f"  - {line}\n"
 
     if pass_without_ref > 0:
-        sys.stderr.write(
-            f"GATE P6-EVIDENCE: 有 {pass_without_ref} 条 PASS 缺文件证据引用（每条 PASS 必须引用证据文件，形式不限：截图/日志/JSON/文本）\n"
+        # 最终裁决 §4「无引用政策」：机制后新任务 exit 1，历史任务 WARNING（fail-open）。
+        # ⚠️ **不得中途 sys.exit(2)**——那会跳过后面的 md5/截图/frames 检查（裁决明确约束）。
+        _new_task = _is_new_task_for_evidence_ref(task_dir)
+        if _new_task:
+            sys.stderr.write(
+                f"GATE P6-EVIDENCE: 有 {pass_without_ref} 条 PASS 未能提取证据引用"
+                "（每条 PASS 须引用证据文件，形式不限：截图/日志/JSON/文本）\n"
+            )
+            sys.stderr.write(pass_without_ref_details + "\n")
+            sys.exit(1)
+        # 历史任务：告警累积，检查继续跑完（exit code 在末尾统一给）
+        _evidence_ref_warnings.append(
+            f"GATE P6-EVIDENCE: 有 {pass_without_ref} 条 PASS 未能提取证据引用"
+            "（**历史任务**，按 evidence_ref_required_since 之前的截止口径给 WARNING，不阻断）\n"
+            + pass_without_ref_details
         )
-        sys.stderr.write(pass_without_ref_details + "\n")
-        sys.exit(1)
 
     if not os.path.isdir(evidence_dir) or not os.listdir(evidence_dir):
         sys.stderr.write("GATE P6-EVIDENCE: P6-evidence/ 目录不存在或为空\n")
@@ -375,8 +444,8 @@ def main():
         for line in p6_text.splitlines():
             if "(frames/" in line:
                 frame_nums = []
-                for ref in re.findall(r"frames/[^()\s,]+\.\w+", line):
-                    if not os.path.isfile(os.path.join(evidence_dir, ref)):
+                for ref in re.findall(r"frames/[^（()）\s,]+\.\w+", line):
+                    if not resolve_evidence(task_dir, ref):
                         sys.stderr.write(f"GATE P6-EVIDENCE: 帧序列引用的文件不存在: {ref}\n")
                         sys.exit(1)
                     mnum = re.search(r"-(\d+)\.\w+$", os.path.basename(ref))
@@ -385,13 +454,13 @@ def main():
                 if frame_nums and max(frame_nums) - min(frame_nums) + 1 > len(set(frame_nums)):
                     sys.stderr.write("GATE P6-EVIDENCE WARNING: 帧序列帧号不连续（存在缺口，请 verifier 复核时序采样完整性）\n")
             if "(renders/" in line:
-                refs = re.findall(r"renders/[^()\s,]+\.\w+", line)
+                refs = re.findall(r"renders/[^（()）\s,]+\.\w+", line)
                 has_actual = any(
-                    "-actual." in os.path.basename(r) and os.path.isfile(os.path.join(evidence_dir, r))
+                    "-actual." in os.path.basename(r) and resolve_evidence(task_dir, r)
                     for r in refs
                 )
                 has_diff = any(
-                    "-diff.json" in os.path.basename(r) and os.path.isfile(os.path.join(evidence_dir, r))
+                    "-diff.json" in os.path.basename(r) and resolve_evidence(task_dir, r)
                     for r in refs
                 )
                 if not (has_actual and has_diff):
@@ -412,6 +481,11 @@ def main():
                         ):
                             sys.stderr.write(f"GATE P6-EVIDENCE: diff.json 缺量化度量字段（须含 pixel_diff_ratio / average_hash_distance 等）: {r}\n")
                             sys.exit(1)
+
+    # 最终裁决 §4：历史任务的「无引用」WARNING 在此**统一输出**（不中途退出，
+    # 保证 md5/截图/frames 检查都已跑完）。WARNING 不改变 exit code（仍 0）。
+    for _w in _evidence_ref_warnings:
+        sys.stderr.write(_w + "\n")
 
     sys.exit(0)
 

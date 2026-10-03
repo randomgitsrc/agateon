@@ -35,6 +35,14 @@ lead_variants:
   blockquote_ok: '^\s*>?\s*-?\s*'
   # P4 转抄核对口径：仅空白 + 短横线（与 grep -cE 等价，历史兼容）
   dash_only: '^\s*-?\s*'
+  # **账本计数口径**：与 `agate_common` 的 `_NC_RE`/`_SUGGEST_RE`/`_NO_NEED_RE` 逐字节同构
+  #   （`grep -cE` 等价语义）：可选反引号 + 可选短横线 + 可选反引号。
+  #   ⚠️ 该口径与 `default` **不等价**且**方向相反**（实测，2026-10-03）：
+  #     `**[NEED_CONFIRM]**` / `* [..]` / `> [..]` → default 认、本口径不认；
+  #     `` `[NEED_CONFIRM]` `` → 本口径认、default 不认。
+  #   两仓真实语料上 **182 行**判定不一致。登记时**必须**用本变体，
+  #   否则注册表与真实消费方分叉（ADR-014「声明单源 ≠ 已经单源」）。
+  ledger_count: '^\s*`*-?\s*`*'
 
 # 显式排除的形态（判为「提及」而非「声明」）——保守边界的单源化。
 #   代价已量化登记在 docs/design-notes/design-scope-plus-declaration-form.md §3。
@@ -92,29 +100,37 @@ markers:
     phases: [P1, P2, P3, P4]
     params: none
     paired_with: NO_NEED_CONFIRM
-    lead_variant: default
-    judged_by: []
+    lead_variant: ledger_count
+    # 标记后**紧跟正文**（无分隔符）是真实声明的常见形态（实测两仓 239 行）
+    trailing_text_ok: true
+    judged_by: [agate_common.py]          # _NC_RE / _NC_DESC_RE（账本计数口径）
 
   - name: NO_NEED_CONFIRM
     purpose: 显式声明无待确认项（配对标记）
     phases: [P1, P2, P3, P4]
     params: none
     resolves: NEED_CONFIRM
-    lead_variant: default
-    judged_by: []
+    lead_variant: ledger_count
+    # 标记后**紧跟正文**（无分隔符）是真实声明的常见形态（实测两仓 239 行）
+    trailing_text_ok: true
+    judged_by: [agate_common.py]          # _NO_NEED_RE
 
   - name: PROD_TOUCHED
     purpose: 意外触达生产环境（→ 立即 PAUSED）
     phases: [P1, P2, P3, P4, P5, P6, P7, P8]
     params: optional_text
     paired_with: PROD_NOT_TOUCHED
-    lead_variant: default
-    judged_by: []
+    lead_variant: dash_only
+    # 标记后**紧跟正文**（无分隔符）是真实声明的常见形态（实测两仓 239 行）
+    trailing_text_ok: true
+    judged_by: [pre-commit-gate.py:343]      # 安全门：命中即中止 commit（sys.exit 1）
 
   - name: PROD_NOT_TOUCHED
     purpose: 显式声明未触达生产环境（配对标记）
     phases: [P1, P2, P3, P4, P5, P6, P7, P8]
     params: optional_text
     resolves: PROD_TOUCHED
-    lead_variant: default
-    judged_by: []
+    lead_variant: dash_only
+    # 标记后**紧跟正文**（无分隔符）是真实声明的常见形态（实测两仓 239 行）
+    trailing_text_ok: true
+    judged_by: [pre-commit-gate.py:347]      # 安全门：格式不合规即中止 commit

@@ -294,3 +294,85 @@ def test_mk_6b_design_gap_matches_agate_common_on_real_corpus(agate_root):
         f"mk_6b 违反（DESIGN_GAP 判据与 agate_common 不等价）："
         f"总计 old={total_old} new={total_new}\n  " + "\n  ".join(diffs[:10])
     )
+
+
+# --- mk_7：注册表 vs **真实消费方** 的等价守护（2026-10-03，外部评审查出 #388 分叉）---
+#
+# 背景（ADR-014 教训「声明单源 ≠ 已经单源」**在同一批改动中重犯**）：
+#   注册表把 8 个标记全部声明为权威源，但实际只有 SCOPE+ 一对真正接入了取值库。
+#   NEED_CONFIRM / NO_NEED_CONFIRM / PROD_TOUCHED 三对的 `judged_by` 曾为 `[]`（登记为
+#   "无消费方"），而**实际消费方存在且口径不同**：
+#     · `agate_common._NC_RE` 等用 `^\s*`*-?\s*`*\[NAME\]`（可选反引号 + 可选短横线）
+#     · `pre-commit-gate.py:343` 用 `^\s*-?\s*\[PROD_TOUCHED\]`（**安全门**，命中即中止 commit）
+#   实测两仓真实语料 **182 行**判定相反 ⇒ 按 ADR-015 属必拦的「判据分叉」。
+#
+# 本守护把 mk_6b（DESIGN_GAP 等价）推广到**全部声明有消费方的标记**。
+
+_CONSUMER_ANCHORS = {
+    "NEED_CONFIRM": ("agate_common.py", r"\[NEED_CONFIRM\]"),
+    "NO_NEED_CONFIRM": ("agate_common.py", r"\[NO_NEED_CONFIRM\]"),
+    "PROD_TOUCHED": ("pre-commit-gate.py", r"\[PROD_TOUCHED\]"),
+    "PROD_NOT_TOUCHED": ("pre-commit-gate.py", r"\[PROD_NOT_TOUCHED\]"),
+}
+
+
+def test_mk_7a_registry_declares_real_consumer(agate_scripts):
+    """mk_7a：声明有消费方的标记，其 `judged_by` 必须**非空且指向真实文件**。
+
+    防「登记为无消费方、实际却有阻断型消费方」——PROD_TOUCHED 正是这样被错登为 `[]`，
+    而它是**安全门**（命中即 `sys.exit(1)` 中止 commit）。
+    """
+    M = _markers_mod(agate_scripts)
+    for name in _CONSUMER_ANCHORS:
+        entry = M.spec(name)
+        judged = entry.get("judged_by") or []
+        assert judged, (
+            f"{name} 的 judged_by 为空，但它有真实消费方 "
+            f"（{_CONSUMER_ANCHORS[name][0]}）——错登会让 agate-mark.py --list 误导读者"
+        )
+        for ref in judged:
+            fn = str(ref).split(":")[0]
+            assert (agate_scripts / fn).is_file(), f"{name} 的 judged_by 指向不存在的文件: {ref}"
+
+
+def test_mk_7b_registry_matches_real_consumer_on_corpus(agate_scripts):
+    """mk_7b：注册表口径与**真实消费方正则**在代表性语料上判定一致。
+
+    ⚠️ 这是 mk_6b 的推广：不看声明看**行为**。用例刻意覆盖 default 口径与消费方口径
+    **方向相反**的两侧——实测正是这两个方向造成了 182 行分叉。
+    """
+    import re
+    am = _markers_mod(agate_scripts)
+
+    cases = {
+        "NEED_CONFIRM": [
+            ("- [NEED_CONFIRM] x", True),
+            ("- `[NEED_CONFIRM]` x", True),
+            ("- [NEED_CONFIRM]其余说明", True),
+            ("**[NEED_CONFIRM]** x", False),
+            ("* [NEED_CONFIRM] x", False),
+            ("> [NEED_CONFIRM] x", False),
+        ],
+        "NO_NEED_CONFIRM": [
+            ("- [NO_NEED_CONFIRM] x", True),
+            ("[NO_NEED_CONFIRM]其余隐含需求方向已明确", True),
+            ("* [NO_NEED_CONFIRM] x", False),
+        ],
+        "PROD_TOUCHED": [
+            ("- [PROD_TOUCHED]", True),
+            ("[PROD_TOUCHED]", True),
+        ],
+    }
+    consumer = {
+        "NEED_CONFIRM": re.compile(r"^\s*`*-?\s*`*\[NEED_CONFIRM\]"),
+        "NO_NEED_CONFIRM": re.compile(r"^\s*`*-?\s*`*\[NO_NEED_CONFIRM\]"),
+        "PROD_TOUCHED": re.compile(r"^\s*-?\s*\[PROD_TOUCHED\]"),
+    }
+    for name, rows in cases.items():
+        for line, want in rows:
+            got_reg = bool(am.pattern(name).search(line))
+            got_con = bool(consumer[name].search(line))
+            assert got_reg == want, f"注册表 {name} 对 {line!r} 判定 {got_reg}，期望 {want}"
+            assert got_reg == got_con, (
+                f"**判据分叉**：{name} 对 {line!r} 注册表={got_reg} 消费方={got_con}"
+            )

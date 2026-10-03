@@ -133,13 +133,22 @@ def _body(name):
     #   带参两支均**不要求闭合 `]`**，允许跨行续写（存量 SCOPE_RESOLVED 3 处）
     if params == "none":
         core = r"\[" + esc + r"\]"
+        if s.get("trailing_text_ok"):
+            # 允许 `[NAME]紧跟正文`（无分隔符）——与既有消费方的账本计数口径一致。
+            # 实测（2026-10-03）：该形态在两仓真实语料中出现 **239 行**（7 个标记），
+            # 其中 PROD_NOT_TOUCHED 212 / NEED_CONFIRM 181 / NO_NEED_CONFIRM 58。
+            # 不加此字段时，注册表与消费方在 `[NO_NEED_CONFIRM]其余…` 这类行上判定相反。
+            # 边界改 ASCII 词字符：中文正文紧跟标记是**真声明**（实测 239 行），
+            # 而 `(?!\w)` 会把中文也算进词字符而误拒。
+            core = r"\[" + esc + r"\](?![A-Za-z0-9_])"
     elif params == "required_text":
         core = r"\[" + esc + r"\s*:\s*(.*?)($|[^a-z]|-->)"
     else:  # optional_text
         core = r"\[" + esc + r"(?::\s*(.*?))?($|[^a-z])"
     # 名称边界：标记名后不得再接词字符（防 A 吞并 A_B 型前缀标记；
     # 注意 `($|[^a-z])` 里的 `_`/`1`/`X` 都算词字符，故必须显式加此约束）。
-    core += r"(?!\w)"
+    if not (params == "none" and s.get("trailing_text_ok")):
+        core += r"(?!\w)"
     if s.get("accept_backtick"):
         # 反引号包裹在**标记本体**这一层表达（行首层是全局排除项）
         core = r"`?" + core + r"`?"
