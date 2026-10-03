@@ -34,9 +34,15 @@ from collections import Counter
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 try:
-    from agate_common import read_vision_tri_state
+    from agate_common import (
+        extract_evidence_refs,
+        read_vision_tri_state,
+        resolve_evidence,
+    )
 except ImportError:
     read_vision_tri_state = None
+    resolve_evidence = None
+    extract_evidence_refs = None
 
 
 def _run_script(script, args, env_extra):
@@ -151,12 +157,16 @@ def main():
 
     evidence_dir = os.path.join(task_dir, "P6-evidence")
 
-    # 每条 PASS 行必须含文件引用（括号内路径，S2 结构判定：文件名.扩展名）
-    ref_re = re.compile(r"\([^()]*[^()\s]\.[a-zA-Z0-9]+[^)]*\)")
+    # 每条 PASS 行必须含文件引用。
+    # **走单源提取器**（S1 + M-A）：不再自持正则——原写法只认 ASCII 括号，
+    # 全角 `（）` 会被判"无引用"⇒ 假红，且与 provenance 判据分叉（ADR-014）。
+    # 提取器同时覆盖：全角/半角、行中/行末、逗号分隔、以及
+    # `(screenshots/b07.png — element: .katex nth(1))` 这类**带内层括号的注释**
+    # （test_evid_ext_4 / test_pv_18 锁定）。
     pass_without_ref = 0
     pass_without_ref_details = ""
     for line in re.findall(r"^\s*- PASS\b.*", p6_text, re.MULTILINE):
-        if not ref_re.search(line):
+        if not extract_evidence_refs(line):
             pass_without_ref += 1
             pass_without_ref_details += f"  - {line}\n"
 
@@ -375,8 +385,8 @@ def main():
         for line in p6_text.splitlines():
             if "(frames/" in line:
                 frame_nums = []
-                for ref in re.findall(r"frames/[^()\s,]+\.\w+", line):
-                    if not os.path.isfile(os.path.join(evidence_dir, ref)):
+                for ref in re.findall(r"frames/[^（()）\s,]+\.\w+", line):
+                    if not resolve_evidence(task_dir, ref):
                         sys.stderr.write(f"GATE P6-EVIDENCE: 帧序列引用的文件不存在: {ref}\n")
                         sys.exit(1)
                     mnum = re.search(r"-(\d+)\.\w+$", os.path.basename(ref))
@@ -385,13 +395,13 @@ def main():
                 if frame_nums and max(frame_nums) - min(frame_nums) + 1 > len(set(frame_nums)):
                     sys.stderr.write("GATE P6-EVIDENCE WARNING: 帧序列帧号不连续（存在缺口，请 verifier 复核时序采样完整性）\n")
             if "(renders/" in line:
-                refs = re.findall(r"renders/[^()\s,]+\.\w+", line)
+                refs = re.findall(r"renders/[^（()）\s,]+\.\w+", line)
                 has_actual = any(
-                    "-actual." in os.path.basename(r) and os.path.isfile(os.path.join(evidence_dir, r))
+                    "-actual." in os.path.basename(r) and resolve_evidence(task_dir, r)
                     for r in refs
                 )
                 has_diff = any(
-                    "-diff.json" in os.path.basename(r) and os.path.isfile(os.path.join(evidence_dir, r))
+                    "-diff.json" in os.path.basename(r) and resolve_evidence(task_dir, r)
                     for r in refs
                 )
                 if not (has_actual and has_diff):

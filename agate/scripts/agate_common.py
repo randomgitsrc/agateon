@@ -1500,6 +1500,192 @@ def extract_embedded_yaml_blocks(text):
     return [m.group(1) for m in _EMBEDDED_YAML_BLOCK_RE.finditer(text)]
 
 
+# ===========================================================================
+# 判据鲁棒性四项单源（设计 docs/design-notes/design-gate-robustness-four-gaps.md）
+# ===========================================================================
+#
+# **为什么放在这里**（ADR-014 判据单一权威源）：同一概念在本仓曾有多份实现、
+# 且**已经分叉**——例如证据前缀规则在 judge 与 provenance 各不相同，
+# 导致「同一引用在一处被接受、在另一处被判缺失」的假红。
+# 本批把 ① 证据解析 ② 括号 ③ 引用提取 ④ 围栏剥离 四项收敛到此，各 gate 共用。
+#
+# **设计核心洞察**：每处「放宽解析」都是**交换**——解除假红的同时，移除了原本靠
+# 假红**顺带**提供的保护。故每处都配**链路级**回归锁（测试见
+# tests/unit/test_agate_common_evidence.py 与各消费方测试）。
+
+# 括号常量（③）：**排除类**中段——不得改成 `.*?`（会吞跨括号内容，改变提取语义）。
+PAREN_OPEN = r"[（(]"
+PAREN_CLOSE = r"[）)]"
+PAREN_INNER = r"[^（()）]"
+
+# 证据目录前缀（①）：**不区分大小写**比较；`evidences/` 为既有兼容别名。
+# 保留二者是**有意为之**——收紧会在 provenance 上引入新假红（存量数据见 R6 爆炸半径）。
+EVIDENCE_PREFIXES = ("p6-evidence/", "evidences/")
+DEFAULT_EVIDENCE_DIR = "P6-evidence"
+
+_FENCE_OPEN_RE = re.compile(r"^```")
+_FENCE_CLOSE_RE = re.compile(r"^`{3,}\s*$")
+
+
+def resolve_evidence(task_dir, ref):
+    """把证据引用解析为任务目录内真实文件的绝对路径；无法解析或越界返回 None。
+
+    顺序（**次序即判据，不得调整**）：
+      1. normpath 折叠冗余分隔符（`./`、`//`、`.//`）。
+      2. **循环**剥离已知前缀（不区分大小写），直到不再以任一前缀开头。
+         —— 必须先剥前缀再拼接：否则嵌套同名目录会把引用指向**错误副本**（静默、零告警）。
+         —— 必须**循环**：只剥一次时 `P6-evidence/P6-evidence/a.json` 仍落到嵌套副本。
+      3. 相对 <task_dir>/P6-evidence/ 拼接（`../vision-reports/x.yml` 自然落到任务根下）。
+      4. realpath 后必须仍在 realpath(task_dir) **之内**，否则 None（防软链逃逸）。
+         —— 必须 realpath 而非 normpath：后者可被软链逃逸（实测）。
+      5. 不是文件 → None。
+
+    已知边界（不修，ADR-015：假红可被发现、非假绿）：
+      · `//P6-evidence/a.json`（前导双斜杠）—— POSIX 实现定义前缀，normpath 保留。
+      · 证据嵌套两层存放时，前缀写法会被循环剥到最后一层。
+    """
+    if not ref:
+        return None
+    task_real = os.path.realpath(str(task_dir))
+    r = os.path.normpath(str(ref).replace("\\", "/"))
+    low = r.lower()
+    for prefix in EVIDENCE_PREFIXES:
+        while low.startswith(prefix):
+            r = r[len(prefix):]
+            low = r.lower()
+            if not r:
+                return None                      # 剥到空串：退化输入，拒绝
+    full = os.path.realpath(os.path.join(task_real, DEFAULT_EVIDENCE_DIR, r))
+    if not (full == task_real or full.startswith(task_real + os.sep)):
+        return None                              # 越界（含软链逃逸）
+    return full if os.path.isfile(full) else None
+
+
+# 路径 token：允许**空格**（既有写法 `screenshots/login page.png`）与**中文文件名**
+# （既有测试 test_bdd_9_chinese_filename / test_evidence_md5_detail_2 锁定）。
+# 不允许括号/逗号（那是分隔符）。
+_REF_PATH_RE = re.compile(r"[^（()）,]+?\.[A-Za-z0-9]{1,8}$")
+# 括号内的**元数据标记**（**不是证据引用**）——协议自身的标记，须先剥离/排除：
+#   `(vision: …)` 视觉元数据；`(manual-review: <file>)` 人工复核记录（provenance 审计 5 读它）。
+_META_MARK_RE = re.compile(r"\((?:vision|manual-review)\s*:[^)]*\)")
+# 行内代码 span（反引号）——其中的文本是**命令/代码示例**，不是证据引用。
+# 真实数据里命令注记常与引用同处一行（甚至同处一个括号组），必须先行剥离。
+_CODE_SPAN_RE = re.compile(r"`[^`]*`")
+
+
+def extract_evidence_refs(line):
+    """提取一行里的**证据引用**（③ 提取规则单源）。
+
+    规则（两个消费方共用，避免"一处认为有引用、另一处认为没有"）：
+
+      **(a) 行末括号组** = 证据引用（可逗号分隔多文件）。
+      **(b) 行内任意位置的「目录前缀路径」**（`screenshots/…`、`frames/…`、`renders/…`、
+          `logs/…` 等含 `/` 的相对路径）= 证据引用（带内层括号注释时也能取到）。
+          行中**无目录前缀**的纯文件名（`(bdd-1.log) — 说明`）**不**取——实测这样做
+          会在两仓产生 701 次误解析（见下方 (c) 的否决记录）。
+      二者取并集、去重、保持出现顺序。
+
+    **为什么是"行末括号"而不是"所有括号"**（真实数据实测，2026-10-03）：
+      两仓 **1,774** 条 PASS 行中，**1,149 条（65%）含多个括号组**，而**非末组绝大多数是
+      命令注释**（如 `` `check-protocol-consistency.py --strict` exit 0 ``、
+      `ruff check agate/scripts/` exit 0），**不是证据**。
+      若把所有括号组当引用，会把命令注释当路径去解析 ⇒ **大面积假红**。
+      ⇒ 末组=证据 是既有约定（测试 `test_pv_4_last_paren_taken` 锁定），本函数**维持**它。
+
+    **为什么还要 (b)**：真实数据主流写法是「引用在行中、后跟说明」
+    （如 `(bdd-1.log) — 说明文字`）；且 `(screenshots/b07.png — element: .katex nth(1))`
+    这类**带内层括号注释**的写法，末组整体不像纯路径。两者都靠 (b) 覆盖。
+
+    其他：先剥离 `(vision: …)`（元数据）；括号端点全角/半角皆认；允许文件名含**空格**与**中文**
+    （既有测试 `test_evidence_md5_detail_2` / `test_bdd_9_chinese_filename` 锁定）。
+    """
+    text = _META_MARK_RE.sub("", line)
+    out = []
+
+    # (a) 行末括号组（可逗号分隔）——**证据的默认位置**
+    tail = re.search(PAREN_OPEN + "([^（()）]*)" + PAREN_CLOSE + r"\s*$", text)
+    if tail:
+        for part in tail.group(1).split(","):
+            token = part.strip()
+            if token and _REF_PATH_RE.fullmatch(token):
+                out.append(token)
+            elif token and "/" in token:
+                # 末组含注释（`screenshots/b07.png — element: …`）：取其中的路径片段
+                m2 = re.match(r"[^（()）,/—:]+/[^（()）,/—:]+\.[A-Za-z0-9]{1,8}", token)
+                if m2:
+                    out.append(m2.group(0).strip())
+
+    # (b) 行内**括号组内**的目录前缀路径——**只在括号内取**，不在散文里取。
+    #     ⚠️ 关键约束（R6 爆炸半径实测抓出）：早期版本在**整行任意位置**匹配路径，
+    #     结果把注释散文里的路径也当引用（如 `… loc=\`agate/phase-cards/P3-tdd.md:1\``,
+    #     `「README.md / AGENTS.md」`）⇒ **两仓几乎全部任务由 exit 0 变 exit 1**。
+    #     证据引用**必须写在括号内**——这是协议约定，也是与 check-p6-evidence 一致的口径。
+    #     括号组用**宽松中段**（允许内层括号，如 `… nth(1))`）。
+    #     ⚠️ **先剥离行内代码 span**（反引号）——R6 爆炸半径实测抓出：真实数据里
+    #     命令注记写成 `` （`grep -c dispatch_route <task>/gate-events.jsonl`） ``，
+    #     它**在括号内**，若不剥 span 会被当引用 ⇒ 两仓几乎全部任务 exit 0 → exit 1。
+    #     「代码 span 内不是引用」与「围栏内不是预判」同一道理（strip_fenced_blocks）。
+    text = _CODE_SPAN_RE.sub("`C`", text)
+    for g in re.finditer(PAREN_OPEN + "([^（()）]*(?:[（(][^（()）]*[）)])?[^（()）]*)" + PAREN_CLOSE,
+                         text):
+        for m in re.finditer(r"[^（()）,/—:\s][^（()）,/—:]*/[^（()）,/—:]+\.[A-Za-z0-9]{1,8}",
+                             g.group(1)):
+            out.append(m.group(0).strip())
+
+    # **刻意不做 (c)：把"行中任意括号组"也算引用**——实测否决（2026-10-03）：
+    #   两仓真实数据下，(c) 会让 **517 行**多出引用、其中 **701 次解析不到** ⇒ 大面积假红。
+    #   根因：多括号行（占 PASS 行 **65%**）的非末组多为**命令注释**
+    #   （`` `ruff check x/` exit 0 ``），不是证据。
+    #   ⇒ 「末组 = 证据」是既有约定（测试 `test_pv_4_last_paren_taken` 锁定），**维持**。
+    #   行中引用由 (b) 覆盖（实测修复 70 条真实假红；目录前缀路径是 M-A 的真实形态）。
+
+    seen, uniq = set(), []
+    for t in out:
+        if not t:
+            continue
+        # 去重键：normpath 归一（`../x` 与 `x` 在 P6-evidence/ 语境下可能指同一处；
+        # 保留先出现的写法作为展示形态）
+        key = os.path.normpath(t)
+        if key in seen:
+            continue
+        # 同一路径的两种写法（`../P5-.../unit.md` vs `P5-.../unit.md`）也算重复
+        if any(os.path.normpath(u) == key for u in uniq):
+            continue
+        seen.add(key)
+        uniq.append(t)
+    return uniq
+
+
+def strip_fenced_blocks(lines):
+    """剥离围栏代码块，返回 (保留行, 告警或 None)。
+
+    **未闭合围栏：不剥离 + 返回告警。**
+    先例：`check-p6-provenance.py` 对 frontmatter 的处理——「找不到闭合对 ⇒ 不剥离 +
+    显式告警（**宁可多审，不可吞正文**）」。
+    ⚠️ **不得照搬 `check-protocol-consistency.py` 的 `in_fence`**：它遇未闭合会
+    **跳到 EOF**，会把其后的真预判一起吞掉（假绿）。
+    """
+    kept, in_fence, opened_at, fence_char = [], False, 0, "`"
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if in_fence:
+            if _FENCE_CLOSE_RE.match(stripped) and stripped.startswith(fence_char):
+                in_fence = False
+            continue
+        if _FENCE_OPEN_RE.match(stripped):
+            in_fence = True
+            opened_at = i
+            fence_char = stripped[0]
+            continue
+        kept.append(line)
+    if in_fence:
+        return list(lines), (
+            f"围栏在第 {opened_at} 行开启但未闭合——**不剥离**"
+            "（避免吞掉其后的正文；宁可多审，不可吞正文）"
+        )
+    return kept, None
+
+
 if __name__ == "__main__":
     project_root = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
     workspace, tasks_dir = resolve_workspace(project_root)

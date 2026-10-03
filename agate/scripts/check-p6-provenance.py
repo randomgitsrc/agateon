@@ -46,9 +46,17 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 try:
-    from agate_common import read_vision_tri_state
+    from agate_common import (
+        extract_evidence_refs,
+        read_vision_tri_state,
+        resolve_evidence,
+        strip_fenced_blocks,
+    )
 except ImportError:
     read_vision_tri_state = None
+    resolve_evidence = None
+    extract_evidence_refs = None
+    strip_fenced_blocks = None
 
 _SKIP_AGENT_CHECK = (
     r"-dispatch-context\.md$",
@@ -289,22 +297,33 @@ def main():
         # R1c 修复：优先精确提取 screenshots/ 路径，避免嵌套括号（如 nth(1)）截断
         missing_refs = 0
         missing_details = ""
+        unparsed_refs = 0
+        unparsed_details = ""
         for line in pass_lines:
-            line_clean = re.sub(r"\(vision:[^)]*\)", "", line).rstrip()
-            refs = re.findall(r"screenshots/[^ ),]+", line_clean)
+            # 提取走**单源**（设计 §3.2）：任意位置、全角/半角、逗号分隔多文件，
+            # 且排除类含全角括号（原 `screenshots/[^ ),]+` 会把 `）` 截进路径）。
+            refs = extract_evidence_refs(line)
             if not refs:
-                m = re.search(r"\([^)]+\)$", line_clean)
-                ref_group = m.group(0).replace("(", "").replace(")", "") if m else ""
-                refs = ref_group.split(",")
-            for raw_ref in refs:
-                ref = raw_ref.strip()
-                if not ref:
-                    continue
-                ref_clean = re.sub(r"^(P6-evidence|p6-evidence|evidences)/", "", ref)
-                ref_path = os.path.join(evidence_dir, ref_clean)
-                if not os.path.isfile(ref_path):
+                # **不得静默跳过**（B2）：取不到就放行，等于把「解析失败」当成「通过」。
+                # 与 check-p6-evidence 的「缺引用」检查构成双重防线。
+                unparsed_refs += 1
+                unparsed_details += f"  PASS行: {line}"
+                continue
+            for ref in refs:
+                ref_path = resolve_evidence(task_dir, ref)
+                if not ref_path:
                     missing_refs += 1
-                    missing_details += f"  PASS行: {line}\n  缺失路径: {ref_path}\n"
+                    missing_details += (
+                        f"  PASS行: {line}\n  缺失路径: {ref}（已尝试剥前缀后相对 "
+                        f"{os.path.basename(evidence_dir)}/ 解析）\n")
+
+        if unparsed_refs > 0:
+            sys.stderr.write(
+                f"GATE PROVENANCE: 有 {unparsed_refs} 条 PASS 行**未能提取证据引用**——"
+                "引用须写在括号内（全角/半角均可），可在行中或行末\n")
+            if unparsed_details:
+                sys.stderr.write(unparsed_details)
+            sys.exit(1)
 
         if missing_refs > 0:
             sys.stderr.write(f"GATE PROVENANCE: P6-acceptance.md 有 {missing_refs} 条 PASS 引用的证据文件不存在\n")
@@ -391,6 +410,11 @@ def main():
                 sys.stderr.write(
                     "GATE PROVENANCE: frontmatter 起始 `---` 无闭合对，未剥离（避免吞掉正文）\n"
                 )
+        # 审计 2：**围栏代码块先行剥离**（M3）——与 judge 侧同源，
+        # 否则派发指引里的格式示例会被判预判（假红）。
+        filtered, _fence_warn = strip_fenced_blocks(filtered)
+        if _fence_warn:
+            sys.stderr.write(f"GATE PROVENANCE: {_fence_warn}\n")
         prejudice = sum(1 for line in filtered if re.search(r"^\s*- (PASS|FAIL)\b", line))
         if prejudice > 0:
             sys.stderr.write(f"GATE PROVENANCE: {os.path.basename(dispatch_ctx)} 含 {prejudice} 处验收结论预判\n")

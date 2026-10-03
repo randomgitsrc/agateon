@@ -53,7 +53,16 @@ import sys
 # 引入同目录公共库：AGATE_CARD/frontmatter 双排除与 BDD 计数口径与 check-p6-provenance
 # 同款；append_event 是账本唯一写路径（P2 候选 C1）。
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from agate_common import append_event, read_judge_verdict, split_frontmatter
+from agate_common import (
+    PAREN_CLOSE,
+    PAREN_INNER,
+    PAREN_OPEN,
+    append_event,
+    read_judge_verdict,
+    resolve_evidence,
+    split_frontmatter,
+    strip_fenced_blocks,
+)
 
 # BDD-5：verdict Header status 合法三值
 _VALID_STATUS = {"passed", "rejected", "needs-revision"}
@@ -79,7 +88,9 @@ _WHITELIST_MD = {
 }
 
 # BDD-3：结论条目行前缀（judge.md 产出规范；脚本只做编号/计数机械核对）
-_CONCLUSION_RE = re.compile(r"^\s*-\s*(PASS|FAIL|NEEDS-REVISION)\s+BDD-([0-9]+)\s*:")
+# 冒号含全角（S2）：judge 用中文全角标点是自然书写；
+# 且 check-p6-format.py:26-29 **已接纳**全角冒号 ⇒ 此处不补会造成仓内判据分叉。
+_CONCLUSION_RE = re.compile(r"^\s*-\s*(PASS|FAIL|NEEDS-REVISION)\s+BDD-([0-9]+)\s*[:：]")
 
 # BDD-7：账本路径
 LEDGER_NAME = "gate-events.jsonl"
@@ -242,20 +253,31 @@ def _check_whitelist_outside(section_lines, evidence_basenames=frozenset()):
 
 def _check_prediction(lines):
     r"""BDD-4③（继承审计 2）：全文（已排除 AGATE_CARD/frontmatter）行首
-    `^\s*- (PASS|FAIL)\b` 验收结论预判扫描。返回命中数。"""
-    return sum(1 for line in lines if re.search(r"^\s*- (PASS|FAIL)\b", line))
+    `^\s*- (PASS|FAIL)\b` 验收结论预判扫描。返回命中数。
+
+    **围栏代码块先行剥离**（设计 §3.3）：派发指引里的**格式示例**天然含
+    `- PASS BDD-1: {描述}`，不排除会把示例判成预判（假红）。
+    ⚠️ 未闭合围栏**不剥离**并告警（`strip_fenced_blocks` 的语义）——
+    照搬 `check-protocol-consistency.py` 的 `in_fence`（未闭合跳 EOF）会**吞掉真预判**。
+    """
+    kept, warn = strip_fenced_blocks(list(lines))
+    if warn:
+        sys.stderr.write(f"GATE JUDGE-VERDICT: {warn}\n")
+    return sum(1 for line in kept if re.search(r"^\s*- (PASS|FAIL)\b", line))
 
 
-def _evidence_md5_dedup(evidence_dir, v_evidence):
+def _evidence_md5_dedup(task_dir, v_evidence):
     """对 verdict_evidence 引用的证据文件求 md5（引用缺失 → 返回 missing 列表 + digests）。
 
-    供 _check_evidence 内的 md5 去重（BDD-6）使用。
+    单源（设计四缺口 §3.1）：解析走 `agate_common.resolve_evidence`，不再本地拼接。
+    **md5 的键用解析后的 realpath**——使「同一文件的两种写法」归并为一份证据，
+    而不是被当成两份不同证据（与现有「按 digest 去重」的语义一致）。
     """
     digests = {}
     missing = []
     for ref in v_evidence:
-        full = os.path.join(evidence_dir, str(ref))
-        if not os.path.isfile(full):
+        full = resolve_evidence(task_dir, str(ref))
+        if not full:
             missing.append(str(ref))
             continue
         try:
@@ -264,7 +286,7 @@ def _evidence_md5_dedup(evidence_dir, v_evidence):
         except OSError:
             missing.append(str(ref))
             continue
-        digests[str(ref)] = hashlib.md5(content).hexdigest()
+        digests[full] = hashlib.md5(content).hexdigest()
     return digests, missing
 
 
@@ -277,33 +299,42 @@ def _check_evidence(task_dir, verdict_evidence, conclusions_refs):
     if not os.path.isdir(evidence_dir):
         return 0, []
 
-    # 6a：每条引用真实存在且非空（digests 仅含存在且非空的文件）
-    digests, missing = _evidence_md5_dedup(evidence_dir, verdict_evidence)
+    # 6a：每条引用真实存在且非空——**用同一个解析结果**（B1）：
+    #   若此处退回本地拼接，带前缀写法的**空文件**会被判"不存在"而放行
+    #   （原本靠这个误报顺带挡住）。故 6a 与 md5 必须共用 resolve_evidence。
+    digests, missing = _evidence_md5_dedup(task_dir, verdict_evidence)
     empty = []
     for ref in verdict_evidence:
-        full = os.path.join(evidence_dir, str(ref))
-        if os.path.isfile(full):
-            try:
-                with open(full, "rb") as fh:
-                    if not fh.read():
-                        empty.append(str(ref))
-            except OSError:
-                missing.append(str(ref))
+        full = resolve_evidence(task_dir, str(ref))
+        if not full:
+            continue                     # 已计入 missing，不重复报
+        try:
+            with open(full, "rb") as fh:
+                if not fh.read():
+                    empty.append(str(ref))
+        except OSError:
+            missing.append(str(ref))
 
     # 6b：相互 md5 去重（同一物理内容不得被多条结论引为不同证据）
     dup = []
     seen = {}
-    for ref, digest in digests.items():
+    for path, digest in digests.items():
         if digest in seen:
-            dup.append(f"{seen[digest]} / {ref}")
+            dup.append(f"{seen[digest]} / {path}")
         else:
-            seen[digest] = ref
+            seen[digest] = path
 
-    # 6c：引用对称——结论引用 ⊆ verdict_evidence，且每条被 ≥1 条结论引用
-    ref_set = {str(r) for r in verdict_evidence}
-    concl_set = set(conclusions_refs)
-    refs_not_in_evidence = sorted(concl_set - ref_set)
-    evidence_not_referenced = sorted(ref_set - concl_set)
+    # 6c：引用对称——结论引用 ⊆ verdict_evidence，且每条被 ≥1 条结论引用。
+    #   **两侧都先解析成 realpath 再比**（M1）：否则「清单写 P6-evidence/a.json、
+    #   结论写 (a.json)」会被判双向不符——那是同一个文件的两种写法，不是违规。
+    ref_map = {resolve_evidence(task_dir, str(r)): str(r) for r in verdict_evidence}
+    concl_map = {resolve_evidence(task_dir, str(r)): str(r) for r in conclusions_refs}
+    unresolved = [str(r) for r in list(verdict_evidence) + list(conclusions_refs)
+                  if resolve_evidence(task_dir, str(r)) is None]
+    ref_set = {p for p in ref_map if p}
+    concl_set = {p for p in concl_map if p}
+    refs_not_in_evidence = sorted(concl_map[p] for p in (concl_set - ref_set))
+    evidence_not_referenced = sorted(ref_map[p] for p in (ref_set - concl_set))
 
     if missing or empty or dup or refs_not_in_evidence or evidence_not_referenced:
         lines = []
@@ -317,6 +348,10 @@ def _check_evidence(task_dir, verdict_evidence, conclusions_refs):
             lines.append(f"GATE JUDGE-VERDICT: 结论引用不在 verdict_evidence 清单: {', '.join(refs_not_in_evidence)}")
         if evidence_not_referenced:
             lines.append(f"GATE JUDGE-VERDICT: verdict_evidence 条目未被任何结论引用: {', '.join(evidence_not_referenced)}")
+        if unresolved:
+            lines.append(
+                f"GATE JUDGE-VERDICT: 无法解析的证据引用: {', '.join(sorted(set(unresolved)))}"
+                "（已尝试：剥 P6-evidence/ 前缀后相对 P6-evidence/ 解析；越界或文件不存在）")
         return 1, lines
     return 0, []
 
@@ -507,7 +542,10 @@ def main():
     # 6. 证据交叉核对（BDD-6）——引用收敛到明确证据路径形态（I-2 修复）：
     #    仅取"括号内容整体为文件路径形态"的组（可逗号分隔多文件），描述中的
     #    任意括号（如 "(as discussed)"）不再被误取为首个引用 token
-    _REF_GROUP_RE = re.compile(r"\(([^()]*)\)")
+    # ③ 括号走单源常量（agate_common）；**提取规则**此处更严（内容须整体是路径），
+    #    与 `extract_evidence_refs`（任意位置、只要像文件名）**有意不同**：
+    #    结论行是判据正文，须严格；PASS 行/清单是叙述，须宽松。
+    _REF_GROUP_RE = re.compile(PAREN_OPEN + "(" + PAREN_INNER + "*)" + PAREN_CLOSE)
     _REF_PATH_FULL_RE = re.compile(
         r"[\w./\-]+\.[a-zA-Z0-9]+(?:\s*,\s*[\w./\-]+\.[a-zA-Z0-9]+)*")
     concl_refs = []
