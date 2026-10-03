@@ -95,6 +95,16 @@ def test_pv_4_both_parens_are_refs_missing_one_blocks(task_dir, agate_scripts, p
     assert result.returncode == 1, "a.png 不存在 ⇒ 应拦（两组都是路径形态）"
 
 
+def test_pv_4c_both_parens_exist_exit_0(task_dir, agate_scripts, python_exe, run_cli):
+    """**正例**（F8）：两个括号组的文件**都存在** ⇒ 通过（与 pv_4 构成一对）。"""
+    td = task_dir()
+    _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1 (a.png) (b.png)\n")
+    _add_evidence(td, "a.png", 1000)
+    _add_evidence(td, "b.png", 2000)
+    result = _run_prov(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0
+
+
 def test_pv_4b_all_missing_exit_1(task_dir, agate_scripts, python_exe, run_cli):
     td = task_dir()
     _write_p6(td, "---\nagent: test\n---\n- PASS BDD-1 (a.png) (b.png)\n")
