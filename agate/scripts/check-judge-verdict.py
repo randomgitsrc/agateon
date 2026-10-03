@@ -327,14 +327,24 @@ def _check_evidence(task_dir, verdict_evidence, conclusions_refs):
     #   结论写 (a.json)」会被判双向不符——那是同一个文件的两种写法，不是违规。
     ref_map = {resolve_evidence(task_dir, str(r)): str(r) for r in verdict_evidence}
     concl_map = {resolve_evidence(task_dir, str(r)): str(r) for r in conclusions_refs}
-    unresolved = [str(r) for r in list(verdict_evidence) + list(conclusions_refs)
-                  if resolve_evidence(task_dir, str(r)) is None]
+    #   ⚠️ **F1 回归修复**（2026-10-03 实施评审查出）：`unresolved` 原先只被**报告**、
+    #   **不在失败条件里**。后果：结论行引用一个**不存在**的文件时，
+    #   它既不在 refs_not_in_evidence（None 键被过滤），也不在 missing（只覆盖
+    #   verdict_evidence）⇒ **静默通过**，端到端还会往账本写一条通过事件。
+    #   实测对照：main rc=1「结论引用不在清单: ghost.json」；本批 rc=0（回归）。
+    #   修法：**两侧分别**收集无法解析的引用，并纳入失败条件（**结论侧**必须拦——
+    #   结论行是判据正文，引用不存在的证据即无效验收）。
+    unresolved_evidence = [str(r) for r in verdict_evidence
+                           if resolve_evidence(task_dir, str(r)) is None]
+    unresolved_concl = [str(r) for r in conclusions_refs
+                        if resolve_evidence(task_dir, str(r)) is None]
     ref_set = {p for p in ref_map if p}
     concl_set = {p for p in concl_map if p}
     refs_not_in_evidence = sorted(concl_map[p] for p in (concl_set - ref_set))
     evidence_not_referenced = sorted(ref_map[p] for p in (ref_set - concl_set))
 
-    if missing or empty or dup or refs_not_in_evidence or evidence_not_referenced:
+    if (missing or empty or dup or refs_not_in_evidence or evidence_not_referenced
+            or unresolved_concl):
         lines = []
         if missing:
             lines.append(f"GATE JUDGE-VERDICT: verdict_evidence 引用不存在: {', '.join(missing)}")
@@ -346,9 +356,14 @@ def _check_evidence(task_dir, verdict_evidence, conclusions_refs):
             lines.append(f"GATE JUDGE-VERDICT: 结论引用不在 verdict_evidence 清单: {', '.join(refs_not_in_evidence)}")
         if evidence_not_referenced:
             lines.append(f"GATE JUDGE-VERDICT: verdict_evidence 条目未被任何结论引用: {', '.join(evidence_not_referenced)}")
-        if unresolved:
+        if unresolved_concl:
             lines.append(
-                f"GATE JUDGE-VERDICT: 无法解析的证据引用: {', '.join(sorted(set(unresolved)))}"
+                f"GATE JUDGE-VERDICT: 结论行引用的证据不存在或不可解析: "
+                f"{', '.join(sorted(set(unresolved_concl)))}"
+                "（已尝试：剥 P6-evidence/ 前缀后相对 P6-evidence/ 解析；越界或文件不存在）")
+        if unresolved_evidence:
+            lines.append(
+                f"GATE JUDGE-VERDICT: 无法解析的证据引用: {', '.join(sorted(set(unresolved_evidence)))}"
                 "（已尝试：剥 P6-evidence/ 前缀后相对 P6-evidence/ 解析；越界或文件不存在）")
         return 1, lines
     return 0, []

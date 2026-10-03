@@ -308,12 +308,18 @@ def test_mk_6b_design_gap_matches_agate_common_on_real_corpus(agate_root):
 #
 # 本守护把 mk_6b（DESIGN_GAP 等价）推广到**全部声明有消费方的标记**。
 
+# 标记名 -> (消费方文件, 该文件里必须出现的口径片段)
+# ⚠️ **F6 修复**（2026-10-03 实施评审查出）：PROD_NOT_TOUCHED 原先登记
+#    `pre-commit-gate.py:347`，但第 347 行检查的是 `[PROD_TOUCHED]\s*$` **且不可达**
+#    （同形态第 343 行已 sys.exit）⇒ **无任何代码消费 PROD_NOT_TOUCHED**
+#    （它是配对声明，供人/评审阅读）。已从本表移除，并在 markers.yaml 登记 `judged_by: []`。
 _CONSUMER_ANCHORS = {
     "NEED_CONFIRM": ("agate_common.py", r"\[NEED_CONFIRM\]"),
     "NO_NEED_CONFIRM": ("agate_common.py", r"\[NO_NEED_CONFIRM\]"),
     "PROD_TOUCHED": ("pre-commit-gate.py", r"\[PROD_TOUCHED\]"),
-    "PROD_NOT_TOUCHED": ("pre-commit-gate.py", r"\[PROD_NOT_TOUCHED\]"),
 }
+# 明确声明「无消费方」的标记——mk_7a 要求其 judged_by **为空**（不得凭空登记）
+_NO_CONSUMER = ("PROD_NOT_TOUCHED",)
 
 
 def test_mk_7a_registry_declares_real_consumer(agate_scripts):
@@ -323,6 +329,10 @@ def test_mk_7a_registry_declares_real_consumer(agate_scripts):
     而它是**安全门**（命中即 `sys.exit(1)` 中止 commit）。
     """
     M = _markers_mod(agate_scripts)
+    for name in _NO_CONSUMER:
+        assert not (M.spec(name).get("judged_by") or []), (
+            f"{name} 声明为无消费方，judged_by 必须为空（防凭空登记不存在的消费方）"
+        )
     for name in _CONSUMER_ANCHORS:
         entry = M.spec(name)
         judged = entry.get("judged_by") or []
@@ -376,3 +386,48 @@ def test_mk_7b_registry_matches_real_consumer_on_corpus(agate_scripts):
             assert got_reg == got_con, (
                 f"**判据分叉**：{name} 对 {line!r} 注册表={got_reg} 消费方={got_con}"
             )
+
+
+# --- mk_8：**生成器产物必须被消费方认**（F5 修复的机械约束）---------------------
+#
+# 2026-10-03 实施评审查出（F5）：面向生产环境安全门的 PROD_TOUCHED，
+#   `render()` 原先产出 `[PROD_TOUCHED: db write]`（可选参数 ⇒ 带冒号），
+#   而文档（CONTEXT.md:24 / dispatch-protocol.md:1161）与安全门
+#   （`pre-commit-gate.py` 的 `^\s*-?\s*\[PROD_TOUCHED\]`）要求 `[PROD_TOUCHED] 描述`。
+#   ⇒ **照 WORKFLOW.md 用生成器写标记的 agent，安全门静默放行**（安全门漏检）。
+#
+# 本守护把「生成器写出的东西，消费方必须认」变成**机械约束**。
+
+def test_mk_8_render_output_is_accepted_by_safety_gate(agate_scripts):
+    """mk_8：`render()` 的产物必须被**安全门正则**命中（PROD_TOUCHED）。
+
+    判据直接取自消费方源码的形态（不写死副本 —— F9 的教训）。
+    """
+    import re
+    M = _markers_mod(agate_scripts)
+    gate_src = (agate_scripts / "pre-commit-gate.py").read_text(encoding="utf-8")
+    m = re.search(r'\^\\s\*-\?\\s\*\\\[(PROD_[A-Z_]+)\\\]', gate_src)
+    assert m, "未能在 pre-commit-gate.py 中找到 PROD_* 的安全门正则"
+    gate_marker = m.group(1)
+    # 用真实的安全门正则（从源码抽取）
+    gate_re = re.compile(r"^\s*-?\s*\[" + gate_marker + r"\]")
+    sample = M.render("PROD_TOUCHED")
+    assert gate_re.match(sample) or gate_re.match("- " + sample), (
+        f"render('PROD_TOUCHED') = {sample!r} 不被安全门 {gate_marker} 命中 "
+        "⇒ 用生成器写标记会**静默绕过安全门**"
+    )
+
+
+def test_mk_8b_prod_markers_render_without_colon(agate_scripts):
+    """mk_8b：PROD_TOUCHED / PROD_NOT_TOUCHED 的产物**不含冒号**（文档二值格式）。
+
+    文档形态：`[PROD_TOUCHED] {描述}` / `[PROD_NOT_TOUCHED]`（CONTEXT.md:24）。
+    `params: optional_text` 会渲染成 `[X: 描述]`，那是**旧的错误形态**（F5）。
+    """
+    M = _markers_mod(agate_scripts)
+    for name in ("PROD_TOUCHED", "PROD_NOT_TOUCHED"):
+        sample = M.render(name)
+        assert name + "]" in sample, f"{name} 渲染产物异常: {sample!r}"
+        assert name + ":" not in sample, (
+            f"{name} 渲染出带冒号的形态 {sample!r}，与文档/安全门不符（F5 回归）"
+        )

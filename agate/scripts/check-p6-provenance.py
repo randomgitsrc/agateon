@@ -48,6 +48,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 try:
     from agate_common import (
         extract_evidence_refs,
+        is_new_task_for_evidence_ref,
         read_vision_tri_state,
         resolve_evidence,
         strip_fenced_blocks,
@@ -57,6 +58,7 @@ except ImportError:
     resolve_evidence = None
     extract_evidence_refs = None
     strip_fenced_blocks = None
+    is_new_task_for_evidence_ref = None
 
 _SKIP_AGENT_CHECK = (
     r"-dispatch-context\.md$",
@@ -318,12 +320,28 @@ def main():
                         f"{os.path.basename(evidence_dir)}/ 解析）\n")
 
         if unparsed_refs > 0:
-            sys.stderr.write(
-                f"GATE PROVENANCE: 有 {unparsed_refs} 条 PASS 行**未能提取证据引用**——"
-                "引用须写在括号内（全角/半角均可），可在行中或行末\n")
-            if unparsed_details:
-                sys.stderr.write(unparsed_details)
-            sys.exit(1)
+            # **F2 修复**（2026-10-03 实施评审查出）：政策原先只在 check-p6-evidence 落地，
+            # 本脚本对存量任务仍 exit 1 ⇒ **同一概念两种判定**（ADR-014 意义上的分叉）。
+            # 现共用 `agate_common.is_new_task_for_evidence_ref`：
+            #   新任务 ⇒ exit 1；存量任务 ⇒ **exit 2**（F3：WARNING 须对 pre-commit-gate 可见，
+            #   后者只在 rc∈{1,2} 时打印捕获输出）。
+            msg = (f"GATE PROVENANCE: 有 {unparsed_refs} 条 PASS 行**未能提取证据引用**——"
+                   "引用须写在括号内（全角/半角均可），可在行中或行末\n"
+                   + (unparsed_details or ""))
+            new_task = True
+            try:
+                if is_new_task_for_evidence_ref is not None:
+                    new_task = is_new_task_for_evidence_ref(task_dir, __file__)
+            except Exception:
+                new_task = True
+            if new_task:
+                sys.stderr.write(msg)
+                sys.exit(1)
+            sys.stderr.write(msg + "  （**历史任务**，按 evidence_ref_required_since 之前的"
+                                   "截止口径给 WARNING，不阻断）\n")
+            # F3：以 exit 2 收尾（复用既有的 warning_found 语义；其初始化在同函数稍后处，
+            # 故此处用 globals 标记，末尾统一判定）。
+            globals()["_unparsed_evidence_warning"] = True
 
         if missing_refs > 0:
             sys.stderr.write(f"GATE PROVENANCE: P6-acceptance.md 有 {missing_refs} 条 PASS 引用的证据文件不存在\n")
@@ -604,7 +622,7 @@ def main():
         if reuse_result == "reuse_blocked" and p6_declares_reuse(task_dir):
             sys.exit(1)
 
-    if warning_found == 1:
+    if warning_found == 1 or globals().get("_unparsed_evidence_warning"):
         sys.exit(2)
     sys.exit(0)
 

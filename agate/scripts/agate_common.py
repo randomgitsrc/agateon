@@ -1561,6 +1561,51 @@ def resolve_evidence(task_dir, ref):
     return full if os.path.isfile(full) else None
 
 
+# ── 证据引用政策（最终裁决 §4；F2 修复：两脚本共用同一判据）────────────────
+# 判据：P1-requirements.md 的 `created` ≥ rules/dispatch.yaml 的
+#       evidence_ref_required_since ⇒ **新任务**（无引用 ⇒ exit 1，或 provenance 侧 exit 1）；
+#       否则（created 缺失/非 ISO/更早）⇒ **存量任务**（WARNING，不阻断；fail-open）。
+# ⚠️ **必须两脚本共用**——2026-10-03 实施评审查出：政策原先只在 check-p6-evidence 落地，
+#    provenance 对存量任务仍 exit 1 ⇒ **同一概念两种判定**（ADR-014 意义上的分叉）。
+EVIDENCE_REF_CUTOFF_KEY = "evidence_ref_required_since"
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def read_p1_created(task_dir):
+    """读 P1-requirements.md frontmatter 的 created（经 agate-md-field-get.py；无则 ""）。"""
+    p1 = os.path.join(task_dir, "P1-requirements.md")
+    if not os.path.isfile(p1):
+        return ""
+    env = dict(os.environ)
+    env["FILE"] = p1
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agate-md-field-get.py")
+    try:
+        import subprocess as _sp
+        proc = _sp.run([sys.executable, script, "created"], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace", env=env)
+    except OSError:
+        return ""
+    return (proc.stdout or "").strip() if proc.returncode == 0 else ""
+
+
+def is_new_task_for_evidence_ref(task_dir, script_path=None):
+    """P1 created ≥ 截止 ⇒ True（新任务）；无法判定 ⇒ False（**fail-open**，有意）。
+
+    照搬 check-gate.py 的 judge_required_since 先例（ISO 字典序比较）。
+    裁决 §4：created 缺失或非 ISO ⇒ 按存量任务处理——**有意为之**（不因缺元数据阻断历史任务）。
+    """
+    created = read_p1_created(task_dir)
+    if not (isinstance(created, str) and _ISO_DATE_RE.match(created)):
+        return False
+    try:
+        root = resolve_rules_root(script_path or __file__)
+        rules = read_rules_yaml(root, "dispatch")
+        cutoff = rules.get(EVIDENCE_REF_CUTOFF_KEY) if isinstance(rules, dict) else None
+    except Exception:
+        return False
+    return isinstance(cutoff, str) and created >= cutoff
+
+
 # 证据引用 token：**无空格/无括号/无逗号**的相对路径，扩展名**以字母开头**
 # （后者排除 `v0.99.0` / `0.16.3` / `EC.16` 这类版本号）。
 # ⚠️ **刻意不容空格**：实测两仓 1,739 个证据文件中含空格者为 **0**；

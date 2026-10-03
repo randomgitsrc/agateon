@@ -118,19 +118,29 @@ markers:
   - name: PROD_TOUCHED
     purpose: 意外触达生产环境（→ 立即 PAUSED）
     phases: [P1, P2, P3, P4, P5, P6, P7, P8]
-    params: optional_text
+    # ⚠️ **F5 修复（2026-10-03 实施评审查出）**：原为 `optional_text`，`render()` 产出
+    #   `[PROD_TOUCHED: db write]`（**带冒号**）；而文档与安全门的形态是
+    #   `[PROD_TOUCHED] {描述}`（**空格分隔、无冒号**）——
+    #   安全门 `^\s*-?\s*\[PROD_TOUCHED\]` 匹配**不到**带冒号的写法
+    #   ⇒ **照 WORKFLOW.md 用生成器写标记的 agent，安全门静默放行**（实测确认）。
+    #   改为 `none + trailing_text_ok`：生成 `[PROD_TOUCHED] 描述`，与文档/安全门一致。
+    params: none
     paired_with: PROD_NOT_TOUCHED
     lead_variant: dash_only
-    # 标记后**紧跟正文**（无分隔符）是真实声明的常见形态（实测两仓 239 行）
     trailing_text_ok: true
-    judged_by: [pre-commit-gate.py:343]      # 安全门：命中即中止 commit（sys.exit 1）
+    judged_by: [pre-commit-gate.py]           # 安全门：命中即中止 commit（sys.exit 1）
 
   - name: PROD_NOT_TOUCHED
     purpose: 显式声明未触达生产环境（配对标记）
     phases: [P1, P2, P3, P4, P5, P6, P7, P8]
-    params: optional_text
+    # 与 PROD_TOUCHED 配对；文档形态同为 `[PROD_NOT_TOUCHED]`（无冒号）——
+    # 见 CONTEXT.md:24 / dispatch-protocol.md:1161（二值格式）。
+    params: none
     resolves: PROD_TOUCHED
     lead_variant: dash_only
-    # 标记后**紧跟正文**（无分隔符）是真实声明的常见形态（实测两仓 239 行）
     trailing_text_ok: true
-    judged_by: [pre-commit-gate.py:347]      # 安全门：格式不合规即中止 commit
+    # ⚠️ **F6 修复（2026-10-03 评审查出）**：原登记 `pre-commit-gate.py:347` 是**错的**——
+    #   第 347 行检查的是 `[PROD_TOUCHED]\s*$`（不是 PROD_NOT_TOUCHED），
+    #   且**不可达**（同样形态在第 343 行已 sys.exit）。
+    #   ⇒ **无任何代码消费 PROD_NOT_TOUCHED**（它是配对声明，由人/评审阅读）。
+    judged_by: []
