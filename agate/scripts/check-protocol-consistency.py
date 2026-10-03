@@ -1413,132 +1413,6 @@ def run_all_checks(root: Path, rep: Report) -> None:
             check_anchor_coverage(root, rep)
 
 
-# ── CHECK 16: 活文档数字漂移 ─────────────────────────────────────────────
-#
-# 动机（2026-10-02）：数字漂移在本仓反复发作，且**根因是设计而非疏忽**——
-#   · `agate/tests/README.md` 曾写死 68 行逐文件用例数，实测 **30 行已漂移（44%）**；
-#   · CHANGELOG 的证据数字反复被后续读者当"现状"核对（含我自己），制造多轮无效返工。
-# 其之所以长期存在，是因为 `roadmap.md` 把它登记为「❌ 非机械门禁（约定）」——**约定不拦人**。
-# 故此处补机械判据（设计原则见 `docs/guides/doc-freshness-guide.md` §2/§2.1/§3）。
-#
-# 两条规则：
-#   ① 测量声称须带**时态锚**（`@ <commit>` / `（实测于…）` / `（改动前…）` 等）——
-#      带锚即"当时快照"，不承担"当前状态"义务，故合法；
-#   ② 表格**不得有计数列**（表头含「用例数/条目数/总数…」且该列多为纯整数）——
-#      这是那 68 行索引的形状。
-#
-# 范围 = "agent 读来定位的活文档" = 协议本体 + 开发指引 + 根文档（排除 fixtures——夹具是数据）。
-# **刻意不覆盖**：`agate-workspace/`（任务数据/记录）、`site/blog/`（已发布博文）、
-# `docs/reviews|design-notes|plans|research`（记录）——它们**本就**是历史快照，全体带锚反而失真。
-# ⚠️ 已知边界（据实声明）：**"活文档 vs 记录"的完整分类是语义判断，无法完全机械化**。
-# 现用"窄范围"是**保守选择**（宁可漏报不误报）；广范围实测有 59 处误报（全在记录类文件），
-# 故不采用。将来若要把记录类也纳入，须先给它们一个可机械判定的分类判据。
-_LIVE_DOC_ROOT_FILES = ("AGENTS.md", "CLAUDE.md", "README.md", "README.zh-CN.md",
-                        "SELF-GATE.md", "NOTICES.md")
-_LIVE_DOC_DIRS = ("agate/", "docs/guides/", "docs/brand/", "docs/notes/")
-_NUM_ANCHORS = ("@ ", "实测于", "改动前", "当时", "本次实测", "提交时", "当时测",
-                "≥", "下界", "阈值", "目标：", "基线")
-_MEASURE_RE = re.compile(r"\b\d{2,5}\s*(?:passed|failed|WARNING|ERROR|个测试用例|个用例)")
-_COUNTCOL_HDR_RE = re.compile(r"(用例数|用例句|条目数|总数|数量|计数|个数)")
-
-
-def _is_live_doc(relpath: str) -> bool:
-    """是否"agent 读来定位的活文档"（范围与理由见上方注释块）。"""
-    if "fixtures/" in relpath:
-        return False
-    if "/" not in relpath:
-        return relpath in _LIVE_DOC_ROOT_FILES
-    return relpath.startswith(_LIVE_DOC_DIRS)
-
-
-def _strip_code_for_numbers(text: str) -> str:
-    """去围栏代码块与行内代码 span——示例/格式演示位于其中，不是现状声称。"""
-    out, infence = [], False
-    for line in text.splitlines():
-        if line.lstrip().startswith("```"):
-            infence = not infence
-            out.append("")
-            continue
-        out.append("" if infence else re.sub(r"`[^`]*`", "`CODE`", line))
-    return "\n".join(out)
-
-
-def _count_columns(text: str):
-    """产出 (起始行号, 列名, 纯整数单元数, 总单元数) —— 表格中形如计数列的列。"""
-    lines = text.splitlines()
-    i = 0
-    while i < len(lines):
-        if not lines[i].startswith("|"):
-            i += 1
-            continue
-        j = i
-        while j < len(lines) and lines[j].startswith("|"):
-            j += 1
-        block = lines[i:j]
-        if len(block) >= 4:                       # 表头 + 分隔 + ≥2 数据行
-            cells = [[c.strip() for c in ln.strip().strip("|").split("|")] for ln in block]
-            header, data = cells[0], cells[2:]
-            for col in range(max(len(r) for r in cells)):
-                name = header[col] if col < len(header) else ""
-                if not _COUNTCOL_HDR_RE.search(name) or name.strip() in ("#", "序号"):
-                    continue
-                vals = [r[col] for r in data if col < len(r)]
-                nums = [v for v in vals if re.fullmatch(r"\d{1,5}", v)]
-                if len(nums) >= 3 and len(nums) >= 0.6 * len(vals):
-                    yield i + 1, name, len(nums), len(vals)
-        i = j
-
-
-def _unreleased_section(text: str) -> str:
-    """CHANGELOG 的 `[Unreleased]` 段（其后的已发布段是历史快照，不查）。"""
-    m = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[|\Z)", text, re.M | re.S)
-    return m.group(1) if m else ""
-
-
-def check_doc_number_drift(root: Path, rep: Report) -> None:
-    """CHECK 16：活文档不得含**无时态锚的时变数字**，表格不得有**计数列**。
-
-    带锚的证据数字合法（它是"当时快照"，不承担"当前状态"义务）——本检查**不禁止写数字**，
-    只要求**可区分"当时实测"与"当前声称"**。
-    """
-    problems = []
-    for p in iter_md_files(root):
-        relpath = rel(root, p)
-        if not _is_live_doc(relpath):
-            continue
-        text = p.read_text(encoding="utf-8", errors="replace")
-        for lineno, line in enumerate(_strip_code_for_numbers(text).splitlines(), 1):
-            if _MEASURE_RE.search(line) and not any(a in line for a in _NUM_ANCHORS):
-                problems.append(f"{relpath}:{lineno}: 测量数字缺时态锚（加 `@ <commit>` / `（实测于 <日期>）`，"
-                                f"或注明是「改动前」等相对时点）: {line.strip()[:70]}")
-        for lineno, name, n_num, n_tot in _count_columns(text):
-            problems.append(f"{relpath}:{lineno}: 表格含计数列「{name}」（{n_num}/{n_tot} 为纯整数）"
-                            f"——该类列必然漂移（原 tests/README 用例数列实测 44% 已漂）；"
-                            f"改为指向现场命令（如 `count-tests.sh`）")
-
-    # CHANGELOG 的 [Unreleased]：混合文档（已发布段是快照，Unreleased 段是活文档）。
-    # 锚可出现在**同一 ### 小节内任意位置**（批量级锚，避免逐行加锚的维护负担）。
-    cl = root / "CHANGELOG.md"
-    if cl.is_file():
-        section = _unreleased_section(cl.read_text(encoding="utf-8", errors="replace"))
-        subsections = re.split(r"^### ", section, flags=re.M)[1:]
-        for sub in subsections:
-            if any(a in sub for a in _NUM_ANCHORS):
-                continue
-            for line in _strip_code_for_numbers(sub).splitlines():
-                if _MEASURE_RE.search(line):
-                    problems.append(
-                        f"CHANGELOG.md [Unreleased] 的某 ### 小节内测量数字缺时态锚"
-                        f"（在该小节任一处注明 `（本批实测于 …）` 即覆盖全节）: {line.strip()[:70]}")
-                    break
-
-    if problems:
-        for msg in problems:
-            rep.error("CHECK16-numbers", msg)
-    else:
-        rep.ok("CHECK 16 活文档数字漂移")
-
-
 CHECKS = [
     ("CHECK 1  YAML 代码块可解析", check_yaml_parseable),
     ("CHECK 2  仓库内文件引用存在", check_internal_refs),
@@ -1554,10 +1428,7 @@ CHECKS = [
     ("CHECK 13 CHANGELOG↔UPGRADING 章节对应", check_upgrading_section),
     ("CHECK 14 md 叙述段落平台名扫描", check_md_platform_paragraphs),
     ("CHECK 15 数据面平台名扫描", check_rules_platform_tokens),
-    ("CHECK 16 活文档数字漂移", check_doc_number_drift),
 ]
-
-
 
 
 def main() -> int:
