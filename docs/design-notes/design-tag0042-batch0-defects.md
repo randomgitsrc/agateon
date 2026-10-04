@@ -390,7 +390,6 @@ def _backup(hook_file, label):
 | `agate-config` / `agate-run` 等 | 第 2–6 批（架构演进） |
 | 「`ci-gate-backstop` 换成 `agate-ci-verify`」 | 第 5 批；本批只让它**不再假绿** |
 | **X1 的「非任务目录文件也扫」** | **第 4 批**——须放宽 L327 门控（扩大扫描面 = 跨模块影响）。本批只做到「所有阶段的**任务目录内** diff 都扫」 |
-| X2 的「按提交类型分级」 | 第 4 批 |
 | X9 的「改 `agate-next` 行为」 | 第 1 批；本批只改**卡片文字** |
 
 > **边界声明的方法要求**（评审）：凡本批只做"一半"的项，**都要像 X9 那样显式声明另一半归属哪批**。
@@ -416,7 +415,7 @@ def _backup(hook_file, label):
 | 项 | 须扫描 | 预期 |
 |---|---|---|
 | X1 | 存量任务的收尾提交 diff 是否含 `[PROD_TOUCHED]` | 预期 0（设计称语料 0 例） |
-| X5 | 存量 `gate_commands` 是否含管道（`\| tail` 等） | **可能有**（TAG0016 先例） |
+| X5 | 存量 `gate_commands` 是否含管道（如 `2>&1` 接 `tail`） | **可能有**（TAG0016 先例） |
 | X6 | 存量 P1 是否写了 `design_trivial: false` | 待测 |
 | X7 | 存量 P2-review 是否缺 `agent` | 待测（设计称"向后兼容"暗示有存量） |
 
@@ -428,8 +427,8 @@ def _backup(hook_file, label):
 |---|---|---|
 | X1 | 逐 commit 重放 hook 判「收尾提交 diff 是否含 `[PROD_TOUCHED]`」 | ⚠️ **不可操作**（需重放）⇒ 改为：`grep -rl '\[PROD_TOUCHED\]' agate-workspace/tasks/*/` 后**逐个人工核对**其阶段 |
 | X5 | **用仓库自己的解析器**（唯一权威判据）`parse_gate_commands_block()` 逐 P2-design.md | ✅ 实测 **315 条 / 21 条含管道**（TAG0025 11 / TAG0010 5 / TAG0011 4 / TAG0003 1）——**原设计与第一轮评审的「107/1」均不实**；**但 `P3` 键含管道 = 0** ⇒ 见下 |
-| X6 | `grep -rl 'design_trivial\|follows_existing_pattern' agate-workspace/tasks/*/P1-requirements.md` | ✅ **仅 TAG0018 一个任务**（`^key:` 声明形式；原设计写「3 个任务」口径不符，已更正）⇒ 逐个核对 |
-| X7 | 扫 `P{1,2,4}-review` / `P6-acceptance` 的 `agent` 字段 | ✅ **37/37 齐备，missing=0** ⇒ 转红 0 |
+| X6 | `grep -rl -e design_trivial -e follows_existing_pattern agate-workspace/tasks/*/P1-requirements.md` | ✅ **仅 TAG0018 一个任务**（`^key:` 声明形式；原设计写「3 个任务」口径不符，已更正）⇒ 逐个核对 |
+| X7 | 扫 `P1-review` / `P2-review` / `P4-review` / `P6-acceptance` 的 `agent` 字段 | ✅ **37/37 齐备，missing=0** ⇒ 转红 0 |
 
 **V10 的判据强度**（评审要求定义）：
 > **「无未解释转红」= 上表四项的扫描结果中，每一条转红都能归入以下之一：
@@ -446,7 +445,7 @@ def _backup(hook_file, label):
 | V2 | X2 从暂存区读 | 工作区 phase=P1、暂存区 phase=P2 ⇒ hook 按 **P2** 判定 |
 | V3 | X3 不再**静默**假绿 | 无 `.state.yaml` 时：**exit 0 不变**（保 required check）+ 输出含 **WARNING** 与"backstop 未生效"字样；有 `.state.yaml` 时按原逻辑 |
 | V4 | X4 三写法都认 | 结构化字段 / 中文短语 / 英文别名 ⇒ 均识别 |
-| V5 | X5 pipefail 生效 | 命令写作 `set -o pipefail; cmd \| tail`（**不是** `executable="bash -o pipefail"`）；cmd 失败 ⇒ **非 0**。**并验证 P3 红灯语义方向（实测为"放宽"）**。**⚠️ 条件性低风险**：现存量 `P3` 键含管道 = **0**（实测），若将来出现则会改变 TDD 判定 ⇒ **须留下该条件的登记** |
+| V5 | X5 pipefail 生效 | 命令写作 `set -o pipefail;` 前缀 + 含管道的 cmd（**不是** `executable="bash -o pipefail"`）；cmd 失败 ⇒ **非 0**。**并验证 P3 红灯语义方向（实测为"放宽"）**。**⚠️ 条件性低风险**：现存量 `P3` 键含管道 = **0**（实测），若将来出现则会改变 TDD 判定 ⇒ **须留下该条件的登记** |
 | V6 | X6 **两键分别处理** | `design_trivial: false` ⇒ 仍需 **2** 个候选（**非**降为 1）；`follows_existing_pattern:`（**块列表，键行无值**）⇒ **算已声明** ⇒ 可降为 1 |
 | V7 | X7 不再返回**通过码** | P2-review 缺 `agent` ⇒ **exit 1**（现为 exit 2 = gate_p2 的**通过码**）；断言「不得等于 `gate_pass_exit`」 |
 | V8 | X8 软链也备份 | 目标为软链 ⇒ 备份**记录 `readlink` 目标**；**悬空软链** ⇒ 备份而非被删（第 10 项） |
