@@ -316,3 +316,52 @@ def test_bdd_3_scripts_readme_states_checksum_trust_boundary(agate_scripts):
         "scripts/README.md 应含 checksum 防损坏、不防整包替换的信任边界说明（当前缺失）"
     )
     assert "信任" in text, "scripts/README.md 应显式提及信任边界（bundle 提供者需可信）"
+
+
+# --- X5（TAG0042 批0）：命令执行须开 pipefail --------------------------------
+#
+# 缺陷实测：`run_test_with_formatter` 用 `subprocess.run(cmd, shell=True,
+# executable="bash")` —— **没有 `-o pipefail`** ⇒ `cmd | tail` 的失败被吞
+# （TAG0016 已实际发生：`| tail` 让失败被长期掩盖）。
+#
+# ⚠️ 实现注意（设计 §X5）：**不能**写 `executable="bash -o pipefail"`——
+# `executable` 是**路径**，实测抛 `FileNotFoundError: 'bash -o pipefail'`。
+# 正确写法是 `set -o pipefail; ` **前缀**。
+
+def test_x5_pipefail_propagates_failure():
+    """X5：管道左侧失败必须**传出来**（现状：被 `| tail` 吞成 exit_code 0）。
+
+    实测（修复前）：`run_test_with_formatter("false | tail -1", "")` ⇒ `{"exit_code": 0, ...}`
+    —— **失败被吞**（TAG0016 已实际发生）。
+    """
+    import json as _json
+    import sys as _sys
+    _sys.path.insert(0, "agate/scripts")
+    import agate_common as C
+    r = _json.loads(C.run_test_with_formatter("false | tail -1", "", timeout_secs=20))
+    assert r["exit_code"] != 0, (
+        f"管道左侧失败被吞（pipefail 未生效）⇒ exit_code={r['exit_code']}。"
+        "正确写法是 cmd 前加 `set -o pipefail; `（**不是** executable='bash -o pipefail'，实测抛异常）"
+    )
+
+
+def test_x5_normal_command_still_works():
+    """X5 对照：正常命令仍 exit_code 0（防 pipefail 引入新失败）。"""
+    import json as _json
+    import sys as _sys
+    _sys.path.insert(0, "agate/scripts")
+    import agate_common as C
+    r = _json.loads(C.run_test_with_formatter("echo ok", "", timeout_secs=20))
+    assert r["exit_code"] == 0, f"正常命令应 exit_code 0，实际 {r['exit_code']}"
+
+
+def test_x5_pipefail_not_via_executable_arg():
+    """X5：**不得**用 `executable="bash -o pipefail"`——`executable` 是**路径**。
+
+    实测该写法抛 `FileNotFoundError: 'bash -o pipefail'`（R1 评审实测，我复核）。
+    """
+    import subprocess as _sp
+    # 具体异常类型：executable 被当作**路径**解析 ⇒ 找不到该文件
+    with pytest.raises((FileNotFoundError, OSError)):
+        _sp.run("echo hi", shell=True, executable="bash -o pipefail",
+                capture_output=True, check=True)

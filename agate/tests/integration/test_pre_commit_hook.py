@@ -1644,3 +1644,63 @@ def test_tag0035_bdd_7_pre_commit_standard_phase_output_no_extra_warning(
     assert result.returncode == 0
     assert "无法识别" not in result.output
     assert "一致性检查未覆盖" not in result.output
+
+
+# --- X1（TAG0042 批0）：PROD_TOUCHED 必须在**所有阶段**都扫描 -------------------
+#
+# 缺陷实测：pre-commit-gate.py 的 `# 2g. 跳过非 gate 阶段`（phase ∈ PAUSED/READY/DONE
+# ⇒ `continue`）发生在 `# 2g.1 PROD_TOUCHED 检测` **之前** ⇒ 收尾提交（正是"准备发布"
+# 那个时点）**完全不扫**。
+#
+# 目标（设计 §X1）：所有阶段都扫描；**PAUSED 只扫描不阻断且留痕**（append_event）。
+
+@pytest.mark.parametrize("phase", ["READY", "DONE"])
+def test_x1_prod_touched_scanned_in_ready_and_done(
+    git_repo, agate_root, agate_scripts, run_cli, phase
+):
+    """X1：READY/DONE 提交含 `[PROD_TOUCHED]` ⇒ **应被拦**（现状：被 continue 跳过 ⇒ 通过）。"""
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "P8-release.md").write_text(
+        "[PROD_TOUCHED] 收尾阶段接触了生产环境\n", encoding="utf-8"
+    )
+    _write_state_yaml(task_dir, "TXX0001", phase)
+    git_repo.stage("agate-workspace/tasks/T001/P8-release.md")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", f"{phase} with PROD_TOUCHED")
+    assert result.returncode != 0, (
+        f"{phase} 提交含 [PROD_TOUCHED] 应被拦（安全门），实际通过\n{result.output[-600:]}"
+    )
+    assert "PROD_TOUCHED" in result.output
+
+
+def test_x1_paused_scans_but_does_not_block(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """X1：`PAUSED` **只扫描不阻断**（设计 §X1 原文），但须**留痕**。
+
+    `state-machine.md:98` 定义 `任意阶段 --[出现 PROD_TOUCHED]--> PAUSED` ⇒
+    "PAUSED 只扫不阻断"语义自洽（任务已因生产接触被人工接管，不该再叠加阻断）。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "P5-verification.md").write_text(
+        "[PROD_TOUCHED] PAUSED 期间再次接触\n", encoding="utf-8"
+    )
+    _write_state_yaml(task_dir, "TXX0001", "PAUSED")
+    git_repo.stage("agate-workspace/tasks/T001/P5-verification.md")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", "paused with PROD_TOUCHED")
+    assert result.returncode == 0, f"PAUSED 不应阻断\n{result.output[-600:]}"
+    # 留痕：至少要有可见输出（设计：不能只静默）
+    assert "PROD_TOUCHED" in result.output, "PAUSED 扫描到 PROD_TOUCHED 须留痕（非静默）"

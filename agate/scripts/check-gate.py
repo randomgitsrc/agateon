@@ -890,8 +890,13 @@ def gate_p2(task_dir):
 
     agent = _md_field_get("agent", p2_review)
     if not agent:
-        sys.stderr.write("GATE P2: P2-review.md status:approved 但缺 agent 字段（向后兼容 WARNING）\n")
-        return 2
+        sys.stderr.write("GATE P2: P2-review.md status:approved 但缺 agent 字段（TAG0042 批0 X7：**不得返回通过码**）\n")
+        # X7：本处原先 `return 2`，但**语义随 phase 而变**——
+        #   · P2 的 gate_pass_exit=2 ⇒ 是**通过码** ⇒ **fail-open 放行**
+        #   · P4 的 gate_pass_exit=0 ⇒ 该 2 ∉ pass_set 且 ≠ 1 ⇒ 落
+        #     agate-next 的 exit2-resolution（误判为"真暂停/异常"）
+        # ⇒ 一律改为 1（不得等于 gate_pass_exit）。
+        return 1
     if agent == "main":
         sys.stderr.write("GATE P2: P2-review.md status:approved 但 agent=main（主 Agent 不可自行批准评审）\n")
         return 1
@@ -973,8 +978,13 @@ def gate_p4(task_dir):
 
     agent = _md_field_get("agent", p4_review)
     if not agent:
-        sys.stderr.write("GATE P4: P4-review.md status:approved 但缺 agent 字段（向后兼容 WARNING）\n")
-        return 2
+        sys.stderr.write("GATE P4: P4-review.md status:approved 但缺 agent 字段（TAG0042 批0 X7：**不得返回通过码**）\n")
+        # X7：本处原先 `return 2`，但**语义随 phase 而变**——
+        #   · P2 的 gate_pass_exit=2 ⇒ 是**通过码** ⇒ **fail-open 放行**
+        #   · P4 的 gate_pass_exit=0 ⇒ 该 2 ∉ pass_set 且 ≠ 1 ⇒ 落
+        #     agate-next 的 exit2-resolution（误判为"真暂停/异常"）
+        # ⇒ 一律改为 1（不得等于 gate_pass_exit）。
+        return 1
     if agent == "main":
         sys.stderr.write("GATE P4: P4-review.md status:approved 但 agent=main（主 Agent 不可自行批准评审）\n")
         return 1

@@ -709,8 +709,12 @@ def run_test_with_formatter(cmd, fmt_path, timeout_secs=None):
     output = ""
     exit_code = 0
     try:
+        # X5（TAG0042 批0）：**开 pipefail**——否则 `cmd | tail` 会吞掉左侧失败
+        #   （TAG0016 实测：`| tail` 让失败被长期掩盖）。
+        # ⚠️ **不能**写 `executable="bash -o pipefail"`——`executable` 是**路径**，
+        #   实测抛 `FileNotFoundError: 'bash -o pipefail'`。正确做法是**前缀**。
         proc = subprocess.run(
-            cmd, shell=True, executable="bash",
+            "set -o pipefail; " + cmd, shell=True, executable="bash",
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
             timeout=timeout_secs,
@@ -1386,9 +1390,27 @@ def candidate_count_value(line):
     return None
 
 
+# 「轻量设计」两键的**行首声明**判据（TAG0042 批0 X6）。
+# ⚠️ **两键语义不同，必须分开判**——合并成一条规则会制造两类错误：
+#   · `design_trivial` 是 **bool**：`design_trivial: false` 语义是"**不**轻量"，
+#     但单纯 presence 判据会把它当"已声明" ⇒ **假绿**（最低候选数被错降为 1）。
+#   · `follows_existing_pattern` 是 **list**（`agate-frontmatter-check.py:54` 明列）：
+#     **不存在 true/false**，且真实写法是**块列表**（键行无值，如 `follows_existing_pattern:`）
+#     ⇒ 若按"冒号后须有值"判，**合法声明会被漏认** ⇒ 误拦（存量 TAG0018 即此写法）。
+_DESIGN_TRIVIAL_TRUE_RE = re.compile(r"^design_trivial:\s*true\b")
+# presence 语义：**只要行首出现该键**即算（同时覆盖块列表与流式列表 `[a, b]`）。
+# ⚠️ 不要写成 `^follows_existing_pattern:\s*$`——那会**漏掉流式列表**（R1 曾给该候选，实测漏）。
+_FOLLOWS_PATTERN_PRESENCE_RE = re.compile(r"^follows_existing_pattern:")
+
+
 def design_trivial_declared(line):
-    """P1-requirements.md 行首 `design_trivial:` / `follows_existing_pattern:` 声明 presence。"""
-    return bool(re.search(r"^(design_trivial|follows_existing_pattern):\s*\S", line))
+    """P1-requirements.md 行首「轻量设计」声明判定（**两键分别处理**，见上方常量注释）。
+
+      · `design_trivial: true` ⇒ True（**按值**；`false` ⇒ False）
+      · `follows_existing_pattern:` / `follows_existing_pattern: [a, b]` ⇒ True（**presence**）
+    """
+    return bool(_DESIGN_TRIVIAL_TRUE_RE.match(line)
+                or _FOLLOWS_PATTERN_PRESENCE_RE.match(line))
 
 
 def has_keyword(text, kind):

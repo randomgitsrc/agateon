@@ -316,14 +316,15 @@ def main():
                 f"GATE WARNING: 无法识别该产出文件的阶段号，一致性检查未覆盖: {any_out_file}\n"
             )
 
-        # 2g. 跳过非 gate 阶段
-        if phase in ("PAUSED", "READY", "DONE"):
-            continue
-        if not os.path.isdir(task_dir):
-            continue
-
-        # 2g.1 PROD_TOUCHED 检测（P1.2）——仅扫任务目录下的暂存 diff
-        # 三步检测（正向→中止 / 不合规→中止 / 缺失→静默通过）+ 只扫新增行
+        # 2g.0 PROD_TOUCHED 检测（P1.2 / TAG0042 批0 X1）——**所有阶段都扫**
+        #
+        # ⚠️ 本段原先位于 `# 2g. 跳过非 gate 阶段` 的 continue **之后** ⇒
+        #    phase ∈ PAUSED/READY/DONE 的收尾提交（正是"准备发布"那个时点）**完全不扫**，
+        #    生产安全门在该阶段失效（2026-10-04 实测复现）。
+        #    ⇒ 上移到 continue **之前**：所有阶段都扫；**PAUSED 只扫描不阻断**（见下）。
+        #    粒度 = 「2g.1 整体上移」，**不是删掉 continue**（后者会连带跳过
+        #    frontmatter schema / P6 归一化 / gate / write_gate_result / append_event 等）。
+        _prod_touched_hit = False
         if any(f.startswith(prefix) for f in _staged_name_only()):
             _rc_diff, diff_raw = run_git(["diff", "--cached", "--", task_rel])
             diff_added = []
@@ -341,13 +342,35 @@ def main():
                     continue
                 diff_added.append(line)
             if any(re.match(r"^\s*-?\s*\[PROD_TOUCHED\]", ln) for ln in diff_added):
-                sys.stderr.write(
-                    f"GATE: [PROD_TOUCHED] 检测到生产环境接触（{task_id}），commit 中止\n")
-                sys.exit(1)
-            if any(re.match(r"^\s*-?\s*\[PROD_TOUCHED\]\s*$", ln) for ln in diff_added):
+                _prod_touched_hit = True
+                if phase != "PAUSED":
+                    sys.stderr.write(
+                        f"GATE: [PROD_TOUCHED] 检测到生产环境接触（{task_id}），commit 中止\n")
+                    sys.exit(1)
+            if (phase != "PAUSED"
+                    and any(re.match(r"^\s*-?\s*\[PROD_TOUCHED\]\s*$", ln) for ln in diff_added)):
                 sys.stderr.write(
                     f"GATE: 不合规的 PROD_TOUCHED 标记格式（{task_id}），须用行首 [PROD_TOUCHED] 或 [PROD_NOT_TOUCHED] 声明\n")
                 sys.exit(1)
+
+        # 2g. 跳过非 gate 阶段
+        if phase in ("PAUSED", "READY", "DONE"):
+            # PAUSED 的特殊语义（设计 §X1）：`state-machine.md:98` 定义
+            # `任意阶段 --[出现 PROD_TOUCHED]--> PAUSED` ⇒ 任务已因生产接触被人工接管，
+            # 不该再叠加阻断；**但必须留痕**——否则等于"只打印到 stderr、无消费方"。
+            if phase == "PAUSED" and _prod_touched_hit:
+                sys.stderr.write(
+                    f"GATE WARNING: PAUSED 提交扫描到 [PROD_TOUCHED]（{task_id}）——"
+                    "本阶段只扫描不阻断（任务已被人工接管）；已记入账本\n")
+                try:
+                    append_event(task_dir, "prod_touched_in_paused", {"task_id": task_id})
+                except Exception:
+                    sys.stderr.write("GATE WARNING: 账本留痕失败（不阻断）\n")
+            continue
+        if phase in ("PAUSED", "READY", "DONE"):
+            continue
+        if not os.path.isdir(task_dir):
+            continue
 
         # 2g.2 frontmatter schema 校验（P2-design.md §3.1.3，BDD-8 挂载点）
         # 与 2a 同机制：扫描本任务暂存的 P1/P2/P6/P7 产出文件，逐个跑 check-frontmatter
