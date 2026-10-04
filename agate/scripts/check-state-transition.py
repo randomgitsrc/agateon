@@ -225,6 +225,28 @@ def _find_stale(old_phase, task_dir):
     return ""
 
 
+def _declares_internal_only(state_file):
+    """P1-requirements.md 是否声明 `internal_only`（TAG0042 批0 X9）。
+
+    语义：`internal_only` 表示本任务**不产出对外交付物** ⇒ 协议允许**裁掉 P8（发布）**
+    ⇒ 转 READY 的合法前序可以是 P7 而非 P8。
+    读取面：与任务同目录的 `P1-requirements.md` 的 frontmatter / 顶层键（`^internal_only:`）。
+    读不到 / 解析失败 ⇒ 返回 False（**从严**：要求 P8，不因读不到而放宽）。
+    """
+    task_dir = os.path.dirname(os.path.abspath(state_file))
+    p1 = os.path.join(task_dir, "P1-requirements.md")
+    if not os.path.isfile(p1):
+        return False
+    try:
+        with open(p1, encoding="utf-8") as fh:
+            for line in fh:
+                if re.match(r"^internal_only:\s*true\b", line.rstrip("\r\n")):
+                    return True
+    except OSError:
+        return False
+    return False
+
+
 def main():
     state_file = sys.argv[1] if len(sys.argv) > 1 else ".state.yaml"
     state_basename = os.path.basename(state_file)
@@ -246,7 +268,29 @@ def main():
     old_phase = get_old_phase(state_file, state_basename)
     new_phase = get_new_phase(state_file)
 
-    if new_phase in ("", "PAUSED", "READY", "DONE"):
+    # X9（TAG0042 批0）：**转 READY 不再一律跳过**——须有已提交的 P8 前序。
+    #
+    # 为什么：pre-commit-gate 对 `phase ∈ {PAUSED, READY, DONE}` 直接 `continue`
+    #   （收尾阶段不跑 check-gate）⇒ 若 P8 产出**以 READY 提交**，则 **gate_p8 从不运行**。
+    #   补上下面这条规则后，"以 P8 提交产出、再单独提交 READY"成为机械要求
+    #   （TAG0037 实测已是该写法：`30e2354 phase=P8` → `59aeaeb phase=READY`）。
+    # 合法裁剪：P1 声明 `internal_only` ⇒ 协议允许裁掉 P8（含发布），此时前序 P7 即可。
+    if new_phase == "READY":
+        _allowed = ("P8",) if not _declares_internal_only(state_file) else ("P8", "P7")
+        if old_phase not in _allowed:
+            sys.stderr.write(
+                f"GATE STATE: 转为 READY 前须先以 phase=P8 提交发布产出"
+                f"（当前前序 phase={old_phase or '(无)'}"
+                f"{'；P1 声明 internal_only 时允许 P7' if 'P7' in _allowed else ''}）"
+                f"——否则 gate_p8 不会运行；请改为「以 P8 提交产出，再单独提交 READY」\n"
+            )
+            sys.exit(1)
+        sys.stderr.write(
+            f"GATE OK: check-state-transition: P8 前序已就位（old_phase={old_phase}）→ READY\n"
+        )
+        sys.exit(0)
+
+    if new_phase in ("", "PAUSED", "DONE"):
         sys.stderr.write(
             f"GATE SKIP: check-state-transition: 非推进场景（new_phase={new_phase!r}），未校验\n"
         )

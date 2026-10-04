@@ -12,8 +12,9 @@
 schema_version: 1
 # gate_pass_exit：每 phase 声明的「检查通过」出口码（值 ∈ {0, 2}，TAG0027 BDD-26）。
 #   语义（P2 §3.1 实证，CRITICAL-1 修正）：check-gate.py 的 exit 2 是多数 phase（P0-P3/P5/P6/P8）
-#   的正常通过码（gate_p0 L577 / p1 L698 / p2 L883 / p3 L892 / p5 L1048 / p6 L1093 / p8 L1376
-#   return 2 实证），exit 0 是 P4/P7/P6.5 的通过码（p4 L990 / p7 L1241 / p65 L1110/1120 return 0）。
+#   的正常通过码，exit 0 是 P4/P7/P6.5 的通过码。
+#   （⚠️ 此处**不写各 gate 的行号**——行号是必然漂移的数字，历史上已过期多次；
+#   需要时现场取：`grep -n '^def gate_' check-gate.py`。）
 #   agate-next.py 按 pass_set 三态消费：exit ∈ gate_pass_exit → 直推（exit 2 正常通过不落盘
 #   resolution）；exit 1 → retreat 委托；exit ∉ pass_set 且 ≠ 1（真暂停/异常）→ 才落盘
 #   {phase}-exit2-resolution.md。P6 的 exit 2 ∈ pass_set 为条件式推进（前置 gate_p65 裁决）。

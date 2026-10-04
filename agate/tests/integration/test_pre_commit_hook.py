@@ -1659,13 +1659,25 @@ def test_tag0035_bdd_7_pre_commit_standard_phase_output_no_extra_warning(
 def test_x1_prod_touched_scanned_in_ready_and_done(
     git_repo, agate_root, agate_scripts, run_cli, phase
 ):
-    """X1：READY/DONE 提交含 `[PROD_TOUCHED]` ⇒ **应被拦**（现状：被 continue 跳过 ⇒ 通过）。"""
+    """X1：READY/DONE 提交含 `[PROD_TOUCHED]` ⇒ **应被拦**（现状：被 continue 跳过 ⇒ 通过）。
+
+    ⚠️ READY 分支须**先合法抵达 READY**：TAG0042 批0 X9 之后，
+    `check-state-transition.py` 会校验「转 READY 的前序已提交 phase 必须是 P8」，
+    否则在 PROD_TOUCHED 扫描**之前**就以另一条理由拦下（那样测的就不是 X1 了）。
+    DONE 分支无需此铺垫（终态不校验前序）。
+    """
     repo = git_repo.path
     _install_pre_commit_hook(repo, agate_scripts)
     _init_commit(run_cli, agate_root, git_repo, repo)
 
     task_dir = repo / "agate-workspace" / "tasks" / "T001"
     task_dir.mkdir(parents=True, exist_ok=True)
+    if phase == "READY":
+        # 先以 phase=P8 提交一次（满足 X9 的前序要求），再进入 READY
+        _write_state_yaml(task_dir, "TXX0001", "P8")
+        git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+        _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "P8 setup")
+
     (task_dir / "P8-release.md").write_text(
         "[PROD_TOUCHED] 收尾阶段接触了生产环境\n", encoding="utf-8"
     )

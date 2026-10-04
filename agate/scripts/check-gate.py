@@ -5,9 +5,10 @@
   check-gate.py PHASE TASK_DIR [OLD_PHASE]
 exit 0 = gate 通过; exit 1 = gate 未通过; exit 2 = 多数 phase 正常通过码（含动态
 gate_commands 或语义判断后的"通过"出口）——pass 判定以 phases.yaml gate_pass_exit 为准：
-P0-P3/P5/P6/P8 的通过码是 exit 2（gate_p0 L577 / p1 L698 / p2 L883 / p3 L892 / p5 L1048 /
-p6 L1093 / p8 L1376 return 2），P4/P7/P6.5 的通过码是 exit 0（p4 L990 / p7 L1241 /
-p65 L1110/1120 return 0）。exit 2 是账本常态（pre-commit 每次成功 commit 记 exit:2），
+P0-P3/P5/P6/P8 的通过码是 exit 2，P4/P7/P6.5 的通过码是 exit 0。
+（⚠️ 此处**不写各 gate 的行号**——行号是必然漂移的数字，历史上已过期多次；
+需要时现场取：`grep -n '^def gate_' check-gate.py`。）
+exit 2 是账本常态（pre-commit 每次成功 commit 记 exit:2），
 不是暂停——agate-next.py 消费方按 gate_pass_exit pass_set 区分"正常通过"与"真暂停"
 （TAG0027 BDD-13/26，CRITICAL-1 修正；本脚本返回语义零改动）。
 
