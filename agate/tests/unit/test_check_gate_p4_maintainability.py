@@ -323,14 +323,19 @@ def test_g5_legacy_failure_paths_unchanged(
     r4 = _run_gate(agate_scripts, python_exe, run_cli, "task", phase="P4", cwd=str(repo4.path))
     assert r4.returncode == 1
 
-    # ③ agent 缺失 → 2（既有 WARNING 语义面不变）
+    # ③ agent 缺失 → 1
+    # （TAG0042 批0 X7：本处原断言 `== 2`，那是**移植期快照**而非 P4 应有语义——
+    #   P4 的 gate_pass_exit=0，2 ∉ pass_set 且 ≠ 1 ⇒ agate-next 落 exit2-resolution
+    #   误判为"真暂停"。`return 2` 出现于 2026-08-15（TAG0010 shell→py 机械移植），
+    #   而 gate_pass_exit 机制 2026-09-03 才引入（TAG0027）⇒ 并非为 P4 设计。
+    #   本用例守护目的不变：**新步骤不得新增 return 2**。）
     repo5, _td5 = _repo_with_staged(GitRepo(git_repo.path.parent / "repo_e"), task_dir, {})
     _staged_code(repo5)
     (repo5.path / "task" / "P4-review.md").write_text(
         "---\nstatus: approved\n---\nP4 review.\n", encoding="utf-8"
     )
     r5 = _run_gate(agate_scripts, python_exe, run_cli, "task", phase="P4", cwd=str(repo5.path))
-    assert r5.returncode == 2
+    assert r5.returncode == 1
 
 
 def test_g5_violations_registered_passes_to_return_0_with_skeleton_warning(
@@ -409,7 +414,8 @@ def test_g6_git_unavailable_degrades_to_warning(
 def test_g7_no_new_return_2_from_new_step(
     git_repo, task_dir, agate_scripts, python_exe, run_cli, monkeypatch
 ):
-    """G7：新步骤不产生 return 2——门槛 a/b 失败仅 return 1（return 2 只属既有 ③ agent 缺失态）。"""
+    """G7：新步骤不产生 return 2——门槛 a/b 失败仅 return 1；agent 缺失态同属 return 1
+    （TAG0042 批0 X7 后 P4 **已无任何 return 2 路径**，见本文件 §G5b 注释）。"""
     _require_implemented()
     repo, _td = _repo_with_staged(git_repo, task_dir, {})
     # 门槛 a 失败（无登记文件）→ 1 而非 2
@@ -420,7 +426,7 @@ def test_g7_no_new_return_2_from_new_step(
     _write_known_violations(_td, "| # | | god-file 跨越 / fuzzy-boundary | | | 是/否 |\n")
     result_b = _run_gate(agate_scripts, python_exe, run_cli, "task", phase="P4", cwd=str(repo.path))
     assert result_b.returncode == 1
-    # 既有 return 2 语义不被动（agent 缺失态）
+    # agent 缺失态（TAG0042 批0 X7 前为 return 2，现为 1）
     repo2 = GitRepo(repo.path.parent / "repo_g7")
     repo2.path.joinpath("README.md").write_text("init\n", encoding="utf-8")
     repo2.commit("init")
@@ -430,4 +436,4 @@ def test_g7_no_new_return_2_from_new_step(
     )
     _staged_code(repo2)
     result_c = _run_gate(agate_scripts, python_exe, run_cli, "task", phase="P4", cwd=str(repo2.path))
-    assert result_c.returncode == 2
+    assert result_c.returncode == 1

@@ -546,3 +546,86 @@ def _backup(hook_file, label):
 - 但它**独立可合并**——不依赖第 1–6 批的任何产物；
 - **X9 与第 1 批有交集**（都涉及 phase 语义）：本批只做**文字对齐**，
   第 1 批才改 `agate-next` 行为。**须在 TAG0042 的 P0-brief / 后续产物里记明这条分工**，防重复改。
+
+---
+
+## 8. 实现记录（2026-10-04，实现侧回写）
+
+> 本节由**实现者**回写：设计阶段未预见的事实、V10/V11 的实测结果。
+> 设计正文（§1–§7）不改写，本节只做**增量登记**。
+
+### 8.1 V10 存量扫描（实测，均在 `/tmp` 副本上跑，真实仓库 `git status` 为空）
+
+| 项 | 命令 | 实测结果 | 结论 |
+|---|---|---|---|
+| X1 | `grep -rh '\[PROD_TOUCHED\]' tasks/` 后核对其**行首形式** | 245 行命中，**行首形式 = 0** | **无存量转红**：扫描只判「暂存 diff 中**新增**的行首标记」，存量皆为行内提及（卡片注入文本 / 日志 / 正文）⇒ 即便重写也不命中 |
+| X1（行为） | READY 任务普通收尾提交 | **exit 0**（不阻断） | 不误伤收尾提交 |
+| X1（行为） | READY + 暂存 `.state.yaml` + 新增行首 `[PROD_TOUCHED]` | **exit 1**（阻断） | ✅ X1 生效（改前为静默跳过） |
+| X5 | `parse_gate_commands_block()`（仓库自己的解析器，唯一权威判据）逐 `P2-design.md` | **315 条 / 21 条含管道**；**全部落在 P5 键，P3 键 = 0** | 与设计 §4.2 的更正后数字**完全一致**（「107/1」为误） |
+| X6 | `grep` 存量 `P1-requirements.md` 的两键声明 | **仅 TAG0018 一个任务**，且两键均为 `true`/存在 | 判定结果不变 ⇒ **无转红** |
+| X7 | 扫 4 类评审文件的 `agent` 字段 | **missing = 0**（全齐备） | **无转红**，无需迁移期 |
+
+**⇒ 四项均为"无未解释转红"**，满足 §4.2 的合并前提（V10 判据强度 ①②③ 无一触发）。
+
+> ⚠️ **X5 的 V5 条件登记（设计已要求，此处落实）**：现存量 **P3 键含管道 = 0**，
+> 故 X5 目前**不改变任何 P3 红灯判定**；若将来出现 `P3` 键含管道，其 TDD 判定会随之改变。
+> 该条件已由 V5 锚覆盖（断言方向为"放宽"）。
+
+### 8.2 V11 全量回归（实测）
+
+```
+pytest agate/tests/ -n auto -p no:randomly
+→ 5 failed, 2575 passed, 2 skipped
+```
+
+| 失败项 | 归属 | 处置 |
+|---|---|---|
+| `test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent` | **环境**（`opencode` 不在 PATH） | 已在 `origin/main` 复现 ⇒ **非回归**，不处理 |
+| `test_check_gate_p4_maintainability.py::test_g5_legacy_failure_paths_unchanged` | **X7 引起** | 见 §8.3 |
+| `test_check_gate_p4_maintainability.py::test_g7_no_new_return_2_from_new_step` | **X7 引起** | 见 §8.3 |
+| `test_tag0027_b1_agate_next_cli.py::test_bdd_8_non_pass_exit_writes_exit2_resolution` | **X7 引起** | 见 §8.4 |
+| `test_tag0027_b1_agate_next_cli.py::test_bdd_8_exit2_resolution_frontmatter_machine_readable` | **X7 引起** | 见 §8.4 |
+
+（其余三项：`consistency` **0 ERROR**、`ruff` 干净、structure S0–S6 全 OK。）
+
+### 8.3 ⚠️ 设计未预见（一）：X7 与两处**既有守护断言**冲突
+
+`test_check_gate_p4_maintainability.py` 的两条断言**把 P4 缺 `agent` → exit 2 当作基线**固定下来：
+
+- `test_g5_legacy_failure_paths_unchanged`（`assert r5.returncode == 2`）
+- `test_g7_no_new_return_2_from_new_step`（`assert result_c.returncode == 2`）
+
+**但它们记录的是"当时的既有行为"，不是"P4 应有的行为"**——证据（时间线）：
+
+| 事实 | commit | 日期 |
+|---|---|---|
+| P4 缺 `agent` → `return 2` 出现（**机械移植 shell→py**，TAG0010） | `3547b62` | 2026-08-15 |
+| `gate_pass_exit` / pass_set 机制引入（TAG0027） | `fcf3fd2` | 2026-09-03 |
+
+⇒ `return 2` **早于**它被赋予「按 phase 而变」的语义约 3 周，**并非为 P4 设计**；
+守护测试（TAG0026）晚于机制、却按"现状快照"写断言。
+**故这是"守护测试把缺陷记为基线"，应改测试而非回退 X7**（设计 §X7 的判据成立）。
+
+**处置**：把两处断言由 `== 2` 改为 `== 1`，**守护目的不变**（"新步骤不得新增 `return 2`"仍成立）。
+
+### 8.4 ⚠️ 设计未预见（二）：X7 之后 **P4 不再存在任何合法 exit 2 路径**
+
+`test_tag0027_b1_agate_next_cli.py` 的两条 BDD-8 用例**借用**"P4 缺 `agent`"作为
+"真暂停（exit ∉ pass_set 且 ≠ 1）"的**真实 gate 锚点**（其 docstring 明写该锚点）。
+X7 把该处改为 1 后，锚点消失：
+
+- 实测 `gate_p4` 现有返回**只有 0 与 1**，**无 `return 2`**；
+- 且 P0/P1/P2/P3/P5/P6/P8 的 `gate_pass_exit` **都是 2**（2 = 通过），
+  P7/P6.5 虽 pass_exit=0 但其 `gate_p*` **不含 `return 2`**。
+
+**⇒ 全仓已无任何 gate 能产生"非 pass 的 exit 2"**，
+`agate-next` 的"真暂停"分支**经真实 gate 不可达**。
+
+**处置**（本批）：BDD-8 用例改用**受控输入**触发 exit-2 分支（不依赖真实 gate 的缺口），
+以保留该分支的覆盖；**该"分支不可达"本身登记为独立事项**，不在本批改 `agate-next`
+（属第 1 批 phase 语义统一的范围，见 §7 边界）。
+
+### 8.5 实现范围边界（重申）
+
+- X1 只做到「**所有阶段的、任务目录内的** diff 都扫」；"所有文件都扫"属第 4 批。
+- X9 只做**卡片文字 + 机械规则**，不改 `agate-next` 行为（属第 1 批）。
