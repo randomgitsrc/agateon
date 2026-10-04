@@ -128,9 +128,27 @@ def _ln_sf(source, link_path):
 
 
 def _backup(hook_file, label):
-    """已有非软链 hook → 备份为 {hook_file}.bak.{epoch}（cp 语义，sh set -e 下失败即退）。"""
-    if os.path.isfile(hook_file) and not os.path.islink(hook_file):
-        backup = hook_file + ".bak." + str(int(time.time()))
+    """已有 hook → 备份为 {hook_file}.bak.{epoch}（cp 语义，sh set -e 下失败即退）。
+
+    X8（TAG0042 批0）：**软链也要备份**，且备份**记录 `readlink` 目标**而非复制内容。
+
+    原实现的前置条件是 `os.path.isfile(hook_file) and not os.path.islink(hook_file)`，
+    有两个缺陷：
+      ① 软链 hook **不备份**就被覆盖 —— 实测使用者项目的 hook 常是软链
+         （`make setup-hooks` 类目标与 install-hook 争用同一位置）；
+      ② **悬空软链**（`isfile` 为 False）**既不备份、又被后续步骤替换** ⇒ 静默丢失，
+         比 ① 更严重（① 至少还留着原软链）。
+    ⇒ 改为按 `lexists`（软链本身存在即算）判定 + 分支处理：软链写目标、普通文件复制内容。
+    """
+    if not os.path.lexists(hook_file):
+        return
+    backup = hook_file + ".bak." + str(int(time.time()))
+    if os.path.islink(hook_file):
+        target = os.readlink(hook_file)          # 悬空软链也可读，不跟随
+        with open(backup, "w", encoding="utf-8") as f:
+            f.write(target + "\n")
+        print(f"已备份现有 {label} hook（软链，目标：{target}）")
+    else:
         shutil.copyfile(hook_file, backup)
         print(f"已备份现有 {label} hook")
 

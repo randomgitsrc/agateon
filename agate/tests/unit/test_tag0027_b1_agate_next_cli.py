@@ -229,37 +229,51 @@ def test_bdd_7_p6_exit1_retreats_to_p4_via_retreat_to(
 
 
 # ── BDD-8：真暂停（exit ∉ gate_pass_exit 且 ≠ 1）落盘 exit2-resolution ──
+#
+# ⚠️ TAG0042 批0 X7 后**锚点已消失**：本组原先借用「P4 缺 agent ⇒ gate_p4 return 2」
+#   作为"真暂停"的真实 gate 锚点；X7 把该处改为 return 1（P4 的 gate_pass_exit=0，
+#   2 ∉ pass_set ⇒ 原本会误判为异常暂停）后，**gate_p4 已无任何 return 2 路径**。
+#   经全仓核对：P0/P1/P2/P3/P5/P6/P8 的 gate_pass_exit 都是 2（2=通过），
+#   P7/P6.5 虽 pass_exit=0 但其 gate_p* 不含 `return 2` ⇒ **真实 gate 无法再产生
+#   "非 pass 的 exit 2"**。
+#   ⇒ 改为**直接驱动落盘函数** `_write_exit2_resolution`（与 X6 同法：被测行为不变，
+#     只换触发方式），保留本分支覆盖；"真暂停经真实 gate 不可达"另行登记。
 
-def test_bdd_8_non_pass_exit_writes_exit2_resolution(
-    task_dir, agate_scripts, python_exe, run_cli
-):
+def _load_next_module(agate_scripts):
+    """import agate-next.py（文件名含连字符 ⇒ 用 importlib 显式加载）。"""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "agate_next_mod", str(agate_scripts / "agate-next.py")
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_bdd_8_non_pass_exit_writes_exit2_resolution(task_dir, agate_scripts):
     """BDD-8（R4 收窄语义）：真暂停（exit ∉ gate_pass_exit 且 ≠ 1）→ 不推进 + 落盘
-    {phase}-exit2-resolution.md（§3.3 模板）。真实 gate 锚点：phase=P4 + P4-review.md
-    status:approved 但缺 agent → gate_p4 L913 return 2，而 P4 的 gate_pass_exit=0
-    → 2 ∉ pass_set 且 ≠ 1 = 真暂停。P3 红灯。"""
+    {phase}-exit2-resolution.md（§3.3 模板）。"""
     td = task_dir()
     _write_state(None, td, "P4")
-    (td / "P4-review.md").write_text(
-        "---\nstatus: approved\n---\nreviewed.\n", encoding="utf-8"
-    )
-    result = _run_next(agate_scripts, python_exe, run_cli, td)
-    assert result.returncode == 0, f"真暂停动作完成应 exit 0；rc={result.returncode}"
+    state = {"task_id": "T001", "phase": "P4", "status": "active"}
+
+    mod = _load_next_module(agate_scripts)
+    mod._write_exit2_resolution(str(td), "P4", state, 2)
+
     res_file = td / "P4-exit2-resolution.md"
     assert res_file.is_file(), "真暂停应落盘 P4-exit2-resolution.md（BDD-8）"
 
 
-def test_bdd_8_exit2_resolution_frontmatter_machine_readable(
-    task_dir, agate_scripts, python_exe, run_cli
-):
+def test_bdd_8_exit2_resolution_frontmatter_machine_readable(task_dir, agate_scripts):
     """BDD-8：exit2-resolution.md frontmatter 机器可读（phase/task_id/type=exit2-resolution/
     parent=.state.yaml/agent），正文含 触发/客观证据/解决 三节（§3.3 格式）。"""
     td = task_dir()
     _write_state(None, td, "P4")
-    (td / "P4-review.md").write_text(
-        "---\nstatus: approved\n---\nreviewed.\n", encoding="utf-8"
-    )
-    result = _run_next(agate_scripts, python_exe, run_cli, td)
-    assert result.returncode == 0, f"真暂停动作完成应 exit 0；rc={result.returncode}"
+    state = {"task_id": "T001", "phase": "P4", "status": "active"}
+
+    mod = _load_next_module(agate_scripts)
+    mod._write_exit2_resolution(str(td), "P4", state, 2)
+
     res_file = td / "P4-exit2-resolution.md"
     assert res_file.is_file()
     text = res_file.read_text(encoding="utf-8")

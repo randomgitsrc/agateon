@@ -13,6 +13,7 @@ import os
 import shlex
 import shutil
 import struct
+import subprocess
 import sys
 import zlib
 
@@ -1644,3 +1645,147 @@ def test_tag0035_bdd_7_pre_commit_standard_phase_output_no_extra_warning(
     assert result.returncode == 0
     assert "无法识别" not in result.output
     assert "一致性检查未覆盖" not in result.output
+
+
+# --- X1（TAG0042 批0）：PROD_TOUCHED 必须在**所有阶段**都扫描 -------------------
+#
+# 缺陷实测：pre-commit-gate.py 的 `# 2g. 跳过非 gate 阶段`（phase ∈ PAUSED/READY/DONE
+# ⇒ `continue`）发生在 `# 2g.1 PROD_TOUCHED 检测` **之前** ⇒ 收尾提交（正是"准备发布"
+# 那个时点）**完全不扫**。
+#
+# 目标（设计 §X1）：所有阶段都扫描；**PAUSED 只扫描不阻断且留痕**（append_event）。
+
+@pytest.mark.parametrize("phase", ["READY", "DONE"])
+def test_x1_prod_touched_scanned_in_ready_and_done(
+    git_repo, agate_root, agate_scripts, run_cli, phase
+):
+    """X1：READY/DONE 提交含 `[PROD_TOUCHED]` ⇒ **应被拦**（现状：被 continue 跳过 ⇒ 通过）。
+
+    ⚠️ READY 分支须**先合法抵达 READY**：TAG0042 批0 X9 之后，
+    `check-state-transition.py` 会校验「转 READY 的前序已提交 phase 必须是 P8」，
+    否则在 PROD_TOUCHED 扫描**之前**就以另一条理由拦下（那样测的就不是 X1 了）。
+    DONE 分支无需此铺垫（终态不校验前序）。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    if phase == "READY":
+        # 先以 phase=P8 提交一次（满足 X9 的前序要求），再进入 READY
+        _write_state_yaml(task_dir, "TXX0001", "P8")
+        git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+        _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "P8 setup")
+
+    (task_dir / "P8-release.md").write_text(
+        "[PROD_TOUCHED] 收尾阶段接触了生产环境\n", encoding="utf-8"
+    )
+    _write_state_yaml(task_dir, "TXX0001", phase)
+    git_repo.stage("agate-workspace/tasks/T001/P8-release.md")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", f"{phase} with PROD_TOUCHED")
+    assert result.returncode != 0, (
+        f"{phase} 提交含 [PROD_TOUCHED] 应被拦（安全门），实际通过\n{result.output[-600:]}"
+    )
+    assert "PROD_TOUCHED" in result.output
+
+
+def test_x1_paused_scans_but_does_not_block(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """X1：`PAUSED` **只扫描不阻断**（设计 §X1 原文），但须**留痕**。
+
+    `state-machine.md:98` 定义 `任意阶段 --[出现 PROD_TOUCHED]--> PAUSED` ⇒
+    "PAUSED 只扫不阻断"语义自洽（任务已因生产接触被人工接管，不该再叠加阻断）。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "P5-verification.md").write_text(
+        "[PROD_TOUCHED] PAUSED 期间再次接触\n", encoding="utf-8"
+    )
+    _write_state_yaml(task_dir, "TXX0001", "PAUSED")
+    git_repo.stage("agate-workspace/tasks/T001/P5-verification.md")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", "paused with PROD_TOUCHED")
+    assert result.returncode == 0, f"PAUSED 不应阻断\n{result.output[-600:]}"
+    # 留痕：至少要有可见输出（设计：不能只静默）
+    assert "PROD_TOUCHED" in result.output, "PAUSED 扫描到 PROD_TOUCHED 须留痕（非静默）"
+
+
+# --- X2（TAG0042 批0）：phase 判定必须取**暂存区**那份 -------------------------
+#
+# 缺陷实测：2b 段用 `git diff --cached`（索引）判"phase 有没有变"，2d 段却用
+# `read_state_phase(state_file)`（**工作区文件**）取 phase 值 —— 两者不同源。
+# 实测场景：`git add` 后把工作区 phase 再改高一档（不 add）⇒ 索引里是 P3、
+# 工作区是 P4 ⇒ hook 按 **P4** 跑 gate，而真正被提交的是 P3。
+
+
+def test_x2_staged_phase_used_for_gate_decision(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """X2：索引 phase=P3 + 工作区 P4 ⇒ hook 须按 **P3** 判（现状：按 P4 ⇒ 判错对象）。
+
+    场景构造（**关键**：`.state.yaml` 在索引里必须**真的与 HEAD 有差异**，否则
+    `git diff --cached` 不列它、2d 段根本不会执行——实测踩过这个坑）：
+      1. 提交 P3 基线（HEAD 的 .state.yaml phase=P3）；
+      2. 工作区写 phase=P4；索引写 phase=P3 + `status: blocked`（相对 HEAD 有真实差异，
+         故会被 `git diff --cached` 列出）；
+      3. 于是"索引 P3 / 工作区 P4"并存，可判别 hook 读的是哪一份。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_p1_requirements(task_dir)
+    _write_state_yaml(task_dir, "TXX0001", "P3")
+    git_repo.stage("agate-workspace/tasks/T001/")
+    _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T001 P3 setup")
+
+    # 工作区 = P4；索引 = P3（+status 差异，确保被 `git diff --cached` 列出）
+    (task_dir / "P4-implementation.md").write_text("implementation\n", encoding="utf-8")
+    _write_state_yaml(task_dir, "TXX0001", "P4")
+    git_repo.stage("agate-workspace/tasks/T001/P4-implementation.md")
+
+    blob = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+        input="task_id: TXX0001\nphase: P3\nstatus: blocked\nretries: {}\n",
+        capture_output=True, text=True, encoding="utf-8", check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "update-index", "--cacheinfo",
+         f"100644,{blob},agate-workspace/tasks/T001/.state.yaml"],
+        check=True,
+    )
+
+    # 前置条件自检：两份确实不同，且索引那份**在暂存清单里**
+    assert "phase: P4" in (task_dir / ".state.yaml").read_text(encoding="utf-8"), \
+        "前置条件：工作区须为 P4"
+    assert "phase: P3" in subprocess.run(
+        ["git", "-C", str(repo), "show", ":agate-workspace/tasks/T001/.state.yaml"],
+        capture_output=True, text=True, encoding="utf-8", check=True,
+    ).stdout, "前置条件：索引须为 P3"
+    assert "T001/.state.yaml" in subprocess.run(
+        ["git", "-C", str(repo), "diff", "--cached", "--name-only"],
+        capture_output=True, text=True, encoding="utf-8", check=True,
+    ).stdout, "前置条件：.state.yaml 须出现在暂存清单（否则 2d 段不执行）"
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", "T001 P4 output, index phase=P3")
+
+    # 判据 = **hook 认为当前是哪个 phase**（不是 commit 是否通过）：
+    # 取暂存区 ⇒ 认 P3，并提示"P4 产出 vs phase=P3"；取工作区 ⇒ 认 P4，两者一致、无提示。
+    assert "phase=P3" in result.output, (
+        "索引 phase=P3 却被按工作区 P4 判定（判错对象）——hook 未取暂存区那份\n"
+        f"{result.output[-800:]}"
+    )
+    assert "暂存了 P4 产出但 phase=P3" in result.output, (
+        f"须按暂存区 P3 判定并提示 P4 产出\n{result.output[-800:]}"
+    )

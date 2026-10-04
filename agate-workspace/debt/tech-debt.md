@@ -1837,3 +1837,38 @@ closed_at: 2026-09-29
 closure_note: >-
   已修：三处落点齐备——① P3 卡「推进条件」加平台假设扫描自查（用 `{agate_root}` 占位符，对任何使用者项目成立）；② 派发模板「P3 自检」节加同款要求并点明「注释里的字面量同样计命中」+ 运行时拼接修法；③ `test-designer.md` 新增「交付前自查」节（扫描 + 自跑 + 写入隔离三条）。新增 5 条测试守护（含行为验证：本仓 tests/ 全树扫描 0 命中），并做变异验证（改 P3 卡 → 转红）。
 ```
+
+## DEBT0050
+
+```yaml
+id: DEBT0050
+category: technical
+title: "agate-next 的「真暂停」（exit ∉ pass_set 且 ≠ 1）分支经**真实 gate 不可达**——BDD-8 改直驱落盘函数后失去端到端覆盖"
+status: open
+priority: low
+evidence:
+  - path: agate/scripts/check-gate.py
+    note: >-
+      TAG0042 批0 X7 把 gate_p4 / gate_p2 的「评审缺 agent」由 return 2 改为 1 之后，
+      实测 gate_p4 只剩 {0,1}；且 pass_exit=0 的三个 phase（P4/P6.5/P7）恰好都不含 return 2，
+      而 pass_exit=2 的 phase（P0-P3/P5/P6/P8）里 2 本就是**通过码** ⇒ 无 gate 能产生
+      「非 pass 的 exit 2」。（⚠️ 这是当前代码的巧合，不是结构性不变量。）
+  - ref: agate/tests/unit/test_tag0027_b1_agate_next_cli.py
+    note: >-
+      两条 BDD-8 用例原先**借用**「P4 缺 agent ⇒ return 2」作真实 gate 锚点；X7 后锚点消失，
+      改为直接调用 `_write_exit2_resolution()` ⇒ 该分支的**端到端**（经 agate-next 三态分发）
+      覆盖随之失去，只剩落盘函数本身的覆盖。
+impact: >-
+  agate-next 的 exit ∉ pass_set 分支（会写 {phase}-exit2-resolution.md 并转主 Agent 决策）
+  若将来被改坏，现有测试不会发现——因为触发它的入口在真实 gate 上已不存在。
+recommendation: >-
+  二选一：① 给 agate-next 增加**受控 gate 入口**（如 env 覆盖 check-gate 路径），
+  使用例能以合成 gate 制造 exit 2，从而恢复端到端覆盖；② 或在第 1 批「phase 语义统一」时
+  一并重新定义「异常暂停」的触发面，再据此补覆盖。
+  注意：**不要**为了测试而重新制造一个「本该是 exit 1 的 gate 缺口」。
+closure_criteria:
+  - "存在能以受控输入让 agate-next 走到 exit ∉ pass_set 分支的用例（端到端）"
+source: review  # 实现期的独立评审发现
+created_at: 2026-10-04
+task_id: TAG0042-config-and-enforcement
+```

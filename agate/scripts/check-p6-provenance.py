@@ -53,12 +53,33 @@ try:
         resolve_evidence,
         strip_fenced_blocks,
     )
+
+    # 别名单独 import（ruff isort 按别名排序，与上块不合并不违规）
+    from agate_common import fm_field_value as _fm_field_value
+    from agate_common import split_frontmatter as _split_frontmatter
 except ImportError:
     read_vision_tri_state = None
     resolve_evidence = None
     extract_evidence_refs = None
     strip_fenced_blocks = None
     is_new_task_for_evidence_ref = None
+    _split_frontmatter = None
+    _fm_field_value = None
+
+# X4（TAG0042 批0）：复用声明的**关键词兜底**（仅在结构化字段缺失时使用）。
+#
+# ⚠️ 兜底必须**窄**——实测「只要正文出现该短语」会误报 3 例：
+#   · TAG0033 `### 2.6 P5 证据复用判定`（**节标题**，正文实为否定式「不走…口径」）
+#   · TAG0019 `引用 P5 证据说明：…**未在本报告作"复用"声明**`（**否定式**）
+#   · TAG0018 `…P5 证据复用**判定均通过**`（描述**审计跑了**，非复用声明）
+#   而误报有害：audit 7 对误报不宽容 ⇒ 又碰上"P5 后改过代码"就判 reuse_blocked
+#   ⇒ 把**根本没复用**的任务拦下。**这正说明关键词无法可靠承担这个判断**——
+#   故兜底只认「**粗体独立声明**」这一种高置信形态（实测只命中 2 个真声明，0 误报）。
+#   其余一律要求用结构化字段（字段缺失时不声明，只提示）。
+_REUSE_DECL_PATTERNS = (
+    # 行首（可带列表符）的粗体声明，如 `- **P5 证据复用**：…` / `- **P5 证据复用（审计 7）**：…`
+    r"^\s*[-*]?\s*\*\*\s*(?:引用\s*P5\s*证据|P5\s*证据复用)\s*[*（(:：]",
+)
 
 _SKIP_AGENT_CHECK = (
     r"-dispatch-context\.md$",
@@ -172,7 +193,20 @@ def _run_git(task_dir, args):
 
 
 def p6_declares_reuse(task_dir):
-    """P6-acceptance.md 是否声明"引用 P5 证据、不重跑"（M21 落地的产出规格判定）。"""
+    r"""P6-acceptance.md 是否声明"引用 P5 证据、不重跑"（M21 落地的产出规格判定）。
+
+    X4（TAG0042 批0）：**以结构化字段为准**（ADR-015 手段①：让错误不可能）。
+      · `p5_evidence_reuse: true`  ⇒ 声明（不看正文）
+      · `p5_evidence_reuse: false` ⇒ **不声明**（正文出现任何关键词也不翻案）
+      · 字段缺失 ⇒ 关键词兜底 + **WARNING 提示改用字段**（迁移期语义）
+
+    为什么要改：原实现用 `re.search(r"引用\s*P5\s*证据")` —— 只认一种中文正序，
+    实测本仓 5 个真声明里**只命中 1 个**（主流写法是倒序「P5 证据复用」）。
+    而"加宽词表"方向已被独立评审否决：会命中**否定式**
+    （TAG0033「本任务**不走**「复用 P5 证据」口径」）与描述文字
+    ⇒ 误报 ⇒ 又碰上"P5 后改过代码"就判 reuse_blocked ⇒ 把**没复用**的任务拦下。
+    关键词只保留**精确的肯定写法**，**不含** `reuse_allowed`/`reuse_blocked` 这类审计状态名。
+    """
     p6_file = os.path.join(task_dir, "P6-acceptance.md")
     if not os.path.isfile(p6_file):
         return False
@@ -181,7 +215,27 @@ def p6_declares_reuse(task_dir):
             text = f.read()
     except OSError:
         return False
-    return bool(re.search(r"引用\s*P5\s*证据", text))
+
+    # ① 优先：结构化字段
+    if _split_frontmatter is not None and _fm_field_value is not None:
+        fm, _body = _split_frontmatter(text)
+        val = str(_fm_field_value(fm, "p5_evidence_reuse")).strip().lower() if fm else ""
+        if val == "true":
+            return True
+        if val == "false":
+            return False                      # 显式否认 ⇒ 关键词一律不翻案
+
+    # ② 字段缺失：关键词兜底（迁移期）+ 提示改用字段
+    # 须 re.M：声明出现在文档中段（`^` 默认只匹配串首）
+    hit = any(re.search(p, text, re.M) for p in _REUSE_DECL_PATTERNS)
+    if hit:
+        sys.stderr.write(
+            "GATE PROVENANCE WARNING: P6-acceptance.md 未声明结构化字段 "
+            "`p5_evidence_reuse`（本次按正文关键词兜底判为「已声明」）——"
+            "请在 frontmatter 显式写 `p5_evidence_reuse: true|false`；"
+            "该关键词兜底属迁移期语义，后续版本不再识别\n"
+        )
+    return hit
 
 
 def audit7_p5_evidence_reuse(task_dir, state_yaml):

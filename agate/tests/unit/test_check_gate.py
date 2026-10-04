@@ -651,9 +651,16 @@ def test_g2_19_review_agent_main_exit_1(task_dir, agate_scripts, python_exe, run
     assert "agent=main" in result.output
 
 
-def test_g2_20_review_missing_agent_exit_2(
+def test_g2_20_review_missing_agent_exit_1(
     task_dir, agate_scripts, python_exe, run_cli
 ):
+    """P2-review 缺 `agent` ⇒ **exit 1**（TAG0042 批0 X7 修正）。
+
+    ⚠️ 本用例原名 `..._exit_2`、断言 `returncode == 2`——那是**把缺陷写进了测试**：
+    P2 的 `gate_pass_exit` **就是 2** ⇒ `return 2` 是**通过码** ⇒ **fail-open 放行**。
+    （缺 `agent` 意味着无法证明"评审者不是主 Agent"，与 `agent == "main"` 同等严重。）
+    P4 侧同款 `return 2` 因 P4 的通过码是 0，会落 exit2-resolution 误判为异常——一并于 X7 改 1。
+    """
     td = task_dir()
     _write_p2_design(td, _P2_TWO_CAND_BODY)
     add_p2_candidate_count(td, 2)
@@ -662,7 +669,7 @@ def test_g2_20_review_missing_agent_exit_2(
     )
 
     result = _run_gate(agate_scripts, python_exe, run_cli, "P2", str(td))
-    assert result.returncode == 2
+    assert result.returncode == 1, "缺 agent 不得返回通过码（P2 的通过码是 2）"
     assert "agent" in result.output
 
 
@@ -3894,3 +3901,91 @@ def test_t41_scratch_dir_clean_filenames_no_warn(
     assert result.returncode == 2, result.output[:300]
     assert "测试收集模式" not in result.output
     assert "未被 .gitignore 忽略" not in result.output
+
+
+# --- X6（TAG0042 批0）：两键语义不同，须**分别处理** ---------------------------
+#
+# 缺陷实测（同一函数 `agate_common.design_trivial_declared`）：
+#   正则 `^(design_trivial|follows_existing_pattern):\s*\S` 要求冒号后**有值**，于是：
+#     · `design_trivial: false`  → presence=True ⇒ **假绿**（false 被当"已声明"，候选数降为 1）
+#     · `follows_existing_pattern:`（**YAML 块列表，键行无值**）→ presence=False
+#       ⇒ **漏认**（该键 schema 类型是 `list`，**不存在 true/false**）
+#   ⇒ 原设计「按值判断」只修前者，**会强化后者**（块列表会被判未声明）。
+#
+# 目标：`design_trivial` 按**值**判（true 才降为 1）；`follows_existing_pattern` 按 **presence**
+#       （兼容块列表键行无值），正则写死 `^follows_existing_pattern:`。
+
+def _p2_with_candidates(n):
+    return f"---\nagent: test\n---\ncandidate_count: {n}\n"
+
+def test_x6_design_trivial_false_does_not_lower_min(agate_scripts):
+    """`design_trivial: false` ⇒ **不算已声明**（现状：presence 判据把它当已声明 ⇒ 假绿）。
+
+    直接测判据函数（避免被 gate_p2 的其他前置掩盖；语义本身是本项的核心）。
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(agate_scripts))
+    import agate_common as C
+    assert C.design_trivial_declared("design_trivial: false") is False, (
+        "design_trivial: false 被当成'已声明'⇒ 最低候选数被降为 1（假绿）"
+    )
+    assert C.design_trivial_declared("design_trivial: true") is True
+    assert C.design_trivial_declared("design_trivial: true  # 行尾注释") is True
+
+
+def test_x6_follows_existing_pattern_block_list_counts(agate_scripts):
+    r"""`follows_existing_pattern:`（**块列表，键行无值**）⇒ **算已声明**。
+
+    现状：presence=False ⇒ 判未声明 ⇒ 要求 2 个候选 ⇒ **误拦合法任务**
+    （存量 TAG0018 正是块列表写法）。
+    并须兼容**流式列表** `follows_existing_pattern: [a, b]`（R1 曾给 `\s*$` 候选，实测漏此形态）。
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(agate_scripts))
+    import agate_common as C
+    assert C.design_trivial_declared("follows_existing_pattern:") is True, (
+        "块列表（键行无值）应算已声明"
+    )
+    assert C.design_trivial_declared("follows_existing_pattern: [a, b]") is True, (
+        "流式列表应算已声明"
+    )
+    assert C.design_trivial_declared("# follows_existing_pattern: x") is False, (
+        "注释掉的键不算声明"
+    )
+
+
+# --- X7（TAG0042 批0）：缺 agent 不得返回**通过码**（两个 site）----------------
+#
+# 缺陷实测：`gate_p2` 与 `gate_p4` 各有一处 `if not agent: return 2`，但**语义不同**：
+#   · P2 的 `gate_pass_exit` = **2** ⇒ `return 2` 是**通过码** ⇒ **fail-open 放行**
+#   · P4 的 `gate_pass_exit` = **0** ⇒ 那个 2 **∉ pass_set 且 ≠ 1** ⇒ 落
+#     `agate-next.py` 的 `exit2-resolution`（"真暂停/异常"路径）⇒ **误判为异常暂停**
+# ⇒ 同一句注释、同一个 `return 2`，在两个 phase 上是两种截然不同的错误行为。
+#
+# 目标（设计 §X7）：**两个 site 都改为 `return 1`**（不得返回 `gate_pass_exit`）。
+
+@pytest.mark.parametrize("phase,review_file", [
+    ("P2", "P2-review.md"),
+    ("P4", "P4-review.md"),
+])
+def test_x7_missing_agent_returns_not_pass(agate_scripts, phase, review_file):
+    """缺 `agent` 时须返回 **1**（该 phase 的"未通过"码）。
+
+    ⚠️ 断言写 `got == 1` 而**不是** `got != pass_exit`——后者对 P4 是**空转**的：
+    P4 的通过码是 0、缺陷值是 2，`2 != 0` 为真 ⇒ **改坏了测试照样绿**（独立评审实测指出，
+    我也复核确认）。判据必须锚在**期望行为**上，不能锚在"不等于通过码"这个代理上。
+    """
+    import yaml as _yaml
+    d = _yaml.safe_load((agate_scripts.parent / "rules" / "phases.yaml").read_text(encoding="utf-8"))
+    pass_exit = {p["id"]: p.get("gate_pass_exit") for p in d["phases"]}
+    # 从源码抽取该 phase 分支里缺 agent 的 return 值（允许注释行夹在中间）
+    src = (agate_scripts / "check-gate.py").read_text(encoding="utf-8")
+    pat = "GATE " + phase + r": .*?但缺 agent 字段[\s\S]{0,400}?\n\s*return (\d+)"
+    m = re.search(pat, src)
+    assert m, f"未能在 check-gate.py 中定位 {phase} 的缺 agent 分支"
+    got = int(m.group(1))
+    assert got == 1, (
+        f"{phase} 缺 agent 时返回 {got}（应为 1）。"
+        f"该 phase 的通过码是 {pass_exit[phase]}："
+        f"{'返回 2 = 通过码 ⇒ fail-open 放行' if got == pass_exit[phase] else '返回值不符合未通过码语义'}"
+    )

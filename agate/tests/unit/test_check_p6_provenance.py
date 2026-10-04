@@ -14,6 +14,7 @@
 import importlib.util
 import os
 import re
+import sys
 
 import pytest
 
@@ -877,3 +878,111 @@ def test_pv_unclosed_frontmatter_not_stripped(task_dir, agate_scripts, python_ex
     result = _run_prov(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 1, f"未闭合 frontmatter 吞掉了正文：{result.output[:300]}"
     assert "无闭合对" in result.output
+
+
+# ── X4（TAG0042 批0）：复用声明改由**结构化字段**判定 ─────────────────────────
+#
+# 缺陷：`p6_declares_reuse` 用 `re.search(r"引用\s*P5\s*证据")` 判 —— 只认一种中文正序，
+#   实测本仓 5 个真声明里**只命中 1 个**（其余写「P5 证据复用」倒序）。
+#   而"加宽词表"方向已被第五轮评审否决：会命中否定式（TAG0033「**不走**「复用 P5 证据」口径」）
+#   与描述文字 ⇒ 误报 ⇒ 又碰上"P5 后改过代码"就判 reuse_blocked ⇒ 把没复用的任务拦下。
+# ⇒ 改为**以字段为准**（ADR-015 手段①：让错误不可能），关键词只在字段缺失时兜底 + WARNING。
+
+def _load_prov_module(agate_scripts):
+    """加载被测模块；**须把 scripts/ 放进 sys.path**——该脚本按「与 agate_common 同目录」
+    直接 import（正常执行时脚本目录自动在 sys.path 上），importlib 加载则不会。
+
+    同时断言 `_fm_field_value` 已就位：若 agate_common 导入失败会落到 ImportError 兜底
+    （值为 None），那样字段类断言会**假失败**且看不出原因。
+    """
+    import importlib.util
+    scripts_dir = str(agate_scripts)
+    added = scripts_dir not in sys.path
+    if added:
+        sys.path.insert(0, scripts_dir)
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "prov_mod", str(agate_scripts / "check-p6-provenance.py")
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    finally:
+        if added:
+            sys.path.remove(scripts_dir)
+    assert mod._fm_field_value is not None, "agate_common 未导入成功（字段类断言会假失败）"
+    return mod
+
+
+def test_x4_field_true_is_declaration(tmp_path, agate_scripts):
+    """① 字段 `p5_evidence_reuse: true` ⇒ 判为声明（即使正文无任何关键词）。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(tmp_path, "---\nagent: verifier\np5_evidence_reuse: true\n---\n无任何关键词\n")
+    assert mod.p6_declares_reuse(str(tmp_path)) is True
+
+
+def test_x4_field_false_overrides_keywords(tmp_path, agate_scripts):
+    """② 字段 `false` ⇒ **正文出现任何关键词也不算声明**（TAG0033 型否定式归此列）。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\np5_evidence_reuse: false\n---\n"
+        "本任务**不走「复用 P5 证据」口径**；也不存在「引用 P5 证据」这回事。\n",
+    )
+    assert mod.p6_declares_reuse(str(tmp_path)) is False, (
+        "字段 false 时正文关键词不得翻案（否则误报 ⇒ reuse_blocked 拦下未复用的任务）"
+    )
+
+
+def test_x4_missing_field_falls_back_with_warning(tmp_path, agate_scripts, capsys):
+    """③ 字段缺失 ⇒ 关键词兜底命中 + **WARNING 提示改用字段**（迁移期语义）。
+
+    兜底只认**粗体独立声明**（实测本仓真声明即该形态）；见下方反例用例。
+    """
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(tmp_path, "---\nagent: verifier\n---\n- **P5 证据复用**：引用 ../P5-test-results/unit.md\n")
+    assert mod.p6_declares_reuse(str(tmp_path)) is True
+    err = capsys.readouterr().err
+    assert "p5_evidence_reuse" in err, "字段缺失走关键词兜底时须提示改用结构化字段"
+
+
+def test_x4_missing_field_reversed_phrasing_also_recognized(tmp_path, agate_scripts):
+    """③ 补充：字段缺失时**倒序写法**（实测本仓主流写法「P5 证据复用」）也须识别。
+
+    改前：正则只认「引用 P5 证据」⇒ 该写法静默漏判（实测本仓真声明 2 个全为倒序）。
+    """
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(tmp_path, "---\nagent: verifier\n---\n- **P5 证据复用（审计 7）**：无改动\n")
+    assert mod.p6_declares_reuse(str(tmp_path)) is True, "倒序写法「P5 证据复用」须被识别"
+
+
+def test_x4_negation_and_headings_are_not_declarations(tmp_path, agate_scripts):
+    """兜底词表**不得**命中否定式/节标题（实测本仓 3 例误报，逐条固化为反例）。
+
+    误报有害：audit 7 会据此判 reuse_blocked，把**根本没复用**的任务拦下。
+    """
+    mod = _load_prov_module(agate_scripts)
+    cases = {
+        "TAG0033 型（节标题 + 正文否定式）":
+            "### 2.6 P5 证据复用判定\n\n- 本任务**不走「复用 P5 证据」口径**（非 refactor）。\n",
+        "TAG0019 型（否定式说明）":
+            "> 引用 P5 证据说明：本任务是功能任务，证据全部实测产出；**未在本报告作\"复用\"声明**。\n",
+        "TAG0018 型（描述审计跑了）":
+            "- `check-p6-provenance.py <task_dir>` → exit 0（… P5 证据复用判定均通过）\n",
+    }
+    for label, body in cases.items():
+        _write_p6(tmp_path, "---\nagent: verifier\n---\n" + body)
+        assert mod.p6_declares_reuse(str(tmp_path)) is False, (
+            f"{label} 不得被判为复用声明（否则误报 ⇒ 拦下未复用的任务）"
+        )
+
+
+def test_x4_descriptive_literals_not_treated_as_declaration(tmp_path, agate_scripts):
+    """禁用描述性字面：`reuse_allowed` / `reuse_blocked` 是**审计三态名**，不是复用声明。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\n---\n审计 7 判定 reuse_allowed；此前曾因改动判 reuse_blocked。\n",
+    )
+    assert mod.p6_declares_reuse(str(tmp_path)) is False, (
+        "描述性字面（审计状态名）不得被当成复用声明"
+    )

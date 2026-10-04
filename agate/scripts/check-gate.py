@@ -5,9 +5,10 @@
   check-gate.py PHASE TASK_DIR [OLD_PHASE]
 exit 0 = gate 通过; exit 1 = gate 未通过; exit 2 = 多数 phase 正常通过码（含动态
 gate_commands 或语义判断后的"通过"出口）——pass 判定以 phases.yaml gate_pass_exit 为准：
-P0-P3/P5/P6/P8 的通过码是 exit 2（gate_p0 L577 / p1 L698 / p2 L883 / p3 L892 / p5 L1048 /
-p6 L1093 / p8 L1376 return 2），P4/P7/P6.5 的通过码是 exit 0（p4 L990 / p7 L1241 /
-p65 L1110/1120 return 0）。exit 2 是账本常态（pre-commit 每次成功 commit 记 exit:2），
+P0-P3/P5/P6/P8 的通过码是 exit 2，P4/P7/P6.5 的通过码是 exit 0。
+（⚠️ 此处**不写各 gate 的行号**——行号是必然漂移的数字，历史上已过期多次；
+需要时现场取：`grep -n '^def gate_' check-gate.py`。）
+exit 2 是账本常态（pre-commit 每次成功 commit 记 exit:2），
 不是暂停——agate-next.py 消费方按 gate_pass_exit pass_set 区分"正常通过"与"真暂停"
 （TAG0027 BDD-13/26，CRITICAL-1 修正；本脚本返回语义零改动）。
 
@@ -890,8 +891,13 @@ def gate_p2(task_dir):
 
     agent = _md_field_get("agent", p2_review)
     if not agent:
-        sys.stderr.write("GATE P2: P2-review.md status:approved 但缺 agent 字段（向后兼容 WARNING）\n")
-        return 2
+        sys.stderr.write("GATE P2: P2-review.md status:approved 但缺 agent 字段（TAG0042 批0 X7：**不得返回通过码**）\n")
+        # X7：本处原先 `return 2`，但**语义随 phase 而变**——
+        #   · P2 的 gate_pass_exit=2 ⇒ 是**通过码** ⇒ **fail-open 放行**
+        #   · P4 的 gate_pass_exit=0 ⇒ 该 2 ∉ pass_set 且 ≠ 1 ⇒ 落
+        #     agate-next 的 exit2-resolution（误判为"真暂停/异常"）
+        # ⇒ 一律改为 1（不得等于 gate_pass_exit）。
+        return 1
     if agent == "main":
         sys.stderr.write("GATE P2: P2-review.md status:approved 但 agent=main（主 Agent 不可自行批准评审）\n")
         return 1
@@ -973,8 +979,13 @@ def gate_p4(task_dir):
 
     agent = _md_field_get("agent", p4_review)
     if not agent:
-        sys.stderr.write("GATE P4: P4-review.md status:approved 但缺 agent 字段（向后兼容 WARNING）\n")
-        return 2
+        sys.stderr.write("GATE P4: P4-review.md status:approved 但缺 agent 字段（TAG0042 批0 X7：**不得返回通过码**）\n")
+        # X7：本处原先 `return 2`，但**语义随 phase 而变**——
+        #   · P2 的 gate_pass_exit=2 ⇒ 是**通过码** ⇒ **fail-open 放行**
+        #   · P4 的 gate_pass_exit=0 ⇒ 该 2 ∉ pass_set 且 ≠ 1 ⇒ 落
+        #     agate-next 的 exit2-resolution（误判为"真暂停/异常"）
+        # ⇒ 一律改为 1（不得等于 gate_pass_exit）。
+        return 1
     if agent == "main":
         sys.stderr.write("GATE P4: P4-review.md status:approved 但 agent=main（主 Agent 不可自行批准评审）\n")
         return 1

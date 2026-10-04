@@ -224,3 +224,78 @@ def test_backstop_p5_py_gate_pass(
     assert "check-gate.sh not found" not in result.output
     assert "PASS" in result.output
     assert "FAIL" not in result.output
+
+
+# ── X3（TAG0042 批0）：5 个 SKIP 面不得**静默**假绿 ──────────────────────────
+#
+# 缺陷：`return 0`（exit 0 = 绿）是**有意**设计（gate-backstop 是 required check，
+#   一旦 skipped 会被分支保护永久 BLOCK）。但 5 个 SKIP 面的输出**与 PASS 无法区分**
+#   ⇒ 读者无法从 CI 状态分辨「兜底跑了且通过」与「兜底根本没跑」= 假绿。
+# 目标（ADR-015 手段②「让错误可见」）：**保留 exit 0**，但每个 SKIP 面都输出
+#   **显式 WARNING 块**（含"backstop 未生效"+ 如何配置）。
+# 判据为**行为判据**：逐面构造输入，断言「exit 0 不变」**且**「输出含 WARNING 标识」。
+
+_SKIP_WARN = "BACKSTOP-INACTIVE"
+
+
+def test_x3_no_platform_skip_is_loud(git_repo, agate_scripts, python_exe, run_cli, py_path):
+    """面①：未识别 CI 平台（L124）。"""
+    result = _run_backstop(python_exe, run_cli, py_path, agate_scripts, git_repo.path, _ci_env())
+    assert result.returncode == 0, "exit 0 必须保持（required check 不能被 skip）"
+    assert _SKIP_WARN in result.output, f"未识别平台须显式告警\n{result.output[-400:]}"
+
+
+def test_x3_no_state_yaml_skip_is_loud(git_repo, agate_scripts, python_exe, run_cli, py_path):
+    """面②：无 .state.yaml（L132）。"""
+    env = _ci_env(GITHUB_ACTIONS="true")
+    result = _run_backstop(python_exe, run_cli, py_path, agate_scripts, git_repo.path, env)
+    assert result.returncode == 0
+    assert _SKIP_WARN in result.output, f"无 .state.yaml 须显式告警\n{result.output[-400:]}"
+
+
+def test_x3_unreadable_state_yaml_skip_is_loud(git_repo, agate_scripts, python_exe, run_cli, py_path):
+    """面③：无法读取 .state.yaml（L142）——**最该醒目的一个**（数据坏了却报绿）。"""
+    repo = git_repo.path
+    (repo / ".state.yaml").write_text("phase: [未闭合\n", encoding="utf-8")   # YAML 非法
+    env = _ci_env(GITHUB_ACTIONS="true")
+    result = _run_backstop(python_exe, run_cli, py_path, agate_scripts, repo, env)
+    assert result.returncode == 0
+    assert _SKIP_WARN in result.output, (
+        f"读不出 .state.yaml 时更须显式告警（否则数据坏了却显示绿）\n{result.output[-400:]}"
+    )
+
+
+def test_x3_phase_without_gate_skip_is_loud(git_repo, agate_scripts, python_exe, run_cli, py_path):
+    """面④：phase 无 gate 需对照（L146，如 PAUSED/READY/DONE）。"""
+    repo = git_repo.path
+    (repo / ".state.yaml").write_text(
+        "task_id: T001\nphase: READY\nstatus: active\nretries: {}\n", encoding="utf-8"
+    )
+    env = _ci_env(GITHUB_ACTIONS="true")
+    result = _run_backstop(python_exe, run_cli, py_path, agate_scripts, repo, env)
+    assert result.returncode == 0
+    assert _SKIP_WARN in result.output, f"phase 无 gate 对照须显式告警\n{result.output[-400:]}"
+
+
+def test_x3_refactor_skip_distinguishable(git_repo, agate_scripts, python_exe, run_cli, py_path):
+    """面⑤：refactor 任务跳过 TDD 红灯（语义正当）——但**措辞须与其余 SKIP 区分**。
+
+    该面是"有意跳过且语义正确"，故仍须可见（否则与其他面一样无法分辨），
+    但用**不同的标识**（REFACTOR-EXEMPT）表明这是**规则允许**的豁免，不是机制失效。
+    """
+    repo, tasks = _setup_p3_base(git_repo)
+    (tasks / "P1-requirements.md").write_text(
+        "---\nagent: test\nrisk_level: medium\nchange_type: refactor\n---\n"
+        "#### BDD-1: 关键路径行为不变\n- Given 重构后的协议状态\n"
+        "- When 执行关键路径\n- Then 行为与重构前一致\n",
+        encoding="utf-8",
+    )
+    git_repo.commit("p3 refactor")
+    mock = _write_mock(repo, "mock-tdd-refactor", 2)
+    env = _ci_env(GITHUB_ACTIONS="true", AGATE_TDD_RED_SCRIPT=py_path(str(mock)))
+    result = _run_backstop(python_exe, run_cli, py_path, agate_scripts, repo, env)
+    assert result.returncode == 0
+    assert "REFACTOR-EXEMPT" in result.output, (
+        f"refactor 豁免须有**可区分**标识\n{result.output[-400:]}"
+    )
+    assert _SKIP_WARN not in result.output, "refactor 面是规则允许的豁免，不属'机制未生效'"

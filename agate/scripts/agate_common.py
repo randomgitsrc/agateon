@@ -472,6 +472,41 @@ def read_state_phase(state_file):
     return data.get("phase", "") if data else ""
 
 
+def read_staged_state_phase(task_state, repo_root=None):
+    """读 .state.yaml 的 phase——**取暂存区**（TAG0042 批0 X2）。
+
+    为什么：hook 判定应基于**将要提交的那份**，而非工作区当前内容。
+    工作区与暂存区 phase 不同时（"边改边提交"），按工作区判会**判错阶段**。
+
+    ⚠️ **仅供「该文件本次已在暂存区」的调用点使用**——暂存区读不到时**回退读工作区**
+    （fail-open，不阻断提交），并返回 `from_staged=False`。**回退分支是否可达，取决于调用点**：
+    `pre-commit-gate.py` 2d 段的 `state_file` 来自**暂存文件清单**，回退不可达（无需提示）；
+    2f 段的 `task_state` **常常未暂存**，那里**不得**套用「暂存优先」语义去改判定。
+
+    :returns: `(phase, from_staged)`；两处都读不到时 `("", False)`。
+    """
+    rel = None
+    if repo_root:
+        try:
+            rel = os.path.relpath(os.path.abspath(task_state), os.path.abspath(repo_root))
+        except ValueError:            # Windows 跨盘符
+            rel = None
+    if rel:
+        try:
+            proc = subprocess.run(
+                ["git", "show", ":" + rel.replace(os.sep, "/")],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                cwd=repo_root,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                data = yaml.safe_load(proc.stdout)
+                if isinstance(data, dict) and data.get("phase"):
+                    return str(data["phase"]), True
+        except Exception:             # 暂存区读取失败 ⇒ 回退（fail-open）
+            pass
+    return read_state_phase(task_state), False
+
+
 def read_state_task_id(state_file):
     """读 .state.yaml 的 task_id；文件不存在/解析失败返回 ""。"""
     data = _read_state(state_file)
@@ -709,8 +744,12 @@ def run_test_with_formatter(cmd, fmt_path, timeout_secs=None):
     output = ""
     exit_code = 0
     try:
+        # X5（TAG0042 批0）：**开 pipefail**——否则 `cmd | tail` 会吞掉左侧失败
+        #   （TAG0016 实测：`| tail` 让失败被长期掩盖）。
+        # ⚠️ **不能**写 `executable="bash -o pipefail"`——`executable` 是**路径**，
+        #   实测抛 `FileNotFoundError: 'bash -o pipefail'`。正确做法是**前缀**。
         proc = subprocess.run(
-            cmd, shell=True, executable="bash",
+            "set -o pipefail; " + cmd, shell=True, executable="bash",
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
             timeout=timeout_secs,
@@ -1386,9 +1425,27 @@ def candidate_count_value(line):
     return None
 
 
+# 「轻量设计」两键的**行首声明**判据（TAG0042 批0 X6）。
+# ⚠️ **两键语义不同，必须分开判**——合并成一条规则会制造两类错误：
+#   · `design_trivial` 是 **bool**：`design_trivial: false` 语义是"**不**轻量"，
+#     但单纯 presence 判据会把它当"已声明" ⇒ **假绿**（最低候选数被错降为 1）。
+#   · `follows_existing_pattern` 是 **list**（`agate-frontmatter-check.py:54` 明列）：
+#     **不存在 true/false**，且真实写法是**块列表**（键行无值，如 `follows_existing_pattern:`）
+#     ⇒ 若按"冒号后须有值"判，**合法声明会被漏认** ⇒ 误拦（存量 TAG0018 即此写法）。
+_DESIGN_TRIVIAL_TRUE_RE = re.compile(r"^design_trivial:\s*true\b")
+# presence 语义：**只要行首出现该键**即算（同时覆盖块列表与流式列表 `[a, b]`）。
+# ⚠️ 不要写成 `^follows_existing_pattern:\s*$`——那会**漏掉流式列表**（R1 曾给该候选，实测漏）。
+_FOLLOWS_PATTERN_PRESENCE_RE = re.compile(r"^follows_existing_pattern:")
+
+
 def design_trivial_declared(line):
-    """P1-requirements.md 行首 `design_trivial:` / `follows_existing_pattern:` 声明 presence。"""
-    return bool(re.search(r"^(design_trivial|follows_existing_pattern):\s*\S", line))
+    """P1-requirements.md 行首「轻量设计」声明判定（**两键分别处理**，见上方常量注释）。
+
+      · `design_trivial: true` ⇒ True（**按值**；`false` ⇒ False）
+      · `follows_existing_pattern:` / `follows_existing_pattern: [a, b]` ⇒ True（**presence**）
+    """
+    return bool(_DESIGN_TRIVIAL_TRUE_RE.match(line)
+                or _FOLLOWS_PATTERN_PRESENCE_RE.match(line))
 
 
 def has_keyword(text, kind):

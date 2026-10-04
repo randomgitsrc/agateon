@@ -144,7 +144,21 @@ regression_pass: true      # refactor 口径：全量回归全绿声明（change
 - **`reuse_blocked`**（检测到非产出文件改动，含 BDD-13 场景：P6→P4 修复后重到 P6 但未重跑 P5）→ 仍要求按上方既有口径独立产出 `P6-evidence/regression.log`（尾行 `EXIT_CODE: 0`），不得声明复用
 - **`no_reuse_claim_possible`**（`.state.yaml` 无 `p5_pass_commit` 字段，存量任务兼容）→ 静默回退，等同 `reuse_blocked`，按既有口径独立产出 `regression.log`
 
-**gate 门槛**：若 P6-acceptance.md 已写"引用 P5 证据"类表述但审计 7 判定为 `reuse_blocked`，`check-p6-provenance.py` 拦截（exit 1，GATE PROVENANCE），要求重跑 P5 后再走 P6。判定方向保守——失败只会导致"本可复用却被要求重跑"，不会出现"应重跑却被放行"的安全漏洞。
+**如何声明「复用」**（TAG0042 批0 X4 起）：在 `P6-acceptance.md` **frontmatter** 显式写
+`p5_evidence_reuse: true|false` —— 判定**以该字段为准**：
+
+- `p5_evidence_reuse: true` ⇒ 声明复用（正文不写关键词也算）；
+- `p5_evidence_reuse: false` ⇒ **不声明**（正文出现任何"引用 P5 证据"类字样也不翻案）；
+- **字段缺失**（存量任务）⇒ 按正文关键词兜底，并输出 WARNING 提示改用字段（迁移期语义）。
+
+> ⚠️ **不要再用正文措辞去表达这件事**。原实现靠 `引用 P5 证据` 这一种中文正序匹配，
+> 实测本仓 5 个真声明里**只命中 1 个**（主流写法是倒序「P5 证据复用」）；
+> 而"加宽词表"会命中**否定式**（如「本任务**不走**『复用 P5 证据』口径」）与审计状态名
+> ⇒ 误报 ⇒ 把**没复用**的任务拦下。字段是单一权威源（ADR-014/015）。
+
+**gate 门槛**：若 P6-acceptance.md 声明了复用（字段 `true`，或字段缺失时正文关键词兜底命中）
+但审计 7 判定为 `reuse_blocked`，`check-p6-provenance.py` 拦截（exit 1，GATE PROVENANCE），
+要求重跑 P5 后再走 P6。判定方向保守——失败只会导致"本可复用却被要求重跑"，不会出现"应重跑却被放行"的安全漏洞。
 
 ### P6-evidence/
 
