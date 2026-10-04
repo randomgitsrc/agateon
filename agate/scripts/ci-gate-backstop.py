@@ -117,11 +117,41 @@ def _judge_enabled(task_dir: str) -> bool:
     return bool(isinstance(judge, dict) and judge.get("enabled"))
 
 
+def _inactive(reason: str, howto: str) -> None:
+    """X3（TAG0042 批0）：SKIP 面**显式告警**——输出一个无法与 PASS 混淆的块。
+
+    为什么保留 exit 0：本 job 是 **required check**，一旦 `skipped` 会被分支保护
+    **永久 BLOCK**（PR #193 实证）⇒ 必须 success。但"绿"与"兜底跑了"必须可分辨，
+    否则就是**假绿**（ADR-015 手段②：让错误可见——这里不能用手段①，
+    CI 机制决定了 required check 必须 success）。
+
+    标识 `BACKSTOP-INACTIVE` 供 CI 侧 grep 成注解/摘要（脚本本身不依赖任何 CI 平台）。
+    """
+    print("=" * 66)
+    print(f"BACKSTOP-INACTIVE: {reason}")
+    print("  ⇒ 本次 **未实际执行** gate 兜底（不是「跑了且通过」）")
+    print(f"  如何让它生效：{howto}")
+    print("  （exit 0 是有意为之：required check 被 skip 会永久阻断合并）")
+    print("=" * 66)
+
+
+def _exempt(reason: str) -> None:
+    """规则**允许**的豁免（区别于「机制失效」）——仍可见，但用不同标识。"""
+    print("=" * 66)
+    print(f"REFACTOR-EXEMPT: {reason}")
+    print("  ⇒ 这是规则允许的豁免，**不是**机制失效（exit 0 为预期）")
+    print("=" * 66)
+
+
 def main() -> int:
     platform = detect_ci_platform()
     print(f"CI platform: {platform}")
     if platform is None:
         print("SKIP: 未识别的 CI 平台（非 Gitea/GitLab/GitHub），backstop 不生效")
+        _inactive(
+            "未识别的 CI 平台（非 Gitea/GitLab/GitHub）",
+            "在 Gitea/GitLab/GitHub 的原生 CI 上运行本脚本（探测其平台环境变量）",
+        )
         return 0
 
     repo_root = Path.cwd()
@@ -130,6 +160,10 @@ def main() -> int:
 
     if not state_file.exists():
         print("SKIP: 无 .state.yaml，非 agate 项目")
+        _inactive(
+            f"仓库根无 .state.yaml（{state_file}）",
+            "在仓库根放 .state.yaml（task_id + phase），或确认本项目是否用 agateon 管理",
+        )
         return 0
 
     try:
@@ -140,10 +174,18 @@ def main() -> int:
         task_id = data.get("task_id", "")
     except Exception:
         print("SKIP: 无法读取 .state.yaml")
+        _inactive(
+            f".state.yaml 存在但**无法解析/读取**（{state_file}）——数据坏了却报绿最危险",
+            "修好 .state.yaml 的 YAML 语法后再跑（本面此前与「通过」无法区分）",
+        )
         return 0
 
     if not phase or phase in ("PAUSED", "READY", "DONE", ""):
         print(f"SKIP: phase={phase}，无 gate 需要对照")
+        _inactive(
+            f"phase={phase!r} 无 gate 需对照（PAUSED/READY/DONE 属非推进态）",
+            "本面在推进阶段（非 PAUSED/READY/DONE）才会真正跑兜底",
+        )
         return 0
 
     tasks_dir = resolve_tasks_dir(str(repo_root))
@@ -160,6 +202,10 @@ def main() -> int:
         is_refactor = _read_p1_change_type(task_dir) == "refactor"
         if is_refactor:
             print("SKIP: refactor 任务，TDD 红灯不适用（回归口径由 P5/P6 全量回归兜底）")
+            _exempt(
+                "refactor 任务无新功能断言，TDD 红灯不适用"
+                "（回归口径由 P5/P6 全量回归兜底，见 P2-design.md §3.4）"
+            )
             return 0
         # check-tdd-red.py exit 语义：
         #   0 = 真红灯（符合 TDD）→ 通过

@@ -111,3 +111,73 @@ def test_install_6_ln_copy_mode_pre_push_installed(
     assert result.returncode == 0
     assert "复制" in result.output or "需重跑" in result.output
     assert (repo / ".git" / "hooks" / "pre-push").is_file()
+
+
+# ── X8（TAG0042 批0）：软链 hook 也必须备份（含悬空软链）─────────────────────
+#
+# 缺陷：`_backup` 的前置条件是 `os.path.isfile(hook_file) and not os.path.islink(...)`
+#   ⇒ ① 软链 hook **不备份**就被 `_ln_sf` 覆盖（实测 peekview 的 hook 正是软链，
+#        `make setup-hooks` 与 install-hook 争用同一位置）；
+#     ② 更严重：**悬空软链** `isfile` 为 False ⇒ **既不备份**，又被后续步骤**删除**
+#        ⇒ 静默丢失（原缺陷至少还留着软链）。两者同函数同主题，一并修。
+
+def test_x8_existing_symlink_hook_is_backed_up(
+    git_repo, agate_scripts, agate_root, python_exe, run_cli, tmp_path
+):
+    """软链 hook ⇒ 须备份，且备份**记录链接目标**（不是复制内容）。"""
+    repo = git_repo.path
+    hook = repo / ".git" / "hooks" / "pre-push"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    target = tmp_path / "user-original-hook.sh"
+    target.write_text("#!/usr/bin/env bash\necho user-hook\n", encoding="utf-8")
+    os.symlink(str(target), str(hook))
+
+    result = _run_install(run_cli, python_exe, agate_scripts, repo, agate_root)
+
+    assert "已备份现有 pre-push hook" in result.output, (
+        f"软链 hook 也应备份（改前被 islink 排除 ⇒ 静默覆盖）\n{result.output[-500:]}"
+    )
+    backups = list(hook.parent.glob("pre-push.bak.*"))
+    assert backups, "须留下备份文件"
+    content = backups[0].read_text(encoding="utf-8")
+    assert str(target) in content, (
+        "软链备份须**记录 readlink 目标**（复制内容无意义）\n"
+        f"备份内容: {content[:200]}"
+    )
+
+
+def test_x8_dangling_symlink_hook_is_backed_up_not_deleted(
+    git_repo, agate_scripts, agate_root, python_exe, run_cli, tmp_path
+):
+    """悬空软链 ⇒ 须备份而非被删（改前 `isfile` 为 False ⇒ 既没备份又被删）。"""
+    repo = git_repo.path
+    hook = repo / ".git" / "hooks" / "pre-push"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    missing = tmp_path / "gone" / "vanished-hook.sh"          # 不创建 ⇒ 悬空
+    os.symlink(str(missing), str(hook))
+    assert os.path.islink(str(hook)) and not os.path.exists(str(hook))
+
+    result = _run_install(run_cli, python_exe, agate_scripts, repo, agate_root)
+
+    backups = list(hook.parent.glob("pre-push.bak.*"))
+    assert backups, (
+        f"悬空软链也必须留下备份（改前静默丢失）\n{result.output[-500:]}"
+    )
+    assert str(missing) in backups[0].read_text(encoding="utf-8"), (
+        "悬空软链的备份同样须记录其链接目标"
+    )
+
+
+def test_x8_plain_file_backup_still_works(
+    git_repo, agate_scripts, agate_root, python_exe, run_cli
+):
+    """回归：普通文件备份行为不变（不得因 X8 改动而退化）。"""
+    repo = git_repo.path
+    hook = repo / ".git" / "hooks" / "pre-push"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/usr/bin/env bash\necho plain\n", encoding="utf-8")
+
+    result = _run_install(run_cli, python_exe, agate_scripts, repo, agate_root)
+    assert "已备份现有 pre-push hook" in result.output
+    backups = list(hook.parent.glob("pre-push.bak.*"))
+    assert backups and "plain" in backups[0].read_text(encoding="utf-8")
