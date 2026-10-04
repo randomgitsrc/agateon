@@ -365,3 +365,47 @@ def test_x5_pipefail_not_via_executable_arg():
     with pytest.raises((FileNotFoundError, OSError)):
         _sp.run("echo hi", shell=True, executable="bash -o pipefail",
                 capture_output=True, check=True)
+
+
+# --- X2（TAG0042 批0）：phase 须**从暂存区**读 -------------------------------
+
+def test_x2_staged_phase_wins_over_working_tree(tmp_path):
+    """X2：工作区 phase 与暂存区不同时，**按暂存区判定**（现状：读工作区 ⇒ 判错阶段）。"""
+    import subprocess as _sp
+    import sys as _sys
+    _sys.path.insert(0, "agate/scripts")
+    import agate_common as C
+
+    repo = tmp_path / "repo"
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    state = task / ".state.yaml"
+    _sp.run(["git", "init", "-q"], cwd=str(repo), check=False)
+
+    # 暂存区提交 P1，然后把工作区改成 P2（模拟"边改边提交"）
+    state.write_text("task_id: T001\nphase: P1\n", encoding="utf-8")
+    _sp.run(["git", "add", "-A"], cwd=str(repo), check=False)
+    state.write_text("task_id: T001\nphase: P2\n", encoding="utf-8")
+
+    phase, from_staged = C.read_staged_state_phase(str(state), str(repo))
+    assert phase == "P1", f"应按**暂存区**判定（P1），实际 {phase}"
+    assert from_staged is True
+
+
+def test_x2_falls_back_to_working_tree_when_not_staged(tmp_path):
+    """X2：暂存区**没有**该文件 ⇒ 回退读工作区，且 `from_staged=False`（供调用方提示）。"""
+    import subprocess as _sp
+    import sys as _sys
+    _sys.path.insert(0, "agate/scripts")
+    import agate_common as C
+
+    repo = tmp_path / "repo2"
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    state = task / ".state.yaml"
+    _sp.run(["git", "init", "-q"], cwd=str(repo), check=False)
+    state.write_text("task_id: T001\nphase: P7\n", encoding="utf-8")   # 未 add
+
+    phase, from_staged = C.read_staged_state_phase(str(state), str(repo))
+    assert phase == "P7", f"应回退读工作区（P7），实际 {phase}"
+    assert from_staged is False

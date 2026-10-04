@@ -472,6 +472,41 @@ def read_state_phase(state_file):
     return data.get("phase", "") if data else ""
 
 
+def read_staged_state_phase(task_state, repo_root=None):
+    """读 .state.yaml 的 phase——**取暂存区**（TAG0042 批0 X2）。
+
+    为什么：hook 判定应基于**将要提交的那份**，而非工作区当前内容。
+    工作区与暂存区 phase 不同时（"边改边提交"），按工作区判会**判错阶段**。
+
+    ⚠️ **仅供「该文件本次已在暂存区」的调用点使用**——暂存区读不到时**回退读工作区**
+    （fail-open，不阻断提交），并返回 `from_staged=False`。**回退分支是否可达，取决于调用点**：
+    `pre-commit-gate.py` 2d 段的 `state_file` 来自**暂存文件清单**，回退不可达（无需提示）；
+    2f 段的 `task_state` **常常未暂存**，那里**不得**套用「暂存优先」语义去改判定。
+
+    :returns: `(phase, from_staged)`；两处都读不到时 `("", False)`。
+    """
+    rel = None
+    if repo_root:
+        try:
+            rel = os.path.relpath(os.path.abspath(task_state), os.path.abspath(repo_root))
+        except ValueError:            # Windows 跨盘符
+            rel = None
+    if rel:
+        try:
+            proc = subprocess.run(
+                ["git", "show", ":" + rel.replace(os.sep, "/")],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                cwd=repo_root,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                data = yaml.safe_load(proc.stdout)
+                if isinstance(data, dict) and data.get("phase"):
+                    return str(data["phase"]), True
+        except Exception:             # 暂存区读取失败 ⇒ 回退（fail-open）
+            pass
+    return read_state_phase(task_state), False
+
+
 def read_state_task_id(state_file):
     """读 .state.yaml 的 task_id；文件不存在/解析失败返回 ""。"""
     data = _read_state(state_file)

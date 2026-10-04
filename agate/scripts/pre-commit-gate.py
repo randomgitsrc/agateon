@@ -47,6 +47,7 @@ if SCRIPT_DIR not in sys.path:
 try:
     from agate_common import (
         append_event,
+        read_staged_state_phase,
         read_state_phase,
         read_state_task_id,
         resolve_agate_root,
@@ -254,7 +255,10 @@ def main():
             sys.exit(1)
 
         # 2d. 读取状态
-        phase = read_state_phase(state_file)
+        # X2（TAG0042 批0）：phase 取**暂存区**那份，与 2b 的 `--cached` 差分同源——
+        # 否则「索引里 phase=P4」+「工作区已改成 P5」时会按 P5 跑 gate，判错对象。
+        # 此处 `state_file` 来自暂存清单 ⇒ 回退分支不可达，无需提示（helper 注释有说明）。
+        phase, _ = read_staged_state_phase(state_file, repo_root)
         task_id = read_state_task_id(state_file)
         if not phase:
             continue
