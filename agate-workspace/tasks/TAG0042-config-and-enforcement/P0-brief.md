@@ -113,5 +113,6 @@ phase 不是 READY·DONE·PAUSED。
 - [x] 范围边界明示（只做 agateon）
 - [x] **第 0 批已作为独立设计推进**（4 轮评审 APPROVED）：
   `docs/design-notes/design-tag0042-batch0-defects.md` + 4 份评审报告
-- [ ] **待补**：在第 0 批的实现 PR 合并后，**把 PR 号记录到本任务**
-  （它走 hotfix 通道、在任务阶段之外，不记录则本任务账本里无其痕迹）
+- [x] **第 0 批已落地并留下痕迹**：PR **#401**（普通 merge）→ 版本 **v0.78.1**
+  （已 tag + Release + 安装）。逐项结论、验收锚结论，以及**设计未预见、后续批次必读**的四项，
+  见 `P0-batch0-record.md`（批 0 走 hotfix 通道、在任务阶段之外，该文件是它在本任务账本里的痕迹）
