@@ -3969,7 +3969,12 @@ def test_x6_follows_existing_pattern_block_list_counts(agate_scripts):
     ("P4", "P4-review.md"),
 ])
 def test_x7_missing_agent_returns_not_pass(agate_scripts, phase, review_file):
-    """缺 `agent` 时**不得**返回该 phase 的通过码（现状：两处均 `return 2`）。"""
+    """缺 `agent` 时须返回 **1**（该 phase 的"未通过"码）。
+
+    ⚠️ 断言写 `got == 1` 而**不是** `got != pass_exit`——后者对 P4 是**空转**的：
+    P4 的通过码是 0、缺陷值是 2，`2 != 0` 为真 ⇒ **改坏了测试照样绿**（独立评审实测指出，
+    我也复核确认）。判据必须锚在**期望行为**上，不能锚在"不等于通过码"这个代理上。
+    """
     import yaml as _yaml
     d = _yaml.safe_load((agate_scripts.parent / "rules" / "phases.yaml").read_text(encoding="utf-8"))
     pass_exit = {p["id"]: p.get("gate_pass_exit") for p in d["phases"]}
@@ -3979,7 +3984,8 @@ def test_x7_missing_agent_returns_not_pass(agate_scripts, phase, review_file):
     m = re.search(pat, src)
     assert m, f"未能在 check-gate.py 中定位 {phase} 的缺 agent 分支"
     got = int(m.group(1))
-    assert got != pass_exit[phase], (
-        f"{phase} 缺 agent 时返回 {got}，而该 phase 的通过码是 {pass_exit[phase]} "
-        f"⇒ {'fail-open 放行' if phase == 'P2' else '落 exit2-resolution 误判为异常'}（应改为 1）"
+    assert got == 1, (
+        f"{phase} 缺 agent 时返回 {got}（应为 1）。"
+        f"该 phase 的通过码是 {pass_exit[phase]}："
+        f"{'返回 2 = 通过码 ⇒ fail-open 放行' if got == pass_exit[phase] else '返回值不符合未通过码语义'}"
     )
