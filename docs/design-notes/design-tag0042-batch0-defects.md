@@ -3,7 +3,9 @@
 > **日期**：2026-10-04 ｜ **性质**：设计（**未实现**），待独立评审
 > **归属**：TAG0042「项目形态命令化 + 规则脚本化」的**第 0 批**（设计分析 §7 标注「无前提，改动都很小」）
 > **范围**：**只改 agateon 本仓**（其他项目不归本任务）
-> **事实基线**：main `4daa60b` 之后
+> **事实基线**：main `4daa60b` 之后 ｜ **设计基线**：`fa2fc3d`
+> （⚠️ 独立评审指出：设计曾有两个版本 `f5e4c31` → `fa2fc3d`，**实现须以本版为准**；
+> 本文已按评审的 P0/P1/P2 清单全部修订）
 
 ---
 
@@ -38,8 +40,29 @@ if phase in ("PAUSED", "READY", "DONE"):
 ```
 `continue` 发生在扫描**之前** ⇒ 收尾提交（正是"准备发布"那个时点）**完全不扫**。
 
-**目标行为**：**所有阶段都扫描**；`PAUSED` **只扫描不阻断**（设计 §5 原文）。
-即把"跳过 gate"与"是否扫描 PROD_TOUCHED"解耦。
+**⚠️ 原设计目标「**所有阶段都扫描**」**无法由它给出的改动达成**（独立评审反例，我复核确认）**：
+
+扫描另有一层门控——
+```python
+if any(f.startswith(prefix) for f in _staged_name_only()):   # ← 只在「任务目录下有文件被暂存」时才扫
+```
+⇒ **`phase: P4` 下把 `[PROD_TOUCHED]` 写进 `app.py`（非任务目录文件）也完全不扫**；
+把 `continue` 下移**改变不了这一点**。
+
+**目标行为（修订）**：本批达成「**所有阶段的、任务目录内的**暂存 diff 都扫描」；
+`PAUSED` **只扫描不阻断**。
+> 真正"所有文件都扫描"须**放宽上面那层门控**——那是**扩大扫描面**，属**跨模块影响**，
+> **明确划入第 4 批**（与外部设计分析 §2.4「每一次提交」行同源：该行本就写「PROD_TOUCHED 扫描
+> （PAUSED 只扫描不阻断）」）。
+
+**粒度说明**（评审确认此点设计是对的）：改动粒度须为「**把 2g.1 整体上移**」，
+**不是"删掉 `continue`"**——后者会连带跳过 frontmatter schema、P6 归一化、`check-gate`、
+`write_gate_result`、`append_event` 及 2i–2o 全部检查。
+
+**PAUSED 分支须留痕**（评审补充，我采纳）：`state-machine.md:98` 定义
+`任意阶段 --[出现 PROD_TOUCHED]--> PAUSED` ⇒ "PAUSED 只扫不阻断"语义自洽；
+但若扫到**新的** PROD_TOUCHED，按 `state-machine.md:255` 该信息**无机械消费方**
+⇒ **须至少 `append_event` 或写账本 WARNING**，否则等于"只打印到 stderr、无留痕"。
 
 **风险**：会让**存量任务**在收尾提交时被拦（若其 diff 含 `[PROD_TOUCHED]`）。
 ⇒ **须先全量扫描存量**（`AGENTS.md` 工作流第 0 条），确认不误伤。
@@ -53,10 +76,15 @@ if phase in ("PAUSED", "READY", "DONE"):
 
 **目标行为**：hook 侧**一律从暂存区读**（`git show :<task>/.state.yaml`），不读工作区。
 
+**⚠️ 原设计称"4 个调用方"不实**（独立评审核验，我采纳）：
+实测生产调用点**只有 2 个**——`pre-commit-gate.py` 的 **L257 与 L590**
+（`agate-advance.py:76` 是同名**本地**函数、`agate-next.py:52` 只 import 未调用）。
+⇒ **两个调用点都要改**；只改 L257 会让**同一次 commit 内两处 phase 来源不一致**。
+
 **⚠️ 本批只做最小面**：设计 §7 把 X2 拆成两半——
 「phase 从暂存区读取」属第 0 批；「按提交类型分级」属第 4 批。
-本批**只做前者**，且**只在 hook 的调用点**改为暂存区读取（`read_state_phase` 本身保持兼容，
-新增 `read_staged_state_phase`，避免改动 4 个调用方的语义）。
+本批**只做前者**：新增 `read_staged_state_phase`（`agate_common`），
+`read_state_phase` **本身不动**（避免语义漂移），在**两个** hook 调用点改用新函数。
 
 **风险**：新增函数须与既有 `read_state_phase` 语义一致（除数据来源外）。
 **存量影响**：若某任务工作区与暂存区 phase 不同，判定会**变化** ⇒ 须扫描存量。
@@ -102,6 +130,7 @@ if not state_file.exists():
 |---|---|---|
 | 无 `.state.yaml` | `SKIP:` + exit 0（**与 PASS 无法区分**） | **显式 WARNING 块**（含"backstop 未生效"+ 如何配置）+ exit 0 |
 | 平台未识别 | 同上 | 同上 |
+| **phase ∈ PAUSED/READY/DONE** | `return 0`（**第三个 SKIP 面，原设计漏了**） | 同上（显式 WARNING） |
 
 **理由（ADR-015 手段②「让错误可见」）**：这里**不能**用手段①（让错误不可能）——
 CI 机制决定了 required check 必须 success；**但可以让它"绿得刺眼"**。
@@ -124,7 +153,14 @@ return bool(re.search(r"引用\s*P5\s*证据", text))
 
 **目标行为**（设计 §5 X4）：三种写法都识别——**结构化字段 / 中文短语 / 英文别名**。
 
-**风险**：放宽后可能让**原本被拦**的案例通过 ⇒ 须扫描存量任务的 P6-acceptance。
+**⚠️ 消费方遗漏（评审查出）**：`p6_declares_reuse` 经 **`--audit7-only` CLI** 被
+**`P8-release.md:84-88`** 消费 ⇒ 放宽会改变 **`AUDIT7_RESULT` 三态**、进而改变
+**P8 主 Agent 的动作**（`reuse_allowed` vs `reuse_blocked`）。**须一并评估。**
+
+**⚠️ 风险方向说反了**（评审更正）：放宽识别 ⇒ **更多行被判为"已声明复用"** ⇒
+audit7 更可能判 `reuse_blocked` ⇒ **是更多拦截，不是更多通过**。
+
+**须补"别名词表"**：哪些英文写法算声明（原设计只说"三种写法"，未定义词表）。
 
 > ⚠️ **与今晚刚做的 `extract_evidence_refs` 关系**：那是"证据引用提取"；
 > 本项是"P5 证据复用声明"识别。**两者不同**，不共用判据（但都属"只认一种写法"的同族病）。
@@ -141,28 +177,62 @@ proc = subprocess.run(
 ```
 ⇒ `cmd | tail` 的失败被吞（**TAG0016 已实际发生**：`| tail` 让失败被长期掩盖）。
 
-**目标行为**：改为 `bash -o pipefail`（与 `AGENTS.md`「所有脚本 `set -euo pipefail`」一致）。
-
-**风险**：**会暴露此前被吞的失败** ⇒ 某些任务可能由绿转红。**这是有意的**
-（吞错误才是缺陷）。须扫描存量。
-
----
-
-### X6 — `design_trivial` 按**存在**判，不按**值**判
-
-**缺陷**（代码实测）：
+**⚠️ 原设计的实现指引字面不可执行**（独立评审实测，我复核确认）：
 ```python
-if any(design_trivial_declared(line) for line in p1_lines):
-    min_candidates = 1
+subprocess.run(cmd, shell=True, executable="bash -o pipefail")
+# → FileNotFoundError: [Errno 2] No such file or directory: 'bash -o pipefail'
 ```
-`design_trivial_declared(line)` 只看**是否有该声明**，不看其**值** ⇒
-`design_trivial: false` 也被当成"已声明" ⇒ **最低候选数被降为 1**（本该是 2）。
+`executable` 是**路径**，不接受命令行参数。**正确写法**（评审实测 rc 符合预期）：
+```python
+cmd = "set -o pipefail; " + cmd          # ← 前缀方式
+# 或 SHELLOPTS env
+```
 
-**目标行为**（设计 §5 X6）：**按值判断**（`true` 才降为 1）。
+**存量扫描（评审实跑，我采纳）**：107 条 `gate_commands` 中**仅 1 条含管道**
+（TAG0003 的 `2>&1 | tail -30`）⇒ **转红风险 ≈ 0**（远低于原设计担心的"可能有"）。
 
-**风险**：会让某些 P2 由绿转红（候选数不足）。**这是有意的**——正是要修的假绿。
+**⚠️ 原设计漏了一个耦合，且风险方向说反了**（评审指出）：
+`pipefail` 影响 **`check-tdd-red.py` 的 P3 红灯语义**——那里「非 0 = 红灯 = 符合 TDD」，
+加 pipefail 后**方向可能是放宽**（更容易判为红），而**不是**原设计写的"由绿转红"。
+⇒ **须在实现时评估该方向**，并在 P3 相关测试上验证。
 
 ---
+
+### X6 — 「轻量设计」声明判定：**两键语义不同，须分别处理**（原设计应拒绝）
+
+**⚠️ 本项经独立评审**拒绝**并给出反例，我复核确认。原设计「按值判断」是错的。**
+
+**实测的两个反向缺陷**（同一函数 `agate_common.design_trivial_declared`）：
+
+```python
+return bool(re.search(r"^(design_trivial|follows_existing_pattern):\s*\S", line))
+```
+
+| 键 | schema 类型 | 真实写法 | 现判定 | 问题 |
+|---|---|---|---|---|
+| `design_trivial` | bool | `design_trivial: false` | **presence=True** | ❌ **假绿**：`false` 被当成"已声明" ⇒ 最低候选数降为 1 |
+| `follows_existing_pattern` | **`list`**（`agate-frontmatter-check.py:54` 明列） | `follows_existing_pattern:`（**块列表，键行无值**） | **presence=False** | ❌ **漏认**：合法声明不被识别 |
+
+**⛔ 原设计「按值判断，`true` 才降为 1」是错的**：它只修了第一行，**会强化第二行的漏认**
+（块列表**不存在 `true`/`false`**）。反例（存量 TAG0018）：
+```
+P1-requirements.md:16  design_trivial: true
+P1-requirements.md:17  follows_existing_pattern:      ← 块列表，presence=False
+```
+该任务今天"生效"只是因为 L16 另有 `design_trivial: true`；
+**一个只写了块列表的任务，今天与改后都判「未声明」** ⇒ `candidate_count: 1` 会被判红。
+
+**目标行为（修订）——两键分别处理**：
+- `design_trivial`：走 `_md_field_get("design_trivial", p1_file)`（`agate-md-field-get.py` 已有
+  `_regex_scalar(..., r"design_trivial:\s*(true|false)")` 通道），**判 `== "true"`**；
+- `follows_existing_pattern`：**保持 presence 语义**（它是 list，有键即声明），
+  且须**兼容块列表形态**（键行无值也算）——即正则的 `\s*\S` 要求**不适用于该键**。
+
+**⚠️ 实现者若把两键合并成一条规则，会制造真实的存量转红。** 本设计**明写**此点。
+
+**存量影响**（评审实测，我复核）：全仓**仅 1 个任务**（TAG0018）命中该正则，
+且它是唯一 `candidate_count < 2` 的任务；另有 2 个任务含 `follows_existing_pattern`。
+**⇒ 须逐个核对这 2–3 个任务在修订后的判定。**
 
 ### X7 — P2-review 缺 `agent` 返回**通过码**（**真 fail-open**，比设计分析描述的更严重）
 
@@ -189,12 +259,20 @@ P0-P3/P5/P6/P8 的通过码是 exit 2（… p2 L883 … return 2）
 **目标行为**：**不得返回通过码**。缺 `agent` ⇒ 返回 **1**（`gate_p2` 的未通过码）。
 与 P1 侧（缺 `agent` ⇒ `return 1`）**行为一致**，但**理由不是"统一"，是"当前返回了通过码"**。
 
-**风险**：存量任务的 P2-review 若缺 `agent` ⇒ **由通过转红**。须扫描存量。
-**预期**：设计分析称该分支是"向后兼容"⇒ **暗示存量中确有此类**，扫描结果可能非 0。
-**须评估**：若存量大量缺 `agent`，是否该给迁移期（先 WARNING 一段时间）。
-> 但注意：exit 2 是**通过码**，不能用它做 WARNING ⇒ 若需迁移期，
-> 只能**另择机制**（如 `gate_pass_exit` 之外的告警通道），或**接受一次性转红**。
-> **这是本项最需要评审裁定的点。**
+**⚠️ "是否需迁移期"这个未决点已被评审实测消解**：
+评审扫描 **37 个任务**的 `P2-review` / `P1-review` / `P4-review` / `P6-acceptance` 的
+`agent` 字段 ⇒ **missing = 0（100% 齐备）** ⇒ **转红数 = 0，无需迁移期**。
+（原设计称"注释暗示存量中确有此类"是**从注释推测**，实测否定了该推测。）
+
+**补强论据（评审给出，我采纳）**：`exit 2` 在该 returning site **确凿就是通过码**，三方一致：
+- `phases.yaml` P2 声明 `gate_pass_exit: 2`；
+- `check-gate.py` 头部：「exit 2 = 多数 phase 正常通过码」；
+- `adr.md` 同口径。
+
+且消费方行为印证：`pre-commit-gate.py` 对 exit 2 **只打印、不 `sys.exit(1)`**；
+`agate-next.py` 对 `2 ∈ pass_set` **直推下一阶段**。
+
+**⇒「统一为 1」不过度，是修正 fail-open。**
 
 ### X8 — `install-hook` 覆盖软链 hook **不备份**（**数据丢失**）
 
@@ -212,8 +290,16 @@ def _backup(hook_file, label):
 **本批选择**：**所有 hook 都备份**（最小改动、可逆）。
 > 不选"链式调用"：那是行为变更，属第 4 批的关卡层设计。
 
-**风险**：低（只增加备份）。**但需注意**：软链备份应记**链接目标**而非复制内容，
-否则备份无意义 ⇒ 备份时**记录软链指向**。
+**实现（评审给出最简做法）**：软链备份即 `os.readlink(hook_file)` 一行，记录**链接目标**
+（**不是**复制内容——复制软链内容无意义）。
+
+**⚠️ 同函数另有一个更严重的缺陷（评审建议并入本批，我采纳为第 10 项）**：
+`_backup` 用 `os.path.isfile(hook_file)` 作前置条件 ⇒ **悬空软链（dangling symlink）
+`isfile` 为 False** ⇒ **既不备份**，又被后续 `os.unlink` **删除** ⇒ **静默丢失**。
+**比 X8 原指的"软链不备份"更严重**（原缺陷至少留下软链，这个直接删掉）。
+同函数、同主题，**边际成本 ≈ 0** ⇒ **并入 X8 一并修**。
+
+**风险**：低（只增加备份与 readlink）。
 
 ---
 
@@ -234,9 +320,19 @@ def _backup(hook_file, label):
 
 **⚠️ 这是本批唯一改"协议语义表述"的项**，且与 §2.1 的 phase 语义统一**直接相关**。
 
+**⚠️ 原设计的理由打空靶**（评审查出）：实测 `agate-next` **本就无"预写 READY"行为**
+（其文件头明写：phase ∈ {PAUSED, READY, DONE} → 提示不推进）。原设计把它当成要防的对象，是**误指**。
+
+**实测支持"可拆分"**（评审，我采纳）：`TAG0037` 真有
+`30e2354 phase=P8` → `59aeaeb phase=READY` **两次提交** ⇒ **"以 P8 提交产出、再单独提交 READY"
+可行且已成惯例**；**无脚本依赖"以 READY 提交"**。
+另：`38/16` 的「gate_p8 从不运行」**措辞过强**——对那 16 个任务不成立（它们确有 phase=P8 提交）。
+准确表述：**22/38 个任务从未以 P8 提交**。
+
+**⚠️ 另漏 `P8-release.md:89-93` 的 DEBT0013 时序说明**（CHECK 7 相关），改卡片时须一并核对。
+
 **风险**：**改卡片会影响所有用 agateon 的项目**（不限于本仓）。
-⇒ **须谨慎**：本批**只改卡片文字**使之与既有 hook 行为**一致**，
-**不改 `agate-next` 的预写行为**（那属第 1 批）。
+⇒ 本批**只改卡片文字**使之与既有 hook 行为一致，**不改 `agate-next`**（那属第 1 批）。
 
 ---
 
@@ -247,6 +343,12 @@ def _backup(hook_file, label):
 | X2 的「按提交类型分级」 | 属第 4 批（关卡层设计） |
 | `agate-config` / `agate-run` 等 | 第 2–6 批（架构演进） |
 | 「`ci-gate-backstop` 换成 `agate-ci-verify`」 | 第 5 批；本批只让它**不再假绿** |
+| **X1 的「非任务目录文件也扫」** | **第 4 批**——须放宽 L327 门控（扩大扫描面 = 跨模块影响）。本批只做到「所有阶段的**任务目录内** diff 都扫」 |
+| X2 的「按提交类型分级」 | 第 4 批 |
+| X9 的「改 `agate-next` 行为」 | 第 1 批；本批只改**卡片文字** |
+
+> **边界声明的方法要求**（评审）：凡本批只做"一半"的项，**都要像 X9 那样显式声明另一半归属哪批**。
+> X1 原设计漏了这条（X9 声明了），已补。
 
 ---
 
@@ -274,21 +376,35 @@ def _backup(hook_file, label):
 
 **⇒ 这四项的扫描结果是本批能否合并的前提。**
 
+**扫描命令（评审要求"每项该怎么扫"，且我实测过的项已给出结果）**：
+
+| 项 | 命令 | 实测结果 |
+|---|---|---|
+| X1 | 逐 commit 重放 hook 判「收尾提交 diff 是否含 `[PROD_TOUCHED]`」 | ⚠️ **不可操作**（需重放）⇒ 改为：`grep -rl '\[PROD_TOUCHED\]' agate-workspace/tasks/*/` 后**逐个人工核对**其阶段 |
+| X5 | `grep -c '|' agate-workspace/tasks/*/P2-design.md` 的 `gate_commands` | ✅ **107 条中仅 1 条含管道**（TAG0003 `2>&1 \| tail -30`）⇒ 风险 ≈ 0 |
+| X6 | `grep -rl 'design_trivial\|follows_existing_pattern' agate-workspace/tasks/*/P1-requirements.md` | ✅ **3 个任务**（1 个 `design_trivial` + 2 个 `follows_existing_pattern`）⇒ 逐个核对 |
+| X7 | 扫 `P{1,2,4}-review` / `P6-acceptance` 的 `agent` 字段 | ✅ **37/37 齐备，missing=0** ⇒ 转红 0 |
+
+**V10 的判据强度**（评审要求定义）：
+> **「无未解释转红」= 上表四项的扫描结果中，每一条转红都能归入以下之一：
+> ① 已实测的真违规；② 本批有意收紧且已在本设计登记；③ 存量数据缺陷（登记为债务）。
+> 凡不能归入者，本批不得合并。**
+
 ---
 
 ## 5. 验收锚（逐条可机械校验）
 
 | # | 锚 | 判据 |
 |---|---|---|
-| V1 | X1 所有阶段都扫 | 构造 `phase: READY` + diff 含 `[PROD_TOUCHED]` ⇒ **exit 1**；`PAUSED` ⇒ **扫描但不阻断** |
+| V1 | X1 所有阶段都扫（**任务目录内**） | `phase: READY` + **任务目录内** diff 含 `[PROD_TOUCHED]` ⇒ **exit 1**；`PAUSED` ⇒ **扫描 + 留痕（append_event/WARNING）但不阻断** |
 | V2 | X2 从暂存区读 | 工作区 phase=P1、暂存区 phase=P2 ⇒ hook 按 **P2** 判定 |
 | V3 | X3 不再**静默**假绿 | 无 `.state.yaml` 时：**exit 0 不变**（保 required check）+ 输出含 **WARNING** 与"backstop 未生效"字样；有 `.state.yaml` 时按原逻辑 |
 | V4 | X4 三写法都认 | 结构化字段 / 中文短语 / 英文别名 ⇒ 均识别 |
-| V5 | X5 pipefail 生效 | `cmd \| tail`（cmd 失败）⇒ **非 0** 退出码 |
-| V6 | X6 按值判 | `design_trivial: false` ⇒ 仍需 **2** 个候选 |
+| V5 | X5 pipefail 生效 | 命令写作 `set -o pipefail; cmd \| tail`（**不是** `executable="bash -o pipefail"`）；cmd 失败 ⇒ **非 0**。**并验证 P3 红灯语义方向** |
+| V6 | X6 **两键分别处理** | `design_trivial: false` ⇒ 仍需 **2** 个候选（**非**降为 1）；`follows_existing_pattern:`（**块列表，键行无值**）⇒ **算已声明** ⇒ 可降为 1 |
 | V7 | X7 不再返回**通过码** | P2-review 缺 `agent` ⇒ **exit 1**（现为 exit 2 = gate_p2 的**通过码**）；断言「不得等于 `gate_pass_exit`」 |
-| V8 | X8 软链也备份 | 目标是软链 ⇒ 生成备份且**记录链接目标** |
-| V9 | X9 卡片不再误导 | 卡片文字与 hook 行为一致（不再要求"以 READY 提交"） |
+| V8 | X8 软链也备份 | 目标为软链 ⇒ 备份**记录 `readlink` 目标**；**悬空软链** ⇒ 备份而非被删（第 10 项） |
+| V9 | X9 卡片不再误导 | 卡片改为「以 `phase: P8` 提交产出、再单独提交 READY」；并核对 `:89-93` 的 DEBT0013 时序；**断言无脚本依赖"以 READY 提交"**（可机械：grep） |
 | V10 | **存量扫描报告** | 四项（X1/X5/X6/X7）的存量影响逐条列出，**无未解释的转红** |
 | V11 | 全量回归 | `pytest` 全绿 + `consistency 0 ERROR` + `ruff` + structure S0–S6 |
 
@@ -305,6 +421,8 @@ def _backup(hook_file, label):
 | X9 影响所有用 agateon 的项目 | **只改卡片文字**与既有 hook 行为对齐，不动 `agate-next` |
 | X8 备份软链无意义 | 备份时**记录链接目标**，不是复制内容 |
 | 7 个文件、跨 3 个脚本族 | 沿用 hotfix 判据**修订版**（单一主题「修既有缺陷」+ 无跨模块影响），PR 里说明为何不立项 |
+| **碰 `agate/` 触发 SELF-GATE** | **提交信息必须带 `self-gate-review:` 路径或 `self-gate-skip:` 理由**（`AGENTS.md` 工作流第 5 条）。**原设计漏了这条义务** |
+| X1 目标若被扩大解读 | 本批**只做任务目录内**；扩大属第 4 批（见 §3 边界声明） |
 
 ---
 
