@@ -3,7 +3,7 @@
 > **日期**：2026-10-04 ｜ **性质**：设计（**未实现**），待独立评审
 > **归属**：TAG0042「项目形态命令化 + 规则脚本化」的**第 0 批**（设计分析 §7 标注「无前提，改动都很小」）
 > **范围**：**只改 agateon 本仓**（其他项目不归本任务）
-> **事实基线**：main `4daa60b` 之后 ｜ **设计基线**：`fa2fc3d`
+> **事实基线**：main `4daa60b` 之后 ｜ **设计基线**：**`05edb02`**（本文自身）
 > （⚠️ 独立评审指出：设计曾有两个版本 `f5e4c31` → `fa2fc3d`，**实现须以本版为准**；
 > 本文已按评审的 P0/P1/P2 清单全部修订）
 
@@ -86,6 +86,15 @@ if any(f.startswith(prefix) for f in _staged_name_only()):   # ← 只在「任�
 本批**只做前者**：新增 `read_staged_state_phase`（`agate_common`），
 `read_state_phase` **本身不动**（避免语义漂移），在**两个** hook 调用点改用新函数。
 
+**⚠️ 暂存区读取失败的语义须定义（第一轮已要求，本版补）**：
+- 暂存区**无** `.state.yaml`（如该文件本次未暂存）⇒ **回退读工作区**？
+  还是**视为"无状态"跳过**？
+- **本设计选**：**回退读工作区**——理由是"本次未暂存状态文件"是常见情形，
+  若视为无状态会导致 hook **静默跳过整条链**（正是 X2 要治的病）。
+- **但须同时**：回退时输出**显式提示**（"本次未暂存 .state.yaml，phase 取自工作区"），
+  使"读的是哪一份"可见。
+- **测试**：V2 须含**两种**输入——① 暂存区有 ⇒ 用暂存区；② 暂存区无 ⇒ 回退工作区 + 提示。
+
 **风险**：新增函数须与既有 `read_state_phase` 语义一致（除数据来源外）。
 **存量影响**：若某任务工作区与暂存区 phase 不同，判定会**变化** ⇒ 须扫描存量。
 
@@ -130,7 +139,16 @@ if not state_file.exists():
 |---|---|---|
 | 无 `.state.yaml` | `SKIP:` + exit 0（**与 PASS 无法区分**） | **显式 WARNING 块**（含"backstop 未生效"+ 如何配置）+ exit 0 |
 | 平台未识别 | 同上 | 同上 |
-| **phase ∈ PAUSED/READY/DONE** | `return 0`（**第三个 SKIP 面，原设计漏了**） | 同上（显式 WARNING） |
+| **phase ∈ PAUSED/READY/DONE** | `return 0` | 同上（显式 WARNING） |
+| **无法读取 `.state.yaml`**（解析失败） | `return 0` | 同上（**这是最该醒目的一个**——数据坏了却报绿） |
+| **refactor 任务**（TDD 红灯不适用） | `return 0` | **这一面可保留**（语义正当），但措辞须与其余区分 |
+
+> ⚠️ **实测共 5 个 SKIP 面**（原设计只列 3 个；第一轮评审补了 1 个；**本版补齐**）。
+> 逐行核对：L124 平台未识别 / L132 无 `.state.yaml` / **L142 无法读取** /
+> **L146 phase 无 gate 需对照** / **L162 refactor**。
+> **须逐个决定**：哪些改「显式 WARNING」、哪些保留原样（refactor 面语义正当）。
+> ⚠️ **V3 不能只用关键词判据**（第一轮已指出）——须**行为判据**：对每个 SKIP 面构造输入，
+> 断言「exit 0 不变」**且**「输出含 WARNING 标识」（改坏即红的负向控制）。
 
 **理由（ADR-015 手段②「让错误可见」）**：这里**不能**用手段①（让错误不可能）——
 CI 机制决定了 required check 必须 success；**但可以让它"绿得刺眼"**。
@@ -160,7 +178,16 @@ return bool(re.search(r"引用\s*P5\s*证据", text))
 **⚠️ 风险方向说反了**（评审更正）：放宽识别 ⇒ **更多行被判为"已声明复用"** ⇒
 audit7 更可能判 `reuse_blocked` ⇒ **是更多拦截，不是更多通过**。
 
-**须补"别名词表"**：哪些英文写法算声明（原设计只说"三种写法"，未定义词表）。
+**别名词表（本版给出，不再留作待办）**：
+
+| 形态 | 判据 |
+|---|---|
+| 结构化字段 | P6-acceptance.md frontmatter 的 `p5_reuse`/`evidence_reuse` 类字段（**须先定字段名**——实现时以 schema 为准） |
+| 中文短语 | `引用\s*P5\s*证据`（现行，保留） |
+| **英文别名** | `reuse[sd]?\s+P5\s+evidence` / `reusing\s+P5\s+evidence` / `P5\s+evidence\s+reus` |
+
+⚠️ 英文词表**须在实现时用两仓真实语料验证**（防"定义了却无实例"或"漏掉真实写法"）。
+**本表是起点，不是终点**——V4 须含真实语料回放。
 
 > ⚠️ **与今晚刚做的 `extract_evidence_refs` 关系**：那是"证据引用提取"；
 > 本项是"P5 证据复用声明"识别。**两者不同**，不共用判据（但都属"只认一种写法"的同族病）。
@@ -188,8 +215,21 @@ cmd = "set -o pipefail; " + cmd          # ← 前缀方式
 # 或 SHELLOPTS env
 ```
 
-**存量扫描（评审实跑，我采纳）**：107 条 `gate_commands` 中**仅 1 条含管道**
-（TAG0003 的 `2>&1 | tail -30`）⇒ **转红风险 ≈ 0**（远低于原设计担心的"可能有"）。
+**存量扫描（⚠️ 数字经两轮评审更正，我复核确认）**：
+
+| 口径 | 结果 |
+|---|---|
+| 原设计写 | 「107 条中仅 1 条含管道」——**不实**（其给出的命令跑不出该数字） |
+| 第一轮评审写 | 同样 107/1——**同样不实** |
+| **实测（`parse_gate_commands_block`，权威判据）** | **315 条 / 21 条含管道** |
+
+**但「转红风险 ≈ 0」的结论仍成立——理由与原设计不同**（评审给出，我采纳）：
+- 这 21 条**全在 `P5*` 键且 formatter 为空** ⇒ `agate-capture-env-baseline` 遇无 formatter
+  **直接 bail**，**不进** `run_test_with_formatter`（即不进被 pipefail 影响的那条路径）；
+- **`P3` 键含管道 = 0**（实测）——而 `check-tdd-red` **只消费 `P3` 键**。
+
+⇒ **本项是「条件性低风险」，不是「无风险」**：若将来有 `P3` 键使用管道，
+pipefail 会**立即**改变 TDD 红灯判定。**该条件须写进 V5。**
 
 **⚠️ 原设计漏了一个耦合，且风险方向说反了**（评审指出）：
 `pipefail` 影响 **`check-tdd-red.py` 的 P3 红灯语义**——那里「非 0 = 红灯 = 符合 TDD」，
@@ -226,7 +266,13 @@ P1-requirements.md:17  follows_existing_pattern:      ← 块列表，presence=F
 - `design_trivial`：走 `_md_field_get("design_trivial", p1_file)`（`agate-md-field-get.py` 已有
   `_regex_scalar(..., r"design_trivial:\s*(true|false)")` 通道），**判 `== "true"`**；
 - `follows_existing_pattern`：**保持 presence 语义**（它是 list，有键即声明），
-  且须**兼容块列表形态**（键行无值也算）——即正则的 `\s*\S` 要求**不适用于该键**。
+  **正则写死为**：
+  ```python
+  re.match(r"^follows_existing_pattern:", line)
+  ```
+  **⚠️ 不要用 `^follows_existing_pattern:\s*$`**——独立评审实测它**漏掉流式列表**
+  `follows_existing_pattern: [a, b]`。（**第一轮评审给出的正是这个候选，照抄会复发反向缺陷。**）
+  实测三形态（块列表 / 流式列表 / 注释掉的）**只有 `^key:` 全部正确**。
 
 **⚠️ 实现者若把两键合并成一条规则，会制造真实的存量转红。** 本设计**明写**此点。
 
@@ -381,8 +427,8 @@ def _backup(hook_file, label):
 | 项 | 命令 | 实测结果 |
 |---|---|---|
 | X1 | 逐 commit 重放 hook 判「收尾提交 diff 是否含 `[PROD_TOUCHED]`」 | ⚠️ **不可操作**（需重放）⇒ 改为：`grep -rl '\[PROD_TOUCHED\]' agate-workspace/tasks/*/` 后**逐个人工核对**其阶段 |
-| X5 | `grep -c '|' agate-workspace/tasks/*/P2-design.md` 的 `gate_commands` | ✅ **107 条中仅 1 条含管道**（TAG0003 `2>&1 \| tail -30`）⇒ 风险 ≈ 0 |
-| X6 | `grep -rl 'design_trivial\|follows_existing_pattern' agate-workspace/tasks/*/P1-requirements.md` | ✅ **3 个任务**（1 个 `design_trivial` + 2 个 `follows_existing_pattern`）⇒ 逐个核对 |
+| X5 | **用仓库自己的解析器**（唯一权威判据）`parse_gate_commands_block()` 逐 P2-design.md | ✅ 实测 **315 条 / 21 条含管道**（TAG0025 11 / TAG0010 5 / TAG0011 4 / TAG0003 1）——**原设计与第一轮评审的「107/1」均不实**；**但 `P3` 键含管道 = 0** ⇒ 见下 |
+| X6 | `grep -rl 'design_trivial\|follows_existing_pattern' agate-workspace/tasks/*/P1-requirements.md` | ✅ **仅 TAG0018 一个任务**（`^key:` 声明形式；原设计写「3 个任务」口径不符，已更正）⇒ 逐个核对 |
 | X7 | 扫 `P{1,2,4}-review` / `P6-acceptance` 的 `agent` 字段 | ✅ **37/37 齐备，missing=0** ⇒ 转红 0 |
 
 **V10 的判据强度**（评审要求定义）：
@@ -400,7 +446,7 @@ def _backup(hook_file, label):
 | V2 | X2 从暂存区读 | 工作区 phase=P1、暂存区 phase=P2 ⇒ hook 按 **P2** 判定 |
 | V3 | X3 不再**静默**假绿 | 无 `.state.yaml` 时：**exit 0 不变**（保 required check）+ 输出含 **WARNING** 与"backstop 未生效"字样；有 `.state.yaml` 时按原逻辑 |
 | V4 | X4 三写法都认 | 结构化字段 / 中文短语 / 英文别名 ⇒ 均识别 |
-| V5 | X5 pipefail 生效 | 命令写作 `set -o pipefail; cmd \| tail`（**不是** `executable="bash -o pipefail"`）；cmd 失败 ⇒ **非 0**。**并验证 P3 红灯语义方向** |
+| V5 | X5 pipefail 生效 | 命令写作 `set -o pipefail; cmd \| tail`（**不是** `executable="bash -o pipefail"`）；cmd 失败 ⇒ **非 0**。**并验证 P3 红灯语义方向（实测为"放宽"）**。**⚠️ 条件性低风险**：现存量 `P3` 键含管道 = **0**（实测），若将来出现则会改变 TDD 判定 ⇒ **须留下该条件的登记** |
 | V6 | X6 **两键分别处理** | `design_trivial: false` ⇒ 仍需 **2** 个候选（**非**降为 1）；`follows_existing_pattern:`（**块列表，键行无值**）⇒ **算已声明** ⇒ 可降为 1 |
 | V7 | X7 不再返回**通过码** | P2-review 缺 `agent` ⇒ **exit 1**（现为 exit 2 = gate_p2 的**通过码**）；断言「不得等于 `gate_pass_exit`」 |
 | V8 | X8 软链也备份 | 目标为软链 ⇒ 备份**记录 `readlink` 目标**；**悬空软链** ⇒ 备份而非被删（第 10 项） |
