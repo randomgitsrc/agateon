@@ -164,23 +164,37 @@ if any(design_trivial_declared(line) for line in p1_lines):
 
 ---
 
-### X7 — P2-review 缺 `agent` 放行（exit 2），P1 同类却 exit 1（**不一致**）
+### X7 — P2-review 缺 `agent` 返回**通过码**（**真 fail-open**，比设计分析描述的更严重）
 
-**缺陷**（代码实测）：
+**⚠️ 实测后本项理解需更正——问题不是「与 P1 不一致」，而是「返回了通过码」。**
 
-| 检查 | 缺 `agent` 时 |
-|---|---|
-| P1-review | `return 1`（阻断） |
-| **P2-review** | `return 2`（**放行**，注释写"向后兼容 WARNING"） |
+**代码实测**：
+```python
+# check-gate.py  gate_p2 内
+agent = _md_field_get("agent", p2_review)
+if not agent:
+    sys.stderr.write("GATE P2: ...缺 agent 字段（向后兼容 WARNING）\n")
+    return 2                       # ← ← ← 这是 gate_p2 的**正常通过码**
+```
 
-⇒ 同一概念两种判定。且 `agent` 字段正是**"评审者不是主 Agent"**的证据（`agent == "main"` 已阻断），
-**缺字段放行等于可绕过**。
+**而 `check-gate.py` 头部与 `phases.yaml` 明确定义**：
+```
+exit 2 = 多数 phase 正常通过码（含动态 gate_commands 或语义判断后的"通过"出口）
+P0-P3/P5/P6/P8 的通过码是 exit 2（… p2 L883 … return 2）
+```
 
-**目标行为**（设计 §5 X7）：**统一为 exit 1**。
+**⇒ `return 2` 不是"WARNING 不阻塞"，是"**通过**"。**
+注释写"向后兼容 WARNING"是**误标**——实际语义是 **fail-open 放行**。
 
-**风险**：存量任务的 P2-review 若缺 `agent` ⇒ 会转红。须扫描存量。
+**目标行为**：**不得返回通过码**。缺 `agent` ⇒ 返回 **1**（`gate_p2` 的未通过码）。
+与 P1 侧（缺 `agent` ⇒ `return 1`）**行为一致**，但**理由不是"统一"，是"当前返回了通过码"**。
 
----
+**风险**：存量任务的 P2-review 若缺 `agent` ⇒ **由通过转红**。须扫描存量。
+**预期**：设计分析称该分支是"向后兼容"⇒ **暗示存量中确有此类**，扫描结果可能非 0。
+**须评估**：若存量大量缺 `agent`，是否该给迁移期（先 WARNING 一段时间）。
+> 但注意：exit 2 是**通过码**，不能用它做 WARNING ⇒ 若需迁移期，
+> 只能**另择机制**（如 `gate_pass_exit` 之外的告警通道），或**接受一次性转红**。
+> **这是本项最需要评审裁定的点。**
 
 ### X8 — `install-hook` 覆盖软链 hook **不备份**（**数据丢失**）
 
@@ -272,7 +286,7 @@ def _backup(hook_file, label):
 | V4 | X4 三写法都认 | 结构化字段 / 中文短语 / 英文别名 ⇒ 均识别 |
 | V5 | X5 pipefail 生效 | `cmd \| tail`（cmd 失败）⇒ **非 0** 退出码 |
 | V6 | X6 按值判 | `design_trivial: false` ⇒ 仍需 **2** 个候选 |
-| V7 | X7 统一 exit 1 | P2-review 缺 `agent` ⇒ **exit 1**（与 P1 一致） |
+| V7 | X7 不再返回**通过码** | P2-review 缺 `agent` ⇒ **exit 1**（现为 exit 2 = gate_p2 的**通过码**）；断言「不得等于 `gate_pass_exit`」 |
 | V8 | X8 软链也备份 | 目标是软链 ⇒ 生成备份且**记录链接目标** |
 | V9 | X9 卡片不再误导 | 卡片文字与 hook 行为一致（不再要求"以 READY 提交"） |
 | V10 | **存量扫描报告** | 四项（X1/X5/X6/X7）的存量影响逐条列出，**无未解释的转红** |
