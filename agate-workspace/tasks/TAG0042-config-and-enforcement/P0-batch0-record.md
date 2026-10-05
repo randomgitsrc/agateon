@@ -74,18 +74,28 @@ X4（复用声明改用结构化字段 `p5_evidence_reuse`）、X8（软链 hook
 
 ## 6. 本任务尚未解决、且**不在批 0** 的项
 
-- **发布顺序问题**：`docs/design-notes/design-release-order-boundary.md` 记载
-  「先 PR 后 tag」走不通（CHECK 7 需要 tag 已存在）⇒ 本次仍按**方案 C（先推 tag）**执行。
-  **其根治方案（4.1(ii) 把 CHECK 7 拆到 release workflow）尚未落地**，方案 C 的已知弱点
-  （tag 打错位置无机械判据可察）仍在。**该设计文档 §6 的两个待确认问题仍未决。**
+- **发布顺序问题（已于 v0.78.2 / v0.78.3 根治，本节的「尚未解决」表述已作废）**：
+  `docs/design-notes/design-release-order-boundary.md` 记载「先 PR 后 tag」走不通
+  （CHECK 7 需要 tag 已存在）——批 0 当时仍按**方案 C（先推 tag）**执行。
+  **根治已落地（外部评审第五方案，登记 RM-AG0098）**：
+  （1）CHECK 7 改为**不依赖 tag**（badge ↔ CHANGELOG 最新已发布版本，与 CHECK 13 同源；
+  版本无 tag ⇒「发布进行中」PASS+提示）；
+  （2）`.github/workflows/release.yml` 新增「Verify tag points to matching commit」步，
+  拦「tag 打到无关提交」——**该步已在 v0.78.3 的 Release run 中实际运行并通过**（实测）。
+  ⇒ 方案 C 的已知弱点（tag 打错位置无机械判据可察）已消除；发布流程改为**先合 PR、后打 tag**。
+  **逐项细节见下文 §8 / §9 与 `CHANGELOG.md` [0.78.3]。**
 - 批 1–6 的全部内容（见 `P0-brief.md` §二 范围表）。
 
 ## 7. 当前状态
 
 - 本任务 `.state.yaml` 仍为 **phase: P0**；
 - **P0 收尾自检已全部勾选**（见 `P0-brief.md` §五）；
-- **批 1（统一 phase 语义）具备启动条件**：无前提、且判定它的 gate 现已是 v0.78.2
-  （含批 0 的 X2/X7/X9 修复 + 下述外部评审整改）；
+- **P0-brief 时效性自检（P0 卡片刻录）**：对照卡片「漂移判据」逐条排查——
+  ① `task` 目标方案（agate-config / agate-run / 三态归宿）未变；② `executor_env`（dsh + pytest）
+  仍成立；③ `known_risks` 无「虚标已解决」也无被其他任务解决 ⇒ **三条严重漂移均未命中**，
+  判定 **无严重漂移**，brief 主体无需重写（`consistency_baseline` 的 398 WARNING 实测仍准）。
+- **批 1（统一 phase 语义）具备启动条件**：无前提、且判定它的 gate 现已是 **v0.78.3**
+  （含批 0 的 X2/X7/X9 修复 + 外部评审整改 + §6 根治）；
 - 何时启动由人决定，本文件不代为推进。
 
 ## 8. 外部评审整改（批 0 已发版后的复核，2026-10-05 → v0.78.2）
