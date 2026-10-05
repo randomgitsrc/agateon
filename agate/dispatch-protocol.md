@@ -288,9 +288,11 @@ agate 的标准模式假设主 Agent 所在平台支持派发 subagent。若运�
     门槛失败 → 重试（retries 记录 +1，超限则停下报告）
 ```
 
-> 步骤 6 的「跑 gate → 判定 → 前进写 `.state.yaml` phase → git add」这一段查表机械动作由 `agate next`
-> 完成（不做临场判断，消费 `phases.yaml` 的 `next`/`gate_pass_exit`；gate exit 1 且表有 `retreat` 时
-> 委托 `agate-retreat-to.py` 逐阶回退）；权威定义在 `state-machine.md`「主 Agent 的单步执行」。手工执行为 fallback。
+> 步骤 6 的「跑 gate → 判定 → 前进」这一段查表机械动作由 `agate next` 完成——它只输出「下一阶段
+> 建议」并追加 `state_transition` 事件，**不预写** `.state.yaml` 的 `phase`、**不** `git add`（`phase`
+> 由下一阶段产出 commit 写入）；不做临场判断，消费 `phases.yaml` 的 `next`/`gate_pass_exit`；gate exit 1
+> 且表有 `retreat` 时委托 `agate-retreat-to.py` 逐阶回退。权威定义在 `state-machine.md`「主 Agent 的单步
+> 执行」。手工执行为 fallback（手工 fallback 按该节手工规格写 `phase`）。
 
 ---
 

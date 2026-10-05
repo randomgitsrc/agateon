@@ -18,6 +18,7 @@
    `check-state-transition.py` 已机械校验「转 READY 时上一次已提交 phase 必须是 P8」
    （P1 声明 `internal_only` 从而合法裁剪 P8 时允许 P7）。
    ⚠️ 终态 DONE 收尾随任务终态 commit 一起，不要提前写 DONE
+   （TAG0042 批 1：`agate-next` 亦**不预写**下一阶段，phase 一律由本 commit 的产出阶段写入。）
 
 ## 如果是重试
 

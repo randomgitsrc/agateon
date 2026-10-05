@@ -323,12 +323,16 @@ P8 是**「发布准备」**，不是「发布」。P8 gate 通过后进入 READ
 
 主 Agent 不跑 while 循环，而是执行"单步函数"，每次调用推进一个阶段：
 
-> **机械化（RM-AG0054，v0.66.0）**：下面步骤 5-7（跑 gate → 按转移规则算下一状态 → 写回
-> `.state.yaml` + git add）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
+> **机械化（RM-AG0054，v0.66.0；TAG0042 批 1 更新）**：下面步骤 5-7（跑 gate → 按转移规则算下一
+> 状态 → 建议推进）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
 > 消费 `phases.yaml` 的 `next`/`retreat`/`gate_pass_exit`，不做临场判断；gate exit 1 且表有
-> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。P6/P6.5 的条件式
-> 推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。**手工执行下面
-> 全流程是 fallback**（工具不可用时）；本节的手工规格是 `agate next` 实现所依据的权威语义。
+> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。`agate next`
+> 只**输出「下一阶段建议」并追加 `state_transition` 事件，不预写 `.state.yaml` 的 `phase`、不 `git add`**
+> ——`phase` 一律由**下一阶段产出 commit**写入（`phase` = 本 commit 的产出阶段，见 `git-integration.md`）。
+> P6/P6.5 的条件式推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。
+> **手工执行下面全流程是 fallback**（工具不可用时），此时步骤 7 的「写回 `.state.yaml`」按手工规格执行
+> （手工 fallback 仍写 `phase`，与 `agate next` 自动化路径不同）；本节的手工规格是 `agate next`
+> 判定所依据的权威语义。
 
 ```
 function 执行一步(task_id):
@@ -394,6 +398,9 @@ function 执行一步(task_id):
           再写回 .state.yaml
        else:
            写回 .state.yaml（新阶段 / 重试记录 / PAUSED）
+       （本步「写回 .state.yaml」为**手工 fallback 规格**——手工推进时写 `phase`；
+        `agate next` 自动化路径**不写** `phase`，只输出「下一阶段建议」+ `state_transition`
+        事件，`phase` 由下一阶段产出 commit 写入）
     8. 返回：下一状态是什么
 ```
 

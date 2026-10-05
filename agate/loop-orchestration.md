@@ -241,10 +241,10 @@ LOOP:
   │    └─ pre-commit hook 触发
   │         ├─ exit 0（通过）→ 主 Agent 运行 agate next {TASK_DIR} 推进到下一 phase
   │         │     └─ agate next 内部：check-gate exit ∈ gate_pass_exit（该 phase 的通过出口
-  │         │        码，多数 phase = 2）→ 按 phases.yaml next 更新 .state.yaml phase + git
-  │         │        add + state_transition 事件（只 add 不 commit——跳变合法性由下一
-  │         │        commit 的 pre-commit 校验；exit 2 是多数 phase 正常通过码 ∈ pass_set，
-  │         │        直推不是暂停）
+  │         │        码，多数 phase = 2）→ 按 phases.yaml next 输出「下一阶段建议」+ 追加
+  │         │        state_transition 事件，**不预写** .state.yaml phase、不 git add（phase
+  │         │        由下一阶段产出 commit 写入——跳变合法性由该 commit 的 pre-commit 校验；
+  │         │        exit 2 是多数 phase 正常通过码 ∈ pass_set，直推不是暂停）
   │         ├─ exit 1（拦截）→ 主 Agent 分析错误并修复后重试；
   │         │     若确认该阶段 gate 判负（check-gate exit 1）→ agate next 自动走
   │         │     retreat 分支（按 phases.yaml retreat 表值委托 agate-retreat-to.py 逐阶回退）

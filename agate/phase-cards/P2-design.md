@@ -11,7 +11,9 @@
 3. 评审通过 → P2-review.md status: approved
 4. 预跑 check-gate.py P2（脚本化检查）
 5. git add {AGATE_WORKSPACE}/tasks/{Txxx}/（含 .state.yaml + 产出文件，若 .gitignore 忽略需 git add -f）
-   ⚠️ 此时 .state.yaml 的 phase 保持 P2，不要提前写 P3——phase = 本 commit 的产出阶段
+   ⚠️ 此时 .state.yaml 的 phase 保持 P2，不要提前写 P3——phase = 本 commit 的产出阶段。
+   推进（`agate-next`）亦**不预写**下一阶段（TAG0042 批 1）：它只输出「下一阶段建议」并记
+   `state_transition` 证据，phase 由 P3 产出 commit 时写入。
 6. git commit -m "wf({Txxx}-P2): {摘要}"（phase=P2，P2 产出含 P2-design.md + P2-review.md）
 7. P2 commit 完成后进入 P3：**phase 推进 P3 随 P3 产出 commit 一起**（P3-test-cases.md 就绪后），不是单独 phase commit
 

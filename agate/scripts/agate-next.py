@@ -8,9 +8,10 @@
   * .state.yaml phase ∈ {PAUSED, READY, DONE} → 提示不推进，exit 0
   * 读 phases.yaml 当前 phase 的 gate_pass_exit（pass_set）+ next/retreat
   * 子进程跑 check-gate.py {phase} {TASK_DIR}，按 pass_set 三态判定：
-    - exit ∈ gate_pass_exit（通过，直推候选）：普通 phase 查 next（Pn+1 推进 / null 转
-      READY 提示）——更新 .state.yaml phase + git add（只 add 不 commit，跳变合法性由
-      pre-commit check-state-transition 校验）+ append_event state_transition；
+    - exit ∈ gate_pass_exit（通过，直推候选）：普通 phase 查 next（Pn+1 建议 / null 转
+      READY 提示）——**不预写**下一阶段：不写 .state.yaml 的 phase、不 git add，
+      仅 append_event state_transition 作为「推进已发生」证据（TAG0042 批 1：phase 只表示
+      「本 commit 的产出阶段」，由后续在该阶段的产出 commit 写入）；
       P6（exit 2 ∈ pass_set）走 A1 条件式裁决（§3.1）：provenance exit 0 +
       judge 未启用（gate_p65 早退 0）或启用但 check-gate P6.5 exit 0 → 消费 next: P7；
       gate_p65 exit 1 → 停留 P6 有指引不推进——exit 2 正常通过码不落盘 resolution
@@ -27,7 +28,7 @@
 可观测证据（BDD-11）：每次推进 append_event state_transition（from/to/ts），
 账本 + git log 双面可查；真暂停分支不产生 retry 记录（硬中断不自动 retry）。
 
-平台无关：显式 utf-8；无 /tmp 字面量；解释器一律 sys.executable 子进程。
+平台无关：显式 utf-8；无系统临时目录字面量；解释器一律 sys.executable 子进程。
 Python 3.8+（禁 match / str.removeprefix）。
 """
 
@@ -113,22 +114,6 @@ def _read_state_dict(task_dir):
     return data if isinstance(data, dict) else None
 
 
-def _write_state(task_dir, data):
-    """原子写 .state.yaml（保留字段顺序：task_id/phase/status/retries/judge…）。"""
-    state_file = os.path.join(task_dir, ".state.yaml")
-    ordered = {}
-    for key in ("task_id", "phase", "status", "retries", "judge"):
-        if key in data:
-            ordered[key] = data[key]
-    for key, value in data.items():
-        if key not in ordered:
-            ordered[key] = value
-    tmp = state_file + ".agate-next.tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        yaml.safe_dump(ordered, fh, allow_unicode=True, sort_keys=False)
-    os.replace(tmp, state_file)
-
-
 def _run_cmd(cmd, task_dir=None):
     """子进程运行（解释器一致 sys.executable；返回 returncode + 合并流）。"""
     try:
@@ -166,23 +151,6 @@ def _repo_root(task_dir):
     return out or None
 
 
-def _git(args, repo_root):
-    """git 命令封装（-C repo_root；无仓库 → (1, "")）。"""
-    if not repo_root:
-        return 1, ""
-    try:
-        proc = subprocess.run(
-            ["git", "-C", repo_root, *args],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        return proc.returncode, proc.stdout + proc.stderr
-    except OSError:
-        return 1, ""
-
-
 def _state_transition_event(task_dir, old_phase, new_phase):
     """append_event state_transition（BDD-11 可观测证据；写失败仅 WARNING 不阻断）。"""
     if append_event is None:
@@ -196,18 +164,18 @@ def _state_transition_event(task_dir, old_phase, new_phase):
 
 
 def _advance(task_dir, state, target, repo_root):
-    """把 .state.yaml phase 改为 target + append state_transition + git add .state.yaml。
+    """输出「下一阶段建议」+ append state_transition 证据；**不预写**下一阶段（TAG0042 批 1）。
 
-    只 add 不 commit（commit 语义/hook 链由主 Agent 统一管理；跳变合法性由
-    pre-commit 对暂存 diff 跑 check-state-transition 校验——与手动推进同一机械路径）。
+    phase 语义统一为「本 commit 的产出阶段」：推进时**不**把 target 写入 .state.yaml 的
+    phase，也**不** git add——phase 由后续在该阶段的产出 commit 时写。仅保留
+    append_event state_transition（from/to/ts）作为「推进已发生」的可观测证据（BDD-11）。
+
+    `repo_root` 参数保留以兼容既有调用点（批 1 后本函数不再做 git 操作）。
     """
     old = state.get("phase", "")
-    state["phase"] = target
-    _write_state(task_dir, state)
     _state_transition_event(task_dir, old, target)
-    _git(["add", os.path.abspath(os.path.join(task_dir, ".state.yaml"))], repo_root)
-    _log(f"{old} → {target}：.state.yaml phase 已更新并 git add（未 commit）。"
-         f"请 commit 让 pre-commit hook 校验跳变合法性。")
+    _log(f"{old} → 建议下一阶段 {target}：.state.yaml phase **未预写**（保持 {old}）。"
+         f"phase 由 {target} 产出 commit 时写入；推进证据已 append state_transition。")
 
 
 def _write_exit2_resolution(task_dir, phase, state, gate_rc):

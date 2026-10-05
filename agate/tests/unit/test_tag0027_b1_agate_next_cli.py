@@ -4,10 +4,10 @@
 #   新增脚本 agate/scripts/agate-next.py [TASK_DIR]（P4 新建）：
 #     读 phases.yaml 当前 phase 的 gate_pass_exit（pass_set）+ next/retreat，按 exit 三态判定：
 #       exit ∈ pass_set（多数 phase 正常通过码 = exit 2，P4/P7/P6.5 = exit 0）→ 直推候选：
-#         普通 phase → 按 phases.yaml next 更新 .state.yaml phase + git add +
-#         append_event state_transition（exit 2 正常通过也直推，不落盘 resolution——CRITICAL-1）
-#         P6（exit 2 ∈ pass_set 条件式）→ A1 裁决：provenance exit 0 + judge 未启用直推 P7 /
-#         启用 → check-gate P6.5 exit 0 推 P7 / exit 1 停留 P6 有指引，不落盘
+#         普通 phase → 按 phases.yaml next 输出「下一阶段建议」+ append_event state_transition
+#         （TAG0042 批 1：**不预写** .state.yaml phase、不 git add——phase 由产出 commit 写）
+#         P6（exit 2 ∈ pass_set 条件式）→ A1 裁决：provenance exit 0 + judge 未启用建议 P7 /
+#         启用 → check-gate P6.5 exit 0 建议 P7 / exit 1 停留 P6 有指引，不落盘
 #       exit 1 → 按 retreat 表值存在即委托 agate-retreat-to.py（CLI 不预判 diff）
 #       exit ∉ pass_set 且 ≠ 1（真暂停/异常，如 P4 gate 的 agent 缺失 return 2）→ 落盘
 #         {phase}-exit2-resolution.md（BDD-8 触发面收窄到此）
@@ -145,14 +145,17 @@ def test_bdd_6_next_exit2_pass_advances_to_next_phase(
     task_dir, agate_scripts, python_exe, run_cli
 ):
     """BDD-6（R3 新语义，CRITICAL-1 补测）：phase=P5 + gate exit 2 ∈ pass_set（P5 正常通过码）
-    → agate-next 直推 P6（.state.yaml phase 更新），不落盘 exit2-resolution。
+    → agate-next 建议下一阶段 P6（TAG0042 批 1：**不预写** phase，故 .state.yaml 保持 P5），
+    不落盘 exit2-resolution。
     真实 gate：P5 成功恒 exit 2（gate_p5 L1048）——旧实现（exit 2 一律落盘）在此场景卡死 = 红灯。"""
     td = task_dir()
     _write_state(None, td, "P5")
     _write_p5_full_pass_fixture(td)
     result = _run_next(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0, f"exit ∈ pass_set 直推应 exit 0；rc={result.returncode}"
-    assert _read_state_phase(td) == "P6", "P5 gate exit 2（正常通过）→ 应直推 P6（next 字段）"
+    assert _read_state_phase(td) == "P5", (
+        "TAG0042 批 1：agate-next 不预写下一阶段——phase 应保持 P5（由 P6 产出 commit 写）"
+    )
     assert not (td / "P5-exit2-resolution.md").exists(), "exit 2 正常通过不落盘 resolution（BDD-6 R3）"
 
 
@@ -160,7 +163,8 @@ def test_bdd_6_p6_judge_disabled_direct_p7_anchor(
     task_dir, agate_scripts, python_exe, run_cli
 ):
     """BDD-6 P6 通过路径锚点（A1）：phase=P6 + P6 验收产物合规（FAIL=0/证据非空 +
-    check-p6-provenance exit 0）+ judge 未启用（历史任务）→ agate-next 按 §3.1 裁决直推 P7。
+    check-p6-provenance exit 0）+ judge 未启用（历史任务）→ agate-next 按 §3.1 裁决建议 P7
+    （TAG0042 批 1：不预写 phase，仅记 state_transition 事件）。
     P3：agate-next.py 缺失 → 红灯（B 类，被测未实现）。"""
     td = task_dir()
     _write_state(None, td, "P6")  # 无 judge 块 = 历史任务
@@ -302,14 +306,17 @@ def test_bdd_9_p6_judge_enabled_gate_p65_pass_advances_p7(
     task_dir, agate_scripts, python_exe, run_cli
 ):
     """BDD-9 P6 judge 后推进路径锚点（A1）：judge.enabled=true + verdict/evidence 合规 +
-    gate_p65 exit 0 → agate-next 把 phase P6→P7 + state_transition 事件。P3 红灯。"""
+    gate_p65 exit 0 → agate-next 建议 P7 + state_transition 事件
+    （TAG0042 批 1：不预写 phase，.state.yaml 保持 P6）。P3 红灯。"""
     td = task_dir()
     _write_state(None, td, "P6", judge={"enabled": True, "rounds": 1})
     _write_p6_pass_fixture(td)
     _write_verdict_pass_fixture(td)
     result = _run_next(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0, f"judge 通过推 P7 应 exit 0；rc={result.returncode}"
-    assert _read_state_phase(td) == "P7", "gate_p65 exit 0 → agate-next 应把 phase 推为 P7"
+    assert _read_state_phase(td) == "P6", (
+        "TAG0042 批 1：不预写——gate_p65 exit 0 后 phase 应保持 P6（由 P7 产出 commit 写）"
+    )
     events = _ledger_events(td)
     assert any(
         ev.get("event") == "state_transition" and ev.get("to") == "P7" for ev in events
@@ -352,15 +359,18 @@ def test_bdd_11_state_transition_event_observable(
 def test_bdd_11_healthy_exit2_full_advance_no_resolution(
     task_dir, agate_scripts, python_exe, run_cli
 ):
-    """BDD-11（exit2fix CRITICAL-1 盲区补测）：健康任务 P5 exit 2 ∈ pass_set 直推 P6 全链路
+    """BDD-11（exit2fix CRITICAL-1 盲区补测）：健康任务 P5 exit 2 ∈ pass_set 建议 P6 全链路
     ——经 agate next 推进出 state_transition 事件、不落盘任何 resolution（P0-P3/P5/P8 正常通过码
-    exit 2 全程经 CLI 可达成 = 档位 C 可观测证据）。旧实现（exit 2 一律落盘）在此场景停 P5 = 红灯。"""
+    exit 2 全程经 CLI 可达成 = 档位 C 可观测证据）。旧实现（exit 2 一律落盘）在此场景停 P5 = 红灯。
+    TAG0042 批 1：不预写 phase，故 .state.yaml 保持 P5。"""
     td = task_dir()
     _write_state(None, td, "P5")
     _write_p5_full_pass_fixture(td)
     result = _run_next(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0, f"健康任务 exit 2 直推应 exit 0；rc={result.returncode}"
-    assert _read_state_phase(td) == "P6", "P5 exit 2 正常通过 → phase 推进 P6"
+    assert _read_state_phase(td) == "P5", (
+        "TAG0042 批 1：不预写——P5 exit 2 后 phase 保持 P5（由 P6 产出 commit 写）"
+    )
     events = _ledger_events(td)
     transitions = [ev for ev in events if ev.get("event") == "state_transition"]
     assert any(
