@@ -111,7 +111,7 @@ phases:
       - {check: "check-p6-format.py --fix 归一化（verifier 产出后、gate 前）"}
       - {check: "check-gate.py P6.5 $TASK_DIR（= check-judge-verdict.py + check-events.py 双 exit 0；历史任务自动跳过）"}
     retry_cap: 2
-    task_fields: [pass, fail, ui_affected]
+    task_fields: [pass, fail, ui_affected, p5_evidence_reuse]
     next: P7
     retreat: P4
     gate_pass_exit: 2

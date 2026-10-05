@@ -66,7 +66,7 @@ _TASK_FRONTMATTER_FIELDS = frozenset({
     "design_trivial", "follows_existing_pattern", "need_confirm_resolved",
     "suggest_resolved", "scope_resolved", "change_type", "ui_render_shape",
     "ui_ux_dimensions", "ceremony", "ui_design_section", "project_phase",
-    "dispatch_plan", "pass", "fail", "regression_pass",
+    "dispatch_plan", "pass", "fail", "regression_pass", "p5_evidence_reuse",
     "blocker_count", "deviation_count", "deviation_critical_count",
     "design_gap_count", "design_gap_reviewed_count",
     "code_map_new_files_count", "code_map_reviewed_count",

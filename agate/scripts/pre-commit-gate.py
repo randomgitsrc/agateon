@@ -371,8 +371,6 @@ def main():
                 except Exception:
                     sys.stderr.write("GATE WARNING: 账本留痕失败（不阻断）\n")
             continue
-        if phase in ("PAUSED", "READY", "DONE"):
-            continue
         if not os.path.isdir(task_dir):
             continue
 

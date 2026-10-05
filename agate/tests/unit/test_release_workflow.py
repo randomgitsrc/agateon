@@ -164,6 +164,17 @@ def test_bdd_13_6_release_workflow_change_does_not_touch_existing_workflows():
         files = H.run_git(H.REPO_ROOT, "diff-tree", "--no-commit-id", "--name-only", "-r", c).stdout.decode().split()
         touched = set(files) & set(paths)
         assert not touched, f"提交 {c[:8]} 在改 release.yml 的同时改了既有 workflow: {touched}"
+    # 工作区退化检查**仅在 release.yml 本身未提交时**适用（见 docstring）：那正是
+    # 「引入 release.yml」的开发窗口，此时要求既有 workflow 也干净。release.yml 已提交后，
+    # 上面按 commit 的不可变历史检查已完整覆盖该不变量；若此处仍无条件跑，则**任何**合法的
+    # 既有 workflow 改动（如本批 m-3 文案修正）都会误红——那不是本断言要防的东西。
+    release_dirty = subprocess.run(
+        ["git", "-C", str(H.REPO_ROOT), "status", "--porcelain", "--",
+         ".github/workflows/release.yml"],
+        capture_output=True, text=True, env=H.git_env(), timeout=60,
+    ).stdout.strip()
+    if not release_dirty:
+        return
     status = subprocess.run(
         ["git", "-C", str(H.REPO_ROOT), "status", "--porcelain", "--", *paths],
         capture_output=True,
