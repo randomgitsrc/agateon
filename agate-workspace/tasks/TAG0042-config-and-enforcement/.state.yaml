@@ -1,6 +1,6 @@
 task_id: TAG0042
-phase: P0
+phase: P1
 status: active
+retries: {}
 judge:
   enabled: true
-retries: {}
