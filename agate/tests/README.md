@@ -64,7 +64,8 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | 复盘协议文档条文 | unit/test_retrospective_protocol_docs.py |
 | check-tdd-red.py | unit/test_check_tdd_red.py |
 | formatters | unit/test_check_tdd_red_formatter.py |
-| ci-gate-backstop.py | unit/test_ci_gate_backstop.py |
+| agate-ci-verify.py | unit/test_agate_ci_verify.py |
+| agate-doctor.py | unit/test_agate_doctor.py |
 | agate-json-get.py | unit/test_agate_json_get.py |
 | agate-read-p5-commands.py | unit/test_agate_read_p5_commands.py |
 | agate-state-get.py | unit/test_agate_state_get.py |

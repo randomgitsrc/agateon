@@ -293,9 +293,10 @@ jobs:
           python-version: '3.10'
       - name: Install PyYAML
         run: pip install pyyaml
-      - name: Run gate backstop check (Linux)
-        # X3（TAG0042 批0）：本 job 的 exit 0 常常意味着「**没跑**」而非「跑了且通过」——
-        #   脚本在 5 个 SKIP 面会打印 `BACKSTOP-INACTIVE` / `REFACTOR-EXEMPT` 标识。
+      - name: Run CI gate verify (Linux)
+        # TAG0042 批 5（BDD-16 / M15）：本 job 由旧 CI 兜底脚本（5 个 SKIP 面与 PASS
+        #   无法区分 = 假绿）改为 `agate-ci-verify.py`——它**实际重跑** gate 判定，
+        #   且每个「跳过」面**显式**打印 `SKIP:` + 原因，与「通过」（`PASS:`）在输出上可区分。
         #   绿色 job 日志里的一行字几乎没人看 ⇒ 按 ADR-015 手段②把它抬到
         #   **GitHub 注解 + job summary**，让它在 PR 检查摘要里就看得见。
         #   ⚠️ 脚本本身**不依赖任何 CI 平台**（保持平台无关性）；平台耦合只在本 step。
@@ -305,17 +306,14 @@ jobs:
             echo "docs-only PR: gate-backstop skipped (fast-pass)"
             exit 0
           fi
-          python3 agate/scripts/ci-gate-backstop.py 2>&1 | tee /tmp/backstop.log
-          if grep -q 'BACKSTOP-INACTIVE' /tmp/backstop.log; then
+          python3 agate/scripts/agate-ci-verify.py 2>&1 | tee /tmp/ci-verify.log
+          if grep -q 'SKIP:' /tmp/ci-verify.log; then
             {
-              echo "### ⚠️ gate-backstop 本次**未生效**"
+              echo "### ⚠️ gate-backstop 本次**跳过**（未实际执行 gate 兜底）"
               echo ""
               echo '```'
-              grep -A 4 BACKSTOP-INACTIVE /tmp/backstop.log | head -20
+              grep -A 3 'SKIP:' /tmp/ci-verify.log | head -20
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning title=gate-backstop 未生效::本次 gate 兜底未实际执行（exit 0 是有意为之：本 job 曾为 required check、被 skip 会永久阻断合并；现已移出 required，不代表通过）——详见 job summary"
-          fi
-          if grep -q 'REFACTOR-EXEMPT' /tmp/backstop.log; then
-            echo "::notice title=gate-backstop refactor 豁免::refactor 任务按规则跳过 TDD 红灯检查（非机制失效）"
+            echo "::warning title=gate-backstop 未生效::本次 gate 兜底未实际执行（输出含 SKIP: 与原因；exit 0 不代表通过）——详见 job summary"
           fi

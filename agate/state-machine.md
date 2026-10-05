@@ -151,7 +151,7 @@ P6 --[retry>=MAX]--> PAUSED（正确路由：上游问题需人工介入，非 a
 P6.5 --[judge 启用任务：存在 P6.5-judge-verdict.md AND scripts/check-judge-verdict.py exit 0（Header 字段完备 + criteria_total==P1 BDD 数 + 结论编号集零挑验 + 证据交叉核对 + 信息隔离白名单 + 预算交叉）AND scripts/check-events.py exit 0（事件账本哈希链 + ts 单调 + judge_verdict 计数 ≤2）]--> P7（TAG0020：judge 以 fresh context 逐条重验所有 BDD，只信证据与 git log，`status: passed` 才放行）
      （P6.5 是挂载于 P6→P7 的强门槛子阶段，非独立 phase 值——.state.yaml phase 保持 P6 直至 P7；
        commit-time 由 pre-commit-gate 2i.1 注入硬边界（judge.enabled && verdict 存在 → 双脚本任一
-       exit 1 → 阻断 commit）；CI 由 ci-gate-backstop 兜底重跑；历史任务（.state.yaml 无
+       exit 1 → 阻断 commit）；CI 由 agate-ci-verify 兜底重跑；历史任务（.state.yaml 无
        judge.enabled: true）→ check-gate.py P6.5 早退 0，全链跳过（BDD-2））
 P6.5 --[status: needs-revision / rejected]--> P6 重验（judge 复核轮次 +1；
      judge.rounds 递增 + 账本 judge_verdict 事件计数 ≤2 机械兜底；超限 → 人工接管）

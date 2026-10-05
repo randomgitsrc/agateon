@@ -69,9 +69,9 @@ def _build_guards(script_dir):
     pre_commit = os.path.join(script_dir, "pre-commit-gate.sh")
     if os.path.isfile(pre_commit) and os.access(pre_commit, os.X_OK):
         parts.append("  ✓ pre-commit-gate.sh（hook 入口）")
-    ci_backstop = os.path.join(script_dir, "ci-gate-backstop.py")
-    if os.path.isfile(ci_backstop) and os.access(ci_backstop, os.X_OK):
-        parts.append("  ✓ ci-gate-backstop.py（CI 兜底）")
+    ci_verify = os.path.join(script_dir, "agate-ci-verify.py")
+    if os.path.isfile(ci_verify):
+        parts.append("  ✓ agate-ci-verify.py（CI 兜底）")
     if not parts:
         return ""
     return "\n".join(parts)

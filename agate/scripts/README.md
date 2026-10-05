@@ -10,7 +10,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 
 > **什么时候看**：往 `agate/scripts/` 加任何脚本时。**先读本节，再动手**——
 > ⚠️ **实测更正（2026-09-29）**：① 的机械判据 `uncovered_gate_scripts()` **只 glob `check-*.py`**
-> （+ `pre-commit-gate.{sh,py}` + `ci-gate-backstop.py`）——**`agate-*.py` 不在门禁覆盖面内**。
+> （+ `pre-commit-gate.{sh,py}`）——**`agate-*.py` 不在门禁覆盖面内**。
 > 本节初版写「加任何 `check-*.py` / `agate-*.py` 时」是**过度声称**（实测：新建一个 `agate-*.py`
 > 不触发任何 CHECK9-coverage 告警）。`agate-*.py` 为工具/观测类，登记属**约定**（④⑤ 行）。
 > 否则会踩 DEBT0046：既有测试反向覆盖会令新脚本红灯或告警，而"要同步哪些面"过去没有清单，
@@ -100,9 +100,15 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 ### CI 兜底
 
-| 脚本 | 用途 |
-|------|------|
-| `ci-gate-backstop.py` (P1.3) | push 后重跑 gate + provenance 审计重跑 + git blame 单 author WARNING；多平台自动检测（GitHub/GitLab/Gitea）|
+| 脚本 | 用途 | 退出码语义 |
+|------|------|-----------|
+| `agate-ci-verify.py` (TAG0042 批5) | push 后**实际重跑** gate 判定（`check-gate.py`），防 `--no-verify` 绕过 hook；无参数 + cwd 定位（兼容仓库根 / 任务级 `.state.yaml`）；每个「跳过」面显式 `SKIP:` + 原因（与 `PASS:` 可区分，不再假绿）| 0=通过/跳过, 1=判定失败 |
+
+### 诊断
+
+| 脚本 | 用途 | 退出码语义 |
+|------|------|-----------|
+| `agate-doctor.py` (TAG0042 批5) | 诊断项目接入状态（声明文件 / git hook / 版本解析 / 账本完整性）+ 对异常项给出可执行修复指引 | 0=诊断正常完成（退出码固定；报告问题 ≠ 自身失败）|
 
 ### 安装
 

@@ -759,12 +759,6 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         "keywords": ["EXIT_CODE"],
     },
     {
-        "desc": "CI 平台探测（Gitea/GitLab/GitHub）",
-        "script": "agate/scripts/ci-gate-backstop.py",
-        "keywords": ["detect_ci_platform", "GITEA_ACTIONS", "GITLAB_CI"],
-        "callers": [".github/workflows/protocol-tests.yml"],
-    },
-    {
         "desc": "pre-push alignment-review 阈值（决定 7：install-hook.sh 保留豁免，单独加锚点）",
         "script": "agate/scripts/pre-push-gate.sh",
         "keywords": ["AGATE_ALIGNMENT_REVIEW_THRESHOLD"],
@@ -810,13 +804,13 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         "desc": "judge verdict 门槛判定（P6.5）",
         "script": "agate/scripts/check-judge-verdict.py",
         "keywords": ["criteria_total", "judge"],
-        "callers": ["agate/scripts/check-gate.py", "agate/scripts/pre-commit-gate.py", "agate/scripts/ci-gate-backstop.py"],
+        "callers": ["agate/scripts/check-gate.py", "agate/scripts/pre-commit-gate.py"],
     },
     {
         "desc": "事件账本审计（append-only 哈希链）",
         "script": "agate/scripts/check-events.py",
         "keywords": ["prev_hash", "GENESIS"],
-        "callers": ["agate/scripts/check-gate.py", "agate/scripts/pre-commit-gate.py", "agate/scripts/ci-gate-backstop.py"],
+        "callers": ["agate/scripts/check-gate.py", "agate/scripts/pre-commit-gate.py"],
     },
     {
         "desc": "rules/*.yaml 对 schema 校验（TAG0021 结构化层 M0，S-5 校验器）",
@@ -915,7 +909,7 @@ def uncovered_gate_scripts(root: Path) -> list[str]:
         for p in scripts_dir.glob("check-*.py")
         if p.is_file()
     ]
-    for extra in ("pre-commit-gate.sh", "pre-commit-gate.py", "ci-gate-backstop.py"):
+    for extra in ("pre-commit-gate.sh", "pre-commit-gate.py"):
         if (scripts_dir / extra).exists():
             gate_scripts.append(f"agate/scripts/{extra}")
 
@@ -924,7 +918,7 @@ def uncovered_gate_scripts(root: Path) -> list[str]:
 
 
 def check_anchor_coverage(root: Path, rep: Report) -> None:
-    """反向检查：每个 gate 脚本（check-*.py + pre-commit-gate.{sh,py} + ci-gate-backstop.py）都已登记。
+    """反向检查：每个 gate 脚本（check-*.py + pre-commit-gate.{sh,py}）都已登记。
 
     锚点表本身可能漏——有人加了 check-newrule.py 忘了加锚点，
     正向检查（CHECK 9 主逻辑）只能盯死锚点表里有的，无法发现"该有但没列"。
@@ -945,7 +939,9 @@ def check_anchor_coverage(root: Path, rep: Report) -> None:
 # 对照 agate/scripts/ 实际文件报"引用了不存在的脚本"漂移。防止脚本改名/退役后协议文档漏检
 # （REF_RE 只匹配 docs/assets/scripts 前缀，phase-cards/rules 的裸名引用完全漏检）。
 # 白名单形状：check-* / agate-*（连字符与下划线两形，覆盖库文件 agate_common.py）/ 3 hook 薄壳 /
-#   install-hook / install-offline / resolve-entry / count-tests.sh / ci-gate-backstop.py。
+#   install-hook / install-offline / resolve-entry / count-tests.sh。
+#   `ci-gate-backstop.py` 为**退役名保留**（TAG0042 批5 退役，由 `agate-ci-verify.py` 替换）——
+#   它不匹配 check-*/agate-* 形状，故显式列出以拦截协议文档回引（CHANGELOG 等叙事文件降级 WARNING）。
 #   formatters 名（pytest.sh 等）天然不匹配 → 豁免②。
 
 SCRIPT_REF_RE = re.compile(

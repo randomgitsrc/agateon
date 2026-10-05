@@ -19,7 +19,7 @@ OLD_PHASE（可选第 3 参数）：上一个 phase。省略时行为与之前�
 P0-P8 全部分支均已实现（2f-2 补齐 P5-P8），与 sh 版 check-gate.sh 逐分支等价：
   P5: gate_commands.P5 动态读取提示 + 多命令 WARNING + pre-task-baseline 机械 diff
   P6: P6-acceptance.md pass/fail 汇总 + P6-evidence/ 非空（provenance 审计由
-      pre-commit-gate.sh / ci-gate-backstop.py 单独调用 check-p6-provenance，不在本
+      pre-commit-gate.sh 单独调用 check-p6-provenance，不在本
       分支内执行——与 sh 版一致，sh check-gate.sh P6 同样不调）
   P7: BLOCKER/DEVIATION-CRITICAL + DESIGN_GAP 配对 + P4/P7 转抄交叉核对
   P8: P8-release.md bump_type/debt_check + version/CHANGELOG/tag 检查

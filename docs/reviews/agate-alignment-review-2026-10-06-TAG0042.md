@@ -19,6 +19,11 @@ change_summary: >-
   发布准备→交付收尾 + 新增 gate_layer（commit_types + transitions 含 paused_from）；
   phases.schema.json 扩展；check-gate.py::gate_p8 新增 delivery 校验 + 发版痕迹迁移 WARNING；
   P8-release.md 标题/产出规格；WORKFLOW.md P8 行名；UPGRADING 批 4 小节；测试夹具同步。
+  【round 8 / 批 5（batch5-ci-doctor）】CI 与诊断：新增 agate/scripts/agate-ci-verify.py
+  （实际重跑 gate 判定，无假绿；跳过面显式 SKIP: + 原因）+ agate-doctor.py（声明/hook/版本解析/
+  账本四维诊断 + 修复指引，rc 恒 0）；删除 ci-gate-backstop.py 及其测试；workflow gate-backstop job
+  改调新脚本；check-protocol-consistency 移除退役锚点/extras/callers 并保留退役名拦截；agate-summary/
+  scripts/README/check-gate 注释/6 协议文档/formatters-README/tests-README 同步。
 files_changed:
   - agate/scripts/agate-next.py
   - agate/phase-cards/P2-design.md
@@ -62,13 +67,28 @@ files_changed:
   - agate/assets/execution-roles/implementer.md
   - agate/LIMITATIONS.md
   - agate/tests/unit/test_agate_run.py
+  # round 8 / 批 5（batch5-ci-doctor）
+  - agate/scripts/agate-ci-verify.py
+  - agate/scripts/agate-doctor.py
+  - agate/scripts/ci-gate-backstop.py  # 删除（退役）
+  - .github/workflows/protocol-tests.yml
+  - agate/scripts/check-protocol-consistency.py
+  - agate/scripts/agate-summary.py
+  - agate/platform-notes.md
+  - agate/phase-cards/P3-tdd.md
+  - agate/assets/templates/retrospective-template.md
+  - agate/assets/formatters/README.md
+  - agate/tests/README.md
+  - agate/tests/unit/test_ci_gate_backstop.py  # 删除（测退役对象）
+  - agate/tests/unit/test_check_protocol_consistency.py
+  - agate/tests/unit/test_mvwu_protocol_docs.py
 review_scope: >-
   TAG0042 批 1 的 agate/** 未 commit 改动（SELF-GATE 语义 gate，agent≠main）。
   变更触发模式：意图分析 → 反向传播 → 变更文件全文 + 反向传播文件 + 权威规则源（state-machine.md /
   dispatch-protocol.md / WORKFLOW.md）→ A1-A8。单轮审查。
 prod_isolation: "[PROD_NOT_TOUCHED] —— 仅读取仓库 + 写 /tmp 留痕/日志 + 本报告；未触碰被评审改动集、主 checkout 与 ~/.agate。"
 conclusion: aligned
-review_rounds: 7
+review_rounds: 8
 round1_conclusion: >-
   批 1 首审：misaligned。A1/A2/A3b/A5.3 同一根因 = 反向传播漏改 5 处权威文档——它们仍描述旧行为
   「agate-next 更新 .state.yaml phase + git add」（state-machine.md:326-331 / dispatch-protocol.md:291-292 /
@@ -171,6 +191,23 @@ round7_conclusion: >-
   test_gate_layer+test_check_p8_delivery+test_check_gate+test_agate_run → 237 passed；修复仅动叙事文档 +
   test_agate_run.py 字符串字面量（编码守卫规避）→ A1/A3a/A4/A6/A7/A8 无回退。5 条 [DESIGN_GAP]
   （①-⑤）未受影响，仍判 DESIGN_GAP（交 P7）；⑥（P8 叙事面）即本轮闭合。NEEDS_HUMAN_REVIEW 0 条。
+round8_conclusion: >-
+  TAG0042 批 5（batch5-ci-doctor）增量复审（round 8）：aligned。变更面为 CI 与诊断——新增
+  agate-ci-verify.py（实际重跑 gate 判定，无假绿；跳过面显式 SKIP: + 原因）+ agate-doctor.py
+  （声明/hook/版本解析/账本四维诊断 + 修复指引，rc 恒 0）；删除 ci-gate-backstop.py 及其测试；
+  workflow gate-backstop job 改调新脚本；check-protocol-consistency 移除退役锚点/extras/callers
+  并保留退役名拦截。A1/A2 ALIGNED（两脚本行为 vs BDD-16/17 + P2 §4.4 逐条一致）；A3a ALIGNED
+  （锚点表/extras/callers/agate-summary/README/workflow/6 协议文档 + formatters-README 同步）；
+  A3b/A5.3 ALIGNED（退役名反向传播——CHECK10 扫描面 0 ERROR，CHECK10-scriptref 1 为既有 CHANGELOG
+  聚合未新增；协议文档面 0 残留）；A4 ALIGNED（batch5 两文件 14 passed；count-tests 2671 = batch4
+  2689 − 18 删退役测试）；A6 ALIGNED（SCRIPT_REF_RE 退役名拦截自洽；新脚本 agate-*.py 不在
+  CHECK9-coverage/SG.6 glob；README 索引已补）；A7 ALIGNED；A8 声称均可复核；consistency 0 ERROR /
+  406 WARNING；structure S1-S6/S0 全 OK；ruff 绿；平台扫描 0 命中。5 条 [DESIGN_GAP] 全判 DESIGN_GAP
+  （交 P7）：① ci-verify 定位接口未固化；② doctor 退出码语义；③ 未移植 backstop 的 P3-TDD-red/
+  P6-provenance CI 重跑；④ formatters/README 属 CHECK10 面但派发清单未列（必要同步）；⑤ workflow
+  job 名保留 gate-backstop。观察（非阻塞）：docs/guides/project-map.md:59 活文档仍写
+  ci-gate-backstop.py（非协议面/CHECK10 不扫）；agate-doctor 硬编码 .git/hooks（本仓未设
+  core.hooksPath → 实测一致）。NEEDS_HUMAN_REVIEW 0 条。
 ---
 
 # 协议-脚本对齐审查 — TAG0042 批 1（batch1-phase-semantics）
@@ -1055,3 +1092,142 @@ FAILED agate/tests/unit/test_agate_scripts_encoding.py::test_bdd_5_all_test_py_t
 | **DESIGN_GAP（交 P7）** | ①-⑤（见上表）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`。 |
 
 **round 7 结论：ALIGNED（可 commit）。**
+
+---
+
+## round 8 复审（batch5 增量）（2026-10-06）
+
+> 复审范围：TAG0042 批 5（`batch5-ci-doctor`，CI 与诊断）的 agate 协议/脚本未 commit 改动（HEAD `fb56964`，batch4 已落）。
+> 触发模式：SELF-GATE「变更触发模式」A1-A8。**本批重点 = A3/A5 反向传播**（退役 `ci-gate-backstop`）。
+> 变更文件：新增 `agate/scripts/agate-ci-verify.py`、`agate/scripts/agate-doctor.py`；删除 `agate/scripts/ci-gate-backstop.py` + `agate/tests/unit/test_ci_gate_backstop.py`；改 `.github/workflows/protocol-tests.yml`、`agate/scripts/check-protocol-consistency.py`、`agate/scripts/agate-summary.py`、`agate/scripts/check-gate.py`（注释）、`agate/scripts/README.md`、6 协议文档 + `assets/formatters/README.md`、`tests/README.md`、4 既有测试。
+
+### 复审结论汇总
+
+| # | 审查项 | 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** |
+| A2 | 脚本→文档对齐 | **ALIGNED** |
+| A3 | 一致性连锁 + 反向传播 | A3a **ALIGNED** / A3b **ALIGNED** |
+| A4 | 测试覆盖 | **ALIGNED** |
+| A5 | 下游影响 + 文档传播 | A5.1 **ALIGNED** / A5.2 **ALIGNED**（待 P8）/ A5.3 **ALIGNED** |
+| A6 | 锚点表覆盖 | **ALIGNED** |
+| A7 | 设计原则一致性 | **ALIGNED** |
+| A8 | 声称-命令绑定 | 逐条列出（见 A8；无无据声称） |
+
+**总结论：aligned**。MISALIGNED 0 条、NEEDS_HUMAN_REVIEW 0 条。5 条 `[DESIGN_GAP]` 全部判 **DESIGN_GAP（交 P7）**。退役脚本的反向传播在 CHECK10 扫描面 **0 ERROR**（CHECK10-scriptref 未新增）。
+
+### A1: 文档→脚本对齐 — ALIGNED
+
+- **`agate-ci-verify.py` vs BDD-16 / P2 §4.4**：`_run_gate(phase, task_dir)` 子进程调 `check-gate.py PHASE TASK_DIR`——**实际重跑** gate 判定（BDD-16「不再是永远 SKIP 却显示绿」）；每个「跳过」面经 `_skip()` 打印 `SKIP: <原因>` + 「本次**未实际执行**」（BDD-16「跳过与通过在输出上可区分」）。不读任何 CI 平台环境变量（P2 §4.4 平台无关）。
+- **`agate-doctor.py` vs BDD-17 / P2 §4.4**：四维诊断（声明文件 / git hook / 版本解析 / 账本完整性）+ 异常项可执行修复指引；`main()` **恒 `return 0`**（BDD-17「成功退出码固定」）。声明维度经 `agate_common.read_project_config`（唯一读取函数，不另写 YAML 解析）。
+- **workflow（M15）**：`.github/workflows/protocol-tests.yml` 的 `gate-backstop` job run step 改调 `agate-ci-verify.py`（`test_bdd_16_ci_verify_workflow_invokes_new_script` 断言新脚本在、退役名不在）；注解/summary 判据由 `BACKSTOP-INACTIVE` 改 `SKIP:`。
+
+**结论**：ALIGNED。
+
+### A2: 脚本→文档对齐 — ALIGNED
+
+| 脚本行为 | 文档对应 | 判定 |
+|---|---|---|
+| `agate-ci-verify` 实际重跑 + 显式 SKIP | `scripts/README.md`（CI 兜底行）、`WORKFLOW.md:368`（CI 兜底段）、`platform-notes.md`（CI 兜底说明）、`state-machine.md:154` | ALIGNED |
+| `agate-doctor` 四维诊断 + rc 固定 | `scripts/README.md`（新增「诊断」节）、`tests/README.md`（映射行） | ALIGNED |
+| 删除 `ci-gate-backstop.py` | 6 协议文档 + `formatters/README.md` + `retrospective-template.md` 引用改述为「CI 兜底」/`agate-ci-verify.py` | ALIGNED |
+| 退役名拦截 | `check-protocol-consistency.py` 注释（`SCRIPT_REF_RE` 保留退役名） | ALIGNED |
+
+**结论**：ALIGNED。
+
+### A3: 一致性连锁 + 反向传播 — A3a ALIGNED / A3b ALIGNED
+
+#### A3a（连锁：已知衍生改动）— ALIGNED
+
+- **锚点表 / extras / callers**：`check-protocol-consistency.py` 移除 `ci-gate-backstop.py` 锚点条目；`uncovered_gate_scripts()` 的 `extras` 去掉该名；`check-judge-verdict` / `check-events` 锚点的 `callers` 去掉该名——四处同步。
+- **`agate-summary.py`**：防护清单项 `ci-gate-backstop.py` → `agate-ci-verify.py`。
+- **`check-gate.py`**：头注释去掉该名（provenance 仅 `pre-commit-gate.sh` 调用）。
+- **测试同步**：删除 `test_ci_gate_backstop.py`（测退役对象）+ 移除 `test_check_protocol_consistency.py` 的退役锚点断言；`test_check_gate.py` 的 `test_tag0035_bdd_2_*` 改测 `agate-ci-verify.py`（同语义）；`test_mvwu_protocol_docs.py` 目标脚本元组同步。
+
+#### A3b（反向传播：应被本批影响但未在 diff 中的文件）— ALIGNED
+
+**退役名全仓 grep**（`ci-gate-backstop`）分类：
+
+| 面 | 命中 | 判定 |
+|---|---|---|
+| CHECK10 扫描面 · `agate/UPGRADING.md:943` | 裸名 `ci-gate-backstop`（**无 `.py`**，`SCRIPT_REF_RE` 不匹配 → 不产生 ERROR；历史「不动面」注） | ALIGNED |
+| CHECK10 扫描面 · `CHANGELOG.md`（多处） | 叙事文件**降级为聚合 WARNING**（`CHECK10-scriptref 1`，与改动前**同**） | ALIGNED |
+| CHECK10 扫描面 · `assets/` `phase-cards/` `rules/` | **0 命中** | ALIGNED |
+| workflow / `agate-summary.py` / `scripts/README.md` / 6 协议文档 | 已同步（0 残留） | ALIGNED |
+| 扫描面外 · `docs/guides/project-map.md:59` | 活文档仍写 `ci-gate-backstop.py`（`docs/` 非协议面，CHECK10 按设计不扫） | **观察（非阻塞）** |
+| 扫描面外 · `docs/reviews/*` `docs/design-notes/*` `archived/*` | 历史记录（按设计不改） | ALIGNED |
+| 扫描面外 · `test_agate_ci_verify.py` 注释 | **刻意**引用退役名（断言退役完成） | ALIGNED |
+
+**结论**：A3b ALIGNED（协议文档面 0 残留；`CHECK10-scriptref` 未新增 ERROR/WARNING）。
+
+### A4: 测试覆盖 — ALIGNED
+
+- **批 5 相关测试全绿（实跑）**：`pytest test_agate_ci_verify.py test_agate_doctor.py -q` → **14 passed**（与 `P4-implementation-batch5.md:76` 自报吻合）。
+- **相邻回归（实跑）**：`test_check_gate.py` + `test_check_protocol_consistency.py` + `test_mvwu_protocol_docs.py` + `test_protocol_alignment_review.py`（含 SG.6）→ **334 passed**；`test_t43_check_registration_surface.py` + `test_doc_sweep.py` + `test_agate_scripts_encoding.py` → **27 passed**。
+- **边界覆盖**：BDD-16（重跑 gate + 报告失败 / 显式 SKIP+原因 / 源码含 `check-gate.py` / workflow 改调 / 协议引用同步）、BDD-17（脚本存在 / 四维 / 修复指引 / 未接入 / 已接入 / rc 固定）均有断言。
+- **用例总数**：`count-tests.sh` → **2671**（较 batch4 的 2689 减 18 = 删退役测试 17 + 删退役锚点测试 1；新增 BDD-16/17 的 14 例 P3 已计入）。
+
+**结论**：ALIGNED。
+
+### A5: 下游影响 + 文档传播 — A5.1 ALIGNED / A5.2 ALIGNED（待 P8）/ A5.3 ALIGNED
+
+- **A5.1 破坏性变更 / 向后兼容 — ALIGNED**：退役 `ci-gate-backstop.py` 属 CI 侧实现替换（对使用者项目无 API 破坏）；`agate-ci-verify.py` 保持「push 后重跑 gate 判定」语义，且修复了旧脚本的「假绿」（X3）。`UPGRADING.md` 待 P8 统一记录（见 A5.2）。
+- **A5.2 CHANGELOG — ALIGNED（待 P8，非 MISALIGNED）**：`check-changelog.py` 仅 P8 触发；`CHANGELOG.md` 待 P8 统一补（同前几批判据）。
+- **A5.3 文档传播 — ALIGNED**：应传播面（6 协议文档 + `formatters/README` + `retrospective-template` + `scripts/README` + `tests/README` + `agate-summary` + workflow + 锚点表）均已同步。
+  - **观察（非阻塞）**：`docs/guides/project-map.md:59`（活文档，整仓导航地图）仍写 `ci-gate-backstop.py`——`docs/` 按设计不在 CHECK10/协议面，建议后续批次或收尾时更新。
+
+**结论**：合计 ALIGNED。
+
+### A6: 锚点表覆盖 — ALIGNED
+
+- **`CHECK10` 退役名拦截语义自洽**：`SCRIPT_REF_RE` **保留** `ci-gate-backstop\.py`——协议文档回引 → ERROR；`CHANGELOG.md` 等叙事文件降级为聚合 WARNING（`CHECK10-scriptref 1`，未新增）。**实测** consistency → **0 ERROR**。
+- **新脚本登记面**：`agate-ci-verify.py` / `agate-doctor.py` 是 `agate-*.py` → **不在** `uncovered_gate_scripts()` 的 glob（`check-*.py` + `pre-commit-gate.{sh,py}`）→ 不触发 CHECK9-coverage / SG.6。**实测** `test_protocol_alignment_review.py`（含 SG.6）→ passed；`CHECK 9 ✅ PASS`。README 索引行已补（非门禁，约定）。
+- **无需更新锚点表**（本批删除的锚点条目已移除，无新增 `check-*.py`）。
+
+**结论**：ALIGNED。
+
+### A7: 设计原则一致性 — ALIGNED
+
+- **ADR-015（实质/非实质——让错误可见）**：`agate-ci-verify` 每个「跳过」面显式 `SKIP:` + 原因，workflow 再抬为 GitHub 注解 + job summary——消除旧脚本「永远 SKIP 却显示绿」的假绿。**一致**。
+- **ADR-002（可判定性）**：**实际重跑** `check-gate.py` 判定 + `.gate-result.json` 一致性比对，均可机械判定。**一致**。
+- **ADR-004（安全网分层）**：CI 兜底（防 `--no-verify`）保留，替换实现而非移除防线。**一致**。
+- **是否存在未记录的新架构决策？** 「CI 兜底实现替换 + 诊断工具」是 ADR-015/002/004 的应用，**不引入新架构决策** → 无需新增 ADR。
+
+**结论**：ALIGNED。
+
+### A8: 声称-命令绑定
+
+| 声称 | 产出命令 | 结论 |
+|---|---|---|
+| batch5 红→绿 `14 passed`（P4-impl:76）| `pytest test_agate_ci_verify.py test_agate_doctor.py -q` → 14 passed | ✅ 成立 |
+| consistency `0 ERROR`（P4-impl:80）| `check-protocol-consistency.py --strict-errors-only` → 0 ERROR / 406 WARNING | ✅ 成立（CHECK10-scriptref 1 未新增） |
+| structure `S1-S6/S0 全 OK`（P4-impl:81）| `check-structure-consistency.py` → 全 OK | ✅ 成立 |
+| count-tests `2671`（P4-impl:82）| `count-tests.sh` → 2671 | ✅ 成立 |
+| ruff `All checks passed`（P4-impl:83）| `~/.venvs/agate-dev/bin/ruff check agate/scripts/` | ✅ 成立 |
+| 平台扫描新增脚本 0 命中（P4-impl:84）| `check-platform-assumptions.py agate-ci-verify.py agate-doctor.py` → exit 0 | ✅ 成立 |
+| `agate-ci-verify` 实际重跑 gate（BDD-16）| 读 `agate-ci-verify.py:41-50`（子进程调 check-gate.py）；`test_bdd_16_ci_verify_source_reruns_gate` | ✅ 成立 |
+| `agate-doctor` rc 固定（BDD-17）| 读 `agate-doctor.py:166`（`return 0`）；`test_bdd_17_doctor_success_exit_code_fixed` | ✅ 成立 |
+
+无「无法给出命令」的无据声称。
+
+### [DESIGN_GAP] 逐条判定（5 条）
+
+| # | DESIGN_GAP | 判定 | 依据 |
+|---|---|---|---|
+| ① | `agate-ci-verify` 调用接口 P2 §4.4 未固化（P4 取无参数 + cwd 定位；多任务歧义 → SKIP）| **DESIGN_GAP（交 P7）** | P2 §4.4 未指定定位接口；BDD-16「无适用场景时显式声明跳过+原因」已满足；属设计未定面 |
+| ② | `agate-doctor` 退出码语义（P4 解释「成功=诊断正常完成」⇒ rc 恒 0）| **DESIGN_GAP（交 P7）** | P2 §4.4 仅写「退出码固定」；与 TC-B17-08 一致；若意图为「发现异常即非 0」须改 P3 契约，交 P7 |
+| ③ | 未移植退役 backstop 的独立 P3 `check-tdd-red` / P6 provenance CI 层重跑 | **DESIGN_GAP（交 P7）** | BDD-16 只要求「实际重跑 gate 判定」；P6.5 judge/events 已由 `check-gate.py P6.5` 覆盖；是否补回交 P7 |
+| ④ | `agate/assets/formatters/README.md` 属 CHECK10 面但派发清单未列（P4 已同步）| **DESIGN_GAP（交 P7）** | 属**必要同步**（否则新增 CHECK10 ERROR）；非新增需求；交 P7 核对 |
+| ⑤ | workflow job 名保留 `gate-backstop`（M15 只要求改调用脚本）| **DESIGN_GAP（交 P7）** | P2 M15 未指定改名；保留 job 名不影响语义；是否改名交 P7 |
+
+**判定合计**：5 条**全部 DESIGN_GAP（交 P7）**；**MISALIGNED 0 条**。按角色原则 6——5 条均不对应「`agate/` 协议文档↔脚本不一致」（①②③⑤ 是设计未定/选择，④ 是必要同步），故判 DESIGN_GAP。
+
+### round 8 闭环规则表
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| **ALIGNED** | A1 / A2 / A3a / A3b / A4 / A5.1 / A5.2 / A5.3 / A6 / A7 / A8 | 通过，**可 commit**。 |
+| **DESIGN_GAP（交 P7）** | ①-⑤（见上表）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`。 |
+| **观察（非阻塞）** | `docs/guides/project-map.md:59` 活文档仍写退役名（非协议面）；`agate-doctor` 硬编码 `.git/hooks`（本仓未设 `core.hooksPath` → 实测一致）| 建议后续更新 project-map.md。 |
+
+**round 8 结论：ALIGNED（可 commit）。**

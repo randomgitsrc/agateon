@@ -2,16 +2,17 @@
 phase: P4
 task_id: TAG0042
 type: review
-parent: P4-implementation-batch4.md
+parent: P4-implementation-batch5.md
 batch1_parent: P4-implementation-batch1.md
 batch2_parent: P4-implementation-batch2.md
 batch3_parent: P4-implementation-batch3.md
+batch4_parent: P4-implementation-batch4.md
 status: approved
 agent: review
-review_round: 6
+review_round: 7
 review_date: 2026-10-06
 role: review (偏执 Staff Engineer，工程视角)
-scope: batch1（approved）+ batch2（C1 闭合）+ batch3（C1 闭合）+ batch4-gate-layer（round 6，approved——0 CRITICAL）
+scope: batch1（approved）+ batch2（C1 闭合）+ batch3（C1 闭合）+ batch4（approved）+ batch5-ci-doctor（round 7，approved——0 CRITICAL）
 prod_isolation: "[PROD_NOT_TOUCHED]"
 ---
 
@@ -427,3 +428,82 @@ $ python3 agate/scripts/agate-config.py validate          # cwd=<proj>
 ## [PROD_NOT_TOUCHED]
 
 本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对（pytest 经 `tmp_path`/`git_repo` 夹具隔离；schema/structure/consistency/ruff 为只读扫描）。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 7（增量）：batch5-ci-doctor（CI 重跑兜底 + 接入诊断）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `fb56964`，batch4 已落）。
+> 评审依据：`P4-dispatch-context-review-batch5.md`、`P4-implementation-batch5.md`（含 5 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M13/M14/M15 / §4.4、`P3-test-cases-batch5.md`、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 8 aligned）。
+> 视角：**工程正确性/边界/退役完整性/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 8 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: approved**。Pass 1（CRITICAL/BLOCKER）：**0 条**。Pass 2（INFORMATIONAL）：**6 条**（非阻断，多交 P7）。
+
+核心正确性（BDD-16「无假绿」）经独立核对成立：`agate-ci-verify` **实际重跑** `check-gate.py`；gate 失败（exit 1）→ `FAIL` + rc 1；跳过面显式 `SKIP:` + 原因；workflow step 有 `set -o pipefail` + 默认 `bash -e`，脚本 rc 1 会**使 job 红**（exit code 未被 `tee` 吞掉）。退役完整性、doctor 四维 + rc 固定、回归均通过。
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+**0 条。** 逐项排查（派发重点 1-4）：
+
+### 1. `agate-ci-verify` 无假绿（BDD-16 核心）— 通过
+- `_run_gate` 子进程调 `check-gate.py PHASE TASK_DIR`（源码含 `check-gate.py`）；gate exit 1 → `FAIL` + `return 1`（TC-B16-02 实测）；无 `.gate-result.json`（`--no-verify` 场景）时以重跑 gate 为权威；有记录时 `phase`/`exit_code` 不一致 → `FAIL`。
+- 「跳过」与「通过」输出可区分：`_skip()` 打印 `SKIP: <原因>` + 「本次**未实际执行**」块，正常路径打印 `PASS:`/`FAIL:`。
+- **CI 层不吞退出码**：workflow step `set -o pipefail`（`:304`）+ GitHub 默认 `bash -e` ⇒ `agate-ci-verify.py | tee` 的 pipeline 在脚本 rc 1 时失败 → job 红（核对 workflow 全文确认，非假绿）。
+
+### 2. `agate-doctor` 四维诊断客观 + rc 固定 — 通过
+四维（声明文件经 `read_project_config` 唯一读取函数 / git hook / 版本解析 / 账本 `prev_hash` 链）逐项给客观值；异常项进「修复建议」（含可执行命令）；`main()` **恒 `return 0`**，单维度异常被捕获为「诊断异常」行（不漂移退出码，TC-B17-08）。
+
+### 3. 退役完整性 — 通过
+`ci-gate-backstop.py` + 其测试已删；`check-protocol-consistency.py` 移除锚点 + `uncovered_gate_scripts` extras + 锚点 callers，`SCRIPT_REF_RE` 保留退役名作**回引拦截**；`agate-summary.py`/workflow/6 协议文档/README/formatters-README 全部同步。实跑 consistency → **0 ERROR / 406 WARNING**（CHECK10-scriptref 无新 ERROR）；`test_bdd_16_ci_verify_protocol_refs_synced` + `grep` 复核：CHECK10 扫描面无残留引用（剩余命中均为「退役说明/拦截保留/测试注释」，非协议文档回引）。
+
+### 4. 回归 / 测试充分性 — 通过
+batch5 目标 14 passed；相邻回归 348 + `test_protocol_alignment_review` 13 = **361 passed**（与自报吻合）；regression + integration **198 passed**；SG.6 `-k sg_6` **1 passed**；structure S0-S6 全 OK；ruff 通过；count-tests **2671**（-18 = 删退役测试 17 + 退役锚点测试 1，符合预期）；平台扫描新增脚本 0 命中。
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 边界 / 文档
+
+### [INFORMATIONAL-1] `_run_gate` 的「脚本缺失」哨兵 `2` 与通过码 `2` 冲突 → 破损安装下 `PASS`（残留假绿面）
+`agate-ci-verify.py:44-45`：`check-gate.py` 不存在时 `_run_gate` 返回 `(2, "check-gate.py not found")`；`main` 对 `ci_exit != 1` 判 `PASS` + rc 0（`:131-137`）。多数 phase 的通过码恰为 `2`，故**破损/不完整安装**（缺 `check-gate.py`）会被报成 `PASS`。属**残留假绿路径**（旧 backstop 同样返回 2、但标 `WARN`；本脚本标 `PASS`）。**建议**：用与退出码域不冲突的哨兵（如 `-1`/显式 not-found 分支 → `FAIL`）。非阻断（正常安装下不可达）。
+
+### [INFORMATIONAL-2] agateon 本仓 CI 恒 `SKIP`（多任务歧义）——主消费场景不实际重跑
+`_locate_state` 在无仓库根 `.state.yaml` 且 `{tasks_dir}/*/.state.yaml` > 1 时判 `ambiguous` → `SKIP`（`:116-117`）。agateon 本仓即多任务 ⇒ 其 CI 的 `gate-backstop` job **恒 SKIP**（仅出 warning 注解）。即「实际重跑」只对单任务/有根状态的项目生效；协议自身仓库的 CI 兜底仍不执行。**已在 DESIGN_GAP ① 登记**（「如何唯一定位本仓待兜底任务」）。**建议 P7 裁决**定位约定（如按 `AGATE_TASK_DIR`/push diff 定位）。非阻断（输出显式 SKIP，非假绿）。
+
+### [INFORMATIONAL-3] `agate-doctor._diagnose_hooks` 只查 `<root>/.git/hooks`，漏 worktree / `core.hooksPath`
+`_diagnose_hooks`（`:62-73`）直接看 `project_root/.git/hooks`。worktree 下 `.git` 是**文件**（`hooks_dir.is_dir()` False → 误报「非 git 仓库」）；`core.hooksPath` 指向共享目录时亦漏检。AGENTS.md 明确 worktree 共享 hook、权威取值 `git rev-parse --git-path hooks`。**建议**用该命令/`core.hooksPath` 解析。非阻断（诊断误报，rc 仍 0）。
+
+### [INFORMATIONAL-4] `agate-doctor._check_chain` 未守卫非 dict JSON 行
+`_check_chain`（`:101-108`）对 `json.loads` 只捕获 `ValueError`；若某行是合法 JSON 但非对象（如 `42` / `[1,2]`），`event.get("prev_hash")` 抛 `AttributeError`，被 `main` 的**兜底 except** 记为「诊断异常」而非干净的「第 N 行非法」。`check-events.py` 有 `isinstance(ev, dict)` 守卫。**建议**同样加类型判断。非阻断。
+
+### [INFORMATIONAL-5] `agate-doctor._diagnose_version` 只回显 AGATE_ROOT/.agate-version 字符串，未解析版本链
+`_diagnose_version`（`:76-91`）展示 `AGATE_ROOT`（env 或脚本自定位）与 `.agate-version` 原文，**未调用** `agate-resolve.py` 解析实际生效版本（版本链 `.agate-version` → `current`）。「版本解析」维度偏浅，可能不反映真实解析结果/回退原因。**建议**接解析链。非阻断。
+
+### [INFORMATIONAL-6] 5 条 DESIGN_GAP 判定：同意交 P7；① 为最需裁决项
+- ① 调用接口（无参数 + cwd 定位，未用 `AGATE_TASK_DIR`；多任务 → SKIP）→ **交 P7**（并见 INFORMATIONAL-2，影响本仓 CI 实效）。
+- ② doctor 退出码语义（rc 恒 0 = 「诊断完成」）→ **交 P7**（与 TC-B17-08 一致；若意图「发现异常即非 0」须改测试）。
+- ③ 退役 backstop 的 P3-TDD-red / P6 provenance CI 层重跑未移植 → **交 P7**（BDD-16 只要求 gate 重跑；P6.5 judge/events 由 `check-gate.py P6.5` 覆盖）。
+- ④ `formatters/README.md` 不在派发退役清单但属 CHECK10 扫描面 → **已同步，正确**（否则新增 ERROR），交 P7 核对。
+- ⑤ workflow job 名保留 `gate-backstop` → **交 P7**（M15 只要求改调用脚本）。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| batch5 目标 | `pytest test_agate_ci_verify test_agate_doctor -q` | **14 passed** |
+| 相邻回归 | `pytest test_check_gate test_check_protocol_consistency test_mvwu_protocol_docs test_doc_sweep test_agate_scripts_encoding test_t43_check_registration_surface -q` | **348 passed** |
+| SG 对齐集成 | `pytest integration/test_protocol_alignment_review.py -q` | **13 passed**（`-k sg_6` → 1 passed） |
+| regression + integration | `pytest agate/tests/regression/ agate/tests/integration/ -q -n auto` | **198 passed** |
+| structure | `check-structure-consistency.py` | S0-S6 全 OK |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 406 WARNING** |
+| ruff | `ruff check agate-ci-verify.py agate-doctor.py` | `All checks passed!` |
+| 用例数 | `count-tests.sh` | **2671**（-18，符合删退役测试） |
+| 平台扫描 | `check-platform-assumptions.py agate-ci-verify.py agate-doctor.py` | exit 0（0 命中） |
+| 退役残留 | `grep ci-gate-backstop`（agate/ + .github/，排除 UPGRADING） | 仅退役说明/拦截保留/测试注释，无协议文档回引 |
+| workflow 退出码 | 读 `.github/workflows/protocol-tests.yml:303-319` | step 有 `set -o pipefail` + 默认 `bash -e` → 脚本 rc 1 使 job 红 |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对（pytest 经 `tmp_path`/`git_repo` 夹具隔离；structure/consistency/ruff/平台扫描为只读）。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
