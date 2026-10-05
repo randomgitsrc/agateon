@@ -159,16 +159,16 @@
 2. 更新 `README.md` version badge + `CHANGELOG.md` [Unreleased] → 新版本号
 3. **更新 `agate/UPGRADING.md` 新增本版本章节**——无破坏性变更也写"（无破坏性变更）"（v0.62.0 教训：漏写章节）
 4. `git tag vN.N.0 && git push origin vN.N.0`——`git push` 不带 tag **默认不推送 tag**（v0.51.0 教训）；推送后 `git ls-remote --tags origin vN.N.0` 验证远端到达
-5. CHECK 7（version badge vs git tag）自动通过；CI ruff job 绿（`ruff==0.16.4`，与本地 `~/.venvs/agate-dev/bin/ruff` 对齐，RM-AG0037 required check）
+5. CHECK 7（version badge vs **CHANGELOG 最新已发布版本**，v0.78.2 起**不再依赖 git tag**）自动通过；CI ruff job 绿（`ruff==0.16.4`，与本地 `~/.venvs/agate-dev/bin/ruff` 对齐，RM-AG0037 required check）
 5a. **Release 校验（tag 与 Release 双轨，TAG0037）**：推送 `vN.N.0` 后 `.github/workflows/release.yml` 自动构建并创建 GitHub Release；`gh release view vN.N.0` 须存在，且资产至少含 3 个 tarball——本体 `agateon-vN.N.0.tar.gz` 与两平台 offline 包（`agateon-vN.N.0-offline-linux-x86_64.tar.gz`、`agateon-vN.N.0-offline-windows-x86_64.tar.gz`），另有 `SHA256SUMS`（仅防下载损坏，不认证发布者）。
    - **补救（tag 已推而 Release 缺失）**：release workflow 没有 `workflow_dispatch`，无法手动重跑——本地用同一打包脚本重建：`python3 agate/scripts/agate-release.py build --tag vN.N.0 --repo . --outdir <dist> --notes-out <notes.md> --expect-sha <tag 提交 SHA>`，再 `gh release create vN.N.0 <dist>/* --verify-tag --title vN.N.0 --notes-file <notes.md>`。Release 已存在时重跑会失败，须先确认其属本次创建再 `gh release delete`。
    - **建议（非代码项）**：为 `v*` tag 启用 GitHub tag Ruleset / tag 保护，只允许维护者创建 tag（release workflow 以 tag push 为唯一触发器）。
 6. **release PR 合并后最终验证（G-5）**：`git fetch origin && git describe --tags --abbrev=0 origin/main` == vN.N.0；`git merge-base --is-ancestor vN.N.0 origin/main` 返回 0；合并后 push 的 CI 全绿；`gh release view vN.N.0` 显示 Release 存在且含上述资产
    - ⚠️ **`--abbrev=0` 不可省**（2026-10-02 实测更正）：不带它时 `git describe` 会返回 `vN.N.0-<n>-g<sha>`（tag 之后每多一个 commit 就变一次），**该判据恒不成立**——v0.77.0 实测得到 `v0.77.0-3-gd666d4b`。
-     - **失准范围（据实，勿扩大）**：**活等式判据面**上仅本条如此（`check-protocol-consistency.py` CHECK 7 与本文件下方「release PR 必须普通 merge」条均已用 `--abbrev=0`）；但**历史任务记录里有多处同款副本**（`agate-workspace/tasks/{TAG0020,0027,0028,0029,0030}*/P8-release.md` 等 + `archived/docs-2026-08/HANDOFF-DOGFOODING-3TASKS.md`），它们是 frozen 快照、**本次不回改**，但**会被后来者照抄**——接手 G-5 时请以本条为准。另有 `docs/guides/worktree-dogfooding-guide.md` 两处用它**看输出**（非等式判据），可辩护。
+     - **失准范围（据实，勿扩大）**：**活等式判据面**上仅本条如此（本文件下方「release PR 必须普通 merge」条仍用 `--abbrev=0`）；⚠️ **v0.78.2 起 `check-protocol-consistency.py` CHECK 7 已改为 tag 无关、不再用 `git describe`**，故不再属本条失准面。但**历史任务记录里有多处同款副本**（`agate-workspace/tasks/{TAG0020,0027,0028,0029,0030}*/P8-release.md` 等 + `archived/docs-2026-08/HANDOFF-DOGFOODING-3TASKS.md`），它们是 frozen 快照、**本次不回改**，但**会被后来者照抄**——接手 G-5 时请以本条为准。另有 `docs/guides/worktree-dogfooding-guide.md` 两处用它**看输出**（非等式判据），可辩护。
 
 **版本引用文件清单（Agateon 仓库特有，通用 P8 卡不覆盖）**：README badge / CHANGELOG / UPGRADING 章节 / 稳定版引用（文档优先写"稳定版"不写死版本号）。
 
-**CI 一致性失败诊断（E-3，v0.51.0 教训）**：本地绿 CI 红 → 先拉 CI job 完整日志（`gh api repos/{owner}/{repo}/actions/jobs/{id}/logs`）看真实 FAIL 的 `CHECK N` 归属，**禁止臆测根因**；CHECK 7 FAIL 第一排查项 `git ls-remote --tags origin vN.N.N`。
+**CI 一致性失败诊断（E-3，v0.51.0 教训）**：本地绿 CI 红 → 先拉 CI job 完整日志（`gh api repos/{owner}/{repo}/actions/jobs/{id}/logs`）看真实 FAIL 的 `CHECK N` 归属，**禁止臆测根因**；（v0.78.2 起 CHECK 7 为 badge↔CHANGELOG，不再查 tag——tag 指向问题改由 `release.yml` 的「Verify tag points to matching commit」步拦）。
 
-**release PR 必须普通 merge（`--no-ff`），禁止 squash**：CHECK 7（`check_version_badge`）与 G-5 验证都用 `git describe --tags --abbrev=0` 取最新 tag；squash 生成内容相同但 SHA 不同的新提交，tag 与 main 分叉、describe 回退旧版（v0.31.0 事故）。若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force`。
+**release PR 必须普通 merge（`--no-ff`），禁止 squash**：**G-5 验证**用 `git describe --tags --abbrev=0` 取最新 tag；squash 生成内容相同但 SHA 不同的新提交，tag 与 main 分叉、describe 回退旧版（v0.31.0 事故）。（v0.78.2 起 CHECK 7 不再依赖 tag，该规则由 G-5 单独支撑。）若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force`。

@@ -182,9 +182,10 @@ hook 场景下 `--cached` 是唯一正确选择。
 `self-gate-review: <审查文件路径>` 或 `self-gate-skip: <理由>`——`commit-msg` hook 检查（缺失 WARNING，
 不硬拦截）。触发面与流程见 `SELF-GATE.md`。
 
-**发布 PR 必须普通 merge（`--no-ff`），禁止 squash**：CHECK 7（version badge ↔ git tag）与 G-5 发布
-验证都用 `git describe --tags --abbrev=0` 取最新 tag；squash 生成 SHA 不同的新提交，tag 与 main
-分叉、describe 回退旧版。若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin
+**发布 PR 必须普通 merge（`--no-ff`），禁止 squash**：**G-5 发布验证**用
+`git describe --tags --abbrev=0` 取最新 tag；squash 生成 SHA 不同的新提交，tag 与 main
+分叉、describe 回退旧版。（v0.78.2 起 CHECK 7 改为 badge↔CHANGELOG、不再依赖 tag，该规则由 G-5
+单独支撑。）若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin
 vN.N.0 --force`。
 
 **禁止 `--no-verify` 绕过 hook**：CI backstop 会重跑 `check-gate.py` + `check-p6-provenance.py` +

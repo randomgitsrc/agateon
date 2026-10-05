@@ -1046,3 +1046,60 @@ def test_x4_explicit_false_without_p5_ref_not_conflict(tmp_path, agate_scripts):
         "- PASS BDD-1 已实测（P6-evidence/local.log）\n",
     )
     assert mod.p6_reuse_declaration_conflict(str(tmp_path)) is False
+
+
+# ── X4 M-2 召回补强（TAG0042 批0 独立评审 I-1）──────────────────────────────
+#
+# 缺陷：初版结构信号只经 `extract_evidence_refs` 判定，而该抽取器①先剥离反引号
+#   code span、②只取「整组都是裸路径」的括号组 ⇒ **反引号包裹**与**裸引用**两种
+#   真实形态提取不到，仍逃逸（实测 TAG0016/TAG0020 漏判）。修法：改为原始 PASS 行
+#   正则（`P5-test-results/<file>.<ext>`），两路取并集。
+
+@pytest.mark.parametrize(
+    "line,label",
+    [
+        ("- PASS BDD-1 见 `P5-test-results/unit.md`（反引号包裹）", "backtick-wrapped"),
+        ("- PASS BDD-1 复用 P5-test-results/unit.md（裸引用）", "bare"),
+        ("- PASS BDD-1（证据：P5-test-results/unit.md）", "paren"),
+        ("- PASS BDD-1 (P5-test-results/unit.md)", "ascii-paren"),
+    ],
+)
+def test_x4_pass_line_p5_ref_shapes_are_caught(tmp_path, agate_scripts, line, label):
+    """反射式逃逸回归：反引号包裹 / 裸引用 / 括号三种形态**都须**命中结构信号。
+
+    独立评审 I-1 实测：反引号与裸引用两形态在旧实现下漏判（signal=False）⇒ fail-open 残留。
+    本用例把它们逐条固化为回归（删掉原始行正则即变红）。
+    """
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(tmp_path, "---\nagent: verifier\n---\n" + line + "\n")
+    assert mod.p6_declares_reuse(str(tmp_path)) is True, f"{label} 形态须命中结构信号（I-1）"
+
+
+def test_x4_pass_line_dir_name_only_not_a_ref(tmp_path, agate_scripts):
+    """判别力反例：PASS 行只出现**目录名** `P5-test-results/`（无扩展名）**不**算证据引用。
+
+    实测本仓 TAG0020 BDD-4 的 `P5-test-results/`（黑名单串扫描的描述）即此形态——
+    若正则不要求扩展名，会把「描述扫描路径」误判为复用声明。
+    """
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\n---\n"
+        "- PASS BDD-4 黑名单串扫描（P6-acceptance.md / P5-test-results/，大小写不敏感）\n",
+    )
+    assert mod.p6_declares_reuse(str(tmp_path)) is False, (
+        "仅提及目录名（无 .ext）不得被当成 P5 证据引用"
+    )
+
+
+def test_x4_negation_with_backtick_p5_ref_not_declared(tmp_path, agate_scripts):
+    """否定句即使提到反引号包裹的 P5 结果也**不**构成复用声明（保持 M-2 反例约束）。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\n---\n"
+        "### 2.6 P5 证据复用判定\n\n"
+        "- 本任务**不走「复用 P5 证据」口径**（非 refactor）；`P5-test-results/unit.md` 仅作历史旁证。\n",
+    )
+    # 该行不是 PASS 行 ⇒ 结构信号不触发；正文为否定式 ⇒ 关键词兜底也不命中
+    assert mod.p6_declares_reuse(str(tmp_path)) is False

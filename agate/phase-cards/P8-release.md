@@ -91,11 +91,11 @@ check-gate.py P8 $TASK_DIR
   - `AUDIT7_RESULT: reuse_allowed`（exit 0）→ 复用同一份 `P5-test-results/`（不重新执行命令）
   - `AUDIT7_RESULT: reuse_blocked`（exit 1）或 `AUDIT7_RESULT: no_reuse_claim_possible`
     （exit 0 但结果非 reuse_allowed）→ 完整重跑 `gate_commands.P5`（exit 0 + failed==0）
-   - **⚠️ 时序注意（DEBT0013）**：若 `gate_commands.P5` 的链路包含
-     `check-protocol-consistency.py` 的 CHECK 7（README version badge 与最新 git tag 一致性），
-     P5 重跑应安排在 **commit + 创建 git tag 之后** 进行，而非 bump 版本文件后立即重跑——
-     bump 已完成、tag 尚未创建的中间状态下，CHECK 7 必然报 `badge vX.Y.A != tag vX.Y.B` ERROR，
-     这是设计使然（校验的是"发布完成态"），不是回归。先 tag 后重跑即 0 ERROR。
+   - **⚠️ 时序说明（原 DEBT0013，v0.78.2 起已消解）**：`check-protocol-consistency.py` 的 CHECK 7 已改为
+     README badge ↔ **CHANGELOG 最新已发布版本**（**tag 无关**），故 bump 版本文件后、tag 创建前
+     重跑不再报错——"发布进行中"（版本尚无对应 tag）判 **PASS + 提示**。
+     ⇒ release PR **先合 PR、后打 tag**；tag 指向校验由 `.github/workflows/release.yml`
+     的「Verify tag points to matching commit」步承担（tag 名须等于 tag 所指提交的 badge 版本）。
 - `git log v{prev_version}..HEAD --oneline` 对照 CHANGELOG 无遗漏
 - 从 P2 packages 验证 version 文件路径
 

@@ -276,6 +276,26 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.78.3 — §6 改动的独立评审整改（**无破坏性变更**）
+
+> **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。
+
+**升级方式**：`python3 ~/.agate/scripts/agate-install.py latest`（幂等）。
+
+**⚠️ 会改变你项目的一处**：
+
+1. **P6 复用声明的结构性信号召回扩大**（I-1）：字段缺失时，「PASS 行引用 `P5-test-results/<file>.<ext>`」
+   的识别从「仅括号内裸路径」扩到**原始行正则** ⇒ **反引号包裹**（`` `P5-test-results/unit.md` ``）
+   与**裸引用**（`见 P5-test-results/unit.md`）现在也能被识别为**事实复用**。
+   ⇒ 若你的老任务 P6 用这些写法引用了 P5 结果、且**未**写 `p5_evidence_reuse`，升级后 P8/P6
+   校验会按「已声明复用」处理（并提示补结构化字段）；若同时**显式**写了 `false` ⇒ **自相矛盾 exit 1**。
+   建议：在 `P6-acceptance.md` frontmatter 显式写 `p5_evidence_reuse: true|false`。
+
+**其余为文档与 CI 内部修正**（I-2 / m-a / m-b）：权威文档（`AGENTS.md` / `git-integration.md` /
+`adr.md` / `phase-cards/P8-release.md` / `scripts/README.md`）中「CHECK 7 = badge↔tag」的旧表述
+已改为「badge ↔ CHANGELOG 最新已发布版本」；`release.yml` 的 tag 校验改用 `sed` 抽取并补实跑用例。
+**不影响你项目**。
+
 ### v0.78.2 — TAG0042 批 0 外部评审整改 + 发布顺序耦合根治（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。
