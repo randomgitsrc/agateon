@@ -290,7 +290,31 @@ def main():
         )
         sys.exit(0)
 
-    if new_phase in ("", "PAUSED", "DONE"):
+    # M-1（独立评审查出）：**DONE 也必须校验**——否则 X9 可被绕过。
+    #
+    # 缺陷实测：新规则只管 `READY`，而 `DONE` 落在下面的「非推进场景，未校验」分支里
+    #   ⇒ `P7 → READY` 被拦（rc=1）但 **`P7 → DONE` 放行（rc=0）**。
+    #   而"直接写 DONE"本就是既有习惯（peekview 实测：19 次转入 DONE 时前序不是 READY），
+    #   故只拦 READY 等于**把人推到 DONE 这条没人检查的路上**，`gate_p8` 照样跑不到。
+    # 允许的前序：`READY`（正常序：P8 → READY → DONE）或 `P8`（P8 后直接收尾）；
+    #   P1 声明 `internal_only` 而合法裁掉 P8 时，`P7` 亦可。
+    if new_phase == "DONE":
+        _allowed_done = ("READY", "P8") if not _declares_internal_only(state_file) \
+            else ("READY", "P8", "P7")
+        if old_phase not in _allowed_done:
+            sys.stderr.write(
+                f"GATE STATE: 转为 DONE 前的前序 phase 须为 READY 或 P8"
+                f"（当前 phase={old_phase or '(无)'}"
+                f"{'；P1 声明 internal_only 时允许 P7' if 'P7' in _allowed_done else ''}）"
+                f"——否则说明 P8/READY 收尾流程被跳过；请先走「以 P8 提交产出 → 单独提交 READY」\n"
+            )
+            sys.exit(1)
+        sys.stderr.write(
+            f"GATE OK: check-state-transition: 收尾前序已就位（old_phase={old_phase}）→ DONE\n"
+        )
+        sys.exit(0)
+
+    if new_phase in ("", "PAUSED"):
         sys.stderr.write(
             f"GATE SKIP: check-state-transition: 非推进场景（new_phase={new_phase!r}），未校验\n"
         )

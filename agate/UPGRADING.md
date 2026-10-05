@@ -276,6 +276,31 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.78.2 — TAG0042 批 0 外部评审整改 + 发布顺序耦合根治（**无破坏性变更**）
+
+> **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。
+
+**升级方式**：`python3 ~/.agate/scripts/agate-install.py latest`（幂等）。
+
+**⚠️ 会改变你项目行为的四处**：
+
+1. **转 `DONE` 现在也校验前序**（M-1）：转 DONE 时上一次已提交 phase 须为 `READY` 或 `P8`
+   （P1 声明 `internal_only` 时允许 `P7`）。修的是 v0.78.1 的残留——X9 只管 READY，
+   于是「直接写 DONE」可绕过且 `gate_p8` 照样跑不到。**存量任务不受影响**（已处于 DONE）；
+   新收尾提交须按「P8 → READY → DONE」序。
+2. **P6 复用声明新增结构性判定**（M-2）：字段缺失时，若 P6 的 **PASS 行引用了 `P5-test-results/…`**，
+   视为**事实复用**（不看措辞）；若同时**显式**写了 `p5_evidence_reuse: false` ⇒ **自相矛盾，exit 1**。
+   用例：在 `P6-acceptance.md` frontmatter 写 `p5_evidence_reuse: true|false`（现已可用
+   `agate-md-field-set.py p5_evidence_reuse true` 写入——v0.78.1 时该 key 被判非法）。
+3. **CHECK 7 改为不依赖 git tag**（§6）：README badge 对标 CHANGELOG 最新已发布版本。
+   发布 PR 上**不再要求 tag 已存在**（先合 PR、后打 tag 可走通）；tag 指向何处由
+   `release.yml` 在 tag push 时校验。**本仓 CI 行为变化，不影响你项目**。
+4. **`consistency` 的 CHECK 7 报错文案**与 `gate-backstop` 的必过检查表述已据实际调整
+   （文案修正，无行为变化）。
+
+**已知未做**：`check-state-transition.py` 读 `task_id` / `internal_only` 仍取自**工作区**
+（M-1 未动此点，归批 1/4 统一为暂存区）。
+
 ### v0.78.1 — TAG0042 批 0：9 个既有缺陷（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。

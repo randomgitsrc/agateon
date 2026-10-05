@@ -921,12 +921,17 @@ def test_x4_field_true_is_declaration(tmp_path, agate_scripts):
 
 
 def test_x4_field_false_overrides_keywords(tmp_path, agate_scripts):
-    """② 字段 `false` ⇒ **正文出现任何关键词也不算声明**（TAG0033 型否定式归此列）。"""
+    """② 字段 `false` ⇒ **正文出现任何关键词也不算声明**（TAG0033 型否定式归此列）。
+
+    ⚠️ 本用例的正文**必须用兜底能识别的形态**（粗体独立声明），否则「字段 false 时
+    不翻案」这段逻辑被删掉测试照样绿——**空转测试**（TAG0042 批0 评审 m-1 实测踩过：
+    原正文用非粗体否定句，兜底本就认不出 ⇒ 删掉 false 分支仍全绿）。
+    """
     mod = _load_prov_module(agate_scripts)
     _write_p6(
         tmp_path,
         "---\nagent: verifier\np5_evidence_reuse: false\n---\n"
-        "本任务**不走「复用 P5 证据」口径**；也不存在「引用 P5 证据」这回事。\n",
+        "- **P5 证据复用**：不走该口径（正文为粗体声明形态，兜底本可命中）\n",
     )
     assert mod.p6_declares_reuse(str(tmp_path)) is False, (
         "字段 false 时正文关键词不得翻案（否则误报 ⇒ reuse_blocked 拦下未复用的任务）"
@@ -986,3 +991,58 @@ def test_x4_descriptive_literals_not_treated_as_declaration(tmp_path, agate_scri
     assert mod.p6_declares_reuse(str(tmp_path)) is False, (
         "描述性字面（审计状态名）不得被当成复用声明"
     )
+
+
+# ── X4 M-2（TAG0042 批0 评审）：结构性信号补召回 ────────────────────────────
+#
+# 缺陷：纯关键词判定漏判「实际复用了 P5 证据、但没写粗体声明」的任务（实测两仓 6 个：
+#   TAG0003/0007/0027/0028 + peekview T083/T086 在 PASS 行里直接引用 P5-test-results）。
+#   漏判是 **fail-open**：审计 7 只在 `reuse_blocked and p6_declares_reuse` 时才拦。
+# 修法：字段缺失时，PASS 行引用 `P5-test-results` = **事实复用**（结构性信号，不看措辞）。
+
+def test_x4_missing_field_pass_line_referencing_p5_is_declared(tmp_path, agate_scripts, capsys):
+    """结构信号：字段缺失 + PASS 行引用 P5-test-results ⇒ 判为已声明 + WARNING。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\n---\n"
+        "- PASS BDD-1 无改动（P5-test-results/unit.log）\n",
+    )
+    assert mod.p6_declares_reuse(str(tmp_path)) is True
+    assert "P5-test-results" in capsys.readouterr().err
+
+
+def test_x4_missing_field_negation_without_p5_ref_not_declared(tmp_path, agate_scripts):
+    """否定式（不引用 P5 结果）不得被结构信号误判为声明（TAG0033/TAG0019 型）。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\n---\n"
+        "### 2.6 P5 证据复用判定\n\n- 本任务**不走「复用 P5 证据」口径**（非 refactor）。\n"
+        "- PASS BDD-1 已实测（P6-evidence/local.log）\n",
+    )
+    assert mod.p6_declares_reuse(str(tmp_path)) is False
+
+
+def test_x4_explicit_false_with_p5_ref_is_conflict(tmp_path, agate_scripts):
+    """自相矛盾：显式 `false` 但 PASS 行引用 P5 结果 ⇒ `p6_reuse_declaration_conflict` 为真。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\np5_evidence_reuse: false\n---\n"
+        "- PASS BDD-1 无改动（P5-test-results/unit.log）\n",
+    )
+    assert mod.p6_reuse_declaration_conflict(str(tmp_path)) is True
+    # 且 p6_declares_reuse 仍为 False（矛盾由独立函数处理，不混入声明判定）
+    assert mod.p6_declares_reuse(str(tmp_path)) is False
+
+
+def test_x4_explicit_false_without_p5_ref_not_conflict(tmp_path, agate_scripts):
+    """显式 `false` 且 PASS 行不引用 P5 结果 ⇒ 无矛盾。"""
+    mod = _load_prov_module(agate_scripts)
+    _write_p6(
+        tmp_path,
+        "---\nagent: verifier\np5_evidence_reuse: false\n---\n"
+        "- PASS BDD-1 已实测（P6-evidence/local.log）\n",
+    )
+    assert mod.p6_reuse_declaration_conflict(str(tmp_path)) is False

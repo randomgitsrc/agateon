@@ -120,10 +120,13 @@ def _judge_enabled(task_dir: str) -> bool:
 def _inactive(reason: str, howto: str) -> None:
     """X3（TAG0042 批0）：SKIP 面**显式告警**——输出一个无法与 PASS 混淆的块。
 
-    为什么保留 exit 0：本 job 是 **required check**，一旦 `skipped` 会被分支保护
+    为什么保留 exit 0：本 job **曾**为 required check，一旦 `skipped` 会被分支保护
     **永久 BLOCK**（PR #193 实证）⇒ 必须 success。但"绿"与"兜底跑了"必须可分辨，
     否则就是**假绿**（ADR-015 手段②：让错误可见——这里不能用手段①，
     CI 机制决定了 required check 必须 success）。
+    ⚠️ 2026-10-05（TAG0042 批0 m-3）：本 job **已移出 required checks**
+    （实际 required = pytest×2 / shellcheck×2 / consistency 共 5 个）——一个永远不失败
+    的必过检查是假保障。保留 exit 0 仍是为将来重新纳入 required 时不被 skip 阻断。
 
     标识 `BACKSTOP-INACTIVE` 供 CI 侧 grep 成注解/摘要（脚本本身不依赖任何 CI 平台）。
     """
@@ -131,7 +134,7 @@ def _inactive(reason: str, howto: str) -> None:
     print(f"BACKSTOP-INACTIVE: {reason}")
     print("  ⇒ 本次 **未实际执行** gate 兜底（不是「跑了且通过」）")
     print(f"  如何让它生效：{howto}")
-    print("  （exit 0 是有意为之：required check 被 skip 会永久阻断合并）")
+    print("  （exit 0 是有意为之：required check 被 skip 会永久阻断合并；本 job 现已移出 required）")
     print("=" * 66)
 
 
@@ -162,7 +165,9 @@ def main() -> int:
         print("SKIP: 无 .state.yaml，非 agate 项目")
         _inactive(
             f"仓库根无 .state.yaml（{state_file}）",
-            "在仓库根放 .state.yaml（task_id + phase），或确认本项目是否用 agateon 管理",
+            "本脚本目前只能读取**仓库根**状态，无法定位任务级状态（agate 的状态文件按任务存放于 "
+            "agate-workspace/tasks/{Txxx}/）——这是已知缺陷，由 TAG0042 第 5 批替换本 job；"
+            "**不要**为喂兜底而在仓库根造 .state.yaml",
         )
         return 0
 

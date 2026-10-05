@@ -11,11 +11,15 @@ name: Protocol Tests
 #    而 GitHub 分支保护对 skipped 的 required check 同样 BLOCK（mergeable_state="blocked"）。
 #    此前注释声称"skipped 视为成功"系错误假设，从未被真实 docs-only PR 验证过。
 #
-# ③ 本次修法（当前实现）：4 个 required job（pytest/shellcheck/consistency/gate-backstop）
-#    不再有 job 级 if——job 始终运行，把 docs-only 判断内嵌进各检查 run step 开头
-#    （docs_only=true 时 echo + exit 0 → job conclusion="success"），分支保护即满足。
+# ③ 本次修法（当前实现）：required job 不再有 job 级 if——job 始终运行，把 docs-only 判断
+#    内嵌进各检查 run step 开头（docs_only=true 时 echo + exit 0 → job conclusion="success"），
+#    分支保护即满足。
 #    platform-scan/ruff 非 required，保留 job 级 if 跳过（不阻塞合并）。
 #    代价：docs-only 时各 job 仍会走 checkout/setup（约 20-40s），换取 required check success。
+#    ⚠️ 2026-10-05 更正（TAG0042 批0 m-3）：分支保护实际 required = **5** 个
+#      （pytest×2 / shellcheck×2 / consistency）；**gate-backstop 已移出 required**
+#      （一个永远不失败的必过检查是假保障，见 X3）。本条原标题写"4 个 required job
+#      （…/gate-backstop）"已过期；实际设置以 `gh api .../branches/main/protection` 为准。
 #
 # ④ 2026-08-26 修"docs/site 改动仍跑全量"的隐性 bug（完整机理见
 #    docs/guides/ci-docs-only-playbook.md）：
@@ -310,7 +314,7 @@ jobs:
               grep -A 4 BACKSTOP-INACTIVE /tmp/backstop.log | head -20
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning title=gate-backstop 未生效::本次 gate 兜底未实际执行（exit 0 是 required check 的要求，不代表通过）——详见 job summary"
+            echo "::warning title=gate-backstop 未生效::本次 gate 兜底未实际执行（exit 0 是有意为之：本 job 曾为 required check、被 skip 会永久阻断合并；现已移出 required，不代表通过）——详见 job summary"
           fi
           if grep -q 'REFACTOR-EXEMPT' /tmp/backstop.log; then
             echo "::notice title=gate-backstop refactor 豁免::refactor 任务按规则跳过 TDD 红灯检查（非机制失效）"

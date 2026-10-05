@@ -84,6 +84,22 @@ X4（复用声明改用结构化字段 `p5_evidence_reuse`）、X8（软链 hook
 
 - 本任务 `.state.yaml` 仍为 **phase: P0**；
 - **P0 收尾自检已全部勾选**（见 `P0-brief.md` §五）；
-- **批 1（统一 phase 语义）具备启动条件**：无前提、且判定它的 gate 现已是 v0.78.1
-  （含批 0 的 X2/X7/X9 修复）；
+- **批 1（统一 phase 语义）具备启动条件**：无前提、且判定它的 gate 现已是 v0.78.2
+  （含批 0 的 X2/X7/X9 修复 + 下述外部评审整改）；
 - 何时启动由人决定，本文件不代为推进。
+
+## 8. 外部评审整改（批 0 已发版后的复核，2026-10-05 → v0.78.2）
+
+批 0（v0.78.1）经**外部独立评审**（`review-tag0042-batch0-impl.md`，送审文档见
+`docs/reviews/handoff-tag0042-batch0-for-expert-review.md`）复核，确认 **2 MAJOR + 5 MINOR**，
+本批逐条修复并固化为回归用例（走 hotfix 通道，不立项）：
+
+| 项 | 级别 | 一句话 |
+|---|---|---|
+| M-1 | MAJOR | X9 只拦 READY 不拦 DONE ⇒ 可从 DONE 绕过 |
+| M-2 | MAJOR | X4 漏判是 **fail-open**（非"朝安全方向失败"）⇒ 补结构性信号 |
+| §6 | 悬置 | CHECK 7/13 时序耦合 ⇒ **根治**（CHECK 7 改 tag 无关 + release.yml 补 tag 指向校验），登记 **RM-AG0098** |
+| m-1/m-2/m-3/m-5/m-2b | MINOR | 空转测试 / 字段登记 / 三处文案 / 死代码 / 错误提示文案 |
+
+**逐项细节见 `CHANGELOG.md` [0.78.2] 与 `agate/UPGRADING.md` v0.78.2 章节。**
+

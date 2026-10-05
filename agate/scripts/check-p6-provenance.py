@@ -95,6 +95,65 @@ _SKIP_AGENT_CHECK = (
 EXCLUDE_PRODUCE_PREFIX = "agate-workspace/tasks/"
 
 
+# --- X4 结构性信号（TAG0042 批0 评审 M-2）---
+# 复用声明的判定不能只靠措辞：本仓 6 个任务（TAG0003/0007/0027/0028 + peekview T083/T086）
+# 在 P6 的 **PASS 行里直接把 `P5-test-results/…` 当作证据**——这**事实上就是复用 P5 证据**，
+# 但它们的正文没有「粗体独立声明」形态 ⇒ 旧的纯关键词判定**全部漏判**。
+# 漏判是 **fail-open**：审计 7 只在 `reuse_blocked and p6_declares_reuse` 时才拦
+# （见 main() 审计 7 段），漏判 ⇒ 没声明 ⇒ 即使 P5 之后改过代码也**什么都不会拦**。
+# ⇒ 补一个**不依赖措辞**的结构性信号：PASS 行引用了 P5 证据文件。
+#    该信号不会把否定式误判为声明——否定句（TAG0033/TAG0019）不会在 PASS 行里引用 P5 结果。
+_P5_RESULT_MARKER = "P5-test-results"
+
+
+def _pass_lines_reference_p5_results(task_dir):
+    """P6-acceptance.md 的 PASS 行是否引用了 `P5-test-results/…`（结构性复用信号）。
+
+    用 `extract_evidence_refs` 判定（与审计 1 同源，不看措辞）：任一 PASS 行提取出的证据
+    引用中出现 `P5-test-results` 片段即命中。读不到 P6 / agate_common 不可用 ⇒ False（从严）。
+    """
+    if extract_evidence_refs is None:
+        return False
+    p6_file = os.path.join(task_dir, "P6-acceptance.md")
+    if not os.path.isfile(p6_file):
+        return False
+    try:
+        with open(p6_file, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        if not re.search(r"^\s*- PASS\b", line):
+            continue
+        for ref in extract_evidence_refs(line):
+            if _P5_RESULT_MARKER in ref:
+                return True
+    return False
+
+
+def p6_reuse_declaration_conflict(task_dir):
+    """X4 结构性信号的自相矛盾判定：显式声明 `p5_evidence_reuse: false`，**但** PASS 行
+    引用了 `P5-test-results`（事实复用）——两者矛盾，应 exit 1（TAG0042 批0 评审 M-2）。
+
+    只处理「显式 false」面；`true`、字段缺失（走兜底/结构性信号）不在此列。
+    """
+    if _split_frontmatter is None or _fm_field_value is None:
+        return False
+    p6_file = os.path.join(task_dir, "P6-acceptance.md")
+    if not os.path.isfile(p6_file):
+        return False
+    try:
+        with open(p6_file, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return False
+    fm, _body = _split_frontmatter(text)
+    val = str(_fm_field_value(fm, "p5_evidence_reuse")).strip().lower() if fm else ""
+    if val != "false":
+        return False
+    return _pass_lines_reference_p5_results(task_dir)
+
+
 def _run_script(script, args, env_extra):
     """调既有 py 工具（sys.executable subprocess，env 传参），返回 (stdout 去尾换行, returncode)。
 
@@ -197,8 +256,10 @@ def p6_declares_reuse(task_dir):
 
     X4（TAG0042 批0）：**以结构化字段为准**（ADR-015 手段①：让错误不可能）。
       · `p5_evidence_reuse: true`  ⇒ 声明（不看正文）
-      · `p5_evidence_reuse: false` ⇒ **不声明**（正文出现任何关键词也不翻案）
-      · 字段缺失 ⇒ 关键词兜底 + **WARNING 提示改用字段**（迁移期语义）
+      · `p5_evidence_reuse: false` ⇒ **不声明**（正文出现任何关键词也不翻案；若 PASS 行
+        引用了 P5 结果则属**自相矛盾**，由 `p6_reuse_declaration_conflict` 另行 exit 1）
+      · 字段缺失 ⇒ **结构性信号优先**（PASS 行引用 P5 结果 = 事实复用，M-2 补）
+        ，其次**关键词兜底** + **WARNING 提示改用字段**（迁移期语义）
 
     为什么要改：原实现用 `re.search(r"引用\s*P5\s*证据")` —— 只认一种中文正序，
     实测本仓 5 个真声明里**只命中 1 个**（主流写法是倒序「P5 证据复用」）。
@@ -225,7 +286,17 @@ def p6_declares_reuse(task_dir):
         if val == "false":
             return False                      # 显式否认 ⇒ 关键词一律不翻案
 
-    # ② 字段缺失：关键词兜底（迁移期）+ 提示改用字段
+    # ② 字段缺失：**结构性信号优先**（M-2）——PASS 行引用了 P5 结果 = 事实复用，
+    #    不依赖措辞，能召回「倒序/无声明但实际复用」的任务（实测 6 个）。
+    if _pass_lines_reference_p5_results(task_dir):
+        sys.stderr.write(
+            "GATE PROVENANCE WARNING: P6-acceptance.md 未声明结构化字段 "
+            "`p5_evidence_reuse`，但其 PASS 行引用了 `P5-test-results/…`（**结构性复用信号**，"
+            "按事实复用处理）——请在 frontmatter 显式写 `p5_evidence_reuse: true|false`\n"
+        )
+        return True
+
+    # ③ 字段缺失：关键词兜底（迁移期）+ 提示改用字段
     # 须 re.M：声明出现在文档中段（`^` 默认只匹配串首）
     hit = any(re.search(p, text, re.M) for p in _REUSE_DECL_PATTERNS)
     if hit:
@@ -675,6 +746,16 @@ def main():
         reuse_result = audit7_p5_evidence_reuse(task_dir, state_yaml)
         if reuse_result == "reuse_blocked" and p6_declares_reuse(task_dir):
             sys.exit(1)
+
+    # X4 结构性信号（M-2）：显式声明 `false` 但 PASS 行引用了 P5 结果 = 自相矛盾 ⇒ exit 1
+    # （声明不复用，却拿 P5 结果当证据——比漏判更明确的错误，须拦下）。
+    if p6_reuse_declaration_conflict(task_dir):
+        sys.stderr.write(
+            "GATE PROVENANCE: P6-acceptance.md 声明 `p5_evidence_reuse: false`（不复用），"
+            "但其 PASS 行引用了 `P5-test-results/…`（事实复用）——自相矛盾，"
+            "请改为 `p5_evidence_reuse: true` 或去掉对 P5 结果的引用（TAG0042 批0 评审 M-2）\n"
+        )
+        sys.exit(1)
 
     if warning_found == 1 or globals().get("_unparsed_evidence_warning"):
         sys.exit(2)

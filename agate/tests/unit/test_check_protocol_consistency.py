@@ -751,3 +751,52 @@ def test_bdd_scratch_dir_env_override_is_honored(agate_scripts, tmp_path, monkey
     assert not any(r.startswith("my-scratch/") for r in rels), (
         f"AGATE_TMP_DIR 覆盖后未排除：{sorted(rels)}"
     )
+
+
+# ── CHECK 7（§6 根治，TAG0042 批0 评审）：badge ↔ CHANGELOG 已发布版本（tag 无关）──
+#
+# 缺陷：原 CHECK 7 = 「badge ↔ 最新 git tag」⇒ 需要 tag 已存在；而 consistency 是单个
+#   required job、CHECK 13 又需要 bump 已提交 ⇒ 逼出「先推 tag 再合 PR」。
+# 修法：对标 CHANGELOG 最新已发布版本（与 CHECK 13 同源），不再要求 tag。
+
+def _write_check7_tree(root, badge, changelog_body):
+    (root / "README.md").write_text(
+        f"[![version](https://img.shields.io/badge/version-v{badge}-blue)](x)\n",
+        encoding="utf-8",
+    )
+    (root / "CHANGELOG.md").write_text(changelog_body, encoding="utf-8")
+
+
+def test_check7_badge_matches_changelog_pass(agate_scripts, tmp_path):
+    """badge == CHANGELOG 最新已发布版本 ⇒ PASS（不要求任何 tag）。"""
+    cpc = _load_cpc(agate_scripts)
+    root = Path(tmp_path)
+    _write_check7_tree(root, "1.2.3", "# CHANGELOG\n\n## [Unreleased]\n\n## [1.2.3] - 2026-01-01\n")
+    rep = cpc.Report()
+    cpc.check_version_badge(root, rep)
+    assert not rep.errors
+    assert "CHECK7-version" in rep.passed
+
+
+def test_check7_badge_mismatch_changelog_error(agate_scripts, tmp_path):
+    """badge != CHANGELOG 最新已发布版本 ⇒ ERROR + 指引。"""
+    cpc = _load_cpc(agate_scripts)
+    root = Path(tmp_path)
+    _write_check7_tree(root, "1.2.4", "# CHANGELOG\n\n## [Unreleased]\n\n## [1.2.3] - 2026-01-01\n")
+    rep = cpc.Report()
+    cpc.check_version_badge(root, rep)
+    assert rep.errors, "badge 领先 CHANGELOG 应报 ERROR"
+    assert rep.errors[0]["check"] == "CHECK7-version"
+
+
+def test_check7_no_changelog_warns_not_errors(agate_scripts, tmp_path):
+    """缺 CHANGELOG ⇒ WARNING（不假红）。"""
+    cpc = _load_cpc(agate_scripts)
+    root = Path(tmp_path)
+    (root / "README.md").write_text(
+        "[![version](https://img.shields.io/badge/version-v1.0.0-blue)](x)\n", encoding="utf-8"
+    )
+    rep = cpc.Report()
+    cpc.check_version_badge(root, rep)
+    assert not rep.errors
+    assert any(w["check"] == "CHECK7-version" for w in rep.warnings)

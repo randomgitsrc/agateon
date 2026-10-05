@@ -10,6 +10,36 @@
 
 ## [Unreleased]
 
+## [0.78.2] - 2026-10-05
+
+### 修复
+
+- **TAG0042 批 0 外部评审整改**（走 hotfix 通道，不立项）。批 0（v0.78.1）经外部独立评审
+  复核，确认 **2 个 MAJOR**（其中一处是 v0.78.1 修复的 fail-open 残留）+ **5 个 MINOR**，
+  本版逐条修复并固化为回归用例。
+
+  | 项 | 级别 | 问题 | 修法 |
+  |---|---|---|---|
+  | **M-1** | MAJOR | 批 0 的 X9 只拦 `READY` 不拦 `DONE` ⇒ `P7 → DONE` 放行，**可从 DONE 绕过**、`gate_p8` 照样跑不到 | 转 DONE 时前序须为 `READY`/`P8`（`internal_only` 时允许 `P7`）；补 4 用例 + 改坏即红复验 |
+  | **M-2** | MAJOR | X4 的漏判是 **fail-open**（不是"朝安全方向失败"）：审计 7 只在「声明了复用」时才拦 ⇒ 6 个**实际复用了 P5 证据却没写声明**的任务全部漏过 | 补**结构性信号**（PASS 行引用 `P5-test-results` = 事实复用，不依赖措辞）+ 显式 `false` 与引用并存 ⇒ **自相矛盾 exit 1** |
+  | **m-2** | MINOR | `p5_evidence_reuse` 未登记 ⇒ `agate-md-field-set.py` 判「非法 key」，**字段写不进去**（违背"格式由命令生成"原则） | 登记进 P6 `task_fields` + `check-structure-consistency` 字段集 |
+  | **m-1** | MINOR | `test_x4_field_false_overrides_keywords` 是**空转测试**（正文用兜底认不出的写法，删掉被测逻辑测试照样绿） | 正文改用兜底可识别形态 + 改坏即红复验 |
+  | **m-3** | MINOR | 批 0 称 `gate-backstop` 已移出 required checks，但 workflow 头注释 / 脚本 docstring / 运行时输出**三处仍写"必过检查"** | 三处文案对齐**实际分支保护设置**（实测 required = pytest×2/shellcheck×2/consistency 共 5 个） |
+  | **m-5** | MINOR | `pre-commit-gate.py` 有重复的 `if phase in ("PAUSED","READY","DONE")` **死代码** | 删除死代码（读取来源统一留待批 1/4） |
+  | **m-2b** | MINOR | X3 的提示文案给出**错误修法**「在仓库根放 .state.yaml」（协议状态按任务存放，根目录本不该有） | 改为如实说明"只能读仓库根状态、无法定位任务级状态（已知缺陷，批 5 替换）"，并**明示不要造根级状态文件** |
+
+- **§6 发布顺序耦合根治（RM-AG0098，独立路线图条目）**：`consistency` 作为单个 required job
+  同时承载 CHECK 7（badge↔tag，**需 tag 已存在**）与 CHECK 13（CHANGELOG↔UPGRADING，**需 bump 已提交**）
+  ⇒ 逼出「先推 tag 再合 PR」，且 tag 指向何处**无机械判据可察**（外部评审实测：tag 打到 `HEAD~5`
+  时 CHECK 7 照样 PASS）。修法：
+
+  - **CHECK 7 改为不依赖 git tag**：README badge 对标 **CHANGELOG 最新已发布版本**
+    （与 CHECK 13 同源）；版本无对应 tag ⇒ 判为「发布进行中」**PASS + 提示**。
+    ⇒ release PR 不再需要 tag，「先合 PR、后打 tag」自然走通，CHECK 13 在 release PR 上照常真跑。
+  - **`release.yml` 补 tag 指向校验**：tag 名必须等于 tag 所指提交里 README badge 的版本；
+    该提交的 CHANGELOG 里对应版本节正文不能为空 ⇒ 现在就能拦住「tag 打到无关提交」。
+  - 新增 3 个 CHECK 7 单元用例锁新逻辑。
+
 ## [0.78.1] - 2026-10-04
 
 ### 修复

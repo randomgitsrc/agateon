@@ -963,3 +963,81 @@ def test_x9_ready_after_p7_allowed_when_internal_only(
     assert result.returncode == 0, (
         f"internal_only 裁剪 P8 时 P7 → READY 应合法\n{result.output[-500:]}"
     )
+
+
+# ── M-1（TAG0042 批0 评审）：转换到 DONE 亦须校验前序（否则 X9 可从 DONE 绕过）──
+#
+# 缺陷：X9 新规则只管 `new_phase == "READY"`，而 `DONE` 仍落在
+#   「非推进场景，未校验」分支 ⇒ 实测 `P7 → READY` 被拦（rc=1）但 `P7 → DONE` 放行（rc=0），
+#   等于把人推到 DONE 这条没人检查的路上，gate_p8 照样跑不到。
+# 目标：转 DONE 时前序须为 `READY` 或 `P8`；P1 声明 internal_only 时亦允许 `P7`。
+
+def test_m1_done_without_ready_or_p8_exit_1(git_repo, agate_scripts, python_exe, run_cli):
+    """缺陷路径：P7 直接转 DONE（未经 P8/READY）⇒ 应拦（exit 1）。
+
+    改前行为：DONE 目标走 `GATE SKIP` ⇒ exit 0（X9 可被绕过）。
+    """
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+    task = _commit_state(repo, git_repo, "P7")
+
+    _write_state(task / ".state.yaml", "DONE")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 1, (
+        f"未经 P8/READY 直接转 DONE 应被拦（否则 X9 可从 DONE 绕过）\n{result.output[-500:]}"
+    )
+
+
+def test_m1_done_after_ready_exit_0(git_repo, agate_scripts, python_exe, run_cli):
+    """合法路径：READY → DONE ⇒ exit 0（正常收尾序）。"""
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+    task = _commit_state(repo, git_repo, "READY")
+
+    _write_state(task / ".state.yaml", "DONE")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 0, f"READY → DONE 应合法\n{result.output[-500:]}"
+
+
+def test_m1_done_after_p8_exit_0(git_repo, agate_scripts, python_exe, run_cli):
+    """合法路径：P8 → DONE（P8 后直接收尾）⇒ exit 0。"""
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+    task = _commit_state(repo, git_repo, "P8")
+
+    _write_state(task / ".state.yaml", "DONE")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 0, f"P8 → DONE 应合法\n{result.output[-500:]}"
+
+
+def test_m1_done_after_p7_allowed_when_internal_only(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """合法裁剪：P1 声明 `internal_only` ⇒ 允许 P7 → DONE（裁掉 P8）。"""
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+    task = _commit_state(
+        repo, git_repo, "P7", extra_p1="---\ninternal_only: true\n---\n"
+    )
+
+    _write_state(task / ".state.yaml", "DONE")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 0, (
+        f"internal_only 裁剪 P8 时 P7 → DONE 应合法\n{result.output[-500:]}"
+    )
