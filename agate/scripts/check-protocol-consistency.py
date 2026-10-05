@@ -14,7 +14,7 @@ agate 协议结构一致性检查 (P3-1)
   CHECK 3  协议文件内的硬编码行号引用 `xxx.md L123`               (对应 P1-4)
   CHECK 4  跨文件字段集一致：gate_commands 键集合                  (对应 P1-2)
    CHECK 6  README LICENSE 徽章指向的文件存在 + gstack MIT 归属保留  (对应 P0-2)
-   CHECK 7  README version badge 与最新 git tag 一致
+   CHECK 7  README version badge 与 CHANGELOG 最新已发布版本一致（tag 无关）
    CHECK 8  v0.6 关键词存在性（DESIGN_GAP / design_trivial / model_tier / --cached）
    CHECK 9  协议-脚本结构对齐（锚点表：文档声明的规则 vs 脚本关键词存在性）
   CHECK 10  协议文档脚本名引用漂移（白名单形状对照 agate/scripts/ 实际文件）
@@ -474,7 +474,19 @@ def check_license(root: Path, rep: Report) -> None:
         rep.ok("CHECK6-license")
 
 
-# ── CHECK 7: README version badge 与最新 git tag 一致 ────────────────────────
+# ── CHECK 7: README version badge 与 CHANGELOG 最新已发布版本一致（tag 无关）──
+#
+# §6 根治（TAG0042 批0 评审）：**改为不依赖 git tag**。
+#
+# 缺陷：原判据是「badge ↔ 最新 git tag」⇒ 需要 **tag 已存在**；而 `consistency` 是单个
+#   required job，CHECK 13 又需要 **bump 已提交**（bump 之后即刻）⇒ 二者满足时点不同却被绑在
+#   同一单元 ⇒ 逼出「先推 tag 再合 PR」的顺序（且 tag 打错位置无判据可察）。
+# 修法：badge 的一致性对标**同一份 CHANGELOG**（CHECK 13 也用它）——不再要求 tag 存在。
+#   · badge == CHANGELOG 最新已发布版本 ⇒ PASS；若该版本**尚无对应 tag**，提示「发布进行中」
+#     （release-in-progress，不影响 PASS）。
+#   · badge != CHANGELOG 最新已发布版本 ⇒ ERROR + 指引。
+# tag 指向何处（tag 名 == 该提交 badge、CHANGELOG 版本节非空）由 `release.yml` 在 tag push 时校验
+# （那里本就有 tag；见 .github/workflows/release.yml）。
 
 def check_version_badge(root: Path, rep: Report) -> None:
     readme = root / "README.md"
@@ -486,22 +498,44 @@ def check_version_badge(root: Path, rep: Report) -> None:
         rep.warn("CHECK7-version", "README.md 未找到 version badge", "README.md")
         return
     badge_ver = m.group(1)
+
+    changelog = root / "CHANGELOG.md"
+    if not changelog.exists():
+        rep.warn("CHECK7-version", "CHANGELOG.md 不存在，无法做 badge 一致性检查", "README.md")
+        return
+    ctext = changelog.read_text(encoding="utf-8")
+    # 第一个匹配到的已发布版本条目（[Unreleased] 不含三段版本号，自然跳过）——与 CHECK 13 同源。
+    cm = re.search(r"^## \[(\d+\.\d+\.\d+)\]", ctext, re.MULTILINE)
+    if not cm:
+        rep.warn("CHECK7-version",
+                 "CHANGELOG.md 未找到已发布版本条目（## [X.Y.Z]），跳过 badge 一致性检查",
+                 "CHANGELOG.md")
+        return
+    changelog_ver = cm.group(1)
+
+    if badge_ver != changelog_ver:
+        rep.error("CHECK7-version",
+                  f"README version badge v{badge_ver} != CHANGELOG 最新已发布版本 v{changelog_ver}"
+                  f"（发布时 badge 与 CHANGELOG 必须同步；若正在发布，请先把 CHANGELOG 的 "
+                  f"[Unreleased] 转为 [{badge_ver}] 版本节）",
+                  "README.md")
+        return
+
+    # badge 与 CHANGELOG 一致 ⇒ PASS。tag 缺失只作提示（发布进行中），不判失败。
     import subprocess
     try:
-        tag = subprocess.run(
-            ["git", "describe", "--tags", "--abbrev=0"],
-            capture_output=True, text=True, check=True, cwd=str(root),
+        tags = subprocess.run(
+            ["git", "tag", "-l", f"v{badge_ver}"],
+            capture_output=True, text=True, cwd=str(root),
         ).stdout.strip()
-        tag_ver = tag.lstrip("v")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        rep.warn("CHECK7-version", "无法获取最新 git tag（仓库可能无 tag）", "README.md")
-        return
-    if badge_ver != tag_ver:
-        rep.error("CHECK7-version",
-                  f"README version badge v{badge_ver} != 最新 tag v{tag_ver}",
-                  "README.md")
-    else:
-        rep.ok("CHECK7-version")
+    except (FileNotFoundError, OSError):
+        tags = ""
+    if not tags:
+        sys.stderr.write(
+            f"CHECK 7: v{badge_ver} 尚无对应 git tag（发布进行中——先合 PR、推 tag 由 release "
+            f"workflow 校验 tag 指向）；本次 PASS\n"
+        )
+    rep.ok("CHECK7-version")
 
 
 # ── CHECK 8: v0.6 关键词存在性 ──────────────────────────────────────────────
@@ -1419,7 +1453,7 @@ CHECKS = [
     ("CHECK 3  协议文件无硬编码行号", check_line_refs),
     ("CHECK 4  gate_commands 键集合一致", check_gate_commands_keys),
     ("CHECK 6  LICENSE 与 gstack 归属", check_license),
-    ("CHECK 7  version badge 与 git tag", check_version_badge),
+    ("CHECK 7  version badge 与 CHANGELOG 已发布版本", check_version_badge),
     ("CHECK 8  v0.6 关键词存在性", check_v06_keywords),
     ("CHECK 9  协议-脚本结构对齐", check_script_alignment),
     ("CHECK 10 协议文档脚本名引用漂移", check_script_name_refs),
