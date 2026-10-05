@@ -34,6 +34,7 @@ agate 协议本体划分为五大模块：
   MVWU 观测族（新增 TAG0036）：check-mvwu.py（批级证据只读观测器——六项检查 + 四态 verdict + --observe 观察行；不挂 gate/hook/CI、不写任何文件；单向依赖 agate_common 的 run_git / split_frontmatter / resolve_workspace）。
   安装与发布族（新增 TAG0037）：agate_package.py（本体包边界与构建的单一来源，库模块、stdlib-only、无 CLI，不 import agate_common）、agate-release.py（Release 构建 CLI，被 `.github/workflows/release.yml` 与本地补救流程调用；仅 build 内延迟导入 agate_common）；agate-install.py / install-offline.py / agate-pack-offline.py 依赖 agate_package；agate_common 单向依赖 agate_package（`AGATE_HOME` 基址规范化、软链基址判定与字节码判定，无环）。`release.yml`（属 `.github/workflows/`）与测试助手 `helpers_tag_repo.py` 不在本文件描述范围，不登记。
   项目声明族（新增 TAG0042 批 2）：agate-config.py（项目形态声明 `agate.config.yaml` 的读写/校验 CLI——init/validate/get/list/show；声明解析只经 `agate_common.read_project_config` 唯一读取函数）。
+  执行层族（新增 TAG0042 批 3）：agate-run.py（在不可绕开路径上执行声明 `verify.commands` 中的验证命令——bash+pipefail 如实传播退出码、`--baseline` `.out` 证据逐字节比对、`git check-ignore` ignore 检查、平台分支退化 WARNING；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件，目标账本目录由 `AGATE_TASK_DIR` env 指定）。
 - **templates**（`agate/assets/templates/`）：模板文件（`dispatch-prompt.md`、
   `dispatch-context.md`、`task-files.md`、`code-map-template.md`、`skeleton-template.md`、
   `tech-debt-template.md`、`retrospective-template.md`、`roadmap-template.md`、

@@ -239,6 +239,57 @@ def test_bdd_10_baseline_diff_is_objectively_reported(tmp_path, agate_scripts, p
     )
 
 
+@pytest.mark.windows_smoke
+def test_bdd_10_baseline_evidence_is_byte_exact(tmp_path, agate_scripts, python_exe, run_cli):
+    """BDD-10（C8 C1 修复）：`.out` 证据**逐字节**等于命令输出的 UTF-8 字节。
+
+    Given 声明命令产生**多行**输出（换行敏感）
+    When 运行 `agate-run --baseline`
+    Then 证据文件 `read_bytes()` 的字节 == 命令输出的 UTF-8 字节
+         （写盘不得把 `\\n` 翻译为 `os.linesep`，否则 Windows 上写/比不一致 → 恒 mismatch）。
+
+    为何以 `result.stdout` 为基准：agate-run 把**同一个** `output` 既写 stdout 又写证据，
+    故以实际捕获输出为基准天然平台无关（不写死换行序列）；Windows（`os.linesep="\\r\\n"`）
+    上文本模式默认换行会把证据写成 `\\r\\n`，与此基准不等 ⇒ 修复前该用例在 Windows 变红。
+    """
+    command = "echo alpha && echo beta"
+    _write_config(tmp_path, [command])
+    result = _run_agate_run(agate_scripts, python_exe, run_cli,
+                            "--baseline", command, cwd=tmp_path)
+    assert result.returncode == 0, (
+        f"BDD-10：`--baseline` 应成功；rc={result.returncode}\n{result.output[:400]}"
+    )
+    # 非空跑断言：命令确为多行输出，真正覆盖换行翻译路径
+    assert "\n" in result.stdout, (
+        f"BDD-10：前置——命令应产生多行输出（覆盖换行翻译）；实际 {result.stdout!r}"
+    )
+    outs = [p for p in tmp_path.rglob("*.out") if ".git" not in p.parts]
+    assert outs, "BDD-10：前置——应已落盘 `.out` 证据文件（当前未发现）"
+    expected = result.stdout.encode("utf-8")
+    for p in outs:
+        assert p.read_bytes() == expected, (
+            "BDD-10（C1）：证据文件须逐字节等于命令输出的 UTF-8 字节"
+            f"（写盘不得翻译换行）；\n  文件 {p.read_bytes()!r}\n  期望 {expected!r}"
+        )
+    # 源码面守卫：纯 Linux 运行无法复现 `newline=None` 的 `\n`→os.linesep 翻译，
+    # 故额外断言 `_write_evidence` 的**写盘调用行**字节精确（"wb" 或 newline=""）以防回归。
+    # 注意：只检查 `with open(` 调用行，不搜整个函数体——函数 docstring 会提到 "wb"，
+    # 整段搜索会被 docstring 误导（实测：还原为 buggy 写盘后仍误判绿）。
+    src = (agate_scripts / _RUN_SCRIPT).read_text(encoding="utf-8")
+    match = re.search(r"def _write_evidence\b.*?(?=\ndef |\Z)", src, re.DOTALL)
+    assert match, "BDD-10（C1）：源码中应存在 `_write_evidence` 函数"
+    body = match.group(0)
+    call_lines = [ln.strip() for ln in body.splitlines() if ln.strip().startswith("with open(")]
+    assert call_lines, (
+        f"BDD-10（C1）：`_write_evidence` 应经 `with open(...)` 落盘；实际函数体:\n{body}"
+    )
+    assert all(re.search(r"['\"]wb['\"]", ln) or re.search(r"newline\s*=\s*['\"]['\"]", ln)
+               for ln in call_lines), (
+        "BDD-10（C1）：`_write_evidence` 写盘调用须字节精确（\"wb\" 或 newline=\"\"），"
+        f"否则 Windows 上 `\\n`→os.linesep 翻译破坏逐字节比对；实际调用行: {call_lines}"
+    )
+
+
 # ── BDD-11：agate-run 证据文件被 ignore 检查覆盖 ───────────────────────────
 #
 # Given `agate-run` 产出的 `.out` 证据位于项目内

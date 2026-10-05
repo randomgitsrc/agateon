@@ -11,6 +11,10 @@ change_summary: >-
   唯一读取函数 read_project_config()；check-gate.py::gate_p0 接入 validate 但迁移期恒 return 2 + WARNING；
   install-hook.py/agate-setup.py 接入时自动 init 声明（幂等）；UPGRADING 批 2 小节（截止 v0.80.0）+ 
   scripts/README + CODE-MAP + 两测试文件缺陷修正。
+  【round 4 / 批 3（batch3-agate-run）】引入执行层：新增 agate/scripts/agate-run.py（在不可绕开路径
+  执行声明 verify.commands——bash+pipefail 如实传播退出码、--baseline .out 证据逐字节比对、
+  git check-ignore 覆盖检查、非 POSIX 退化 + WARNING、cmd_run 事件经 append_event、AGATE_TASK_DIR
+  定位账本）；pre-commit-gate.py 一并 git add 账本（不直接写，防破链）；scripts/README + CODE-MAP。
 files_changed:
   - agate/scripts/agate-next.py
   - agate/phase-cards/P2-design.md
@@ -34,13 +38,19 @@ files_changed:
   - agate-workspace/agents/CODE-MAP.md
   - agate/tests/unit/test_agate_config.py
   - agate/tests/unit/test_config_schema.py
+  # round 4 / 批 3（batch3-agate-run）
+  - agate/scripts/agate-run.py
+  - agate/scripts/pre-commit-gate.py
+  # round 5 / 批 3 修复轮（cmd_run 反向传播闭合）
+  - agate/git-integration.md
+  - agate/scripts/check-events.py
 review_scope: >-
   TAG0042 批 1 的 agate/** 未 commit 改动（SELF-GATE 语义 gate，agent≠main）。
   变更触发模式：意图分析 → 反向传播 → 变更文件全文 + 反向传播文件 + 权威规则源（state-machine.md /
   dispatch-protocol.md / WORKFLOW.md）→ A1-A8。单轮审查。
 prod_isolation: "[PROD_NOT_TOUCHED] —— 仅读取仓库 + 写 /tmp 留痕/日志 + 本报告；未触碰被评审改动集、主 checkout 与 ~/.agate。"
 conclusion: aligned
-review_rounds: 3
+review_rounds: 5
 round1_conclusion: >-
   批 1 首审：misaligned。A1/A2/A3b/A5.3 同一根因 = 反向传播漏改 5 处权威文档——它们仍描述旧行为
   「agate-next 更新 .state.yaml phase + git add」（state-machine.md:326-331 / dispatch-protocol.md:291-292 /
@@ -85,6 +95,33 @@ round3_conclusion: >-
   模型下自洽（required 被默认满足、非违反），但有语义影响，建议 P7 裁决 required 去留。
   非阻塞观察：SETUP.md/scripts-README(install-hook 行)/CONTEXT 未提及自动 init 声明（完备性缺口，非矛盾）。
   NEEDS_HUMAN_REVIEW 0 条。
+round4_conclusion: >-
+  TAG0042 批 3（batch3-agate-run）增量复审（round 4）：misaligned（1 根因）。变更面为执行层——新增
+  agate-run.py（bash+pipefail 如实传播退出码、--baseline .out 逐字节比对、git check-ignore、
+  非 POSIX 退化 + WARNING、cmd_run 经 append_event、AGATE_TASK_DIR 定位账本）；pre-commit-gate.py
+  一并 git add 账本（不直接写，防破链）。A1 ALIGNED（脚本行为与 P2 §4.2 / P3 契约逐条一致，pipefail
+  写法与 agate_common:747-756 同口径）；A4 ALIGNED（batch3 两文件 15 passed、hook 集成 61 passed、
+  count-tests 2688）；A6 ALIGNED（agate-run.py 不在 CHECK9-coverage/SG.6 glob，实测 SG.6 1 passed）；
+  A7 ALIGNED（落地 ADR-015 让错误可见 / ADR-002 可判定 / ADR-004 安全网）；A8 声称均可复核；
+  consistency 0 ERROR / 402 WARNING（CHECK9 PASS、CHECK10 WARN1 pre-existing、CHECK14/15 PASS）。
+  **MISALIGNED（A2 / A3b / A5.3，同一根因）**：新增账本事件类型 `cmd_run` 未反向传播到两处协议文档的
+  「事件类型枚举」——`agate/CONTEXT.md:31`（gate_run / judge_verdict / state_transition / dispatch_route）
+  与 `agate/git-integration.md:176-177`（同枚举）。先例：`dispatch_route`（TAG0034）由专门提交
+  b68af6b 加入上述两处，故新事件类型须同步。修复方向：两处枚举补 `cmd_run`（纯文本）。state-machine/
+  dispatch-protocol/WORKFLOW/卡片/角色无事件类型枚举，无需改。2 条 [DESIGN_GAP] 均归 DESIGN_GAP（交 P7）：
+  ① P2 M10「修正 formatter 计数」无缺陷/落点/判据且 P3 无覆盖（改动将违反 N3）——建议 P2 删/细化；
+  ② P2 §4.2 `<cmd-key|命令>` 但 schema 无命名 key（实现按命令文本匹配 + 下标槽位）。
+  NEEDS_HUMAN_REVIEW 0 条。观察：BDD-9「经 agate-run 执行」尚未传播到 verifier/P5 卡（batch3 §6.1b/
+  §12 声明 output 仅脚本，属后续接线）。
+round5_conclusion: >-
+  TAG0042 批 3 修复复审（round 5）：aligned。round4 的 3 项 MISALIGNED（A2/A3b/A5.3，同一根因 =
+  新增账本事件类型 `cmd_run` 未传播到事件类型枚举）已全部闭合：`agate/CONTEXT.md:31`、
+  `agate/git-integration.md:177` 两处枚举各补 `cmd_run`；`agate/scripts/check-events.py:14`
+  docstring 已知类型注释亦补 `cmd_run`（纯注释，审计逻辑零改动，1 行 diff）。`grep` 残留旧枚举
+  （gate_run…dispatch_route 无 cmd_run）→ 0 命中。回归面：consistency 0 ERROR / 402 WARNING（无新增）；
+  batch3 回归 test_agate_run + test_events_ledger + test_check_events → 29 passed；SG.6 → 1 passed；
+  修复仅动文档/注释、未改脚本逻辑 → A1/A3a/A4/A6/A7/A8 无回退。2 条 [DESIGN_GAP]（formatter 计数 /
+  cmd-key）未受本轮修复影响，仍判 DESIGN_GAP（交 P7）。NEEDS_HUMAN_REVIEW 0 条。
 ---
 
 # 协议-脚本对齐审查 — TAG0042 批 1（batch1-phase-semantics）
@@ -531,3 +568,216 @@ FAILED agate/tests/unit/test_agate_scripts_encoding.py::test_bdd_5_all_test_py_t
 | **观察（非阻塞）** | SETUP.md / scripts-README(install-hook 行) / CONTEXT 未提自动 init；P2 §1.4 对新 schema 的 S-5 覆盖表述不精确 | 建议后续补记，不阻塞。 |
 
 **round 3 结论：ALIGNED（可 commit）。**
+
+---
+
+## round 4 复审（batch3 增量）（2026-10-06）
+
+> 复审范围：TAG0042 批 3（`batch3-agate-run`，执行层）的 agate 协议/脚本未 commit 改动（HEAD `18b3e3d`，batch2 已落）。
+> 触发模式：SELF-GATE「变更触发模式」A1-A8。
+> 变更文件：新增 `agate/scripts/agate-run.py`；改 `agate/scripts/pre-commit-gate.py`（一并 git add 账本 + 导入文案）、`agate/scripts/README.md`、`agate-workspace/agents/CODE-MAP.md`。
+
+### 复审结论汇总
+
+| # | 审查项 | 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** |
+| A2 | 脚本→文档对齐 | **MISALIGNED**（新增 `cmd_run` 事件类型未同步到协议文档的事件类型枚举） |
+| A3 | 一致性连锁 + 反向传播 | A3a **ALIGNED** / A3b **MISALIGNED** → 合计 **MISALIGNED** |
+| A4 | 测试覆盖 | **ALIGNED** |
+| A5 | 下游影响 + 文档传播 | A5.1 **ALIGNED** / A5.2 **ALIGNED**（待 P8）/ A5.3 **MISALIGNED** → 合计 **MISALIGNED** |
+| A6 | 锚点表覆盖 | **ALIGNED** |
+| A7 | 设计原则一致性 | **ALIGNED** |
+| A8 | 声称-命令绑定 | 逐条列出（见 A8；无无据声称） |
+
+**总结论：misaligned**。MISALIGNED 共 3 项（A2 / A3b / A5.3），**同一根因**：本批新增账本事件类型 `cmd_run`，但两处**协议文档的事件类型枚举**未同步（见 A2/A3b）。改动面本身（脚本 + hook + README + CODE-MAP）语义自洽。2 条 `[DESIGN_GAP]` 均归 DESIGN_GAP（交 P7）。NEEDS_HUMAN_REVIEW 0 条。
+
+### A1: 文档→脚本对齐 — ALIGNED
+
+- **pipefail 写法**：`agate-run.py:83-89` 用 `"set -o pipefail; " + cmd` + `shell=True, executable="bash"`——与 P2 §4.2（:277-280）及既有 `agate_common.py:747-756` 的已验证写法**逐字同口径**（明确排除 `executable="bash -o pipefail"`）。
+- **`.out` 证据（BDD-10）**：`_evidence_path` = `{paths.evidence}/cmd-<index>.out`（缺省 `.agate-evidence`），首次 `--baseline` 落盘、后续逐字节比对（`_read_bytes` vs `output.encode("utf-8")`），差异 → 非 0。与 P2 §4.2（:281）一致。
+- **ignore 检查（BDD-11）**：`_is_ignored` 用 `git check-ignore -- <rel>`（rc0=已忽略 / rc1=未忽略 / 其它=无法判定→WARNING 跳过）；未覆盖 → 报错且**不落盘**。与 P2 §4.2（:282）一致。
+- **平台分支（m-2）**：`sys.platform == "win32"` → 退化直执行 + 显式 `WARNING`（不静默报绿，ADR-015 手段②）。与 P2 §4.2（:285-289）一致。
+- **`cmd_run` 事件（BDD-12）**：`_record_cmd_run` 经 `agate_common.append_event`（唯一写路径）写 `event/cmd/exit/runner`；`append_event`（`agate_common.py:524-566`）自动补 `ts` + `prev_hash` → 满足 BDD-12「命令 / 退出码 / 时间戳」字段。`AGATE_TASK_DIR` 定位账本（P3 §5 约定）。与 P2 §4.2（:283-284）一致。
+- **不可绕开路径**：`_resolve_command` 要求 CLI 实参**精确匹配** `verify.commands` 一条，否则拒绝执行（rc=1）。与 docstring/README 一致。
+
+**结论**：ALIGNED。
+
+### A2: 脚本→文档对齐 — MISALIGNED
+
+脚本新增了账本事件类型 `cmd_run`（`agate-run.py:131-136` 经 `append_event` 写入），但**两处协议文档的「事件类型枚举」未同步**：
+
+1. `agate/CONTEXT.md:31`（术语表 `gate-events.jsonl` 行）：
+   > 每任务 append-only 事件账本（`gate_run` / `judge_verdict` / `state_transition` / `dispatch_route`）……
+2. `agate/git-integration.md:176-177`：
+   > **`gate-events.jsonl` 事件账本**（`gate_run` / `state_transition` / `judge_verdict` / `dispatch_route` 追加行，pre-commit hook 会追加、随本 commit 一起入库……）
+
+`cmd_run` 目前**仅**出现在 `agate/scripts/README.md:157`（新工具行），未进入上述两处枚举。**先例**：`dispatch_route`（TAG0034）由专门提交 `b68af6b`（"批 C —— CONTEXT.md + git-integration.md 大改"）加入上述两处——即新事件类型须同步两枚举。
+
+**结论**：MISALIGNED。
+**差异**：文档枚举账本事件类型为 4 种（不含 `cmd_run`），脚本已写第 5 种，枚举不再完整。
+**建议**：在 `CONTEXT.md:31` 与 `git-integration.md:176-177` 的事件类型枚举各补 `cmd_run`（纯文本）。`check-events.py:14` docstring 的「已知类型」注释可顺带补 `cmd_run`（非门禁，可选）。
+
+> A1/A2 是同一差异的两个方向；本项为纯「脚本新行为未落文档」（A2），故 A1 仍 ALIGNED。
+
+### A3: 一致性连锁 + 反向传播 — A3a ALIGNED / A3b MISALIGNED（合计 MISALIGNED）
+
+#### A3a（连锁：已知衍生改动）— ALIGNED
+
+- **账本写路径**：`cmd_run` 经 `append_event`（唯一写路径），未直接 `open(..., 'a')` 写账本；`check-events.py` 第 7 条「未知 event 类型不拦截」→ 链完整、审计通过（`test_bdd_12_ledger_hash_chain_preserved` 绿）。
+- **hook 暂存**：`pre-commit-gate.py:424-429`（2h.1d）在 `if phase_changed:` **同级**（非嵌套）新增 `run_git(["add", …/gate-events.jsonl])`——把 agate-run 追加的 `cmd_run` 及本 hook 的 `gate_run`/`state_transition` 一并入库；**不直接写账本**（防破 `prev_hash` 链，P2 R5）。`git-integration.md:175-178` 已述「pre-commit hook 会追加、随本 commit 一起入库」，与该行为一致。
+- **导入文案**：`pre-commit-gate.py` 的 `python3`→`Python 3`（消除平台扫描 R2 存量命中，无测试断言该文案）。
+- **测试同步**：无（新增测试文件由 P3 产出，本批实现转绿）。
+
+#### A3b（反向传播：应被本批影响但未在 diff 中的文件）— MISALIGNED
+
+| 应被影响候选 | 影响到了没 | 判定 |
+|---|---|---|
+| `agate/CONTEXT.md:31`（账本事件类型枚举）| **否** —— 仍为 4 种（缺 `cmd_run`） | **MISALIGNED** |
+| `agate/git-integration.md:176-177`（账本事件类型枚举）| **否** —— 仍为 4 种（缺 `cmd_run`） | **MISALIGNED** |
+| `agate/state-machine.md` | 无需改 —— 无账本事件类型枚举（CONTEXT:31 的「首次定义位置」指向其，但正文未枚举类型） | ALIGNED |
+| `agate/dispatch-protocol.md` | 无需改 —— 仅 judge 白名单提及 `gate-events.jsonl`，不枚举事件类型 | ALIGNED |
+| `agate/WORKFLOW.md`「Pre-commit 检查总览」| 无需改 —— 该表列 `check-*.py` **检查项**；账本暂存非检查项，且已由 `git-integration.md:177` 描述 | ALIGNED |
+| `agate/phase-cards/*` / `execution-roles/*` / `review-roles/*` | 无需改 —— 无账本事件类型枚举 | ALIGNED |
+| `agate/scripts/README.md` / `CODE-MAP.md` | **已改** —— 补 `agate-run.py` 行 / 执行层族 | ALIGNED |
+
+**结论**：MISALIGNED（2 处事件类型枚举反向传播缺失）。**建议**：同 A2。
+
+### A4: 测试覆盖 — ALIGNED
+
+- **批 3 相关测试全绿（实跑）**：`pytest agate/tests/unit/test_agate_run.py agate/tests/unit/test_events_ledger.py -q` → **15 passed**（与 `P4-implementation-batch3.md:78` 自报吻合）。
+- **hook 集成无回归（实跑）**：`pytest agate/tests/integration/test_pre_commit_hook.py -q` → **61 passed**。
+- **关联回归（实跑）**：`test_check_events.py` + `test_t42_p3_platform_selfcheck.py` + `test_agate_gate_p5_count.py` → **24 passed**。
+- **边界覆盖**：BDD-9（成功/非 0 退出码/pipefail 左失败/平台分支源码）、BDD-10（baseline 落盘/一致/差异）、BDD-11（ignore 命中/未覆盖报错）、BDD-12（事件追加/字段/链完整/append_event 链约定/源码唯一写路径/hook 暂存）均有直接断言。
+- **用例总数**：`count-tests.sh` → **2688**（未漂移）。
+
+**结论**：ALIGNED。
+
+### A5: 下游影响 + 文档传播 — A5.1 ALIGNED / A5.2 ALIGNED（待 P8）/ A5.3 MISALIGNED
+
+- **A5.1 破坏性变更 / 向后兼容 — ALIGNED**：新增工具 + 账本暂存，不改既有 gate 判定/`.state.yaml` schema/账本链格式；`cmd_run` 为新增事件类型（`check-events.py` 向后兼容不拦截）。既有 hook 行为增强（一并暂存账本）与 `git-integration.md:175-178` 一致。
+- **A5.2 CHANGELOG — ALIGNED（待 P8，非 MISALIGNED）**：`check-changelog.py` 仅 P8 触发，`CHANGELOG.md` 待 P8 统一补（同 batch1/2 判据）。
+- **A5.3 文档传播 — MISALIGNED**：除代码改动外，应被影响的文档 = A3b 的 2 处账本事件类型枚举（`CONTEXT.md:31` / `git-integration.md:176-177`）——均**未同步**。`scripts/README.md` / `CODE-MAP.md` 已同步。
+  - **非阻塞观察**：BDD-9「经 agate-run 执行验证命令」尚未传播到 `verifier.md` / P5 卡 / WORKFLOW——但 batch3 `§6.1b`/`§12` 声明的 output 仅脚本，工作流接线属后续（非本批义务）。建议主 Agent 确认归属批次。
+
+**结论**：合计 MISALIGNED（A5.1/A5.2 ALIGNED；A5.3 与 A3b 同 2 处）。
+
+### A6: 锚点表覆盖 — ALIGNED
+
+- **`agate-run.py` 不在门禁面**：`uncovered_gate_scripts()` 的 glob = `check-*.py` + `pre-commit-gate.{sh,py}` + `ci-gate-backstop.py`；`agate-run.py` 是 `agate-*.py` → 不触发 CHECK9-coverage / SG.6。**实测**：`pytest .../test_protocol_alignment_review.py -k sg_6` → **1 passed**；consistency `CHECK 9 ✅ PASS`，无 `CHECK9-coverage`。
+- **README 索引行**：已补（非门禁，约定）。
+- **无需更新锚点表**：本批未新增/改名 `check-*.py`，未改 `rules/schema/` 字段集。
+
+**结论**：ALIGNED。
+
+### A7: 设计原则一致性 — ALIGNED
+
+- **ADR-015（实质/非实质——让错误可见）**：平台退化路径**显式 WARNING**（`_run_command` win32 分支），绝不静默报绿——本批是该原则（手段②）的落地。**一致**。
+- **ADR-002（可判定性）**：退出码如实传播、`.out` 逐字节比对为二值判定、ignore 检查经 `git check-ignore` exit code。**一致**。
+- **ADR-004（安全网分层）**：账本暂存走 `append_event` 唯一写路径 + hook 一并入库，不绕过哈希链。**一致**。
+- **ADR-003（不绑定技术栈）**：命令来自声明 `verify.commands`，脚本不硬编码技术栈。**一致**。
+- **是否存在未记录的新架构决策？** 「验证命令经不可绕开路径执行」是 ADR-003（不绑定技术栈）+ ADR-004（安全网）+ ADR-015（让错误可见）在新执行层的应用，**不引入新架构决策** → 无需新增 ADR（如需更强留痕，P8 可考虑把「声明层/执行层分离」回溯进 ADR，非本批义务）。
+
+**结论**：ALIGNED。
+
+### A8: 声称-命令绑定
+
+| 声称 | 产出命令 | 结论 |
+|---|---|---|
+| batch3 红→绿 `15 passed`（P4-impl:78）| `pytest test_agate_run.py test_events_ledger.py -q` → 15 passed | ✅ 成立 |
+| hook 集成 `61 passed`（P4-impl:79）| `pytest test_pre_commit_hook.py -q` → 61 passed | ✅ 成立 |
+| 关联回归 `24 passed`（P4-impl:80）| `pytest test_check_events.py test_t42_p3_platform_selfcheck.py test_agate_gate_p5_count.py -q` → 24 passed | ✅ 成立 |
+| consistency `0 ERROR / 402 WARNING`（P4-impl:81）| `check-protocol-consistency.py --strict-errors-only` → 0 ERROR / 402 WARNING | ✅ 0 ERROR 成立（402 为冻结文件面） |
+| count-tests `2688`（P4-impl:82）| `count-tests.sh` → 2688 | ✅ 成立 |
+| ruff `All checks passed`（P4-impl:83）| `~/.venvs/agate-dev/bin/ruff check agate/scripts/` | ✅ 成立 |
+| 平台扫描 0 命中（P4-impl:84）| `check-platform-assumptions.py agate-run.py pre-commit-gate.py` → exit 0（0 命中） | ✅ 成立 |
+| 账本隔离无污染（P4-impl:85）| `git status --porcelain` → 无 `gate-events.jsonl`/`.out` 新增 | ✅ 成立 |
+| `cmd_run` 经 append_event 不破链（脚本/README）| `test_bdd_12_ledger_hash_chain_preserved` + `check-events.py` item 7 向后兼容 | ✅ 成立 |
+
+无「无法给出命令」的无据声称。
+
+### [DESIGN_GAP] 逐条判定（2 条）
+
+| # | DESIGN_GAP | 判定 | 依据 |
+|---|---|---|---|
+| ① | P2 §4.2/M10「修正 formatter 计数」无缺陷/落点/判据，P3 无覆盖用例（实现未做） | **DESIGN_GAP（交 P7）** | 核查：与 formatter 计数相关的既有代码 `is_gate_meta_key`（后缀排除，正确）、`_fallback_json`（无 formatter 恒 0，为既有设计、A/B 出口码依赖它）、`agate-capture-env-baseline.py` 一致性检查（不在本批 output 面）——均无可复现缺陷；改动 `_fallback_json` 将违反 P2 §1.2 N3（不改 TDD 判定语义）。属 P2 条目不可执行，建议 P2 删/细化。**非 `agate/` 协议文档↔脚本矛盾**，不判 MISALIGNED |
+| ② | P2 §4.2 写 `agate-run <cmd-key|命令>`，但 schema `verify.commands` 为字符串数组、无命名 key（实现按命令文本精确匹配 + 下标槽位） | **DESIGN_GAP（交 P7）** | P2 与 schema 的接口张力；实现以命令文本精确匹配 + 声明下标作稳定证据槽位（使 BDD-10-03 成立）。设计选择，语义自洽；若需命名 key 须先扩 schema。**非协议文档↔脚本矛盾** |
+
+**判定合计**：2 条**全部 DESIGN_GAP（交 P7）**；**MISALIGNED 0 条来自 DESIGN_GAP**（本批的 3 条 MISALIGNED 来自 `cmd_run` 反向传播，与 DESIGN_GAP 无关）。按角色原则 6——2 条均不对应「`agate/` 协议文档↔脚本不一致」（① 是 P2 条目不可执行，② 是 P2 与 schema 的接口张力），故不适用「无 P7 记录即按 MISALIGNED」的触发条件；P7 需逐条转抄 `DESIGN_GAP_REVIEWED`。
+
+### round 4 闭环规则表
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| **MISALIGNED** | A2 / A3b / A5.3（同一根因：`cmd_run` 未同步到 `CONTEXT.md:31` + `git-integration.md:176-177` 的事件类型枚举）| **必须修复**：两处枚举各补 `cmd_run`（纯文本，与先例 `dispatch_route`/`b68af6b` 一致）；修完重审（round 5）。 |
+| **ALIGNED** | A1 / A3a / A4 / A5.1 / A5.2 / A6 / A7 / A8 | 通过。 |
+| **DESIGN_GAP（交 P7）** | 2 条（见上表）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`。 |
+| **观察（非阻塞）** | BDD-9「经 agate-run 执行」未传播到 verifier/P5 卡（batch3 output 仅脚本）| 建议主 Agent 确认归属批次。 |
+
+**不可 commit**（存在未闭合 MISALIGNED）。修复后建议对本报告做同任务复核轮（round 5），追加 `round5_conclusion`。
+
+**round 4 结论：MISALIGNED（须修复 2 处事件类型枚举）。**
+
+---
+
+## round 5 复审（batch3 修复闭合）（2026-10-06）
+
+> 复审范围：round4 判 MISALIGNED 的 3 项（A2 / A3b / A5.3，同一根因 = `cmd_run` 未传播到事件类型枚举）修复是否闭合，以及修复是否引入新不一致（回归面）。HEAD `18b3e3d`（batch2 已落），batch3 改动未 commit。
+> 修复文件：`agate/CONTEXT.md`、`agate/git-integration.md`、`agate/scripts/check-events.py`（均纯文本/注释）。
+
+### 复审结论汇总
+
+| # | 审查项 | round 4 | round 5 |
+|---|--------|---------|---------|
+| A1 | 文档→脚本对齐 | ALIGNED | **ALIGNED（无回退）** |
+| A2 | 脚本→文档对齐 | MISALIGNED | **ALIGNED（闭合）** |
+| A3 | 一致性连锁 + 反向传播 | A3a ALIGNED / A3b MISALIGNED | A3a **ALIGNED** / A3b **ALIGNED（闭合）** |
+| A4 | 测试覆盖 | ALIGNED | **ALIGNED（无回退）** |
+| A5 | 下游影响 + 文档传播 | A5.1/A5.2 ALIGNED / A5.3 MISALIGNED | A5.1/A5.2 **ALIGNED** / A5.3 **ALIGNED（闭合）** |
+| A6 | 锚点表覆盖 | ALIGNED | **ALIGNED（无回退）** |
+| A7 | 设计原则一致性 | ALIGNED | **ALIGNED（无回退）** |
+| A8 | 声称-命令绑定 | ALIGNED | **ALIGNED（无回退）** |
+
+**总结论：aligned**。round4 的 3 项 MISALIGNED 已全部闭合，无新增不一致，无回退。解除 commit 阻塞。
+
+### A2 / A3b / A5.3 逐项复核 — ALIGNED（闭合）
+
+同一根因的 3 处修复（`git diff` 逐处核对）：
+
+| 落点 | 修复后枚举 | 判定 |
+|---|---|---|
+| `agate/CONTEXT.md:31`（术语表 `gate-events.jsonl` 行）| `gate_run` / `judge_verdict` / `state_transition` / `dispatch_route` / **`cmd_run`** | 闭合 |
+| `agate/git-integration.md:176-177`（commit 一并暂存的账本枚举）| `gate_run` / `state_transition` / `judge_verdict` / `dispatch_route` / **`cmd_run`** | 闭合 |
+| `agate/scripts/check-events.py:14`（docstring 已知类型注释，可选）| `...dispatch_route/cmd_run` | 闭合（纯注释，审计逻辑零改动） |
+
+- **残留旧枚举复核**：`grep -rn "gate_run.*dispatch_route" agate/*.md agate/**/*.md agate/scripts/*.py`（排除含 `cmd_run` 者）→ **0 命中**。两处协议文档枚举均已含 `cmd_run`，与 `agate-run.py:131-136` 写入的 `cmd_run` 事件一致。
+- **与先例一致**：`dispatch_route`（TAG0034，提交 `b68af6b`）亦同时进入上述两处枚举——本修复沿用同一约定。
+
+**结论**：A2 / A3b / A5.3 **全部 ALIGNED**（同一根因闭合）。
+
+### 回归面复核 — 首轮 ALIGNED 项无回退
+
+| 维度 | 复核命令 / 依据 | 结果 |
+|---|---|---|
+| consistency | `check-protocol-consistency.py --strict-errors-only` | **exit 0 / 0 ERROR / 402 WARNING**（与 round4 前一致，无新增） |
+| batch3 回归 | `pytest test_agate_run.py test_events_ledger.py test_check_events.py -q` | **29 passed** |
+| A6 门禁面 | `pytest .../test_protocol_alignment_review.py -k sg_6 -q` | **1 passed**（`agate-run.py` 仍不在门禁 glob） |
+| A1/A3a/A4/A7/A8 | 修复仅改文档/注释，未改任何脚本逻辑（`check-events.py` 1 行 docstring diff） | 无回退 |
+
+### [DESIGN_GAP] 复核（2 条，未受本轮修复影响）
+
+| # | DESIGN_GAP | 判定 |
+|---|---|---|
+| ① | P2 §4.2/M10「修正 formatter 计数」无缺陷/落点/判据、P3 无覆盖（实现未做） | **DESIGN_GAP（交 P7）** —— 本轮修复未触及；建议 P2 删/细化该条 |
+| ② | P2 §4.2 `agate-run <cmd-key|命令>` 但 schema `verify.commands` 无命名 key（实现按命令文本匹配 + 下标槽位） | **DESIGN_GAP（交 P7）** —— 本轮修复未触及 |
+
+> `P4-implementation-batch3.md` 的 `[SCOPE+]` 已消解为「观察项（已就地处理）」（`check-events.py:14` 注释补 `cmd_run`），与 round5 修复一致。
+
+### round 5 闭环规则表
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| **ALIGNED** | A1 / A2 / A3a / A3b / A4 / A5.1 / A5.2 / A5.3 / A6 / A7 / A8 | 通过，**可 commit**。 |
+| **DESIGN_GAP（交 P7）** | 2 条（formatter 计数 / cmd-key）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`。 |
+
+**round 5 结论：ALIGNED（可 commit）。**

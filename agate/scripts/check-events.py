@@ -11,7 +11,7 @@ CLI：check-events.py [TASK_DIR]（exit 0 = 审计通过 / exit 1 = 审计不通
   5. ts 单调不减（同格式 UTC ISO8601 微秒字符串字典序可比；违例 → exit 1）
   6. judge 复核轮次 = judge_verdict 事件按 verdict_hash 去重后计数 ≤ 2（同一 verdict
      重跑不增轮，真实复核才 +1；无 hash 旧事件各计 1——轮次预算机械兜底，BDD-8；超出 → exit 1）
-  7. 未知 event 类型不拦截（向后兼容；gate_run/judge_verdict/state_transition/dispatch_route 为已知类型）
+  7. 未知 event 类型不拦截（向后兼容；gate_run/judge_verdict/state_transition/dispatch_route/cmd_run 为已知类型）
   8. dispatch_route 理由码枚举（TAG0034 / RM-AG0060）：event == "dispatch_route" 的行，
      每个 candidates_tried[i].reason（若存在）必须 ∈ {launch_fail, infra_error, no_parseable_output}；
      出现 gate_fail 或任何其它值 → exit 1（机械强制「gate 判定不触发换候选」的完整性不变量）

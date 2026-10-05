@@ -60,7 +60,7 @@ except Exception as exc:
     # 捕获，仍 fail-closed exit 1）；此处捕获 ImportError（agate_common.py 本体缺失，
     # 如脚本被独立复制到缺公共库的目录）。
     sys.stderr.write(
-        f"GATE ERROR: 无法加载 agate_common.py（公共库缺失，需 python3 + pyyaml）: {exc}\n"
+        f"GATE ERROR: 无法加载 agate_common.py（公共库缺失，需 Python 3 + pyyaml）: {exc}\n"
     )
     sys.exit(1)
 
@@ -420,6 +420,13 @@ def main():
                 })
             except Exception as exc:
                 sys.stderr.write(f"GATE WARNING: state_transition 事件写入失败（不阻断 commit）: {exc}\n")
+
+        # 2h.1d 一并暂存账本（TAG0042 BDD-12）：agate-run 追加的 cmd_run 事件（以及本 hook
+        # 追加的 gate_run / state_transition）写在 gate-events.jsonl（append-only 哈希链）。
+        # 用 `git add` 把它一并纳入本次 commit——**不直接写账本文件**，避免绕过 append_event
+        # 破坏 prev_hash 链（P2 R5）。
+        if os.path.isfile(os.path.join(task_dir, "gate-events.jsonl")):
+            run_git(["add", os.path.join(task_dir, "gate-events.jsonl")])
 
         # 2i. P6 客观行为审计（P2.1/P2.10）
         if gate_exit != 1 and _run_script_rc("check-p6-provenance.py", [task_dir]) == 1:
