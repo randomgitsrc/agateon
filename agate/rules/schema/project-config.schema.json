@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "agate.config.yaml schema (draft-07 subset)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string",
+          "description": "项目主语言（项目自述，不写死任何单一技术栈）"
+        },
+        "package_manager": {
+          "type": "string",
+          "description": "包管理器 / 依赖工具（项目自述）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "verify": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "项目的验证命令列表（供执行层消费）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "semver-changelog-tag"
+          ],
+          "description": "发版方式预设（如 semver-changelog-tag = semver + CHANGELOG + tag）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "evidence": {
+          "type": "string",
+          "description": "证据文件落盘目录（项目自述）"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

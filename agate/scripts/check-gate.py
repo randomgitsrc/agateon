@@ -629,6 +629,24 @@ def _gate_p2_ui_design_section(p2_file):
 
 
 def gate_p0(task_dir):
+    # TAG0042 批 2：调用 agate-config validate 做声明校验，但**迁移期只 WARNING**——
+    # validate 的退出码**只决定是否打印 WARNING**，绝不参与本函数返回值（BDD-8）。
+    # 存量项目无声明的行为与引入前一致：无论 validate 返回 0 还是非 0，恒 return 2。
+    config_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agate-config.py")
+    validate_rc = 0
+    if os.path.isfile(config_script):
+        try:
+            proc = subprocess.run(
+                [sys.executable, config_script, "validate"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+            validate_rc = proc.returncode
+        except OSError:
+            validate_rc = 0
+    if validate_rc != 0:
+        sys.stderr.write(
+            "WARNING: agate.config.yaml 缺失或非法（迁移期不阻断；截止版本起将 exit 1）\n"
+        )
     sys.stderr.write(
         "GATE P0: 立项阶段无需脚本 gate（仅 P0-brief.md）。主 Agent 确认 P0-brief 四字段齐全即可推进 P1。\n"
     )

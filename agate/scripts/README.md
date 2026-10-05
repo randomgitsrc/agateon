@@ -153,6 +153,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 |
 |------|------|
+| `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|
 | `agate-extract-context.py` | 提取任务上下文（BDD 计数 / implementation_dir / P5 失败参考）|
 | `agate-archive-stale-outputs.py` | 回退时归档旧阶段产出（`.archived/{ts}-{phase}` + breadcrumb）|

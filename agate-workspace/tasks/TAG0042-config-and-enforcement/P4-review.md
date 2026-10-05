@@ -2,13 +2,14 @@
 phase: P4
 task_id: TAG0042
 type: review
-parent: P4-implementation-batch1.md
+parent: P4-implementation-batch2.md
+batch1_parent: P4-implementation-batch1.md
 status: approved
 agent: review
-review_round: 1
+review_round: 3
 review_date: 2026-10-06
 role: review (偏执 Staff Engineer，工程视角)
-scope: batch1-phase-semantics（agate-next 去预写 + 卡片/文档反传 + 测试同步）
+scope: batch1-phase-semantics（round 1，approved）+ batch2-agate-config（round 2 rejected→round 3 C1 闭合，approved）
 prod_isolation: "[PROD_NOT_TOUCHED]"
 ---
 
@@ -102,6 +103,140 @@ prod_isolation: "[PROD_NOT_TOUCHED]"
 本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试（pytest tmp_path 夹具、ruff、平台扫描、一致性、count-tests）。未修改任何被评审文件、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。实跑命令均无对仓库内已提交文件的写副作用（pytest 用例经 `tmp_path`/`git_repo` 夹具隔离；一致性/ruff/scan 为只读扫描）。
 
 <!--
-增量复评说明（供后续批次）：本文件为 round 1（batch1-phase-semantics）。若同一 reviewer 对后续批次增量复评，
-按轮次追加（参照 TAG0034 P4-review.md 形态），保留本 round 1 全文。
+增量复评说明（供后续批次）：本文件按轮次追加（参照 TAG0034 P4-review.md 形态），保留前轮全文。
+round 1 = batch1-phase-semantics（approved）；round 2 = batch2-agate-config（rejected）。
 -->
+
+---
+
+# P4 实现评审 — round 2（增量）：batch2-agate-config（声明层）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `48091f2`，batch1 已落）。
+> 评审依据：`P4-dispatch-context-review-batch2.md`、`P4-implementation-batch2.md`（含 4 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M4-M8 / §4.1、`P3-test-cases-batch2.md`、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 3 aligned）。
+> 视角：**工程正确性/边界/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 3 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: rejected**。Pass 1（CRITICAL/BLOCKER）：**1 条**（C1，可复现）。Pass 2（INFORMATIONAL）：**6 条**（非阻断）。
+
+> frontmatter 的 `status` 为**聚合门禁态**：round 1（batch1）结论不变（approved），但 batch2 存在 1 条 CRITICAL，
+> 按 review 角色门槛映射「有 CRITICAL → rejected」。须修复 C1（1 行改动 + 1 条测试）后复审 batch2，P4 gate 方可放行。
+
+---
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+### [CRITICAL] `agate/scripts/agate_common.py:871`（`read_project_config`）— 非法 YAML 未按契约优雅返回，抛未捕获异常
+
+**问题**：`read_project_config` 的 docstring（`:855-859`）与 `P4-implementation-batch2.md`（§3）均声称
+「文件存在但 YAML 非法 / 顶层非映射 → 返回默认 dict + `present=False` + `parse_error`」。但实现只捕获
+`except (OSError, ValueError)`（`:871`），而 PyYAML 的语法/扫描/组合错误（`yaml.parser.ParserError` /
+`yaml.scanner.ScannerError` / `yaml.composer.ComposerError`）都继承自 **`yaml.YAMLError` → `Exception`**，
+**既不是 `ValueError` 也不是 `OSError`**（本机实测 `issubclass(ParserError, ValueError) == False`）。
+
+**复现（本次评审实测）**：
+
+```text
+$ printf 'not: [a mapping\n' > <proj>/agate.config.yaml
+$ python3 agate/scripts/agate-config.py validate          # cwd=<proj>
+  Traceback (most recent call last):
+    ...
+    File ".../agate_common.py", line 870, in read_project_config
+      loaded = yaml.safe_load(f)
+  yaml.parser.ParserError: while parsing a flow sequence ...
+  rc=1
+```
+
+进程内调用同样抛出（`read_project_config(d)` → `RAISED: yaml.parser.ParserError`），**不返回** `present=False`/`parse_error`。
+
+**影响**：
+- `agate-config validate` 对非法声明打印**完整 traceback**（而非契约的逐条报错），违反「退出码语义 + 客观报错」的交付面；`UPGRADING.md` / BDD-8 明确把「声明文件**非法**」纳入迁移契约，故该路径是**约定内输入**，非边缘情况。
+- 本批 `gate_p0` 经**子进程**调 validate，rc≠0 仍被吸收为 WARNING（恒 return 2 不变量未被破坏）——故**迁移期用户可见行为尚可**；但 `read_project_config` 是 P2 §4.1 指定的**唯一读取函数**，batch3+（`agate-run` / `agate-doctor`）将**进程内**消费它，届时非法声明会让消费方**直接崩溃**，而不是拿到默认值 + `parse_error`。这正与该函数「让所有消费方免于各自处理解析错误」的设计目的相悖。
+- 测试未覆盖该路径（`test_agate_config.py` / `test_config_schema.py` 只测「文件缺失」，无非法 YAML 用例）→ 缺陷未被红灯拦住。
+
+**建议 Fix（最小、单一）**：
+1. `:871` 的 `except (OSError, ValueError)` 增补 `yaml.YAMLError`（`yaml` 在 `agate_common` 顶部已 import，import 失败会 `sys.exit(1)`，无需额外守卫）；与**同文件**既有惯例一致（`read_rules_yaml:1212` 直接 `except Exception`）。
+2. 补 1 条红灯/绿灯测试（如 `test_bdd_6_read_project_config_malformed_yaml_is_graceful`）：写非法 YAML → 断言 `read_project_config` **不抛**、`present is False`、`parse_error` 非空；并可加 `agate-config validate` 对该输入 rc≠0 且**无 traceback**（stderr 不含 `Traceback`）。
+
+---
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 边界观察
+
+### [INFORMATIONAL-1] `gate_p0` 经**调用方 cwd** 定位声明，未用 `task_dir`/项目根（WARNING 可假阳性/假阴性）
+`check-gate.py::gate_p0`（`:631-652`）以 `subprocess.run([sys.executable, config_script, "validate"])` 调 validate，**未传 `cwd`** → 继承 check-gate 进程的 cwd；而 `agate-config.py` 用 `os.getcwd()` 作 project_root。实测：从**有合法声明**的目录跑 `check-gate.py P0 <task>` → **无 WARNING**；从无声明目录跑 → 有 WARNING。即 WARNING 取决于调用方 cwd，而非被检查任务的所属项目根。
+- pre-commit hook 路径 cwd=仓库根（正确）；但 `gate_p0` 的 `task_dir` 形参被闲置，任何从其它目录调用（子目录 / 不同项目）都会给出**错误 WARNING**。
+- **建议**：由 `task_dir` 确定项目根（如 `agate_common.resolve_workspace(task_dir)` 或 `git -C task_dir rev-parse --show-toplevel`），并显式 `cwd=<repo_root>` 调 validate。
+
+### [INFORMATIONAL-2] BDD-8 测试依赖「仓库根当前无 `agate.config.yaml`」，环境决定红绿
+`test_bdd_8_gate_p0_missing_declaration_keeps_passing_exit` / `..._emits_warning` 通过 `run_cli`（`cwd=None`）继承 pytest 进程 cwd = 仓库根，其 WARNING 断言**隐含要求 agateon 仓库根没有 `agate.config.yaml`**。而本批新增的 `install-hook` 自动 init 会在项目根生成该文件——一旦 agateon 自身被接入（或在仓库根手动 `init`），这两条测试即变红。这与 conftest `_run_cli_impl` docstring 明确反对的「本机环境决定红绿」同类。**建议**：给这两条用例传显式隔离 `cwd`（tmp 项目根），与 INFORMATIONAL-1 的确定性定位一并解决。
+
+### [INFORMATIONAL-3] `agate-config.py` shebang `#!/usr/bin/env python` 偏离主流惯例（测试驱动的工作绕过）
+仓内 78 个脚本用 `#!/usr/bin/env python3`，仅 `agate-config.py`（及 1 个既有文件）用 `python`——原因是为规避 `test_bdd_3_protocol_does_not_hardcode_md_product_shape` 对**源码任意位置** `python3` 字面量的扫描（连 shebang 一并命中）。本机 `command -v python` **不存在** ⇒ `./agate-config.py` 直接执行会失败（虽常规路径经 `sys.executable` 调用，无功能影响）。**建议**：收窄该测试扫描（跳过 shebang/注释行）并恢复 `python3`，避免测试倒逼脚本偏离惯例。
+
+### [INFORMATIONAL-4] DESIGN_GAP ④（默认注入使 schema `required` 不可达）— 独立复现，确认非阻断
+实测：仅 `schema_version: 1`（缺 required 的 `project`）→ validate **rc=0**；空映射文件（0 字节 → `safe_load` 返回 `None`）→ 走 `present=False` → rc=1。即顶层 `required`（`schema_version`/`project`）在「先注入默认值再校验」的 effective-config 模型下**永不触发**。与 round 3 判定一致（DESIGN_GAP 交 P7）。**建议 P7 明确裁决**：或从 schema 移除 `required`（与 effective 语义对齐），或让 validate 针对「用户实际声明的键集合」判 required（需 `read_project_config` 额外暴露声明键集）。
+
+### [INFORMATIONAL-5] `read_project_config` 把元数据（`present`/`parse_error`）混入数据 dict
+消费方须自行用 `_public_config` 剥除内部键；后续消费方（batch3+）若忘记剥除，会把 `present` 误当声明字段。**建议**：返回 `(config, present)` 或专用结果对象，或至少在 P2/文档固化「消费方必须剥除内部键」的约定。非阻断。
+
+### [INFORMATIONAL-6] `_load_schema()` 无缺失/损坏守卫
+`agate-config.py:98-101` 直接 `open` + `json.load` schema；schema 缺失或非法 JSON → 未捕获异常。schema 是随协议发布的固定产物，风险低；与「唯一读取函数」的优雅风格不一致。**建议**：捕获并给出明确报错（非阻断）。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| batch2 红→绿 | `pytest test_agate_config test_config_schema test_agate_scripts_encoding -q` | **24 passed** |
+| 关联回归（5 文件） | `pytest test_check_gate test_install_hook test_agate_common test_agate_config test_config_schema -q` | **277 passed** |
+| ruff | `ruff check agate/` | `All checks passed!` |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 401 WARNING**（冻结面） |
+| 用例数 | `count-tests.sh` | **2687**（未漂移） |
+| 平台扫描（改动文件） | `check-platform-assumptions.py <6 脚本 + 1 测试>` | 仅 5 条 R2 **存量行**（`agate_common:332`/`install-hook:257`/`agate-setup:157,848,945`）；`git diff` 新增行含 `python3` **0 命中** |
+| C1 复现（非法 YAML） | `printf 'not: [a mapping\n' > agate.config.yaml && agate-config.py validate` | **Traceback + `yaml.parser.ParserError`**（契约应为 present=False + parse_error） |
+| gate_p0 cwd 依赖 | 从有/无合法声明的目录各跑一次 `check-gate.py P0 <task>` | WARNING 出现与否**随 cwd 翻转**（INFORMATIONAL-1 实证） |
+| DESIGN_GAP ④ | `validate`（仅 schema_version / 空文件） | 仅 schema_version → rc=0；空文件 → rc=1（确认 required 不可达） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与 CLI 探针。C1 复现与 DESIGN_GAP ④ 探针全部在 `/tmp/opencode/cfgprobe/` 下以自建 `agate.config.yaml` 运行，**未在仓库内写入/修改任何文件**；pytest 经 `tmp_path`/`git_repo` 夹具隔离；未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 3（复审）：batch2-agate-config C1 闭合
+
+> 复审对象：round 2 判定的唯一 CRITICAL = **C1**（`read_project_config` 漏捕 `yaml.YAMLError`）。
+> 修复面：`agate/scripts/agate_common.py::read_project_config()`（`:871`）+ 新增测试
+> `agate/tests/unit/test_config_schema.py::test_bdd_6_read_project_config_malformed_yaml_is_graceful`。
+> 依据：`P4-dispatch-context-review-batch2-rereview.md`；只复核 C1 闭合与回归，不重开其它面。
+
+## 结论
+
+**status: approved**。**C1 已闭合**，无剩余 CRITICAL/BLOCKER。round 2 的 6 条 INFORMATIONAL **仍为非阻断**（按派发指引不在本轮修，留 P7/P8 或后续批次）。
+
+## C1 闭合核验（独立实跑）
+
+1. **代码**：`agate_common.py:871` 已改为 `except (OSError, ValueError, yaml.YAMLError) as exc`，并附注释说明 `yaml.YAMLError`（`ParserError`/`ScannerError`/`ComposerError`）不继承 `ValueError`/`OSError`。`yaml` 在 `agate_common` 顶部 import（失败即 `sys.exit(1)`），无需额外守卫——修复正确、无副作用。
+2. **进程内**（本次评审自建非法 YAML 复跑）：`read_project_config(<dir with 'not: [a mapping\n'>)` → **不再抛异常**，返回 `present=False` 且 `parse_error` 非空（与 docstring 契约一致）。
+3. **CLI**：`agate-config.py validate` 对非法 YAML → **rc=1，输出干净报错、`Traceback` 计数 = 0**（修复前为完整 traceback）。
+4. **新增测试**：`test_bdd_6_read_project_config_malformed_yaml_is_graceful` **1 passed**（断言不抛 + `present is False` + `parse_error` 非空）——C1 契约已由红灯测试锁定。
+5. **无新回归**：`test_agate_common.py` + `test_agate_config.py` + `test_config_schema.py` + `test_agate_scripts_encoding.py` → **52 passed**；`test_check_gate.py` + `test_install_hook.py` + `test_agate_common.py` → **255 passed**；`ruff check` 两改动文件 → `All checks passed!`。
+6. **用例数**：`count-tests.sh` → **2688**（较上轮 2687 +1 = C1 回归测试，符合预期）。
+
+## 验证清单
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| C1 回归测试 | `pytest test_config_schema.py::test_bdd_6_read_project_config_malformed_yaml_is_graceful -q` | **1 passed** |
+| 进程内不抛 | 自建非法 YAML 调 `read_project_config` | `present=False` + `parse_error` 非空，**无异常** |
+| CLI 无 traceback | `agate-config.py validate`（非法 YAML） | rc=1，`Traceback` 计数 **0** |
+| 关联回归（4 文件） | `pytest test_agate_common test_agate_config test_config_schema test_agate_scripts_encoding -q` | **52 passed** |
+| 关联回归（3 文件） | `pytest test_check_gate test_install_hook test_agate_common -q` | **255 passed** |
+| ruff | `ruff check agate_common.py test_config_schema.py` | `All checks passed!` |
+| 用例数 | `count-tests.sh` | **2688**（+1） |
+
+## [PROD_NOT_TOUCHED]
+
+本轮复核**只读**改动集并运行**只读/隔离**测试与 CLI 探针。非法 YAML 探针在 `/tmp/opencode/c1probe/` 下自建 `agate.config.yaml` 运行（探针文件已清理），**未在仓库内写入/修改任何文件**；pytest 经 `tmp_path` 夹具隔离；未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。

@@ -6,6 +6,11 @@ change_summary: >-
   （去掉 _advance 的 state["phase"]=target 预写 + _write_state 落盘 + git add，删除孤儿 _write_state/_git，
   保留 state_transition 事件，改输出「下一阶段建议」）；同步 P2/P8 卡片表述与 UPGRADING v0.79.0 节；
   同步既有 test_tag0027_b1_agate_next_cli.py 的 3 处「推进后 phase」断言。
+  【round 3 / 批 2（batch2-agate-config）】引入项目声明层：新增 agate/scripts/agate-config.py
+  （init/validate/get/list/show）+ agate/rules/schema/project-config.schema.json；agate_common 新增
+  唯一读取函数 read_project_config()；check-gate.py::gate_p0 接入 validate 但迁移期恒 return 2 + WARNING；
+  install-hook.py/agate-setup.py 接入时自动 init 声明（幂等）；UPGRADING 批 2 小节（截止 v0.80.0）+ 
+  scripts/README + CODE-MAP + 两测试文件缺陷修正。
 files_changed:
   - agate/scripts/agate-next.py
   - agate/phase-cards/P2-design.md
@@ -18,13 +23,24 @@ files_changed:
   - agate/CONTEXT.md
   - agate/loop-orchestration.md
   - agate/orchestrator-template.md
+  # round 3 / 批 2（batch2-agate-config）
+  - agate/scripts/agate-config.py
+  - agate/rules/schema/project-config.schema.json
+  - agate/scripts/agate_common.py
+  - agate/scripts/check-gate.py
+  - agate/scripts/install-hook.py
+  - agate/scripts/agate-setup.py
+  - agate/scripts/README.md
+  - agate-workspace/agents/CODE-MAP.md
+  - agate/tests/unit/test_agate_config.py
+  - agate/tests/unit/test_config_schema.py
 review_scope: >-
   TAG0042 批 1 的 agate/** 未 commit 改动（SELF-GATE 语义 gate，agent≠main）。
   变更触发模式：意图分析 → 反向传播 → 变更文件全文 + 反向传播文件 + 权威规则源（state-machine.md /
   dispatch-protocol.md / WORKFLOW.md）→ A1-A8。单轮审查。
 prod_isolation: "[PROD_NOT_TOUCHED] —— 仅读取仓库 + 写 /tmp 留痕/日志 + 本报告；未触碰被评审改动集、主 checkout 与 ~/.agate。"
 conclusion: aligned
-review_rounds: 2
+review_rounds: 3
 round1_conclusion: >-
   批 1 首审：misaligned。A1/A2/A3b/A5.3 同一根因 = 反向传播漏改 5 处权威文档——它们仍描述旧行为
   「agate-next 更新 .state.yaml phase + git add」（state-machine.md:326-331 / dispatch-protocol.md:291-292 /
@@ -51,6 +67,24 @@ round2_conclusion: >-
   CHECK2-refs 无来自 5 文档的新命中 / CHECK14-15 PASS；consistency 0 ERROR；count-tests 2687 未漂移；
   batch1 相关 4 测试文件 99 passed、doc 关联 7 文件 142 passed。
   首轮附注（UPGRADING T085 归因措辞侧重）仍为非阻塞观察项，留 P7/P8 留意，不阻塞 commit。
+round3_conclusion: >-
+  TAG0042 批 2（batch2-agate-config）增量复审（round 3）：aligned。变更面为声明层——新增
+  agate-config.py + project-config.schema.json；agate_common 唯一读取函数 read_project_config()；
+  check-gate.py::gate_p0 接 validate 但迁移期恒 return 2 + WARNING；install-hook/agate-setup 自动 init
+  （幂等）。A1/A2 ALIGNED：gate_p0 恒 return 2 与 UPGRADING「迁移期行为与引入前一致 + WARNING」同口径；
+  唯一读取函数有 docstring/README 声明，无第二处声明解析。A3b/A5 ALIGNED：新「声明文件」概念无需传播到
+  state-machine/dispatch-protocol/WORKFLOW/phase-cards/角色文件（grep 0 命中）；UPGRADING v0.79.0 节
+  自洽（批1+batch2 同节 + 截止 v0.80.0）。A6 ALIGNED：agate-config.py（agate-*.py）不在 CHECK9-coverage/
+  SG.6 门禁 glob（实测 SG.6 1 passed，uncovered 为空）；新 schema 被 CHECK15 数据面扫描 + test_config_schema
+  同构测试覆盖。A4 ALIGNED：batch2 三文件 24 passed、+3 回归文件 279 passed、count-tests 2687 未漂移。
+  A7 ALIGNED（落地 ADR-003 不绑定技术栈 + ADR-014 判据单源）。A8 声称均可复核。consistency 0 ERROR /
+  401 WARNING（CHECK9 PASS，CHECK10 WARN1 为 pre-existing，CHECK14/15 PASS）。
+  4 条 [DESIGN_GAP] 判定：全部归 DESIGN_GAP（交 P7），0 条 MISALIGNED——#1（P2 §4.1 正文 vs N2/P3 矛盾）
+  P2 自相矛盾且实现随 N2+P3+UPGRADING（非 agate/ 协议文档矛盾）；#2/#3 为 P2 未指定的设计选择；
+  #4（默认注入使 schema required 不触发，实测仅 schema_version/{} → validate rc0）在 effective-config
+  模型下自洽（required 被默认满足、非违反），但有语义影响，建议 P7 裁决 required 去留。
+  非阻塞观察：SETUP.md/scripts-README(install-hook 行)/CONTEXT 未提及自动 init 声明（完备性缺口，非矛盾）。
+  NEEDS_HUMAN_REVIEW 0 条。
 ---
 
 # 协议-脚本对齐审查 — TAG0042 批 1（batch1-phase-semantics）
@@ -353,3 +387,147 @@ FAILED agate/tests/unit/test_agate_scripts_encoding.py::test_bdd_5_all_test_py_t
 > 遗留（非阻塞，非 MISALIGNED）：首轮 A8 备注——`UPGRADING.md:294` 对 T085 `--no-verify` 的归因侧重（「预写 phase vs pre-commit 校验」vs 复盘自述「pre-commit hook 超时」）措辞不同但方向一致，交由 P7/P8 留意，不阻塞本批 commit。
 
 **round 2 结论：ALIGNED（可 commit）。**
+
+---
+
+## round 3 复审（batch2 增量）（2026-10-06）
+
+> 复审范围：TAG0042 批 2（`batch2-agate-config`，声明层）的 agate 协议/脚本未 commit 改动（HEAD `48091f2`，batch1 已落）。
+> 触发模式：SELF-GATE「变更触发模式」A1-A8。
+> 变更文件：新增 `agate/scripts/agate-config.py`、`agate/rules/schema/project-config.schema.json`；改 `agate/scripts/agate_common.py`（`read_project_config`）、`check-gate.py::gate_p0`（恒 return 2）、`install-hook.py`/`agate-setup.py`（自动 init）、`agate/UPGRADING.md`、`agate/scripts/README.md`、`agate-workspace/agents/CODE-MAP.md`、`test_agate_config.py`/`test_config_schema.py`（测试缺陷修正）。
+
+### 复审结论汇总
+
+| # | 审查项 | 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** |
+| A2 | 脚本→文档对齐 | **ALIGNED** |
+| A3 | 一致性连锁 + 反向传播 | A3a **ALIGNED** / A3b **ALIGNED** |
+| A4 | 测试覆盖 | **ALIGNED** |
+| A5 | 下游影响 + 文档传播 | A5.1 **ALIGNED** / A5.2 **ALIGNED**（待 P8）/ A5.3 **ALIGNED** |
+| A6 | 锚点表覆盖 | **ALIGNED** |
+| A7 | 设计原则一致性 | **ALIGNED** |
+| A8 | 声称-命令绑定 | 逐条列出（见 A8；无无据声称） |
+
+**总结论：aligned**。MISALIGNED 0 条、NEEDS_HUMAN_REVIEW 0 条。4 条 `[DESIGN_GAP]` 全部归 **DESIGN_GAP（交 P7）**（见末节），无一条构成 `agate/` 协议文档↔脚本矛盾。变更行为已在权威迁移文档（UPGRADING）+ 新工具文档（scripts/README + CODE-MAP）落地。
+
+### A1: 文档→脚本对齐 — ALIGNED
+
+- **`gate_p0` 恒 return 2 口径**：脚本（`check-gate.py:631-652`）调 `agate-config validate` 子进程，`validate_rc` **只决定是否打印 WARNING**（`agate-config.py` 缺失时视为 0，不误报），随后**恒 `return 2`**。与 `UPGRADING.md:302-304`「迁移期行为与引入前一致：没有 `agate.config.yaml` 的存量项目，`gate_p0` 仍返回通过码（exit 2），只输出显眼 WARNING，不 exit 1」**逐字一致**。`agate-config.py:8-13` 退出码语义（0=成功/非 0=失败）与 `scripts/README.md:156` 同口径。
+- **唯一读取函数防第二处解析**：`agate_common.py:851 read_project_config` 是唯一读取路径，docstring（`:832-836`）+ `agate-config.py:15-16` + `scripts/README.md:156` 均声明「声明解析只经 `agate_common.read_project_config`」。`grep read_project_config agate/`（非测试）→ 仅 `agate_common.py`（定义）+ `agate-config.py`（4 处调用）+ README。`agate-config.py` 对项目声明**无旁路 `yaml.safe_load`**（`yaml` 仅用于 `show` 的 `safe_dump`）；`gate_p0`/`install-hook` 经子进程调 `agate-config`，不自行解析。
+- **schema 语义**：`project-config.schema.json` 的字段（`schema_version`/`project`/`verify.commands`/`release.preset`/`paths.evidence`）与 `agate-config.py` 的 `_INIT_TEMPLATE`、`read_project_config` 的 `PROJECT_CONFIG_DEFAULTS` 一致；`validate` 实测对非法 enum / 未知字段返回非 0 并指出字段名（见 A8）。
+
+**结论**：ALIGNED。
+
+### A2: 脚本→文档对齐 — ALIGNED
+
+| 脚本行为 | 文档对应 | 判定 |
+|---|---|---|
+| `gate_p0` 调 validate、rc 只控 WARNING、恒 return 2 | `UPGRADING.md:302-304` | ALIGNED |
+| `read_project_config`（唯一读取，缺失→`present=False` 不抛） | `agate_common.py:832-890` docstring + README | ALIGNED |
+| `agate-config` 五子命令 + 退出码 | `scripts/README.md:156` + 脚本 docstring | ALIGNED |
+| `install-hook`/`agate-setup` 自动 init（幂等） | `UPGRADING.md:300-301`（`agate-setup`/`install-hook` 接入时自动生成，幂等不覆盖） | ALIGNED |
+| 新增 schema | `scripts/README.md`（validate schema 校验）+ P2 §1.1 M5 | ALIGNED |
+| `install-hook` 新增 `_init_declaration` 行为 | `scripts/README.md:111`（install-hook 行）**未提**自动 init | 观察（见 A5，非矛盾） |
+
+**结论**：ALIGNED。
+
+### A3: 一致性连锁 + 反向传播 — A3a ALIGNED / A3b ALIGNED
+
+#### A3a（连锁：已知衍生改动）— ALIGNED
+
+- **孤儿/重复实现**：无。`agate-config.py` 未复制声明模板（`install-hook` 经子进程调 `agate-config init`，模板单一实现在 `agate-config.py:_INIT_TEMPLATE`）；`agate_common` 的默认值单一实现，`agate-config.py` 仅做内部键过滤（`_INTERNAL_KEYS`）。
+- **测试同步**：`test_config_schema.py:235` docstring 措辞修正（避编码守卫 `test_agate_scripts_encoding` 误判）、`test_agate_config.py:25` 删未用 `import os`（避 ruff F401）——均不改断言语义。
+- **subprocess 隔离**：`install-hook._init_declaration` 用 `sys.executable` + 同目录脚本；`agate-config.py` 缺失时只提示不阻断（fake 安装根测试场景）。
+
+#### A3b（反向传播：应被本批影响但未在 diff 中的文件）— ALIGNED
+
+新引入的「项目声明」概念是否需要传播到权威流程文档？逐一核查：
+
+| 应被影响候选 | 影响到了没 | 判定 |
+|---|---|---|
+| `agate/state-machine.md` | 无需改 —— 描述阶段转移机制，不涉及项目接入/声明；`grep agate.config\|声明文件\|声明层` → 0 命中，无 stale 旧行为声明 | ALIGNED |
+| `agate/dispatch-protocol.md` | 无需改 —— 同上（0 命中） | ALIGNED |
+| `agate/WORKFLOW.md` | 无需改 —— 「Pre-commit 检查总览」表未枚举 `gate_p0` 内部行为；gate_p0 的触发条件（phase 变更）未变 | ALIGNED |
+| `agate/role-system.md` / `orchestrator-template.md` | 无需改 —— 0 命中 | ALIGNED |
+| `agate/phase-cards/P0-orchestrator.md` 及其余卡片 | 无需改 —— P0 卡描述「主 Agent 亲自写 P0-brief」，不含 `gate_p0` 返回值声明 | ALIGNED |
+| `agate/assets/execution-roles/*` / `review-roles/*` | 无需改 —— 0 命中 | ALIGNED |
+| `agate/UPGRADING.md` 截止版本自洽 | **已改** —— 批 2 小节在 `### v0.79.0` 节内（与批 1 同节），截止版本 v0.80.0（下一 minor），表述自洽 | ALIGNED |
+| `agate/scripts/README.md`（工具索引） | **已改** —— 补 `agate-config.py` 行 | ALIGNED |
+| `agate-workspace/agents/CODE-MAP.md` | **已改** —— 补「项目声明族」 | ALIGNED |
+
+**结论**：A3b ALIGNED（派发指引点名的 5 类文件均无需传播；无反向传播遗漏）。
+
+### A4: 测试覆盖 — ALIGNED
+
+- **批 2 相关测试全绿（实跑）**：`python3 -m pytest agate/tests/unit/test_agate_config.py agate/tests/unit/test_config_schema.py agate/tests/unit/test_agate_scripts_encoding.py -q` → **24 passed**（与 `P4-implementation-batch2.md:116` 自报吻合）。
+- **关联回归（实跑）**：上述 3 文件 + `test_check_gate.py` + `test_install_hook.py` + `test_agate_common.py` → **279 passed**。
+- **边界覆盖**：BDD-5（schema 同构 / 非法 enum / 未知字段 / 合法声明）、BDD-6（唯一读取函数存在 / 声明值回读 / 两处取值同源 / 无第二处解析）、BDD-7（install-hook 自动 init / 幂等 / setup 接入点）、BDD-8（gate_p0 缺失声明仍 rc=2 + WARNING / UPGRADING 截止版本）、BDD-3/4/20（声明驱动、子命令退出码、非单项目硬编码）均有直接断言。schema 的**同构**由 `test_bdd_5_schema_file_exists_and_is_isomorphic` 机械守护。
+- **用例总数**：`count-tests.sh` → **2687**（未漂移）。
+
+**结论**：ALIGNED。
+
+### A5: 下游影响 + 文档传播 — A5.1 ALIGNED / A5.2 ALIGNED（待 P8）/ A5.3 ALIGNED
+
+- **A5.1 破坏性变更 / 向后兼容 — ALIGNED**：迁移期 `gate_p0` 恒 return 2（行为与引入前一致），无声明的存量项目不受影响；`.state.yaml` schema / 字段集未动（`git diff` 不含 `agate/rules/schema/{phases,dispatch,roles,markers}.schema.json`，仅**新增** `project-config.schema.json`，符合 P2 §1.2 N6）。截止版本 v0.80.0 已在 UPGRADING 明示。
+- **A5.2 CHANGELOG — ALIGNED（待 P8，非 MISALIGNED）**：本批是协议行为变更，但 `check-changelog.py` 仅 P8 触发；`CHANGELOG.md` 待 P8 统一补（同 batch1 判据）。
+- **A5.3 文档传播 — ALIGNED**：本批应传播的文档 = `UPGRADING.md`（已改，批 2 小节）+ `scripts/README.md`（已改）+ `CODE-MAP.md`（已改）。派发指引点名的 state-machine/dispatch-protocol/WORKFLOW/卡片/角色文件**均无需改**（A3b 已逐条验证）。
+  - **非阻塞观察（完备性缺口，非 MISALIGNED）**：`agate/SETUP.md`「它做的事」表、`agate/scripts/README.md` 的 `install-hook.py`/`agate-setup.py` 行、`agate/CONTEXT.md` 术语表**未提及**接入时自动生成声明。三处均为**遗漏而非矛盾**（行为已在 `UPGRADING.md` 记载），建议后续批次补记；不阻塞本批 commit。
+
+**结论**：合计 ALIGNED。
+
+### A6: 锚点表覆盖 — ALIGNED
+
+- **`agate-config.py` 不在门禁面**：`check-protocol-consistency.py:uncovered_gate_scripts()` 的 glob = `check-*.py` + `pre-commit-gate.{sh,py}` + `ci-gate-backstop.py`；`agate-config.py` 是 `agate-*.py` → 不触发 CHECK9-coverage / SG.6。**实测**：`pytest .../test_protocol_alignment_review.py -k sg_6` → **1 passed**；consistency `CHECK 9 ✅ PASS`，无 `CHECK9-coverage`。
+- **新 schema 是否被 CHECK 覆盖**：`project-config.schema.json` 位于 `rules/schema/*.json` → **被 CHECK 15（数据面平台名扫描）覆盖**（`check-protocol-consistency.py:1378-1380` glob 含 `schema/*.json`），CHECK 15 ✅ PASS；`test_bdd_5_schema_file_exists_and_is_isomorphic` 机械守护其与既有 4 schema 同构。
+  - **非阻塞观察**：P2 §1.4 称新 schema 由 `check-yaml-schema.py`/`check-structure-consistency.py`（S-5）覆盖——实测 `check-yaml-schema.py` 仅校验**硬编码的 4 对** `rules/{phases,dispatch,roles,markers}.yaml↔schema`，新 schema 不在其列（它校验的是 `agate.config.yaml` 而非 `rules/*.yaml`，故本不应入 S-5 对列表）。**R5 schema 自身健全性自检未覆盖新 schema**（仅 CHECK15 扫描 + 同构测试）。P2 该句表述不精确，属任务设计文档措辞，非 `agate/` 协议文档矛盾 → 观察，建议 P7 留意。
+- **无需更新锚点表**：本批未新增/改名 `check-*.py`。
+
+**结论**：ALIGNED。
+
+### A7: 设计原则一致性 — ALIGNED
+
+- **ADR-003（最小约定——不绑定技术栈）**：本批是 ADR-003 的**直接落地**——项目形态（语言/包管理器/验证命令/发版方式）由项目自带 `agate.config.yaml` 声明，协议不硬编码技术栈（`read_project_config` 函数体无 `agateon`/`peekview`/`pytest` token，`agate-config.py` 无 `python3` 硬编码 token）。**一致**。
+- **ADR-014（判据单一权威源）**：「唯一读取函数」`read_project_config` 是声明解析的单源，等价守护测试（两处取值同源 + 无第二处解析）防漂移。**一致**。
+- **ADR-002（可判定性）**：gate_p0 恒 return 2、validate 退出码为可判定信号；声明缺失迁移期只 WARNING（可观测、不阻断）。**一致**。
+- **ADR-001（隔离性）**：声明由项目自述，主 Agent/脚本不写死项目形态。**一致**。
+- **是否存在未记录的新架构决策？** 「项目形态声明化 + 唯一读取函数」是 ADR-003 + ADR-014 的既有原则在新层的应用，**不引入新架构决策** → 无需新增 ADR。
+
+**结论**：ALIGNED。
+
+### A8: 声称-命令绑定
+
+| 声称 | 产出命令 | 结论 |
+|---|---|---|
+| `gate_p0` 恒 return 2（UPGRADING:303-304 / P4-impl） | 读 `check-gate.py:631-652`（恒 `return 2`）；`pytest test_agate_config.py::test_bdd_8_*` | ✅ 成立 |
+| 迁移期只 WARNING（UPGRADING:302-304） | `test_bdd_8_gate_p0_missing_declaration_emits_warning` + 实测子进程输出含 `WARNING` + 文件名 | ✅ 成立 |
+| 唯一读取函数、无第二处解析（README:156 / P4-impl） | `grep read_project_config agate/`（非测试仅 common+config）；`test_bdd_6_no_second_independent_yaml_parser_in_config` | ✅ 成立 |
+| 截止版本 v0.80.0（UPGRADING:305-307） | `grep -n "v0.80.0" agate/UPGRADING.md` | ✅ 成立 |
+| batch2 红→绿 `24 passed`（P4-impl:116） | `pytest test_agate_config.py test_config_schema.py test_agate_scripts_encoding.py -q` → 24 passed | ✅ 成立 |
+| consistency `0 ERROR / 401 WARNING`（P4-impl:118） | `check-protocol-consistency.py --strict-errors-only` → 0 ERROR / 401 WARNING | ✅ 0 ERROR 成立（401 为冻结文件面） |
+| count-tests `2687`（P4-impl:119） | `count-tests.sh` → 2687 | ✅ 成立 |
+| ruff `All checks passed`（P4-impl:120） | `~/.venvs/agate-dev/bin/ruff check agate/` | ✅ 成立 |
+| 平台扫描「新增行 0 命中」（P4-impl:121） | `check-platform-assumptions.py <改动文件>` → R2 命中均为存量行（`agate_common.py:332`/`install-hook.py:257`/`agate-setup.py:157,848,945`），非本批新增行 | ✅ 成立 |
+
+无「无法给出命令」的无据声称。
+
+### [DESIGN_GAP] 逐条判定（4 条）
+
+| # | DESIGN_GAP | 判定 | 依据 |
+|---|---|---|---|
+| ① | P2 §4.1 正文「validate 缺失返回 0」vs N2 伪代码 / TC-B8 矛盾 | **DESIGN_GAP（交 P7）** | P2 **自相矛盾**（§4.1 正文 vs 同节 N2）；实现随 N2 + P3（`test_bdd_8_*` 要求 WARNING）+ `UPGRADING.md:302-304`——三者互相一致。P2 正文为离群句，属任务设计文档需订正（建议 P7 或 P2 baseline change），**非 `agate/` 协议文档↔脚本矛盾**，不判 MISALIGNED |
+| ② | 脚本内 draft-07 子集校验器（不引入 jsonschema / 未复用 check-yaml-schema.py） | **DESIGN_GAP（交 P7）** | P2 未指定实现方式；无协议文档强制复用 `check-yaml-schema.py`（后者为 `check-*.py` 且带 `if __name__` 侧效应）。设计选择，语义自洽 |
+| ③ | install-hook 经子进程调 `agate-config init`（非内联模板） | **DESIGN_GAP（交 P7）** | P2 §1.1 M7 未指定路径；子进程方案保持声明模板单一实现，契合 BDD-6 单源精神。设计选择 |
+| ④ | `read_project_config` 默认注入使 schema `required` 不触发 | **DESIGN_GAP（交 P7）** | 实测：仅 `schema_version`（缺 required `project`）→ validate rc=0；`{}` → rc=0。在 **effective-config 模型**下自洽（validate 校验的是已注入默认值的 dict，`required` 被默认**满足**、非违反），故**非** `agate/` 协议文档↔脚本矛盾。但有**语义影响**（schema `required` 形同虚设）——建议 P7 明确裁决：或从 schema 去掉 `required`，或让 validate 对「用户声明的键集合」判 required |
+
+**判定合计**：4 条**全部 DESIGN_GAP（交 P7）**；**MISALIGNED 0 条**。按角色原则 6——4 条均不对应「`agate/` 协议文档↔脚本不一致」（① 是 P2 内部矛盾，②③ 是 P2 未指定的设计选择，④ 在 effective-config 模型下自洽），故不适用「无 P7 记录即按 MISALIGNED」的触发条件；P7 需逐条转抄 `DESIGN_GAP_REVIEWED`。
+
+### round 3 闭环规则表
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| **ALIGNED** | A1/A2/A3a/A3b/A4/A5.1/A5.2/A5.3/A6/A7/A8 | 通过，**可 commit**。 |
+| **DESIGN_GAP（交 P7）** | 4 条（见上表） | P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`；其中 ④ 建议明确 schema `required` 去留。 |
+| **观察（非阻塞）** | SETUP.md / scripts-README(install-hook 行) / CONTEXT 未提自动 init；P2 §1.4 对新 schema 的 S-5 覆盖表述不精确 | 建议后续补记，不阻塞。 |
+
+**round 3 结论：ALIGNED（可 commit）。**

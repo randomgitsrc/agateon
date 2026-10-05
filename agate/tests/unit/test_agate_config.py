@@ -22,7 +22,6 @@
 #   不写仓库内已提交文件（全在 tmp_path/git_repo）。
 
 import importlib.util
-import os
 import re
 
 import pytest

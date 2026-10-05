@@ -1,0 +1,7 @@
+command: python3 -m pytest agate/tests/unit/test_agate_config.py agate/tests/unit/test_config_schema.py -q
+exit_code: 0
+git_head: 48091f20f302b110cb9256646fdb12b2ce24115a
+timestamp: 2026-10-06T05:16:28+08:00
+expected_red: []
+failed_tests: []
+duration_seconds: 1

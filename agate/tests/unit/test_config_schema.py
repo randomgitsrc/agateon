@@ -202,6 +202,30 @@ def test_bdd_6_read_project_config_returns_declared_values(tmp_path, agate_scrip
     )
 
 
+def test_bdd_6_read_project_config_malformed_yaml_is_graceful(tmp_path, agate_scripts):
+    """BDD-6（C8 C1 回归）：文件存在但 YAML **非法** → `read_project_config` 优雅返回，不抛异常。
+
+    Given 项目根 `agate.config.yaml` 含语法非法 YAML（flow sequence 未闭合）
+    When 经唯一读取函数 read_project_config 读取
+    Then **不抛异常**，`present is False`，`parse_error` 非空（与 docstring 契约一致）。
+
+    回归背景（C8 review C1）：`yaml.safe_load` 对非法 YAML 抛 `yaml.YAMLError`（如
+    `ParserError`），其**不继承** `ValueError`/`OSError`；修复前 `except (OSError, ValueError)`
+    漏捕 → 抛未捕获 traceback。本用例锁定「优雅返回」契约。
+    """
+    common = _load_common(agate_scripts)
+    # 非法 YAML：flow sequence 未闭合（safe_load 抛 ParserError）。
+    _write_config_raw(tmp_path, "not: [a mapping\n")
+    cfg = common.read_project_config(str(tmp_path))  # 不得抛异常
+    assert isinstance(cfg, dict), "BDD-6：非法 YAML 仍应返回 dict（优雅降级）"
+    assert cfg.get("present") is False, (
+        f"BDD-6：非法 YAML 应 present=False；实际 {cfg.get('present')!r}"
+    )
+    assert cfg.get("parse_error"), (
+        "BDD-6：非法 YAML 应给出非空 parse_error 说明；当前为空"
+    )
+
+
 def test_bdd_6_two_readers_agree_single_source(tmp_path, agate_scripts, python_exe, run_cli):
     """BDD-6（等价守护）：`agate-config get` 与 `read_project_config` **两处取值同源**。
 
@@ -232,8 +256,8 @@ def test_bdd_6_two_readers_agree_single_source(tmp_path, agate_scripts, python_e
 def test_bdd_6_no_second_independent_yaml_parser_in_config(agate_scripts):
     """BDD-6：`agate-config.py` 不得含**第二个独立 YAML 解析实现**（须复用唯一读取函数）。
 
-    判据：若脚本内直接 `yaml.safe_load(open(<声明文件>))` 类旁路解析，而非委托
-    `agate_common.read_project_config`，即出现「第二处解析实现」⇒ 违反声明单源。
+    判据：若脚本内直接对声明文件做旁路 `yaml.safe_load` 解析（而非委托
+    `agate_common.read_project_config`），即出现「第二处解析实现」⇒ 违反声明单源。
 
     现行为：脚本不存在 ⇒ 红灯（模块未实现）。
     """
