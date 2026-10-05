@@ -4,8 +4,10 @@
 # 仅做静态契约（yaml.safe_load + 文本），不联网、不推 tag；BDD-20 的真实 CI 实跑属 P5/P6，actionlint 属 P5 降级路径，不在 P3 写。
 # 注意：PyYAML 把键 `on` 解析成布尔 True——一律用 doc.get(True, doc.get("on"))。
 
+import os
 import re
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -138,6 +140,101 @@ def test_d15_build_step_pins_source_pyyaml_and_expected_sha():
     assert re.search(r"git clone[^\n]*--depth 1[^\n]*--branch\s+\"?\$TAG\"?[^\n]* -- ", runs)
     envs = [j.get("env", {}) for j in doc["jobs"].values()]
     assert any("TAG" in e for e in envs), "TAG 应经 job 级 env 传入"
+
+
+def _tag_verify_step(doc):
+    hits = [s for s in _steps(doc) if "Verify tag points to matching commit" in str(s.get("name", ""))]
+    assert len(hits) == 1, f"应恰有 1 个「Verify tag points to matching commit」步骤，实际 {len(hits)}"
+    return hits[0]
+
+
+def test_s6_tag_verify_step_shape():
+    """§6 / TAG0042 批0 评审 m-a：新 tag 指向校验步骤的静态契约。
+
+    该步骤是「tag 打到无关提交」的**唯一机械防线**，必须有测试锁定其存在与判据形态
+    （否则未来编辑可静默删除它）。
+    """
+    doc, _ = _load()
+    step = _tag_verify_step(doc)
+    run = str(step["run"])
+    # 判据要素：取 tag 版本号（去 v 前缀）、抽 README badge 版本、两者相等性、CHANGELOG 版本节非空
+    assert "TAG#v" in run, "须从 TAG 去掉 v 前缀得到期望版本"
+    assert "badge/version-v" in run, "须从 README 抽 badge 版本"
+    assert "CHANGELOG" in run, "须校验 CHANGELOG 版本节"
+    # fail-closed：两处不符都必须 exit 1（不得只打 warning）
+    assert run.count("exit 1") >= 2, "badge 缺失 / 不符 / CHANGELOG 空都须显式 exit 1"
+    # 该步骤内联 python 校验 CHANGELOG 段落非空
+    assert "版本节正文为空" in run or "版本节" in run
+    assert step.get("working-directory") == "src", "须在 clone 出的源码树内判定"
+
+
+def _run_tag_verify(tmp_path, run_script, tag, readme, changelog, python_exe):
+    """在 tmp 目录内执行 release.yml 的 tag 校验脚本（真实 shell + python），返回 CompletedProcess。"""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "README.md").write_text(readme, encoding="utf-8")
+    (src / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
+    env = dict(os.environ)
+    env["TAG"] = tag
+    # 脚本内用裸 `python3`；用 PATH 前置真实解释器目录的 python3 包装保证可移植
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    wrapper = shim / "python3"
+    wrapper.write_text(f'#!/bin/sh\nexec "{python_exe}" "$@"\n', encoding="utf-8")
+    wrapper.chmod(0o755)
+    env["PATH"] = str(shim) + os.pathsep + env.get("PATH", "")
+    return subprocess.run(
+        ["bash", "-c", run_script],
+        cwd=str(src), env=env, capture_output=True, text=True, timeout=60,
+    )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="依赖 POSIX bash（仅 ubuntu 的 release note 场景）")
+@pytest.mark.parametrize(
+    "tag,readme,changelog,expect_rc,label",
+    [
+        # 正常：tag 与提交内 badge 一致，CHANGELOG 版本节有正文 ⇒ 通过
+        ("v1.2.3",
+         "![version](https://img.shields.io/badge/version-v1.2.3-blue)\n",
+         "# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2026-10-05\n\n### Fixed\n\n- real body\n",
+         0, "match"),
+        # tag 打到 badge 是旧版本的提交（正是 §6 要拦的场景）⇒ exit 1
+        ("v1.2.3",
+         "![version](https://img.shields.io/badge/version-v1.0.0-blue)\n",
+         "# Changelog\n\n## [1.2.3] - 2026-10-05\n\n- body\n",
+         1, "tag-points-at-wrong-commit"),
+        # README 无 badge ⇒ exit 1
+        ("v1.2.3",
+         "# readme without badge\n",
+         "# Changelog\n\n## [1.2.3] - 2026-10-05\n\n- body\n",
+         1, "no-badge"),
+        # badge 一致但 CHANGELOG 无该版本节 ⇒ exit 1
+        ("v1.2.3",
+         "![version](https://img.shields.io/badge/version-v1.2.3-blue)\n",
+         "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n- old\n",
+         1, "missing-changelog-section"),
+        # badge 一致、版本节存在但正文为空 ⇒ exit 1
+        ("v1.2.3",
+         "![version](https://img.shields.io/badge/version-v1.2.3-blue)\n",
+         "# Changelog\n\n## [1.2.3] - 2026-10-05\n\n## [1.0.0] - 2026-01-01\n\n- old\n",
+         1, "empty-changelog-section"),
+    ],
+)
+def test_s6_tag_verify_step_executes(tmp_path, python_exe, tag, readme, changelog, expect_rc, label):
+    """§6 / 评审 m-a：**实跑** tag 校验步骤内联脚本，逐场景断言结论（positive + 4 负例）。
+
+    仅静态形状不足以证明逻辑正确（评审 I-1 即「静态看着对、实跑漏判」的先例）；
+    这里真跑 shell + 内联 python，覆盖 badge 一致/打错位置/缺 badge/缺节/节空 五种。
+    """
+    doc, _ = _load()
+    run = str(_tag_verify_step(doc)["run"])
+    proc = _run_tag_verify(tmp_path, run, tag, readme, changelog, python_exe)
+    assert proc.returncode == expect_rc, (
+        f"[{label}] 期望 rc={expect_rc} 实得 {proc.returncode}\n"
+        f"stdout={proc.stdout}\nstderr={proc.stderr}"
+    )
+    if expect_rc == 1:
+        assert "::error::" in proc.stdout, f"[{label}] 失败须给出 ::error:: 提示"
 
 
 def test_bdd_13_release_job_shape():

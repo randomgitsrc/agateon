@@ -103,3 +103,20 @@ X4（复用声明改用结构化字段 `p5_evidence_reuse`）、X8（软链 hook
 
 **逐项细节见 `CHANGELOG.md` [0.78.2] 与 `agate/UPGRADING.md` v0.78.2 章节。**
 
+## 9. §6 改动的独立评审整改（v0.78.2 发版后的复核，2026-10-05 → v0.78.3）
+
+v0.78.2 的协议本体 / CI 改动（触发 SELF-GATE）经**独立评审**（`subagent` general，read-only，
+对照 `9223262..50ca02f` 全量 diff 并实跑测试）复核，发现 **2 个 Important**（均已由主 Agent
+复测证实）+ 若干 Minor：
+
+| 项 | 级别 | 问题（复核结论） | 修法 |
+|---|---|---|---|
+| **I-1** | Important | M-2 结构信号**召回不足**却被 CHANGELOG 说成全部闭合：初版只经 `extract_evidence_refs`，而该抽取器先剥反引号、只取整组裸路径括号组 ⇒ 反引号/裸引用逃逸（复测 TAG0016/TAG0020 `signal=False`） | 改**原始 PASS 行正则** `P5-test-results/<file>.<ext>`，两路取并集；4 形态 + 2 判别力反例用例 + 改坏即红 |
+| **I-2** | Important | §6 后 CHECK 7 已 tag 无关，但 5 处权威文档仍写「badge == tag」（含根 `AGENTS.md` squash 规则理由），会误导下次发布者「先推 tag」 | 逐处改述 + squash 规则改由 G-5 支撑；另修 `scripts/README.md`、`P8-release.md` DEBT0013 时序说明 |
+| **m-a** | Minor | §6 新增的 `release.yml` tag 校验步**零测试** | 补静态契约 + **实跑**用例（5 场景） |
+| **m-b** | Minor | 该步 `grep\|head\|grep` 链在 `pipefail` 下无 badge 时**丢失友好错误**（复测 stdout 空、只剩 rc=1） | 改 `sed` 抽取 + 实跑用例锁定 |
+
+**教训**：静态契约通过 ≠ 行为正确——I-1/m-b 都是「静态看着对、实跑才暴露」⇒ m-a 用例做成真跑内联脚本。
+
+**逐项细节见 `CHANGELOG.md` [0.78.3] 与 `agate/UPGRADING.md` v0.78.3 章节。**
+

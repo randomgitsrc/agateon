@@ -210,7 +210,7 @@ agate 教别人「gate 必须机器可判定」，但自己的文档一致性此
 | CHECK 3 | 协议文件无硬编码行号引用 `xxx.md L123`（应用节标题） | P1-4 |
 | CHECK 4 | `gate_commands` 键集合跨文件一致（以 architect.md 为权威） | P1-2 |
 | CHECK 6 | README LICENSE 徽章指向的文件存在 + LICENSE 含 MIT + gstack 概念启发致谢保留于 NOTICES.md | P0-2 |
-| CHECK 7 | README version badge 与最新 git tag 一致 | — |
+| CHECK 7 | README version badge 与 CHANGELOG 最新已发布版本一致（tag 无关，v0.78.2 起） | — |
 | CHECK 8 | v0.6 关键词存在性（DESIGN_GAP / design_trivial / model_tier / --cached） | — |
 | CHECK 9 | 协议-脚本结构对齐（锚点表：文档声明的规则 vs 脚本关键词存在性） | — |
 

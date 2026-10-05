@@ -103,17 +103,32 @@ EXCLUDE_PRODUCE_PREFIX = "agate-workspace/tasks/"
 # （见 main() 审计 7 段），漏判 ⇒ 没声明 ⇒ 即使 P5 之后改过代码也**什么都不会拦**。
 # ⇒ 补一个**不依赖措辞**的结构性信号：PASS 行引用了 P5 证据文件。
 #    该信号不会把否定式误判为声明——否定句（TAG0033/TAG0019）不会在 PASS 行里引用 P5 结果。
+#
+# ⚠️ 初版信号（TAG0042 批0）只经 `extract_evidence_refs` 判定，实测**召回不足**（评审 I-1）：
+#   该抽取器①先剥离反引号 code span、②只取「整组都是裸路径」的括号组
+#   ⇒ 反引号包裹 `` `P5-test-results/unit.md` `` 与裸引用 `见 P5-test-results/unit.md`
+#   都提取不到 ⇒ 仍逃逸（实测 TAG0016/TAG0020 漏判，signal=False）。
+# ⇒ 改为**直接在原始 PASS 行上做正则**（不看措辞、不先剥反引号）：
+#   只要 PASS 行出现「`P5-test-results/` + 带扩展名的文件名」即命中。
+#   判别力验证（2026-10-05 全仓 P6 普查）：命中 9 处、**全部是真 P5 证据引用**；
+#   不误伤两类已知反例——TAG0020 BDD-4 的 `P5-test-results/`（**只有目录名、无 .ext**，
+#   是黑名单串扫描的描述）、TAG0033/TAG0019 的否定式/标题（无 PASS 行引用形态）。
 _P5_RESULT_MARKER = "P5-test-results"
+# 「P5-test-results/<file>.<ext>」——要求带扩展名，避免误伤仅提及目录名的描述行
+# （如「黑名单串扫描 … P5-test-results/」）。\w 含 Unicode（中文文件名也认）。
+_P5_RESULT_REF_RE = re.compile(r"P5-test-results/[^\s`）)】\],，;；]+\.\w+")
 
 
 def _pass_lines_reference_p5_results(task_dir):
     """P6-acceptance.md 的 PASS 行是否引用了 `P5-test-results/…`（结构性复用信号）。
 
-    用 `extract_evidence_refs` 判定（与审计 1 同源，不看措辞）：任一 PASS 行提取出的证据
-    引用中出现 `P5-test-results` 片段即命中。读不到 P6 / agate_common 不可用 ⇒ False（从严）。
+    判定分两路取**并集**（任一命中即 True）：
+      · 主路：原始 PASS 行正则 `_P5_RESULT_REF_RE`（不看措辞、**不先剥反引号**）——
+        覆盖反引号包裹与裸引用两种逃逸形态（评审 I-1）。
+      · 辅路：`extract_evidence_refs` 提取出的引用中含 `P5-test-results`——与审计 1 同源，
+        兜住文件名含空格等主路覆盖不到的边界形态。
+    读不到 P6 ⇒ False（从严）。
     """
-    if extract_evidence_refs is None:
-        return False
     p6_file = os.path.join(task_dir, "P6-acceptance.md")
     if not os.path.isfile(p6_file):
         return False
@@ -125,9 +140,14 @@ def _pass_lines_reference_p5_results(task_dir):
     for line in lines:
         if not re.search(r"^\s*- PASS\b", line):
             continue
-        for ref in extract_evidence_refs(line):
-            if _P5_RESULT_MARKER in ref:
-                return True
+        # 主路：原始行正则
+        if _P5_RESULT_REF_RE.search(line):
+            return True
+        # 辅路：证据引用抽取（agate_common 不可用时跳过，不因此丢主路判定）
+        if extract_evidence_refs is not None:
+            for ref in extract_evidence_refs(line):
+                if _P5_RESULT_MARKER in ref:
+                    return True
     return False
 
 

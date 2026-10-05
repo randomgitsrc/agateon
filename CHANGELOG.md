@@ -10,6 +10,24 @@
 
 ## [Unreleased]
 
+## [0.78.3] - 2026-10-05
+
+### 修复
+
+- **TAG0042 批 0 §6 改动的独立评审整改**（走 hotfix 通道，不立项）。v0.78.2 的协议本体 / CI
+  改动（触发 SELF-GATE）经独立评审复核，发现 **2 个 Important**（均已实测证实）+ 若干 Minor，
+  本版整改：
+
+  | 项 | 级别 | 问题 | 修法 |
+  |---|---|---|---|
+  | **I-1** | Important | v0.78.2 的 M-2「结构性信号」**召回不足却被 CHANGELOG 说成全部闭合**：初版只经 `extract_evidence_refs` 判定，而该抽取器先剥离反引号 code span、只取整组裸路径括号组 ⇒ **反引号包裹**与**裸引用**两种真实形态仍逃逸（实测 TAG0016/TAG0020 `signal=False`）——fail-open 残留 | 结构信号改为**直接在原始 PASS 行做正则**（`P5-test-results/<file>.<ext>`，不先剥反引号），两路取并集；补 4 形态 + 2 判别力反例用例 + 改坏即红复验。全仓 P6 普查：命中 9 处全为真引用，不误伤「仅提目录名」的描述行 |
+  | **I-2** | Important | §6 后 CHECK 7 已不用 `git tag`，但 **5 处权威文档仍写「CHECK 7 badge == tag」**（含根 `AGENTS.md` 的 squash 规则理由、`agate/git-integration.md`、`agate/adr.md`）——会误导下次发布者「先推 tag」 | 逐处改述为「badge ↔ CHANGELOG 最新已发布版本」；squash 规则改由 **G-5** 单独支撑。另修 `agate/scripts/README.md` CHECK 7 行、`agate/phase-cards/P8-release.md` 的 DEBT0013 时序说明（原「先 tag 后重跑」建议已随 §6 失效） |
+  | **m-a** | Minor | §6 新增的 `release.yml`「Verify tag points to matching commit」步骤**零测试覆盖** | 补静态契约 + **实跑**用例（badge 一致/打错位置/缺 badge/缺节/节空 5 场景，真跑 shell + 内联 python） |
+  | **m-b** | Minor | 该步骤用 `grep … \\| head -1 \\| grep …` 链，在 `set -o pipefail` 下 README 无 badge 时首个 `grep` 退出 1 ⇒ 赋值整体失败、**跳过友好 `::error::` 提示**（实测 stdout 空、只剩 rc=1） | 改用 `sed -n` 抽取（无匹配只输出空串，交由 `-z` 判定给明确错误）；实跑用例锁定该路径 |
+
+- **反思（本次教训）**：静态"看着对"不等于行为正确——I-1 与 m-b 都是「静态契约通过、实跑才暴露」；
+  故 m-a 的用例做成**真跑内联脚本**而非只断言 YAML 形状。
+
 ## [0.78.2] - 2026-10-05
 
 ### 修复

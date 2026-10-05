@@ -35,7 +35,10 @@ jobs:
         run: |
           set -euo pipefail
           WANT="${TAG#v}"
-          BADGE="$(grep -oE 'badge/version-v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+          # 用 sed 抽取（不用 `grep | head | grep` 链）：后者在 README 无 badge 时首个 grep 退出 1，
+          # 经 pipefail 会让赋值整体失败、**跳过下方友好错误提示**（评审 m-b 实测：no-badge 场景
+          # stdout 为空、只剩 rc=1）。sed 无匹配只输出空串，交由下方 -z 判定给明确 ::error::。
+          BADGE="$(sed -n 's#.*badge/version-v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*#\1#p' README.md | head -1)"
           if [ -z "$BADGE" ]; then
             echo "::error::tag 所指提交的 README.md 未找到 version badge"
             exit 1
