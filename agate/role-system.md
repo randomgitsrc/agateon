@@ -26,7 +26,7 @@ agate 的角色体系把角色分成两层：
 | 需求分析师 | analyst.md | P1 | 需求质疑、建立 BDD 基线 |
 | 方案设计师 | architect.md | P2、P7 | 写设计方案、一致性检查 |
 | 测试设计师 | test-designer.md | P3 | 写测试用例和测试代码（TDD 红灯）|
-| 实现工程师 | implementer.md | P4、P8 | 写代码、多包发布准备 |
+| 实现工程师 | implementer.md | P4、P8 | 写代码、多包交付收尾 |
 | 验证工程师 | verifier.md | P5、P6 | P5 技术验证、P6 BDD 验收 |
 | 视觉结构分析师 | vision-analyst.md | P6（按需）| UI 截图翻译成结构化 YAML，供 P6 验收和 design-review 使用 |
 

@@ -1353,7 +1353,7 @@ def _init_p8_repo(git_repo, td, files=None, tag=None):
     return repo
 
 
-_P8_COMPLIANT = "bump_type: minor\ndebt_check: none\n"
+_P8_COMPLIANT = "bump_type: minor\ndebt_check: none\ndelivery: package-release\n"
 _P8_UNRELEASED = "## [Unreleased]\n"
 _P8_CHANGELOG_TAGGED = "## [Unreleased]\n\n## [0.2.0] - 2026-07-20\n"
 

@@ -305,6 +305,26 @@ git commit
 - **截止版本：v0.80.0** 起，声明文件缺失 / 非法将改为 **`exit 1`**（硬拦截）。请在此之前用
   `agate-config init` 生成声明并填写自身形态（语言 / 包管理器 / 验证命令 / 发版方式）。
 
+**批 4（关卡层分级，TAG0042）— P8 交付收尾 + 发版逻辑迁移 `preset: semver-changelog-tag`（迁移期无破坏性变更）**：
+
+- **关卡层分级**：`phases.yaml` 新增 `gate_layer`——按**提交类型**（纯代码 / 纯文档 / 发版）选择
+  关卡集合 + 转换表（含 `paused_from`）。各 phase 的 `gate_pass_exit` / `next` / `retreat`
+  **语义不变**（无回归）。
+- **P8 语义改述为「交付收尾」**（原「发布准备」）：`P8-release.md` 须声明 `delivery` 字段，
+  缺失 → `check-gate.py P8` **exit 1**（硬拦截）。升级后请在 `P8-release.md` 补一行
+  `delivery:`（交付方式），否则 P8 gate 会拦。
+- **发版逻辑迁移（一行声明即保持现状）**：协议内既有发版检查（version 文件 / CHANGELOG / tag）
+  的等价物为项目声明 `release.preset: semver-changelog-tag`：
+  ```yaml
+  release:
+    preset: semver-changelog-tag
+  ```
+  迁移期：**没有** `agate.config.yaml` 的存量项目，P8 gate **仍执行**既有发版检查
+  （不静默失去保护），只输出指向该声明 / preset 迁移的显眼 WARNING。
+- **截止版本：v0.80.0**（与批 2 的声明文件硬切同版本）——请在此版本前用 `agate-config init`
+  生成声明并填写 `release.preset`；届时未声明的项目将失去协议内发版检查的等价保护
+  （发版逻辑删除由后续批次执行，本批只提供等价物 + WARNING）。
+
 ### v0.78.3 — §6 改动的独立评审整改（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。

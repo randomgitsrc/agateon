@@ -1,0 +1,7 @@
+command: python3 -m pytest agate/tests/unit/test_gate_layer.py agate/tests/unit/test_check_p8_delivery.py -q
+exit_code: 0
+git_head: 68a796e00abbfcf3434a03da1ef4443d6a8b0ac4
+timestamp: 2026-10-06T06:12:28+08:00
+expected_red: []
+failed_tests: []
+duration_seconds: 1

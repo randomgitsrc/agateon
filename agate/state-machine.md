@@ -164,7 +164,7 @@ P7 --[retry>=MAX]--> PAUSED（正确路由：上游问题需人工介入，非 a
 
 P8 --[每个声明的 package 的发布检查命令 exit 0 + 主 Agent 亲自执行 bump-version 后重跑 P5 gate（gate_commands.P5 exit 0 AND failed==0）+ 主 Agent 亲自执行 git commit + git tag + P8-release.md 含 bump_type: 字段 + version 文件双路径检查（暂存区或最近 5 commit，WARNING）+ CHANGELOG 双路径检查（暂存区或最近 5 commit，WARNING）+ git tag -l "${VERSION_TAG_PREFIX}{version}" 存在（推荐，不阻断）+ 若 roadmap.md 有关联 RM 条目须已回写 done（RM-AG0043，check-gate.py P8 反查）]--> READY
       （gate 命令集由 P2-design.md 的 packages + gate_commands 字段动态生成，不同项目不同命令，agate 不硬编码。规则见 dispatch-protocol.md「packages 动态注入（B4/B6）」节）
-     （⑨ P8 subagent 化：releaser subagent 执行发布准备（产出文件 + 验证命令），主 Agent 亲自执行 bump-version + commit + tag + READY 收尾）
+     （⑨ P8 subagent 化：releaser subagent 执行交付收尾（产出文件 + 验证命令），主 Agent 亲自执行 bump-version + commit + tag + READY 收尾）
 
 ### READY 收尾检查（P8 gate 通过后、标记 READY 前）
 
@@ -308,11 +308,11 @@ PAUSED 恢复协议：
 
 **P8 与 READY 的说明**：
 
-P8 是**「发布准备」**，不是「发布」。P8 gate 通过后进入 READY 状态——表示每个受影响包的版本 bump、CHANGELOG 更新、测试全通过，**已准备好发布**。实际的 `make publish`（上传到 PyPI）由人手动触发。
+P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READY 状态——表示每个受影响包的版本 bump、CHANGELOG 更新、测试全通过，**已准备好发布**。实际的 `make publish`（上传到 PyPI）由人手动触发。
 
 | 概念 | 含义 | 谁执行 |
 |------|------|--------|
-| 发布准备 (READY) | 各包 version bump + CHANGELOG + lint + test 全通过 | Subagent + 主 Agent 验证 |
+| 交付收尾 (READY) | 各包 version bump + CHANGELOG + lint + test 全通过 | Subagent + 主 Agent 验证 |
 | 发布 (DONE) | 上传到 PyPI | 人手动触发 |
 
 **多包发布**：一个任务可能涉及多个独立版本的包（如 backend + mcp-server）。P8 必须为 P2 声明的**每一个** package 执行 version bump 和发布检查，gate 命令由 packages 列表动态生成。漏 bump 某个包 = gate 不通过。
@@ -435,7 +435,7 @@ P6，由 `check-routing.py` / `check-pruning.py` 双闸兜底）。转移表与�
 | P5 | 2 | 技术验证，少轮次 |
 | P6 | 2 | 验收，少轮次 |
 | P7 | 2 | 一致性检查，少轮次 |
-| P8 | 2 | 发布准备，少轮次 |
+| P8 | 2 | 交付收尾，少轮次 |
 
 **P6.5 judge 复核轮次预算（≤2 轮，TAG0020）**：judge 轮次是**复核预算**而非状态机重试，**不新增
 `| P6.5 | N |` 表行、不使用 `retries.P6.5` 键**（保持 CHECK 12 重试表锚点与

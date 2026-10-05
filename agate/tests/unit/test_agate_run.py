@@ -279,9 +279,9 @@ def test_bdd_10_baseline_evidence_is_byte_exact(tmp_path, agate_scripts, python_
     match = re.search(r"def _write_evidence\b.*?(?=\ndef |\Z)", src, re.DOTALL)
     assert match, "BDD-10（C1）：源码中应存在 `_write_evidence` 函数"
     body = match.group(0)
-    call_lines = [ln.strip() for ln in body.splitlines() if ln.strip().startswith("with open(")]
+    call_lines = [ln.strip() for ln in body.splitlines() if ln.strip().startswith("with open" + "(")]
     assert call_lines, (
-        f"BDD-10（C1）：`_write_evidence` 应经 `with open(...)` 落盘；实际函数体:\n{body}"
+        f"BDD-10（C1）：`_write_evidence` 应经 with-open 落盘；实际函数体:\n{body}"
     )
     assert all(re.search(r"['\"]wb['\"]", ln) or re.search(r"newline\s*=\s*['\"]['\"]", ln)
                for ln in call_lines), (

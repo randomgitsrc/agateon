@@ -163,7 +163,7 @@ roadmap 是项目级任务规划层（单文件 `{AGATE_WORKSPACE}/roadmap/roadm
 
 **Claude Project 会话的定位：**
 - 适合：P0-P2（设计决策、需求基线、方案评审）、代码审查
-- 不适合：P3-P6 技术验证、E2E 测试、发布准备
+- 不适合：P3-P6 技术验证、E2E 测试、交付收尾
 - 建议工作方式：用 Claude Project 完成 P0-P2 并 push 到 main，再切换到 OpenCode/Claude Code 执行 P3-P8
 
 **执行环境在 P0-brief 的 `executor_env` 字段里声明**（见 task-files 模板），后续所有阶段的 gate 判定和 subagent 派发以此为依据。
@@ -253,7 +253,7 @@ agate 的派发机制有固定开销——每次派发约需写 25 行派发 pro
   此时 P3 的价值从「独立验证」变为「提前定义行为契约」——先写测试让自己明确"完成标准"，
   而不是边实现边定义。须在 P1 裁剪说明里声明 `single_agent_mode: true`。
 - **P6 不可裁剪**：验收是质量最后防线。no_behavior_change 可简化 P6（快速验收），不可省略。仅微任务（直接做不走 agate）可免于 P6。`change_type: refactor` 的任务 P6 换用回归口径（行为不变 + 全量回归全绿 + 关键路径验收）——换口径 ≠ 裁 P6，P6 仍不可裁剪
-- P8 发布准备：涉及发布的任务必做
+- P8 交付收尾：涉及发布的任务必做
 - **裁剪必须附理由**：P1 分析师判定复杂度后，在 `P1-requirements.md` 的「裁剪说明」节写明每个跳过阶段的理由；主 Agent 按声明推进，不强制全 8 阶段
 - **裁剪不等于跳过需求质疑**：无论任务大小，P1 的需求基线（哪怕一句话）都要建立，因为隐含需求的识别不依赖任务规模
 
@@ -324,7 +324,7 @@ P5 gate 要求「测试环境隔离正常（无 [PROD_TOUCHED]）」，是流程
 | P6 | 验收 | verifier（验收模式）| P7 | P4 | — | `scripts/check-gate.py P6` exit 2（FAIL=0/NC=0/证据非空）；`scripts/check-p6-evidence.py` UI 截图 > 1KB（R1a 客观证据 barrier）+ 渲染形态证据形式匹配（帧序列/渲染输出对比/时序截图）+ avg-hash 雷同降级待复核；`scripts/check-p6-provenance.py` exit 0/2（2 = 协作规范 WARNING［缺 agent 字段］，**不阻塞**；exit 1 硬阻。证据-结论对应 + dispatch-context 审计 + BDD 总数对照由审计 3 自动执行 + R1b vision YAML 审计的 GAP 放宽）；UI 条件按 P1 vision 能力三态分档双证据（available/supplementable→vision YAML blocker_count==0；GAP→截图/帧序列+人工复核记录；证据形式按渲染形态选择）⚠️ self-authored（降级缓解：provenance 审计 + R1a 截图实质检查；**P6.5 judge 独立复核强化缓解**，机制见下） |
 | P6.5 | 独立 Judge 复核 | judge（**强制，所有任务**；fresh context 逐条重验全部 BDD，只信证据与 git log）| —（gate_subphase: 通过→P7）| —（needs-revision→P6）| — | `P6.5-judge-verdict.md` 存在 + `scripts/check-judge-verdict.py` exit 0（Header 字段/criteria_total==P1 BDD 数/结论编号集零挑验/证据交叉核对/信息隔离白名单/预算交叉）+ `scripts/check-events.py` exit 0（事件账本哈希链/ts 单调/轮次计数）；历史任务（.state.yaml 无 `judge.enabled: true`）→ check-gate.py P6.5 早退跳过（BDD-2）；主 Agent 跑 `check-gate.py P6.5 $TASK_DIR` 判定 |
 | P7 | 一致性检查 | consistency-reviewer（subagent 派发）| P8 | — | gate 自检 + N3⑨ 实质锚点（跨文件引用关键词）| `grep -E '^\s*-?\s*\[BLOCKER\]' P7-consistency.md | grep -cvE '\[BLOCKER\][:：]?\s*\d+\s*条?\s*$'` → =0；同理 DEVIATION-CRITICAL → =0 ⚠️ self-authored |
-| P8 | 发布准备 | implementer（P8 模式/releaser，subagent 派发）| —（无自动后继：exit 0 后转 READY 由人/发布流程处理）| —（失败重试本阶段）| gate 自检（发布检查命令）| `scripts/check-gate.py P8` 脚本化部分通过（exit 2）；P2 `gate_commands` 逐包 exit 0；bump 后重跑 P5 `gate_commands.P5` exit 0；`git log v{prev_version}..HEAD --oneline` 对照 CHANGELOG 无遗漏；P2 `packages` 验证 version 文件路径；`grep -q 'bump_type:' P8-release.md` 命中；version 双路径检查（暂存区或最近 5 commit，WARNING）；CHANGELOG 双路径检查（暂存区或最近 5 commit，WARNING，`CHANGELOG_FILE` 环境变量可覆盖默认 CHANGELOG.md）；`check-pruning.py` 验证裁剪 P8 时有 `internal_only: true` 声明 |
+| P8 | 交付收尾 | implementer（P8 模式/releaser，subagent 派发）| —（无自动后继：exit 0 后转 READY 由人/发布流程处理）| —（失败重试本阶段）| gate 自检（发布检查命令）| `scripts/check-gate.py P8` 脚本化部分通过（exit 2）；P2 `gate_commands` 逐包 exit 0；bump 后重跑 P5 `gate_commands.P5` exit 0；`git log v{prev_version}..HEAD --oneline` 对照 CHANGELOG 无遗漏；P2 `packages` 验证 version 文件路径；`grep -q 'bump_type:' P8-release.md` 命中；version 双路径检查（暂存区或最近 5 commit，WARNING）；CHANGELOG 双路径检查（暂存区或最近 5 commit，WARNING，`CHANGELOG_FILE` 环境变量可覆盖默认 CHANGELOG.md）；`check-pruning.py` 验证裁剪 P8 时有 `internal_only: true` 声明 |
 | READY | 待发布 | — |  |  | — | 人手动 `make publish` → DONE |
 
 <!-- S1S2-ANCHOR-END：阶段总览表 S-1/S-2 锚点终点（表行增删须同步 `rules/phases.yaml`，否则 check-structure-consistency.py S-1/S-2 报 ERROR） -->

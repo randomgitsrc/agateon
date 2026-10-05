@@ -15,6 +15,10 @@ change_summary: >-
   执行声明 verify.commands——bash+pipefail 如实传播退出码、--baseline .out 证据逐字节比对、
   git check-ignore 覆盖检查、非 POSIX 退化 + WARNING、cmd_run 事件经 append_event、AGATE_TASK_DIR
   定位账本）；pre-commit-gate.py 一并 git add 账本（不直接写，防破链）；scripts/README + CODE-MAP。
+  【round 6 / 批 4（batch4-gate-layer）】关卡层分级 + P8 交付收尾：phases.yaml P8 name
+  发布准备→交付收尾 + 新增 gate_layer（commit_types + transitions 含 paused_from）；
+  phases.schema.json 扩展；check-gate.py::gate_p8 新增 delivery 校验 + 发版痕迹迁移 WARNING；
+  P8-release.md 标题/产出规格；WORKFLOW.md P8 行名；UPGRADING 批 4 小节；测试夹具同步。
 files_changed:
   - agate/scripts/agate-next.py
   - agate/phase-cards/P2-design.md
@@ -44,13 +48,27 @@ files_changed:
   # round 5 / 批 3 修复轮（cmd_run 反向传播闭合）
   - agate/git-integration.md
   - agate/scripts/check-events.py
+  # round 6 / 批 4（batch4-gate-layer）
+  - agate/rules/phases.yaml
+  - agate/rules/schema/phases.schema.json
+  - agate/WORKFLOW.md
+  - agate/tests/unit/test_gate_layer.py
+  - agate/tests/unit/test_check_p8_delivery.py
+  - agate/tests/unit/test_check_gate.py
+  - agate/tests/unit/test_t41_platform_hygiene.py
+  - agate/tests/regression/test_v060_p8_cached.py
+  # round 7 / 批 4 修复轮（P8 名称/语义叙事闭合）
+  - agate/role-system.md
+  - agate/assets/execution-roles/implementer.md
+  - agate/LIMITATIONS.md
+  - agate/tests/unit/test_agate_run.py
 review_scope: >-
   TAG0042 批 1 的 agate/** 未 commit 改动（SELF-GATE 语义 gate，agent≠main）。
   变更触发模式：意图分析 → 反向传播 → 变更文件全文 + 反向传播文件 + 权威规则源（state-machine.md /
   dispatch-protocol.md / WORKFLOW.md）→ A1-A8。单轮审查。
 prod_isolation: "[PROD_NOT_TOUCHED] —— 仅读取仓库 + 写 /tmp 留痕/日志 + 本报告；未触碰被评审改动集、主 checkout 与 ~/.agate。"
 conclusion: aligned
-review_rounds: 5
+review_rounds: 7
 round1_conclusion: >-
   批 1 首审：misaligned。A1/A2/A3b/A5.3 同一根因 = 反向传播漏改 5 处权威文档——它们仍描述旧行为
   「agate-next 更新 .state.yaml phase + git add」（state-machine.md:326-331 / dispatch-protocol.md:291-292 /
@@ -122,6 +140,37 @@ round5_conclusion: >-
   batch3 回归 test_agate_run + test_events_ledger + test_check_events → 29 passed；SG.6 → 1 passed；
   修复仅动文档/注释、未改脚本逻辑 → A1/A3a/A4/A6/A7/A8 无回退。2 条 [DESIGN_GAP]（formatter 计数 /
   cmd-key）未受本轮修复影响，仍判 DESIGN_GAP（交 P7）。NEEDS_HUMAN_REVIEW 0 条。
+round6_conclusion: >-
+  TAG0042 批 4（batch4-gate-layer）增量复审（round 6）：misaligned（1 根因）。变更面为关卡层分级 +
+  P8 交付收尾：phases.yaml P8 name 发布准备→交付收尾 + 新增 gate_layer（commit_types + transitions
+  含 paused_from）；phases.schema.json 扩展；check-gate.py::gate_p8 新增 delivery 校验 + 发版痕迹迁移
+  WARNING；P8-release.md 标题/产出规格；WORKFLOW.md P8 行名；UPGRADING 批 4 小节；测试夹具同步。
+  A1 ALIGNED（gate_p8 delivery 校验 vs BDD-15/P2 §4.3、gate_layer vs BDD-14 逐条一致；
+  gate_pass_exit/next/retreat 未变）；A4 ALIGNED（test_gate_layer+test_check_p8_delivery+test_check_gate
+  → 227 passed）；A6 ALIGNED（gate_layer 被 check-yaml-schema S-5 覆盖，SCHEMA-phases OK）；
+  A7 ALIGNED；A8 声称均可复核；consistency 0 ERROR / 404 WARNING（CHECK9 PASS、CHECK14/15 PASS）；
+  count-tests 2689；ruff 绿；structure S1-S6/S0 全 OK。
+  **MISALIGNED（A2 / A3b / A5.3，同一根因）**：P8 名称/语义由「发布准备」改「交付收尾」（BDD-15），
+  但名称/身份级叙事未反向传播——`agate/state-machine.md:311`（「P8 是**「发布准备」**」）+:315（表
+  「发布准备 (READY)」）、`agate/dispatch-protocol.md:881`（P8→READY「发布准备完成」）、
+  `agate/WORKFLOW.md:256`（「P8 发布准备」（同文件 :327 已改交付收尾 → 文件内不一致））、
+  `agate/role-system.md:29`（「多包发布准备」）、`agate/assets/execution-roles/implementer.md:9`
+  （角色标题「P8 发布准备」）。`state-machine.md:311` 直接违背 BDD-15「P8 语义为交付收尾」基线。
+  描述活动级残留（state-machine:167/:438、implementer.md:11、P8-release.md:9/:29/:47、LIMITATIONS:119、
+  WORKFLOW:166）措辞可对齐，判 DESIGN_GAP/观察。6 条 [DESIGN_GAP]：①-⑤ 判 DESIGN_GAP（交 P7）；
+  ⑥（P8 叙事面未同步）**reclassify 为 MISALIGNED**（与 BDD-15/权威名直接矛盾，无 P7 REVIEWED-ACCEPTED
+  → 原则 6）。NEEDS_HUMAN_REVIEW 0 条。
+round7_conclusion: >-
+  TAG0042 批 4 修复复审（round 7）：aligned。round6 的 3 项 MISALIGNED（A2/A3b/A5.3，同一根因 =
+  P8 名称/语义「发布准备」→「交付收尾」未反向传播）已全部闭合：名称/身份级 6 处
+  （state-machine.md:311/315、dispatch-protocol.md:881、WORKFLOW.md:256、role-system.md:29、
+  implementer.md:9）+ 活动级残留（state-machine.md:167/438、implementer.md:11、P8-release.md:9/29/47、
+  LIMITATIONS.md:119、WORKFLOW.md:166）均已改「交付收尾」。`grep -rn "发布准备"` 5 目标文件 → 0 命中；
+  全 agate/（非 tests）仅剩 UPGRADING 的历史注（「原「发布准备」」+ 冻结历史版本节）。回归面：
+  consistency 0 ERROR / 404 WARNING（无新增）；structure S1-S6/S0 全 OK；batch4 回归
+  test_gate_layer+test_check_p8_delivery+test_check_gate+test_agate_run → 237 passed；修复仅动叙事文档 +
+  test_agate_run.py 字符串字面量（编码守卫规避）→ A1/A3a/A4/A6/A7/A8 无回退。5 条 [DESIGN_GAP]
+  （①-⑤）未受影响，仍判 DESIGN_GAP（交 P7）；⑥（P8 叙事面）即本轮闭合。NEEDS_HUMAN_REVIEW 0 条。
 ---
 
 # 协议-脚本对齐审查 — TAG0042 批 1（batch1-phase-semantics）
@@ -781,3 +830,228 @@ FAILED agate/tests/unit/test_agate_scripts_encoding.py::test_bdd_5_all_test_py_t
 | **DESIGN_GAP（交 P7）** | 2 条（formatter 计数 / cmd-key）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`。 |
 
 **round 5 结论：ALIGNED（可 commit）。**
+
+---
+
+## round 6 复审（batch4 增量）（2026-10-06）
+
+> 复审范围：TAG0042 批 4（`batch4-gate-layer`，关卡层分级 + P8 交付收尾）的 agate 协议/脚本未 commit 改动（HEAD `68a796e`，batch3 已落）。
+> 触发模式：SELF-GATE「变更触发模式」A1-A8。**本批重点 = A3b 反向传播**（P8 名称/语义改述）。
+> 变更文件：`agate/rules/phases.yaml`、`agate/rules/schema/phases.schema.json`、`agate/scripts/check-gate.py::gate_p8`、`agate/phase-cards/P8-release.md`、`agate/WORKFLOW.md`、`agate/UPGRADING.md`、测试夹具（`test_check_gate.py`/`test_t41_platform_hygiene.py`/`test_v060_p8_cached.py`/`test_check_p8_delivery.py`）。
+
+### 复审结论汇总
+
+| # | 审查项 | 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** |
+| A2 | 脚本→文档对齐 | **MISALIGNED**（P8 名称/语义改述未同步到叙事文档） |
+| A3 | 一致性连锁 + 反向传播 | A3a **ALIGNED** / A3b **MISALIGNED** → 合计 **MISALIGNED** |
+| A4 | 测试覆盖 | **ALIGNED** |
+| A5 | 下游影响 + 文档传播 | A5.1 **ALIGNED** / A5.2 **ALIGNED**（待 P8）/ A5.3 **MISALIGNED** → 合计 **MISALIGNED** |
+| A6 | 锚点表覆盖 | **ALIGNED** |
+| A7 | 设计原则一致性 | **ALIGNED** |
+| A8 | 声称-命令绑定 | 逐条列出（见 A8；无无据声称） |
+
+**总结论：misaligned**。MISALIGNED 共 3 项（A2 / A3b / A5.3），**同一根因**：P8 名称/语义由「发布准备」改「交付收尾」（BDD-15），但**名称/身份级叙事未反向传播**（见 A2/A3b）。核心变更面（gate_layer + gate_p8 delivery 校验 + schema + WORKFLOW + 卡片）语义自洽。6 条 `[DESIGN_GAP]`：①-⑤ 判 DESIGN_GAP（交 P7），**⑥ reclassify 为 MISALIGNED**。NEEDS_HUMAN_REVIEW 0 条。
+
+### A1: 文档→脚本对齐 — ALIGNED
+
+- **`gate_p8` delivery 校验 vs BDD-15 / P2 §4.3**：`check-gate.py:1447-1453` 在 `debt_check` 后新增 `if "delivery:" not in p8_text: return 1`——BDD-15「`delivery` 未声明时 gate 拦截（非 0），声明后放行」与 P2 §4.3「`gate_p8()` 校验 `delivery` 声明；未声明 → 非 0」**逐字一致**；既有 bump_type/debt_check/version/CHANGELOG/tag/roadmap 检查**全部保留**。
+- **`gate_layer` vs BDD-14**：`phases.yaml` 新增顶层 `gate_layer`——`commit_types`（`code-only`/`docs-only`/`release` 三类不同关卡集合）+ `transitions.forward`/`retreat` + `pause.paused_from`（字面 `paused_from`）——满足 BDD-14「按提交类型选择对应关卡集合（转换表可查），不同类型走不同关卡，且转换表含 `paused_from`」。
+- **`gate_pass_exit`/`next`/`retreat` 语义未变（回归）**：`git diff` 仅改 P8 `name`（发布准备→交付收尾）+ P8 `gates[]` 描述 + 追加 `gate_layer`；各 phase 的 `gate_pass_exit`/`next`/`retreat` **未触碰**（`test_gate_layer.py::_EXPECTED_GATE_PASS_EXIT` 回归基线绿）。
+- **发版痕迹迁移 WARNING（BDD-21）**：`gate_p8:1520-1534` 在 version/CHANGELOG 变更存在且无 `agate.config.yaml` 时输出指向 `release.preset: semver-changelog-tag` 的 WARNING（不阻断）——与 P2 §4.3「缺失时按发版痕迹给 WARNING」一致。
+
+**结论**：ALIGNED。
+
+### A2: 脚本→文档对齐 — MISALIGNED
+
+本批把 P8 的**名称/语义**从「发布准备」改为「交付收尾」（`phases.yaml:153 name: 交付收尾`，BDD-15「P8 语义为交付收尾（非发版）」）。仅同步了 3 处（`phases.yaml`、`WORKFLOW.md:327` 表行、`P8-release.md:1` 标题），但**其它权威文档的名称/身份级叙事仍写「发布准备」**，与权威名**直接矛盾**：
+
+| # | 落点 | 现文（旧） | 判定 |
+|---|------|-----------|------|
+| 1 | `agate/state-machine.md:311` | 「P8 是**「发布准备」**，不是「发布」」 | **MISALIGNED** |
+| 2 | `agate/state-machine.md:315` | 表行「发布准备 (READY)」 | **MISALIGNED** |
+| 3 | `agate/dispatch-protocol.md:881` | P8→READY 行「发布准备完成（…）」 | **MISALIGNED** |
+| 4 | `agate/WORKFLOW.md:256` | 「P8 发布准备：涉及发布的任务必做」（同文件 :327 已改「交付收尾」→ **文件内不一致**）| **MISALIGNED** |
+| 5 | `agate/role-system.md:29` | 角色表「P4、P8 | 写代码、多包发布准备」 | **MISALIGNED** |
+| 6 | `agate/assets/execution-roles/implementer.md:9` | 角色标题「# 实现工程师（P4 实现 / P8 发布准备）」 | **MISALIGNED** |
+
+> **判据**：以上为 P8 的**名称/身份级**表述（读者据此得知「P8 = 发布准备」），与权威数据面 `phases.yaml name: 交付收尾` 及 BDD-15 基线**直接矛盾**——`state-machine.md:311` 尤甚（定义句「P8 是『发布准备』」）。
+
+**结论**：MISALIGNED。
+**建议**：将上述 6 处名称/身份级「发布准备」改述为「交付收尾」（与 `phases.yaml`/`WORKFLOW:327`/卡片标题同口径）。
+
+> **描述活动级**残留（「执行发布准备步骤」等，P8 仍做发版准备、措辞可对齐）判 DESIGN_GAP/观察：`state-machine.md:167`/`:438`、`implementer.md:11`、`P8-release.md:9`/`:29`/`:47`、`LIMITATIONS.md:119`、`WORKFLOW.md:166`。
+
+### A3: 一致性连锁 + 反向传播 — A3a ALIGNED / A3b MISALIGNED（合计 MISALIGNED）
+
+#### A3a（连锁：已知衍生改动）— ALIGNED
+
+- **schema 同步**：`phases.yaml` 新增顶层 `gate_layer` 在 `additionalProperties:false` 下须同步 `phases.schema.json`——已扩展；`check-yaml-schema.py` → **`SCHEMA-phases: OK`**（S-5 覆盖）。
+- **WORKFLOW 名称同步**：`check-structure-consistency.py` → **S1-phases OK**（S-1 YAML↔WORKFLOW 名称一致强制，已同步 `WORKFLOW.md:327`）。
+- **测试夹具**：`_P8_COMPLIANT`/`_P8_RELEASE`/t41 夹具补 `delivery: package-release`；`test_check_p8_delivery._p8_repo` 补 `dirs_exist_ok=True`（夹具缺陷修复，未改断言）。
+
+#### A3b（反向传播：应被本批影响但未在 diff 中的文件）— MISALIGNED
+
+| 应被影响候选 | 影响到了没 | 判定 |
+|---|---|---|
+| `agate/state-machine.md`（P8 定义/表/转移）| **部分** —— :311/:315 名称级未改；:167/:438 活动级未改 | **MISALIGNED**（:311/:315）|
+| `agate/dispatch-protocol.md`（P8→READY 门槛表）| **否** —— :881「发布准备完成」未改 | **MISALIGNED** |
+| `agate/WORKFLOW.md` | **部分** —— :327 已改；:256「P8 发布准备」未改 | **MISALIGNED**（:256）|
+| `agate/role-system.md`（P4/P8 角色表）| **否** —— :29「多包发布准备」未改 | **MISALIGNED** |
+| `agate/assets/execution-roles/implementer.md`（P8 角色）| **部分** —— :9 标题未改；:11 描述未改 | **MISALIGNED**（:9）|
+| `agate/phase-cards/P8-release.md` | **部分** —— :1 标题已改；:9/:29/:47 活动级未改 | DESIGN_GAP/观察 |
+| `agate/LIMITATIONS.md` | **否** —— :119「P8 发布准备」未改（活动级）| DESIGN_GAP/观察 |
+| `agate/rules/phases.yaml` / `phases.schema.json` / `WORKFLOW:327` / `P8-release.md:1` | **已改** | ALIGNED |
+
+**结论**：MISALIGNED（6 处名称/身份级叙事反向传播缺失）。**建议**：同 A2。
+
+### A4: 测试覆盖 — ALIGNED
+
+- **批 4 相关测试全绿（实跑）**：`pytest test_gate_layer.py test_check_p8_delivery.py test_check_gate.py -q` → **227 passed**（与 `P4-implementation-batch4.md:103` 自报吻合）。
+- **相邻回归（自报，未重跑）**：`test_check_structure_consistency` / `test_check_yaml_schema` / `test_t41_platform_hygiene` / `test_v060_p8_cached` / `test_check_protocol_consistency` / `test_agate_debt_check` → 101 passed。
+- **边界覆盖**：BDD-14（提交类型→关卡集合 + `paused_from`）、BDD-15（`delivery` 缺失拦截 / 声明放行）、BDD-21（preset 等价物 + 发版痕迹 WARNING）均有断言。
+- **用例总数**：`count-tests.sh` → **2689**（未漂移）。
+- **已知仓库面（非本批）**：`test_agate_scripts_encoding::test_bdd_5`（batch3 `test_agate_run.py:282/284` 缺 `encoding`）、`test_setup_agate_dir::test_bdd_43`（本机 `opencode debug agent` 环境差异）——二者非 batch4 引入。
+
+**结论**：ALIGNED。
+
+### A5: 下游影响 + 文档传播 — A5.1 ALIGNED / A5.2 ALIGNED（待 P8）/ A5.3 MISALIGNED
+
+- **A5.1 破坏性变更 / 向后兼容 — ALIGNED**：`gate_layer` 为纯新增数据面（不改 `gate_pass_exit`/`next`/`retreat`）；`delivery` 新增为 P8 产出必填（UPGRADING 明示「升级后补一行 `delivery:`，否则 P8 gate 拦」）；发版逻辑**本批未删除**（只提供等价物 + WARNING，符合 P2 §4.3 顺序）。`UPGRADING.md` 批 4 小节自洽（preset 迁移 + 截止版本 v0.80.0，与批 2 同版本）。
+- **A5.2 CHANGELOG — ALIGNED（待 P8，非 MISALIGNED）**：`check-changelog.py` 仅 P8 触发；`CHANGELOG.md` 待 P8 统一补（同前几批判据）。
+- **A5.3 文档传播 — MISALIGNED**：除代码改动外，应被影响的文档 = A3b 的 6 处名称/身份级叙事（`state-machine.md:311/:315`、`dispatch-protocol.md:881`、`WORKFLOW.md:256`、`role-system.md:29`、`implementer.md:9`）——均**未同步**。`phases.yaml`/`phases.schema.json`/`WORKFLOW:327`/`P8-release.md:1`/`UPGRADING.md` 已同步。
+
+**结论**：合计 MISALIGNED（A5.1/A5.2 ALIGNED；A5.3 与 A3b 同 6 处）。
+
+### A6: 锚点表覆盖 — ALIGNED
+
+- **`phases.schema.json` 扩展被覆盖**：`check-yaml-schema.py`（S-5）校验 `rules/phases.yaml` 对 `phases.schema.json`——新增 `gate_layer` 已纳入，**`SCHEMA-phases: OK`**。
+- **`gate_layer` 新字段登记面**：属 `rules/*.yaml` 数据面（schema 覆盖），非 `check-*.py` 新增/改名 → CHECK 9 锚点表**无新增义务**。consistency `CHECK 9 ✅ PASS`，无 `CHECK9-coverage`。
+- **无需更新锚点表**。
+
+**结论**：ALIGNED。
+
+### A7: 设计原则一致性 — ALIGNED
+
+- **ADR-014（判据单一权威源）**：P8 名称在 `phases.yaml` 单源 + S-1 强制 WORKFLOW 同步；`gate_layer` 转换表把各 phase 的 `next`/`retreat` 集中为可查视图（不新增第二判据）。**一致**（但见 A2——叙事文档未跟随单源，属传播缺口而非判据双源）。
+- **ADR-002（可判定性）**：`delivery` 存在性、`gate_layer` 结构、发版痕迹 WARNING 均可机械判定。**一致**。
+- **ADR-004（安全网分层）/ ADR-015（让错误可见）**：发版痕迹存在但无声明 → 显眼 WARNING（不静默失去保护）。**一致**。
+- **是否存在未记录的新架构决策？** 「关卡层按提交类型分级 + P8 交付收尾」是 ADR-002/ADR-004 在新关卡层的应用，**不引入新架构决策** → 无需新增 ADR。
+
+**结论**：ALIGNED。
+
+### A8: 声称-命令绑定
+
+| 声称 | 产出命令 | 结论 |
+|---|---|---|
+| `gate_p8` 缺 `delivery` → exit 1（BDD-15）| 读 `check-gate.py:1447-1453`；`pytest test_check_p8_delivery.py` | ✅ 成立 |
+| `gate_layer` 含 `paused_from`（BDD-14）| `grep -n paused_from agate/rules/phases.yaml`；`pytest test_gate_layer.py` | ✅ 成立 |
+| `gate_pass_exit`/`next`/`retreat` 未变（回归）| `git diff -- agate/rules/phases.yaml`（未触碰）；`test_gate_layer.py::_EXPECTED_GATE_PASS_EXIT` | ✅ 成立 |
+| batch4 `227 passed`（P4-impl:103）| `pytest test_gate_layer.py test_check_p8_delivery.py test_check_gate.py -q` → 227 passed | ✅ 成立 |
+| consistency `0 ERROR / 404 WARNING`（P4-impl:105）| `check-protocol-consistency.py --strict-errors-only` → 0 ERROR / 404 WARNING | ✅ 0 ERROR 成立 |
+| count-tests `2689`（P4-impl:107）| `count-tests.sh` → 2689 | ✅ 成立 |
+| ruff `All checks passed`（P4-impl:108）| `~/.venvs/agate-dev/bin/ruff check agate/scripts/` | ✅ 成立 |
+| structure `S1-S6/S0 全 OK`（P4-impl:106）| `check-structure-consistency.py` → S1-S6/S0 OK | ✅ 成立 |
+| 平台扫描 0 命中（P4-impl:109）| `check-platform-assumptions.py <改动文件>` → exit 0 | ✅ 成立 |
+
+无「无法给出命令」的无据声称。
+
+### [DESIGN_GAP] 逐条判定（6 条）
+
+| # | DESIGN_GAP | 判定 | 依据 |
+|---|---|---|---|
+| ① | 提交类型→关卡集合的具体成员与转换表矩体未定（P4 落定 code-only 全链 / docs-only [P0,P1,P2,P7,P8] / release [P7,P8]）| **DESIGN_GAP（交 P7）** | P2 §11 明确预留「批 4 的关卡层转换表矩体…P4 implementer 应标 [DESIGN_GAP]，P7 逐条审查」；P4 已落定，非文档-脚本矛盾 |
+| ② | `phases.schema.json` 不在 §6.1b batch4 output 列，但须同步 | **DESIGN_GAP（交 P7）** | 必要同步（additionalProperties:false）；已扩展，`check-yaml-schema` OK；属 output 清单遗漏，交 P7 核对 |
+| ③ | `WORKFLOW.md` 不在 §6.1b batch4 output 列，但 S-1 强制同步 | **DESIGN_GAP（交 P7）** | 必要同步（S-1 强制）；已同步，S-1 OK；交 P7 核对 |
+| ④ | `delivery` 合法取值集合设计未定（只查留痕存在）| **DESIGN_GAP（交 P7）** | BDD-15/P2 §4.3 只要求「未声明→拦截」；卡片明示只查留痕；取值集收紧属设计决策，交 P7 |
+| ⑤ | 发版逻辑删除时机/顺序（本批未删除）| **DESIGN_GAP（交 P7）** | BDD-21 的 Then 已满足（等价物 + WARNING + UPGRADING 截止版本）；P2 §4.3 明确「先提供等价物 → 再删」；删除属后续批次，交 P7 |
+| ⑥ | P8 叙事面（state-machine.md/dispatch-protocol.md/role-system.md/implementer.md）仍写「发布准备」| **MISALIGNED（非 DESIGN_GAP）** | 与权威名 `phases.yaml name: 交付收尾` 及 BDD-15「P8 语义为交付收尾」**直接矛盾**；任务在 P4、无 P7 `REVIEWED-ACCEPTED` → 按角色原则 6 判 MISALIGNED（同 A2/A3b/A5.3）|
+
+**判定合计**：5 条 **DESIGN_GAP（交 P7）**；**1 条（⑥）reclassify 为 MISALIGNED**（与 A2/A3b/A5.3 同根因）。按角色原则 6——①-⑤ 不对应「`agate/` 协议文档↔脚本不一致」（① 是 P2 预留设计未定，②③ 是 output 清单遗漏，④ 是取值集未定，⑤ 是删除时机），故判 DESIGN_GAP；⑥ 是真实名称/语义矛盾，不豁免。
+
+### round 6 闭环规则表
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| **MISALIGNED** | A2 / A3b / A5.3（同一根因：P8 名称/身份级「发布准备」未同步——`state-machine.md:311`/`:315`、`dispatch-protocol.md:881`、`WORKFLOW.md:256`、`role-system.md:29`、`implementer.md:9`）+ DESIGN_GAP ⑥ | **必须修复**：6 处名称/身份级改述为「交付收尾」；修完重审（round 7）。 |
+| **ALIGNED** | A1 / A3a / A4 / A5.1 / A5.2 / A6 / A7 / A8 | 通过。 |
+| **DESIGN_GAP（交 P7）** | ①-⑤（见上表）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`。 |
+| **观察（非阻塞）** | 活动级「发布准备」残留（state-machine:167/:438、implementer.md:11、P8-release.md:9/:29/:47、LIMITATIONS:119、WORKFLOW:166）| 建议随修复一并对齐措辞。 |
+
+**不可 commit**（存在未闭合 MISALIGNED）。修复后建议对本报告做同任务复核轮（round 7），追加 `round7_conclusion`。
+
+**round 6 结论：MISALIGNED（须同步 P8 名称/身份级叙事 6 处）。**
+
+---
+
+## round 7 复审（batch4 修复闭合）（2026-10-06）
+
+> 复审范围：round6 判 MISALIGNED 的 3 项（A2 / A3b / A5.3，同一根因 = P8 名称/语义「发布准备」→「交付收尾」未反向传播）修复是否闭合，以及修复是否引入新不一致（回归面）。HEAD `68a796e`（batch3 已落），batch4 改动未 commit。
+> 修复文件：`agate/state-machine.md`、`agate/dispatch-protocol.md`、`agate/WORKFLOW.md`、`agate/role-system.md`、`agate/assets/execution-roles/implementer.md`、`agate/LIMITATIONS.md`、`agate/phase-cards/P8-release.md`（叙事改述）+ `agate/tests/unit/test_agate_run.py`（编码守卫字符串字面量）。
+
+### 复审结论汇总
+
+| # | 审查项 | round 6 | round 7 |
+|---|--------|---------|---------|
+| A1 | 文档→脚本对齐 | ALIGNED | **ALIGNED（无回退）** |
+| A2 | 脚本→文档对齐 | MISALIGNED | **ALIGNED（闭合）** |
+| A3 | 一致性连锁 + 反向传播 | A3a ALIGNED / A3b MISALIGNED | A3a **ALIGNED** / A3b **ALIGNED（闭合）** |
+| A4 | 测试覆盖 | ALIGNED | **ALIGNED（无回退）** |
+| A5 | 下游影响 + 文档传播 | A5.1/A5.2 ALIGNED / A5.3 MISALIGNED | A5.1/A5.2 **ALIGNED** / A5.3 **ALIGNED（闭合）** |
+| A6 | 锚点表覆盖 | ALIGNED | **ALIGNED（无回退）** |
+| A7 | 设计原则一致性 | ALIGNED | **ALIGNED（无回退）** |
+| A8 | 声称-命令绑定 | ALIGNED | **ALIGNED（无回退）** |
+
+**总结论：aligned**。round6 的 3 项 MISALIGNED 已全部闭合，无新增不一致，无回退。解除 commit 阻塞。
+
+### A2 / A3b / A5.3 逐项复核 — ALIGNED（闭合）
+
+**名称/身份级 6 处**（`git diff` 逐处核对）：
+
+| 落点 | 修复后 | 判定 |
+|---|---|---|
+| `agate/state-machine.md:311` | 「P8 是**「交付收尾」**，不是「发布」」 | 闭合 |
+| `agate/state-machine.md:315` | 表行「交付收尾 (READY)」 | 闭合 |
+| `agate/dispatch-protocol.md:881` | P8→READY「交付收尾完成（…）」 | 闭合 |
+| `agate/WORKFLOW.md:256` | 「P8 交付收尾：涉及发布的任务必做」（与 :327 一致）| 闭合 |
+| `agate/role-system.md:29` | 「写代码、多包交付收尾」 | 闭合 |
+| `agate/assets/execution-roles/implementer.md:9` | 「# 实现工程师（P4 实现 / P8 交付收尾）」 | 闭合 |
+
+**活动级残留**（一并对齐）：`state-machine.md:167`（「执行交付收尾」）、`:438`（「交付收尾，少轮次」）、`implementer.md:11`（「P8 … 做交付收尾」）、`P8-release.md:9/:29/:47`、`LIMITATIONS.md:119`（「P8 交付收尾」）、`WORKFLOW.md:166`（「交付收尾」）——均已改。
+
+- **残留复核**：`grep -rn "发布准备" agate/state-machine.md agate/dispatch-protocol.md agate/WORKFLOW.md agate/role-system.md agate/assets/execution-roles/implementer.md` → **0 命中**。全 `agate/`（非 tests）仅剩 `UPGRADING.md:313`（批 4 节历史注「（原「发布准备」）」）+ `UPGRADING.md:1269`（冻结历史版本节）——均为**合法历史注**。
+- **一致性**：`交付收尾` 现覆盖 9 文件（phases.yaml / dispatch-protocol / WORKFLOW / implementer / UPGRADING / role-system / P8-release / state-machine / LIMITATIONS），与权威 `phases.yaml name: 交付收尾` + BDD-15 同口径。
+
+**结论**：A2 / A3b / A5.3 **全部 ALIGNED**（同一根因闭合）。
+
+### 回归面复核 — 首轮 ALIGNED 项无回退
+
+| 维度 | 复核命令 / 依据 | 结果 |
+|---|---|---|
+| consistency | `check-protocol-consistency.py --strict-errors-only` | **exit 0 / 0 ERROR / 404 WARNING**（与 round6 一致，无新增） |
+| structure | `check-structure-consistency.py` | **S1-S6/S0 全 OK**（S-1 YAML↔WORKFLOW 名称一致） |
+| batch4 回归 | `pytest test_gate_layer.py test_check_p8_delivery.py test_check_gate.py test_agate_run.py -q` | **237 passed** |
+| A1/A3a/A6 | 修复仅动叙事文档 + `test_agate_run.py` 字符串字面量（`"with open" + "("`，编码守卫规避）——未改任何协议逻辑/数据面 | 无回退 |
+
+> **观察（非阻塞）**：`test_agate_run.py:282/284` 的编码守卫误判修复属 batch3 测试源修正（非本批协议面），已随本轮落地。
+
+### [DESIGN_GAP] 复核（5 条，未受本轮修复影响）
+
+| # | DESIGN_GAP | 判定 |
+|---|---|---|
+| ① | 提交类型→关卡集合的具体成员与转换表矩体未定（P2 §11 预留）| **DESIGN_GAP（交 P7）** |
+| ② | `phases.schema.json` 不在 §6.1b output 列但须同步（已同步）| **DESIGN_GAP（交 P7）** |
+| ③ | `WORKFLOW.md` 不在 §6.1b output 列但 S-1 强制（已同步）| **DESIGN_GAP（交 P7）** |
+| ④ | `delivery` 合法取值集合设计未定（只查留痕存在）| **DESIGN_GAP（交 P7）** |
+| ⑤ | 发版逻辑删除时机/顺序（本批未删除）| **DESIGN_GAP（交 P7）** |
+| ⑥ | P8 叙事面未同步 | **本轮修复即其闭合 → 转 ALIGNED** |
+
+### round 7 闭环规则表
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| **ALIGNED** | A1 / A2 / A3a / A3b / A4 / A5.1 / A5.2 / A5.3 / A6 / A7 / A8 | 通过，**可 commit**。 |
+| **DESIGN_GAP（交 P7）** | ①-⑤（见上表）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`。 |
+
+**round 7 结论：ALIGNED（可 commit）。**

@@ -1,4 +1,4 @@
-# P8 — 发布
+# P8 — 交付收尾
 
 > 当前状态：[首次 / 重试 #N / 裁剪跳阶]
 > 裁剪跳阶 → 确认 P1 phases 不含 P8 + internal_only: true + internal_only_reason 已声明 → 跳过，标记 READY
@@ -6,7 +6,7 @@
 
 ## 如果是首次进入本阶段
 
-1. 主 Agent 派发 releaser subagent（implementer P8 模式）执行发布准备
+1. 主 Agent 派发 releaser subagent（implementer P8 模式）执行交付收尾
    1.1 写 P8-dispatch-context-implementer.md（派发指引：目标/约束/上游关联/输入文件 + 客观查证信息）
 2. releaser subagent 产出 P8-release.md，**不执行 git commit/tag**
 3. 主 Agent 执行 gate 验证 → 通过后执行 bump-version + CHANGELOG 更新 → 同一 commit + tag
@@ -26,7 +26,7 @@
 
 ## 执行方式
 
-releaser subagent（implementer P8 模式）执行以下发布准备步骤：
+releaser subagent（implementer P8 模式）执行以下交付收尾步骤：
 
 1. 读取 P2-design.md packages 声明，确定需 bump 的包
 2. 为每个 package 执行发布检查命令
@@ -44,7 +44,7 @@ releaser subagent（implementer P8 模式）执行以下发布准备步骤：
 多包发布时 P8 可拆批并行（模式 2 静态拆批 / 模式 3 并行）：
 
 1. 每个 package 派一个 releaser subagent（implementer P8 模式），各写 `P8-release-{pkg}.md`
-2. 各 releaser 只处理自己包的发布准备（版本 bump 建议 + CHANGELOG 更新 + 发布检查命令）
+2. 各 releaser 只处理自己包的交付收尾（版本 bump 建议 + CHANGELOG 更新 + 发布检查命令）
 3. 所有 releaser 返回后，主 Agent 派合并 subagent 整合唯一 P8-release.md
 4. 合并 subagent 需交叉核对：各包版本号不冲突、bump_type 汇总一致、CHANGELOG 变更合并无遗漏
 5. 主 Agent 在 gate 验证通过后统一执行 bump-version / git commit / git tag
@@ -67,6 +67,8 @@ P8-release.md 中的**临时资源清单**是 releaser→主 Agent 的交接文�
 
 P8-release.md 必须包含：
 - `bump_type: major / minor / patch`
+- `delivery` 字段——交付方式声明（P8 为**交付收尾**，须声明交付方式；缺失 → `check-gate.py P8` exit 1）。
+  合法取值集合设计未定（见 P4-implementation-batch4.md `[DESIGN_GAP]`），当前只查留痕存在、内容任意放行
 - `debt_check: none / reviewed`——债务清单确认留痕（TAG0001 Phase 3）：`none` = 本次无关注项（合法选项，不视为失败）；`reviewed` = 已核对，建议正文附条目 id 清单。只查留痕存在，不查内容达标、不阻断发布
 - 版本号变更确认（version 文件已修改）
 - CHANGELOG [Unreleased] → 新版本号
@@ -79,6 +81,7 @@ check-gate.py P8 $TASK_DIR
 ```
 
 - bump_type 字段存在
+- `delivery` 字段存在（缺失 → exit 1；交付收尾须声明交付方式）
 - `debt_check` 字段存在（缺失 → exit 1；内容任意，含 `none` / 未关闭债务 → 不阻断，BDD-17）
 - 暂存区有 version 文件变更
 - 暂存区 CHANGELOG 有变更

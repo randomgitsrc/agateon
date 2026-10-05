@@ -2,15 +2,16 @@
 phase: P4
 task_id: TAG0042
 type: review
-parent: P4-implementation-batch3.md
+parent: P4-implementation-batch4.md
 batch1_parent: P4-implementation-batch1.md
 batch2_parent: P4-implementation-batch2.md
+batch3_parent: P4-implementation-batch3.md
 status: approved
 agent: review
-review_round: 5
+review_round: 6
 review_date: 2026-10-06
 role: review (偏执 Staff Engineer，工程视角)
-scope: batch1（approved）+ batch2（C1 闭合，approved）+ batch3-agate-run（round 4 rejected→round 5 C1 闭合，approved）
+scope: batch1（approved）+ batch2（C1 闭合）+ batch3（C1 闭合）+ batch4-gate-layer（round 6，approved——0 CRITICAL）
 prod_isolation: "[PROD_NOT_TOUCHED]"
 ---
 
@@ -349,3 +350,80 @@ $ python3 agate/scripts/agate-config.py validate          # cwd=<proj>
 ## [PROD_NOT_TOUCHED]
 
 本轮复核**只读**改动集并运行**只读/隔离**测试与静态核对。守卫有效性以内存字符串模拟验证（未改仓库源码）；pytest 经 `tmp_path`/`git_repo` 夹具隔离；ruff 为只读。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 6（增量）：batch4-gate-layer（关卡层分级 + P8 交付收尾）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `68a796e`，batch3 已落）。
+> 评审依据：`P4-dispatch-context-review-batch4.md`、`P4-implementation-batch4.md`（含修正轮 + 6 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M11/M12/M19 / §4.3、`P3-test-cases-batch4.md`、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 7 aligned）。
+> 视角：**工程正确性/边界/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 7 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: approved**。Pass 1（CRITICAL/BLOCKER）：**0 条**。Pass 2（INFORMATIONAL）：**6 条**（非阻断，多交 P7）。
+
+改动面（`gate_p8` 新增 `delivery` 校验且既有检查全保留、`gate_layer` 数据面 + schema 扩展、P8 叙事同步、UPGRADING 批 4 节）
+经独立实跑核对：gate_p8 未破坏既有检查、`gate_pass_exit`/`next`/`retreat` 未变、schema/structure/consistency 全绿、无新回归。
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+**0 条。** 逐项排查（派发重点 1-4）：
+
+### 1. `gate_p8` 新增 `delivery` 校验未破坏既有检查 — 通过
+读 `check-gate.py::gate_p8`（`:1430-1560`）逐条核对：`bump_type` → `debt_check` → **新增 `delivery`**（缺 → `return 1`，输出含 `delivery`）→ roadmap-done → version/CHANGELOG 双路径 → 声明缺失 WARNING → tag → RM-AG0075 卫生告警。**既有检查全部保留**、顺序未被破坏；`delivery` 检查只查子串留痕（`"delivery:" in p8_text`），未新增文件读写/竞态/TOCTOU。实跑 `test_check_p8_delivery.py`（未声明→非0、声明→rc=2）+ `test_check_gate.py` G8 系列（夹具补 `delivery`）全绿。
+
+### 2. `gate_layer` 结构与 `gate_pass_exit`/`next`/`retreat` 语义 — 通过
+`phases.yaml` 仅改 P8 `name`/`gates` 描述并**追加**顶层 `gate_layer`（`commit_types` 3 类集合互异 + `transitions` forward/retreat/pause 含字面 `paused_from`）；各 phase 的 `gate_pass_exit`/`next`/`retreat` **逐字未变**（`test_gate_layer::_EXPECTED_GATE_PASS_EXIT` 回归基线断言通过）。schema 在 `additionalProperties:false` 下同步新增 `gate_layer`，`check-yaml-schema.py` → `SCHEMA-phases: OK`。
+
+### 3. 回归 — 通过
+`test_gate_layer + test_check_p8_delivery + test_check_gate` → **227 passed**；P8 相邻回归（`test_v060_p8_internal_only`/`test_v060_r4_cached`/`test_check_pruning`/`test_tag0027_b1_phases_transfer_fields`/`test_tag0027_b3b_structure_s1s2_next_retreat`/`test_protocol_dedup_audit`）→ **61 passed**；`test_agate_scripts_encoding`/`test_t41_platform_hygiene`/`test_check_yaml_schema`/`test_check_structure_consistency`/`test_agate_debt_check` → **62 passed**；`check-structure-consistency.py` → S0-S6 全 OK；consistency → **0 ERROR / 404 WARNING**；count-tests **2689**（未漂移）；ruff 通过。
+
+### 4. 测试充分性 — 通过（含 1 条观察）
+`test_gate_layer.py`（BDD-14 结构键名无关 + `paused_from` + gate_pass_exit 回归；BDD-21 preset/UPGRADING/WARNING）、`test_check_p8_delivery.py`（BDD-15 未声明拦截/声明放行/语义面）覆盖 P3 契约。夹具缺陷修复（`copytree(dir=dirs_exist_ok=True)`）未改断言，正确。观察见 INFORMATIONAL-2。
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 文档 / 边界
+
+### [INFORMATIONAL-1] UPGRADING 批 4 节标题「（迁移期无破坏性变更）」与正文矛盾
+标题：`批 4 … P8 交付收尾 + 发版逻辑迁移 preset（迁移期无破坏性变更）`；正文却写「`P8-release.md` 须声明 `delivery` 字段，缺失 → `check-gate.py P8` **exit 1（硬拦截）**。升级后请在 `P8-release.md` 补一行 `delivery:`，否则 P8 gate 会拦」。**`delivery` 是即时硬拦**（在途 P8 任务不加字段即被阻断）= 对既有任务的**破坏性变更**，与标题的「无破坏性变更」不符（batch2 节标题正确，因其行为确未变）。正文已明确告知用户，故**非阻断**。**建议**：标题改为「P8 交付收尾（`delivery` 即时强制）+ 发版逻辑迁移（迁移期无破坏性变更）」，或明示 delivery 为即时生效项。
+
+### [INFORMATIONAL-2] `gate_layer` 目前**无运行时消费者**——BDD-14「不同类型走不同关卡」仅数据面成立
+`grep gate_layer agate/ --include=*.py`（非测试）→ **0 命中**；仅测试 + schema 引用。即 `commit_types` 的「不同集合」是可查数据，但**无脚本按提交类型选择关卡**。BDD-14 Then 的「不同类型走**不同关卡**」在行为层尚未落地（P3 用例亦只断言结构）。DESIGN_GAP ① 覆盖「成员未定」，未覆盖「消费者归属」。**建议 P7 裁决**：`gate_layer` 的消费者是 batch5 `agate-ci-verify` 还是后续批次；否则 BDD-14 行为子句需明确为「数据面即达成」。非阻断。
+
+### [INFORMATIONAL-3] `gate_layer.transitions` 数据完备性：`forward` 无 P6.5 边而 `retreat` 有
+`transitions.forward` 为 P6→P7 直连（无 P6.5 边），而 `retreat` 含 `{from: P6.5, to: P6}`；`commit_types.code-only` 又含 P6.5。P6.5 是挂载于 P6→P7 的子阶段（`phases.yaml:118-121` 注明「非独立转移边」），故 forward 省略 P6.5 可能**有意**，但两侧不对称、易误读。**建议 P7 明确** forward 是否应含 P6.5 语义（或加注释）。非阻断。
+
+### [INFORMATIONAL-4] P8 卡片引用了**不随协议发布**的任务内部文件
+`phase-cards/P8-release.md` 新句含「（见 `P4-implementation-batch4.md` `[DESIGN_GAP]`）」。phase-cards 随协议发布到用户（`~/.agate/current/agate/phase-cards/`），而 `P4-implementation-batch4.md` 在任务目录、**不随发布**——引用悬空。**建议**改为不含内部任务路径的表述。非阻断（纯文档卫生）。
+
+### [INFORMATIONAL-5] 6 条 DESIGN_GAP 判定：同意交 P7；另记 P0-brief 迁移原则与 BDD-15 的张力
+- ① 提交类型成员/矩体未定 → **交 P7**（并见 INFORMATIONAL-2）。
+- ② `phases.schema.json` 不在 output 列但 `additionalProperties:false` 强制同步 → **已同步，正确**，交 P7。
+- ③ `WORKFLOW.md` 不在 output 列但 S-1 强制名称一致 → **已同步，正确**，交 P7。
+- ④ `delivery` 取值集合未定（只查子串）→ **交 P7**（子串检查可被注释/正文误满足，收紧取值需扩 schema）。
+- ⑤ 发版逻辑删除时机/顺序 → **交 P7**（本批只提供等价物 + WARNING + 截止版本，符合 BDD-21 Then）。
+- **张力**：`P0-brief` known_risks「第 2 批起文件缺失时行为与现状一致 + WARNING，到截止版本改 exit 1」vs BDD-15「未声明 `delivery` → 即时拦截」。`delivery` 是字段非文件、且 BDD-15 为验收基线，实现随 BDD；**建议 P7 裁决**该即时强拦是否需给出迁移窗口（否则与 INFORMATIONAL-1 一并处理）。
+
+### [INFORMATIONAL-6] schema `transitions.forward/retreat` 的 `from`/`to` 未做 phase-id 枚举
+`phases.schema.json` 的 `gate_layer.transitions.forward/retreat` 项把 `from`/`to` 声明为自由 `string`（无 `enum`），而 `pause.paused_from` 用了 phase-id `enum`。即 schema 不阻止 `forward` 写入非法 phase id。**建议**统一为 phase-id `enum`。非阻断。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| batch4 目标 | `pytest test_gate_layer test_check_p8_delivery test_check_gate -q` | **227 passed** |
+| P8 相邻回归（6 文件） | `pytest test_v060_p8_internal_only test_v060_r4_cached test_check_pruning test_tag0027_b1_phases_transfer_fields test_tag0027_b3b_structure_s1s2_next_retreat test_protocol_dedup_audit -q` | **61 passed** |
+| 编码/卫生/schema/structure/debt（5 文件） | `pytest test_agate_scripts_encoding test_t41_platform_hygiene test_check_yaml_schema test_check_structure_consistency test_agate_debt_check -q` | **62 passed** |
+| structure | `check-structure-consistency.py` | S0-S6 **全 OK** |
+| schema | `check-yaml-schema.py` | `SCHEMA-phases: OK`（+dispatch/roles/markers） |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 404 WARNING**（冻结面） |
+| ruff | `ruff check agate/scripts/check-gate.py` | `All checks passed!` |
+| 用例数 | `count-tests.sh` | **2689**（未漂移） |
+| gate_layer 消费者 | `grep gate_layer agate/ --include=*.py`（非测试） | **0 命中**（INFORMATIONAL-2 依据） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对（pytest 经 `tmp_path`/`git_repo` 夹具隔离；schema/structure/consistency/ruff 为只读扫描）。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。

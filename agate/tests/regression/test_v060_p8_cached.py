@@ -34,7 +34,7 @@ def _run_gate_p8(agate_scripts, python_exe, run_cli, repo):
     )
 
 
-_P8_RELEASE = "bump_type: minor\ndebt_check: none\n"
+_P8_RELEASE = "bump_type: minor\ndebt_check: none\ndelivery: package-release\n"
 _P8_UNRELEASED = "## [Unreleased]\n"
 
 

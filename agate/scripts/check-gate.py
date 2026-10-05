@@ -1444,6 +1444,14 @@ def gate_p8(task_dir):
     if "debt_check:" not in p8_text:
         sys.stderr.write("GATE P8: P8-release.md 缺 debt_check 字段（须确认债务清单并留痕，可为 none）\n")
         return 1
+    # BDD-15（TAG0042 批 4）：P8 语义为**交付收尾**——delivery 声明缺失 → 拦截（非 0）。
+    # 只查留痕存在（合法取值集合设计未定，见 P4-implementation-batch4.md [DESIGN_GAP]），
+    # 内容任意放行；未声明则说明交付收尾未完成。
+    if "delivery:" not in p8_text:
+        sys.stderr.write(
+            "GATE P8: P8-release.md 缺 delivery 字段（P8 为交付收尾，须声明交付方式）\n"
+        )
+        return 1
 
     # RM-AG0043（BDD-5/6）：P8 完成时反查 roadmap.md 关联 RM 条目是否已回写 done
     # DEBT0020：roadmap_path 按仓库根锚定（而非 CWD 相对拼接），非仓库根 CWD 下仍能
@@ -1508,6 +1516,24 @@ def gate_p8(task_dir):
         sys.stderr.write(
             f"GATE P8 WARNING: 暂存区和最近 {lookback_num} 个 commit 均无 {changelog_file} 变更\n"
         )
+
+    # BDD-21（TAG0042 批 4）：声明文件缺失 + 有发版痕迹 → 显眼 WARNING（不静默失去保护）。
+    # 迁移期：项目未采纳 agate.config.yaml 时，既有发版检查（version/CHANGELOG/tag）仍生效，
+    # 但提示可迁移到等价物 `release.preset: semver-changelog-tag`（一行声明即保持现状）。
+    # 仓库定位以 **task_dir** 为基准（与上方 DEBT0020 / RM-AG0075 同取向）。
+    if cached_version or recent_version or cached_changelog or recent_changelog:
+        rc_cfg, cfg_root = _git(["rev-parse", "--show-toplevel"], cwd=task_dir)
+        cfg_root_out = (cfg_root or "").strip()
+        if (
+            rc_cfg == 0
+            and cfg_root_out
+            and not os.path.isfile(os.path.join(cfg_root_out, "agate.config.yaml"))
+        ):
+            sys.stderr.write(
+                "GATE P8 WARNING: 未发现项目声明 agate.config.yaml——发版检查（version/"
+                "CHANGELOG/tag）仍按既有逻辑执行；建议迁移为一行声明 "
+                "`release.preset: semver-changelog-tag`（等价物，保持现状），详见 UPGRADING.md\n"
+            )
 
     # 检查 tag 存在性（WARNING，不阻断——tag 通常在 gate 通过后才打）
     version_tag_prefix = os.environ.get("VERSION_TAG_PREFIX", "v")

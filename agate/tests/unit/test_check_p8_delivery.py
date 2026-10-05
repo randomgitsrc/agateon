@@ -43,7 +43,9 @@ def _p8_repo(git_repo, td, files):
     repo = git_repo.path
     (repo / "README.md").write_text("init\n", encoding="utf-8")
     git_repo.commit("init")
-    shutil.copytree(td, repo / "task")
+    # dirs_exist_ok：本测试在同一 git_repo 上先后跑「未声明 / 已声明」两场景，
+    # 第二次复制需覆盖既有 task/（仅 P8-release.md 不同）——不改变任何断言。
+    shutil.copytree(td, repo / "task", dirs_exist_ok=True)
     for name, content in files.items():
         (repo / name).write_text(content, encoding="utf-8")
         git_repo.stage(name)
