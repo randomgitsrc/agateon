@@ -12,3 +12,4 @@
 {"event":"state_transition","from":"P3","phase":"P4","prev_hash":"bdea60dcf3946ab5ee5dec648be4dc30881455af20edb20dda9b6d90dc51a2a6","to":"P4","ts":"2026-10-05T20:47:23.181566Z"}
 {"cmd":"check-gate.py P4","event":"gate_run","exit":0,"phase":"P4","prev_hash":"141fff1fdf85d659d1c7161081a7a9d384d538aabcf6b1548f546cfe1f02a8f1","runner":"pre-commit","ts":"2026-10-05T20:47:51.921007Z"}
 {"event":"state_transition","from":"P3","phase":"P4","prev_hash":"bf4940b14e35966272d435d86e6a1e2ae01a177301679432ff3ed8c46179430c","to":"P4","ts":"2026-10-05T20:47:51.921108Z"}
+{"event":"state_transition","from":"P4","phase":"P5","prev_hash":"afd52bd8f4887fc4f4a5291e8a969bfdd88fbc1ec4e766f50ae1d4a8aa396344","to":"P5","ts":"2026-10-06T01:15:54.918424Z"}
