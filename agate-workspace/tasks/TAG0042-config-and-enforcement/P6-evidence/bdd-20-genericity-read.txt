@@ -1,0 +1,16 @@
+### BDD-20: 项目形态声明化不引入单项目规则（通用性实读）
+
+## ① 声明读取路径 agate-config.py 单项目 token 扫描（期望：无命中）
+  agate-config.py 中 'agateon': 0
+  agate-config.py 中 'peekview': 0
+  agate-config.py 中 'pytest': 0
+
+## ② read_project_config 函数体单项目 token 扫描（期望：无命中）
+  函数体行数: 56
+  read_project_config 中 'agateon': 0
+  read_project_config 中 'peekview': 0
+  read_project_config 中 'pytest': 0
+  → 读取完全由声明文件驱动，无单项目硬编码
+
+## ③ 通用性实读：任意形态声明均按声明值返回（test_bdd_20_config_read_path_is_declaration_driven 覆盖 go/python 两形态）
+  见 bdd-05-06-20-config-schema.txt 中 test_bdd_20_* 两条 PASSED

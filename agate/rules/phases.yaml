@@ -150,13 +150,13 @@ phases:
     retreat: null
     gate_pass_exit: 0
   - id: P8
-    name: 发布准备
+    name: 交付收尾
     exec_role: implementer
     outputs:
       - {file: P8-release.md, required: true}
     gates:
       - {check: "check-gate.py P8 + gate_commands 逐包 exit 0"}
-      - {check: "check-gate.py P8 $TASK_DIR：bump_type/debt_check 字段 + version/CHANGELOG/tag 检查"}
+      - {check: "check-gate.py P8 $TASK_DIR：delivery/bump_type/debt_check 字段 + version/CHANGELOG/tag 检查"}
       - {check: "check-p6-provenance.py --audit7-only $TASK_DIR 判定 P5 证据复用；gate_commands.P5 逐包 exit 0 + failed==0"}
       - {check: "gate_commands.P5 链路含 check-protocol-consistency.py 时先 tag 后重跑（DEBT0013）"}
     retry_cap: 2
@@ -164,3 +164,36 @@ phases:
     next: null
     retreat: null
     gate_pass_exit: 2
+
+# ── 关卡层分级（TAG0042 批 4，BDD-14）───────────────────────────────────────
+# 数据面：按**提交类型**（纯代码 / 纯文档 / 发版）选择关卡集合 + 转换表。
+# 语义约束：本节引入**不改变**上方各 phase 条目的 gate_pass_exit / next / retreat
+# （回归基线见 agate/tests/unit/test_gate_layer.py::_EXPECTED_GATE_PASS_EXIT）。
+# 转换表把上方各 phase 的 next/retreat 集中为可查视图，并补 PAUSED 来源语义（paused_from）。
+# [DESIGN_GAP]：提交类型 → 关卡集合的**具体成员**与转换表矩体属 P2 §11 预留的设计未定面，
+# 由 P4 落定、P7 逐条审查（详见 P4-implementation-batch4.md）。
+gate_layer:
+  # 提交类型 → 关卡集合（该提交类型实际经过的 phase 序列；不同类型走不同集合）。
+  commit_types:
+    code-only: [P0, P1, P2, P3, P4, P5, P6, P6.5, P7, P8]
+    docs-only: [P0, P1, P2, P7, P8]
+    release: [P7, P8]
+  # 转换表：phase 间合法转移（forward/retreat 与上方 next/retreat 同源）+ PAUSED 来源。
+  transitions:
+    forward:
+      - {from: P0, to: P1}
+      - {from: P1, to: P2}
+      - {from: P2, to: P3}
+      - {from: P3, to: P4}
+      - {from: P4, to: P5}
+      - {from: P5, to: P6}
+      - {from: P6, to: P7}
+      - {from: P7, to: P8}
+    retreat:
+      - {from: P5, to: P4}
+      - {from: P6, to: P4}
+      - {from: P6.5, to: P6}
+    pause:
+      # 任意阶段 → PAUSED；paused_from = 进入 PAUSED 的来源阶段（恢复时据此回原阶段，
+      # 见 state-machine.md「PAUSED 恢复协议」）。
+      - {to: PAUSED, paused_from: [P0, P1, P2, P3, P4, P5, P6, P6.5, P7, P8]}

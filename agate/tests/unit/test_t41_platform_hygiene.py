@@ -60,7 +60,7 @@ def test_t41_p8_warning_names_existing_template_in_output(
     现改为触发真实路径并断言**输出内容**（remedy 必须出现在用户实际看到的地方，且文件存在）。
     """
     td = task_dir()
-    (td / "P8-release.md").write_text("bump_type: minor\ndebt_check: none\n", encoding="utf-8")
+    (td / "P8-release.md").write_text("bump_type: minor\ndebt_check: none\ndelivery: package-release\n", encoding="utf-8")
     repo = git_repo.path
     for name, content in (("package.json", "v0.1.0\n"), ("CHANGELOG.md", "## [Unreleased]\n")):
         (repo / name).write_text(content, encoding="utf-8")

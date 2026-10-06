@@ -1,0 +1,23 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 12 items
+
+agate/tests/unit/test_agate_config.py::test_bdd_3_init_generates_declaration_file PASSED [  8%]
+agate/tests/unit/test_agate_config.py::test_bdd_3_declared_form_is_readback_not_hardcoded PASSED [ 16%]
+agate/tests/unit/test_agate_config.py::test_bdd_3_protocol_does_not_hardcode_md_product_shape PASSED [ 25%]
+agate/tests/unit/test_agate_config.py::test_bdd_4_get_outputs_consumable_value PASSED [ 33%]
+agate/tests/unit/test_agate_config.py::test_bdd_4_list_and_show_output_declaration PASSED [ 41%]
+agate/tests/unit/test_agate_config.py::test_bdd_4_get_missing_field_is_nonzero PASSED [ 50%]
+agate/tests/unit/test_agate_config.py::test_bdd_7_install_hook_auto_inits_declaration PASSED [ 58%]
+agate/tests/unit/test_agate_config.py::test_bdd_7_install_hook_init_is_idempotent PASSED [ 66%]
+agate/tests/unit/test_agate_config.py::test_bdd_7_setup_source_invokes_config_init PASSED [ 75%]
+agate/tests/unit/test_agate_config.py::test_bdd_8_gate_p0_missing_declaration_keeps_passing_exit PASSED [ 83%]
+agate/tests/unit/test_agate_config.py::test_bdd_8_gate_p0_missing_declaration_emits_warning PASSED [ 91%]
+agate/tests/unit/test_agate_config.py::test_bdd_8_upgrading_documents_cutoff_version PASSED [100%]
+
+============================== 12 passed in 0.82s ==============================

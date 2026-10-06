@@ -1,0 +1,917 @@
+# agate/rules/obligations.yaml — 阶段义务三态归宿登记表（TAG0042 批6，BDD-13/18/19）
+#
+# 重新盘点口径（详见 agate-workspace/tasks/TAG0042-config-and-enforcement/P4-implementation-batch6.md）：
+#   外部审计的「160 项逐条清单」不在仓库（P0-brief §四已确认），本表按 P0-brief fallback
+#   「没有就得重新盘点」从协议本体重新盘点。每条义务带**可追溯来源锚点**（文件 + 节/键），
+#   不编造：每条都能指回协议原文（WORKFLOW.md / phase-cards/*.md / rules/*.md /
+#   dispatch-protocol.md / state-machine.md / rules/phases.yaml）。
+#
+# 三态归宿：
+#   M = 脚本执行（脚本在不可绕开路径上执行：pre-commit hook / check-gate.py / check-*.py 门禁）
+#   C = 命令生成（有可判定命令但依赖主 Agent 记得运行，不在必经路径上）
+#   R = 强制评审（判断类义务，由强制独立评审承载；脚本强制的是「该评审必须出现」而非其内容）
+#
+# 字段：
+#   id           义务编号（OBL-<阶段>-NN / OBL-X-NN 横切）
+#   phase        归属阶段（P0..P8 / P6.5 / X 横切）
+#   statement    义务陈述（人可读）
+#   anchor       可追溯来源锚点（文件#节 / rules/phases.yaml#键）
+#   disposition  三态归宿（M / C / R）——不得为空，空即「无归宿」
+#   script       现有脚本（如有；无则空串）
+#   evidence     失败证据（如有；来自 AGENTS.md / WORKFLOW.md / P0-brief 记录的实测事故）
+#
+# 平台无关：本文件属数据面（CHECK 15 扫描面），不得出现平台名/平台工具名——
+# 具体词表由 check-protocol-consistency.py 的平台词表维护，本文件不复述（复述即命中）。
+
+schema_version: 1
+
+# 基线：引入登记表时的 M 类占比（只增不减；下降即 check-obligations.py 判失败，BDD-19）。
+# m / total 用整数交叉相乘比对（current_m * baseline_total >= baseline_m * current_total），
+# 避免浮点舍入。m_ratio 仅供人读。
+baseline:
+  m: 60
+  total: 123
+  m_ratio: 0.4878
+  note: "TAG0042 批6 首次登记基线（从协议本体重新盘点口径；M60/C33/R30）"
+
+obligations:
+  # ── P0 任务简报（主 Agent 亲自写）────────────────────────────────────
+  - id: OBL-P0-01
+    phase: P0
+    statement: "P0-brief.md 四字段齐全（目标描述 + known_risks + executor_env + env_constraints）"
+    anchor: "agate/phase-cards/P0-orchestrator.md#P0-brief.md 四字段"
+    disposition: R
+    script: ""
+    evidence: "gate_p0 恒 return 2（无脚本判定），当前无脚本强制力"
+  - id: OBL-P0-02
+    phase: P0
+    statement: "known_risks 含同类/影响面预判结论（三问）"
+    anchor: "agate/phase-cards/P0-orchestrator.md#同类/影响面预判（强制）"
+    disposition: R
+    script: ""
+    evidence: "TAG0036 M18：P1 凭推理判『不处理』，P2 实测才发现 SG.6 由绿转红"
+  - id: OBL-P0-03
+    phase: P0
+    statement: "P0-brief 时效性自检（严重漂移回 P0 / 轻微漂移标 [P0_STALE]）"
+    anchor: "agate/phase-cards/P0-orchestrator.md#P0-brief 时效性自检（漂移判据）"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P0-04
+    phase: P0
+    statement: "环境自检（debug 环境 / 测试框架 / 浏览器自动化可用）"
+    anchor: "agate/phase-cards/P0-orchestrator.md#环境自检"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P0-05
+    phase: P0
+    statement: "active-tasks.md 写入新任务行"
+    anchor: "agate/phase-cards/P0-orchestrator.md#推进条件"
+    disposition: C
+    script: ""
+    evidence: ""
+
+  # ── P1 需求基线 ────────────────────────────────────────────────────
+  - id: OBL-P1-01
+    phase: P1
+    statement: "P1-requirements.md 含 ≥1 条 BDD 验收条件（#### BDD-NN:）"
+    anchor: "agate/rules/phases.yaml#P1.gates"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P1-02
+    phase: P1
+    statement: "domains / packages / risk_level / phases 声明"
+    anchor: "agate/rules/phases.yaml#P1.task_fields"
+    disposition: M
+    script: "agate/scripts/check-frontmatter.py + agate/scripts/check-pruning.py"
+    evidence: ""
+  - id: OBL-P1-03
+    phase: P1
+    statement: "无未决阻塞 [NEED_CONFIRM]（[SUGGEST:] 不阻塞）"
+    anchor: "agate/WORKFLOW.md#P1-P8 阶段总览"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P1-04
+    phase: P1
+    statement: "无 status: GAP（supplementable 不阻塞）"
+    anchor: "agate/dispatch-protocol.md#可判定门槛规范"
+    disposition: C
+    script: ""
+    evidence: "TAG0009：环境问题错标 supplementable 致 11.7 小时"
+  - id: OBL-P1-05
+    phase: P1
+    statement: "P1-review.md status:approved + agent≠main + 含 BDD 编号锚点"
+    anchor: "agate/rules/phases.yaml#P1.gates"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P1-06
+    phase: P1
+    statement: "requirements-review 强制派发（所有任务不可裁）"
+    anchor: "agate/rules/review-mapping.md#映射规则"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P1-07
+    phase: P1
+    statement: "同类扫描结论写入正文（命中清单 + 逐条处理判定）"
+    anchor: "agate/phase-cards/P1-requirements.md#同类扫描（强制节）"
+    disposition: R
+    script: ""
+    evidence: "DEBT0046：凭推理判『不处理』已被证伪（TAG0036 M18）"
+  - id: OBL-P1-08
+    phase: P1
+    statement: "新增/改名 agate/scripts 下文件登记面实测（非推理）"
+    anchor: "agate/phase-cards/P1-requirements.md#同类扫描（强制节）"
+    disposition: C
+    script: ""
+    evidence: "TAG0036 M18：P1 推理判『不处理』，P2 实测才发现 SG.6 由绿转红"
+  - id: OBL-P1-09
+    phase: P1
+    statement: "capability_requirements 三态声明（available / supplementable / GAP）"
+    anchor: "agate/phase-cards/P1-requirements.md#产出规格"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P1-10
+    phase: P1
+    statement: "frontend 任务 vision 能力条目声明（need 含 visual/vision）"
+    anchor: "agate/phase-cards/P1-requirements.md#常见错误"
+    disposition: M
+    script: "agate/scripts/check-gate.py::_gate_p1_vision_capability"
+    evidence: ""
+  - id: OBL-P1-11
+    phase: P1
+    statement: "ceremony thin 四要素 checklist（coupling_checklist + 跳过风险 + P5/P6 保留）"
+    anchor: "agate/phase-cards/P1-requirements.md#ceremony fail-closed 声明 checklist"
+    disposition: M
+    script: "agate/scripts/check-routing.py"
+    evidence: ""
+  - id: OBL-P1-12
+    phase: P1
+    statement: "judge.enabled: true 写入 .state.yaml（机制后新任务）"
+    anchor: "agate/phase-cards/P1-requirements.md#产出规格"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P1-13
+    phase: P1
+    statement: "P0-brief 时效性质疑标记（[P0_STALE: 具体漂移点]）"
+    anchor: "agate/phase-cards/P1-requirements.md#P0-brief 时效性质疑"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P1-14
+    phase: P1
+    statement: "P1 基线保护（后续变更须授权 + [BASELINE_CHANGE]）"
+    anchor: "agate/phase-cards/P1-requirements.md#P1 基线保护"
+    disposition: R
+    script: ""
+    evidence: "TAG0025：P3/P4 隐含扩展范围未授权"
+
+  # ── P2 方案设计 ────────────────────────────────────────────────────
+  - id: OBL-P2-01
+    phase: P2
+    statement: "候选方案 ≥2 + candidate_count 字段（design_trivial/follows_existing_pattern 可 1）"
+    anchor: "agate/rules/phases.yaml#P2.gates"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P2-02
+    phase: P2
+    statement: "四字段 packages / domains / ui_affected / gate_commands"
+    anchor: "agate/rules/phases.yaml#P2.gates"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P2-03
+    phase: P2
+    statement: "含权衡/选择理由/取舍/考量"
+    anchor: "agate/WORKFLOW.md#P1-P8 阶段总览"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P2-04
+    phase: P2
+    statement: "P2-review.md status:approved + agent≠main"
+    anchor: "agate/rules/phases.yaml#P2.outputs"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P2-05
+    phase: P2
+    statement: "影响面梳理三部分（改什么 / 不改什么 / 风险在哪）"
+    anchor: "agate/phase-cards/P2-design.md#影响面梳理（强制节）"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P2-06
+    phase: P2
+    statement: "登记面实测（新增 agate/scripts 文件）"
+    anchor: "agate/phase-cards/P2-design.md#影响面梳理（强制节）"
+    disposition: C
+    script: ""
+    evidence: "DEBT0046：原文把约定与门禁混为一谈"
+  - id: OBL-P2-07
+    phase: P2
+    statement: "UI 设计节（ui_affected: true：## UI 设计 + 形态声明 + 维度选择 + checklist）"
+    anchor: "agate/phase-cards/P2-design.md#产出规格"
+    disposition: M
+    script: "agate/scripts/check-gate.py::_gate_p2_ui_design_section"
+    evidence: ""
+  - id: OBL-P2-08
+    phase: P2
+    statement: "骨架产出 P2-skeleton.md（project_phase: bootstrap）"
+    anchor: "agate/phase-cards/P2-design.md#产出规格"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P2-09
+    phase: P2
+    statement: "minimal_validation 最小验证（或声明纯代码逻辑 + 理由）"
+    anchor: "agate/phase-cards/P2-design.md#派发"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P2-10
+    phase: P2
+    statement: "dispatch_plan 合法性（mode / parallel_limit / batches 字段契约）"
+    anchor: "agate/phase-cards/P2-design.md#dispatch_plan 机器字段"
+    disposition: M
+    script: "agate/scripts/check-gate.py::_gate_p2_dispatch_plan"
+    evidence: ""
+  - id: OBL-P2-11
+    phase: P2
+    statement: "gate_commands 声明 + --strict 反模式（每校验独立 key）"
+    anchor: "agate/phase-cards/P2-design.md#gate_commands 声明"
+    disposition: C
+    script: ""
+    evidence: "TAG0004：&& 链路短路致 --strict 校验从未执行"
+  - id: OBL-P2-12
+    phase: P2
+    statement: "禁止声明 P3_xxx 检测键（只收集精确键 P3）"
+    anchor: "agate/phase-cards/P2-design.md#P3_xxx 禁止声明"
+    disposition: M
+    script: "agate/scripts/check-tdd-red.py"
+    evidence: "旧解析器 startswith('P3') 静默收集辅助键致 TDD 误执行"
+  - id: OBL-P2-13
+    phase: P2
+    statement: "plan-eng-review（backend 或 risk=high 强制）"
+    anchor: "agate/rules/review-mapping.md#映射规则"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P2-14
+    phase: P2
+    statement: "plan-design-review（domains 含 frontend）"
+    anchor: "agate/rules/review-mapping.md#映射规则"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P2-15
+    phase: P2
+    statement: "plan-ceo-review（[NEED_CONFIRM] 且涉及业务方向）"
+    anchor: "agate/rules/review-mapping.md#映射规则"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P2-16
+    phase: P2
+    statement: "项目侧架构决策读取/写入 decisions/"
+    anchor: "agate/phase-cards/P2-design.md#项目侧架构决策（decisions/）"
+    disposition: R
+    script: ""
+    evidence: "DEBT0039：决策落点缺失"
+  - id: OBL-P2-17
+    phase: P2
+    statement: "评审组长汇总（多评审角色并行后组长汇总统一 status）"
+    anchor: "agate/phase-cards/P2-design.md#评审派发（C8 机械映射）"
+    disposition: R
+    script: ""
+    evidence: ""
+
+  # ── P3 测试设计 ────────────────────────────────────────────────────
+  - id: OBL-P3-01
+    phase: P3
+    statement: "agate-capture-env-baseline.py 执行（环境基线捕获）"
+    anchor: "agate/phase-cards/P3-tdd.md#如果是首次进入本阶段"
+    disposition: C
+    script: "agate/scripts/agate-capture-env-baseline.py"
+    evidence: ""
+  - id: OBL-P3-02
+    phase: P3
+    statement: "创建型测试清理钩子（创建即注册 / 无条件删除 / 404 视为已清理）"
+    anchor: "agate/phase-cards/P3-tdd.md#如果是首次进入本阶段"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P3-03
+    phase: P3
+    statement: "P3-test-cases.md 存在 + test_code_dir 声明"
+    anchor: "agate/rules/phases.yaml#P3.outputs"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P3-04
+    phase: P3
+    statement: "check-tdd-red.py exit 0（真红灯：assertion 失败 / 项目内 import 失败）"
+    anchor: "agate/phase-cards/P3-tdd.md#gate 规则"
+    disposition: C
+    script: "agate/scripts/check-tdd-red.py"
+    evidence: ""
+  - id: OBL-P3-05
+    phase: P3
+    statement: "每条 BDD 1:1 测试用例映射"
+    anchor: "agate/phase-cards/P3-tdd.md#产出规格"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P3-06
+    phase: P3
+    statement: "UI 任务 Playwright/E2E 用例存在"
+    anchor: "agate/phase-cards/P3-tdd.md#产出规格"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P3-07
+    phase: P3
+    statement: "新增/改动测试通过平台假设扫描（0 命中）"
+    anchor: "agate/phase-cards/P3-tdd.md#推进条件"
+    disposition: C
+    script: "agate/scripts/check-platform-assumptions.py"
+    evidence: "DEBT0048：平台假设到 P4 全量 pytest 才被抓出"
+
+  # ── P4 代码实现 ────────────────────────────────────────────────────
+  - id: OBL-P4-01
+    phase: P4
+    statement: "暂存区含非 md/yaml 代码文件（git diff --cached）"
+    anchor: "agate/rules/phases.yaml#P4.gates"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P4-02
+    phase: P4
+    statement: "P3 测试变绿（不修改测试迁就实现）"
+    anchor: "agate/assets/execution-roles/implementer.md#认知模式"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P4-03
+    phase: P4
+    statement: "P4-review.md status:approved（按 C8 domains/risk 派发）"
+    anchor: "agate/rules/phases.yaml#P4.outputs"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P4-04
+    phase: P4
+    statement: "SCOPE+ / DESIGN_GAP 标注（发现偏差须上报）"
+    anchor: "agate/assets/execution-roles/implementer.md#DESIGN_GAP 偏差声明"
+    disposition: C
+    script: "agate/scripts/check-scope-resolved.py"
+    evidence: ""
+  - id: OBL-P4-05
+    phase: P4
+    statement: "新增文件核对表（骨架/CODE-MAP 机制已采用时）"
+    anchor: "agate/phase-cards/P4-implementation.md#新增文件核对表"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P4-06
+    phase: P4
+    statement: "known-violations.md 登记（RM-AG0046 三重门槛）"
+    anchor: "agate/phase-cards/P4-implementation.md#评审 checklist（RM-AG0046）"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P4-07
+    phase: P4
+    statement: "review / design-review / cso 派发（C8 域触发）"
+    anchor: "agate/rules/review-mapping.md#映射规则"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P4-08
+    phase: P4
+    statement: "phase=P4（不提前写 P5；phase = 本 commit 产出阶段）"
+    anchor: "agate/phase-cards/P4-implementation.md#如果是首次进入本阶段"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: "peekview T085：预写 vs 不预写冲突致 8 次 --no-verify"
+
+  # ── P5 技术验证 ────────────────────────────────────────────────────
+  - id: OBL-P5-01
+    phase: P5
+    statement: "P2 gate_commands.P5 命令全部 exit 0 + failed==0"
+    anchor: "agate/phase-cards/P5-verification.md#执行方式"
+    disposition: C
+    script: ""
+    evidence: "T046：38 单元测试全绿 + 类型检查 OK，但浏览器里图片是破的"
+  - id: OBL-P5-02
+    phase: P5
+    statement: "P5-test-results/ 存在 + failed 计数判定"
+    anchor: "agate/rules/phases.yaml#P5.outputs"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P5-03
+    phase: P5
+    statement: "UI 任务 E2E（gate_commands.P5_e2e）已执行且通过"
+    anchor: "agate/phase-cards/P5-verification.md#推进条件"
+    disposition: C
+    script: ""
+    evidence: "T046：不跑 E2E，端到端行为未验证"
+  - id: OBL-P5-04
+    phase: P5
+    statement: "无 [PROD_TOUCHED]（生产环境触达即 PAUSED）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/pre-commit-gate.py"
+    evidence: ""
+  - id: OBL-P5-05
+    phase: P5
+    statement: "全量测试（含非本任务测试；预存失败须标注）"
+    anchor: "agate/phase-cards/P5-verification.md#判定规则"
+    disposition: C
+    script: ""
+    evidence: "T027：修复后不重跑全量致回归未发现"
+  - id: OBL-P5-06
+    phase: P5
+    statement: "p5_pass_commit 写入 .state.yaml（供 P6/P8 复用判定）"
+    anchor: "agate/phase-cards/P5-verification.md#如果是首次进入本阶段"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P5-07
+    phase: P5
+    statement: "N5 签名校验（grep test runner 输出签名，计数 >0）"
+    anchor: "agate/phase-cards/P5-verification.md#P5 commit→push 窗口残余风险（N5）"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P5-08
+    phase: P5
+    statement: "P5 commit 不得混入非产出文件改动"
+    anchor: "agate/phase-cards/P5-verification.md#如果是首次进入本阶段"
+    disposition: C
+    script: ""
+    evidence: "反例提交 5bdcd90 混入 agate-debt-check.py 真实修复"
+  - id: OBL-P5-09
+    phase: P5
+    statement: "verification_env 失败处理协议（先分类 + 批处理 + 止损 2 轮）"
+    anchor: "agate/dispatch-protocol.md#verification_env 失败处理协议"
+    disposition: R
+    script: ""
+    evidence: "TAG0009：环境问题错标 supplementable 致 11.7 小时"
+
+  # ── P6 验收 ────────────────────────────────────────────────────────
+  - id: OBL-P6-01
+    phase: P6
+    statement: "所有 BDD PASS（FAIL=0）+ 证据非空"
+    anchor: "agate/rules/phases.yaml#P6.gates"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P6-02
+    phase: P6
+    statement: "每条 PASS 行含文件引用（证据路径）"
+    anchor: "agate/phase-cards/P6-acceptance.md#产出规格"
+    disposition: M
+    script: "agate/scripts/check-p6-provenance.py"
+    evidence: "T046：15 个 1 行 txt 文件凑 provenance 数量"
+  - id: OBL-P6-03
+    phase: P6
+    statement: "P6-evidence/ 非空 + 截图 >1KB（R1a 客观证据 barrier）"
+    anchor: "agate/phase-cards/P6-acceptance.md#P6-evidence/"
+    disposition: M
+    script: "agate/scripts/check-p6-evidence.py"
+    evidence: "T046：1 行文本文件充数"
+  - id: OBL-P6-04
+    phase: P6
+    statement: "操作类 BDD 截图互不相同（md5 逐字节去重）"
+    anchor: "agate/phase-cards/P6-acceptance.md#P6-evidence/"
+    disposition: M
+    script: "agate/scripts/check-p6-evidence.py"
+    evidence: ""
+  - id: OBL-P6-05
+    phase: P6
+    statement: "UI vision 三态双证据（vision YAML blocker_count=0 / GAP 走人工复核记录）"
+    anchor: "agate/phase-cards/P6-acceptance.md#vision-helper 结论绑定"
+    disposition: M
+    script: "agate/scripts/check-p6-provenance.py + agate/scripts/check-p6-evidence.py"
+    evidence: ""
+  - id: OBL-P6-06
+    phase: P6
+    statement: "真实视觉分析（BDD-10：结构化描述判定，不得仅以像素/HTTP 断言）"
+    anchor: "agate/phase-cards/P6-acceptance.md#vision-helper 结论绑定"
+    disposition: R
+    script: ""
+    evidence: "T046：三次视觉否定被三次程序化指标反驳"
+  - id: OBL-P6-07
+    phase: P6
+    statement: "post-test 环境残留检查（快照比对 / 清理钩子验证）"
+    anchor: "agate/phase-cards/P6-acceptance.md#如果是首次进入本阶段"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P6-08
+    phase: P6
+    statement: "check-p6-format.py --fix 归一化（verifier 产出后、gate 前）"
+    anchor: "agate/rules/phases.yaml#P6.gates"
+    disposition: M
+    script: "agate/scripts/check-p6-format.py"
+    evidence: ""
+  - id: OBL-P6-09
+    phase: P6
+    statement: "refactor 回归双证（regression_pass: true + P6-evidence/regression.log）"
+    anchor: "agate/phase-cards/P6-acceptance.md#P6-acceptance.md（refactor 任务：回归验收口径）"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P6-10
+    phase: P6
+    statement: "p5_evidence_reuse 字段声明（P5 证据复用判定，审计 7）"
+    anchor: "agate/phase-cards/P6-acceptance.md#P6-acceptance.md（引用 P5 证据、不重跑：BDD-12/13）"
+    disposition: M
+    script: "agate/scripts/check-p6-provenance.py"
+    evidence: ""
+  - id: OBL-P6-11
+    phase: P6.5
+    statement: "P6.5-judge-verdict.md 存在 + check-judge-verdict.py exit 0"
+    anchor: "agate/rules/phases.yaml#P6.5.gates"
+    disposition: M
+    script: "agate/scripts/check-judge-verdict.py"
+    evidence: ""
+  - id: OBL-P6-12
+    phase: P6.5
+    statement: "judge fresh context 逐条重验全部 BDD（信息隔离白名单）"
+    anchor: "agate/phase-cards/P6-acceptance.md#如果是首次进入本阶段"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P6-13
+    phase: P6.5
+    statement: "check-events.py exit 0（账本哈希链 + judge 轮次 ≤2）"
+    anchor: "agate/rules/phases.yaml#P6.5.gates"
+    disposition: M
+    script: "agate/scripts/check-events.py"
+    evidence: ""
+  - id: OBL-P6-14
+    phase: P6
+    statement: "验收报告记录验收时事实（不写『修复后 PASS』）"
+    anchor: "agate/phase-cards/P6-acceptance.md#核心原则"
+    disposition: R
+    script: ""
+    evidence: "T046：花 2 小时凑 PASS 格式，未验 API 响应头"
+
+  # ── P7 一致性检查 ──────────────────────────────────────────────────
+  - id: OBL-P7-01
+    phase: P7
+    statement: "P7-consistency.md 存在 + [BLOCKER]=0 + [DEVIATION-CRITICAL]=0"
+    anchor: "agate/rules/phases.yaml#P7.gates"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P7-02
+    phase: P7
+    statement: "DESIGN_GAP 全部 REVIEWED 配对"
+    anchor: "agate/phase-cards/P7-consistency.md#gate 规则"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P7-03
+    phase: P7
+    statement: "SCOPE+ 闭环（P1 含 [SCOPE_RESOLVED]）"
+    anchor: "agate/dispatch-protocol.md#SCOPE+ 处理追踪（P2.11）"
+    disposition: M
+    script: "agate/scripts/check-scope-resolved.py"
+    evidence: ""
+  - id: OBL-P7-04
+    phase: P7
+    statement: "跨文件一致性（packages / BDD 数 / 实现路径吻合）"
+    anchor: "agate/phase-cards/P7-consistency.md#执行方式"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P7-05
+    phase: P7
+    statement: "CODE-MAP 核对（code_map_reviewed_count ≥ code_map_new_files_count）"
+    anchor: "agate/phase-cards/P7-consistency.md#gate 规则"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P7-06
+    phase: P7
+    statement: "架构决策落点与过时标注核对"
+    anchor: "agate/phase-cards/P7-consistency.md#执行方式"
+    disposition: R
+    script: ""
+    evidence: "DEBT0039"
+  - id: OBL-P7-07
+    phase: P7
+    statement: "实质锚点（跨文件引用关键词，否则 WARNING）"
+    anchor: "agate/phase-cards/P7-consistency.md#实质锚点要求（N3⑨）"
+    disposition: C
+    script: ""
+    evidence: ""
+
+  # ── P8 交付收尾 ────────────────────────────────────────────────────
+  - id: OBL-P8-01
+    phase: P8
+    statement: "bump_type 字段（major / minor / patch）"
+    anchor: "agate/rules/phases.yaml#P8.outputs"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P8-02
+    phase: P8
+    statement: "delivery 字段（交付方式声明）"
+    anchor: "agate/phase-cards/P8-release.md#产出规格"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P8-03
+    phase: P8
+    statement: "debt_check 字段（none / reviewed）"
+    anchor: "agate/phase-cards/P8-release.md#产出规格"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P8-04
+    phase: P8
+    statement: "version 文件变更（暂存区 / 最近 5 commit，双路径）"
+    anchor: "agate/phase-cards/P8-release.md#gate 规则"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P8-05
+    phase: P8
+    statement: "CHANGELOG [Unreleased] → 新版本号（含 task_id）"
+    anchor: "agate/phase-cards/P8-release.md#gate 规则"
+    disposition: M
+    script: "agate/scripts/check-changelog.py"
+    evidence: ""
+  - id: OBL-P8-06
+    phase: P8
+    statement: "roadmap 关联条目回写 done（RM-AG0043）"
+    anchor: "agate/phase-cards/P8-release.md#gate 规则"
+    disposition: M
+    script: "agate/scripts/check-gate.py"
+    evidence: ""
+  - id: OBL-P8-07
+    phase: P8
+    statement: "从 P2 packages 逐包读取发布检查命令并执行 → 全部 exit 0"
+    anchor: "agate/phase-cards/P8-release.md#gate 规则"
+    disposition: C
+    script: ""
+    evidence: "T005：P8 subagent 把 1 failed 标 ✅"
+  - id: OBL-P8-08
+    phase: P8
+    statement: "bump 后重跑 P5（或审计 7 复用判定）"
+    anchor: "agate/phase-cards/P8-release.md#gate 规则"
+    disposition: C
+    script: "agate/scripts/check-p6-provenance.py"
+    evidence: ""
+  - id: OBL-P8-09
+    phase: P8
+    statement: "READY 收尾检查（清理临时资源 / 还原开发环境 / 生产无残留）"
+    anchor: "agate/state-machine.md#READY 收尾检查（P8 gate 通过后、标记 READY 前）"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P8-10
+    phase: P8
+    statement: "提交前暂存面审查（凭证/临时物防泄漏，RM-AG0077⑤）"
+    anchor: "agate/phase-cards/P8-release.md#READY 收尾检查（P8 gate 通过后）"
+    disposition: C
+    script: ""
+    evidence: "某任务实测 stage 162 条路径含 10 个明文 token/cookie"
+  - id: OBL-P8-11
+    phase: P8
+    statement: "干净 checkout 跑 consistency（改造协议自身的任务）"
+    anchor: "agate/phase-cards/P8-release.md#READY 收尾检查（P8 gate 通过后）"
+    disposition: C
+    script: "agate/scripts/check-protocol-consistency.py"
+    evidence: "本地 worktree 路径过滤会掩盖任务产出扫描问题"
+  - id: OBL-P8-12
+    phase: P8
+    statement: "临时资源清单（临时服务 / 数据 / 开发安装）"
+    anchor: "agate/phase-cards/P8-release.md#产出规格"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-P8-13
+    phase: P8
+    statement: "releaser subagent 不执行 git commit / git tag"
+    anchor: "agate/phase-cards/P8-release.md#如果是首次进入本阶段"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-P8-14
+    phase: P8
+    statement: "phase=P8 提交（以 READY 提交会让 P8 gate 从不运行）"
+    anchor: "agate/phase-cards/P8-release.md#如果是首次进入本阶段"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: "38 个 READY/DONE 任务中仅 16 个曾以 phase:P8 提交"
+
+  # ── 横切：pre-commit / 状态机 / 派发纪律 ────────────────────────────
+  - id: OBL-X-01
+    phase: X
+    statement: ".state.yaml 格式校验（必填字段 / phase 取值 / retries 结构）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-state-yaml.py"
+    evidence: ""
+  - id: OBL-X-02
+    phase: X
+    statement: "[PROD_TOUCHED] 三步检测（正向声明→中止 / 不合规→中止 / 缺失→静默通过）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/pre-commit-gate.py"
+    evidence: "X1：READY/DONE 跳过 PROD_TOUCHED 扫描致安全门失效（批0 已修）"
+  - id: OBL-X-03
+    phase: X
+    statement: "P6-evidence 阶段检查（非空 + BDD 行数 + md5 去重 + 方差）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-p6-evidence.py"
+    evidence: ""
+  - id: OBL-X-04
+    phase: X
+    statement: "P6 provenance 客观行为审计（六道 + EXIT_CODE 一致性）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-p6-provenance.py"
+    evidence: ""
+  - id: OBL-X-05
+    phase: X
+    statement: "状态转移合法性 + 重试上限（check-state-transition）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: ""
+  - id: OBL-X-06
+    phase: X
+    statement: "裁剪条件与实际执行一致性 + override 校验"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-pruning.py"
+    evidence: ""
+  - id: OBL-X-07
+    phase: X
+    statement: "ceremony 路由校验（声明 vs 算分单向 fail-closed）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-routing.py"
+    evidence: ""
+  - id: OBL-X-08
+    phase: X
+    statement: "[SCOPE+] 标记追踪（须有 [SCOPE_RESOLVED]）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-scope-resolved.py"
+    evidence: ""
+  - id: OBL-X-09
+    phase: X
+    statement: "异常模式复盘提醒（重试超限 / SCOPE+ / override）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-retrospective.py"
+    evidence: ""
+  - id: OBL-X-10
+    phase: X
+    statement: "CI 重跑 gate 判定（防 --no-verify 绕过 hook，跳过与通过可区分）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/agate-ci-verify.py"
+    evidence: "X3：ci-gate-backstop 永远 SKIP 却显示绿（假绿，批0 已修）"
+  - id: OBL-X-11
+    phase: X
+    statement: "pre-push alignment 审查阈值提示"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/pre-push-gate.py"
+    evidence: ""
+  - id: OBL-X-12
+    phase: X
+    statement: "dispatch-context hash 校验（嵌入卡片防过期/防篡改）"
+    anchor: "agate/scripts/README.md#阶段卡片 CLI（Phase Card 渐进披露）"
+    disposition: M
+    script: "agate/scripts/pre-commit-gate.py"
+    evidence: ""
+  - id: OBL-X-13
+    phase: X
+    statement: "phase = 本 commit 产出阶段（不预写下一阶段）"
+    anchor: "agate/state-machine.md#状态机定义"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: "peekview T085：8 次 --no-verify 由预写冲突所致"
+  - id: OBL-X-14
+    phase: X
+    statement: "重试上限（MAX_RETRY，超限 → PAUSED）"
+    anchor: "agate/state-machine.md#重试上限"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: ""
+  - id: OBL-X-15
+    phase: X
+    statement: "评审被拒必须写 retries（RM-AG0042）"
+    anchor: "agate/WORKFLOW.md#P1-P8 阶段总览"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: ""
+  - id: OBL-X-16
+    phase: X
+    statement: "回退须先归档旧阶段产出（agate-archive-stale-outputs）"
+    anchor: "agate/state-machine.md#回退机制（诊断→跳转→PAUSED→批准→重跑）"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: ""
+  - id: OBL-X-17
+    phase: X
+    statement: "回退落地后建 DEBT 条目（source: retreat）"
+    anchor: "agate/rules/state-transitions.md#回退规则"
+    disposition: M
+    script: "agate/scripts/check-debt.py --retreat-coverage"
+    evidence: "TAG0001 强制"
+  - id: OBL-X-18
+    phase: X
+    statement: "门禁失败事件 ↔ retries 对应性校验（RM-AG0042）"
+    anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
+    disposition: M
+    script: "agate/scripts/check-state-transition.py"
+    evidence: ""
+  - id: OBL-X-19
+    phase: X
+    statement: "平台无关（新增测试/脚本 0 平台假设命中）"
+    anchor: "agate/WORKFLOW.md#测试/调试环境隔离原则（项目级责任）"
+    disposition: M
+    script: "agate/scripts/check-platform-assumptions.py"
+    evidence: "DEBT0048：平台假设到 P4 全量 pytest 才被抓出"
+  - id: OBL-X-20
+    phase: X
+    statement: "subagent 假完成校验（C7：自评不可作为 gate 依据）"
+    anchor: "agate/dispatch-protocol.md#Subagent 假完成校验（D2）"
+    disposition: R
+    script: ""
+    evidence: "T005：P8 subagent 把 1 failed 标 ✅"
+  - id: OBL-X-21
+    phase: X
+    statement: "dispatch-context 只传路径不传文件内容（铁律 2）"
+    anchor: "agate/dispatch-protocol.md#铁律 2"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-X-22
+    phase: X
+    statement: "SCOPE+ / SCOPE_GAP 扫描（每次 subagent 返回后）"
+    anchor: "agate/dispatch-protocol.md#SCOPE+ / SCOPE_GAP 扫描"
+    disposition: C
+    script: "agate/scripts/check-scope-resolved.py"
+    evidence: ""
+  - id: OBL-X-23
+    phase: X
+    statement: "gate 命令固化（不得在派发 prompt 里自行降级）"
+    anchor: "agate/dispatch-protocol.md#P5/P6 gate 命令固化（B7）"
+    disposition: R
+    script: ""
+    evidence: "T004 教训 B7：主 Agent 要求『不用 Playwright』= 违规降级"
+  - id: OBL-X-24
+    phase: X
+    statement: "不可逆操作保护（[NEED_CONFIRM] 硬中断）"
+    anchor: "agate/dispatch-protocol.md#不可逆操作保护协议（通用）"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-X-25
+    phase: X
+    statement: "judge 信息隔离白名单（不读 P6-acceptance.md 与自述）"
+    anchor: "agate/dispatch-protocol.md#Judge 信息隔离（P6.5）"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-X-26
+    phase: X
+    statement: "每阶段 commit（git 持久化，状态落盘可恢复）"
+    anchor: "agate/WORKFLOW.md#核心原则"
+    disposition: C
+    script: ""
+    evidence: ""
+  - id: OBL-X-27
+    phase: X
+    statement: "生产环境隔离（开发全程在测试环境，不写生产）"
+    anchor: "agate/WORKFLOW.md#裁剪风险维度（T005/T006 教训）"
+    disposition: R
+    script: ""
+    evidence: ""
+  - id: OBL-X-28
+    phase: X
+    statement: "subagent 返回校验（路径 + 一句话摘要，防假完成）"
+    anchor: "agate/dispatch-protocol.md#subagent 返回校验（处理 subagent 自身失败）"
+    disposition: R
+    script: ""
+    evidence: ""

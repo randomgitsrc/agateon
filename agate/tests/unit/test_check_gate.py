@@ -1353,7 +1353,7 @@ def _init_p8_repo(git_repo, td, files=None, tag=None):
     return repo
 
 
-_P8_COMPLIANT = "bump_type: minor\ndebt_check: none\n"
+_P8_COMPLIANT = "bump_type: minor\ndebt_check: none\ndelivery: package-release\n"
 _P8_UNRELEASED = "## [Unreleased]\n"
 _P8_CHANGELOG_TAGGED = "## [Unreleased]\n\n## [0.2.0] - 2026-07-20\n"
 
@@ -3613,16 +3613,16 @@ def test_tag0035_bdd_1_unknown_phase_fail_closed_exit_1(
     assert "P99" in result.output
 
 
-def test_tag0035_bdd_2_ci_backstop_exit_code_comparison_unaffected(
+def test_tag0035_bdd_2_ci_verify_exit_code_comparison_unaffected(
     tmp_path, agate_scripts, python_exe, run_cli
 ):
-    """BDD-2：ci-gate-backstop.py 的『记录值==重跑值』比对逻辑本身不因未知阶段退出码
+    """BDD-2：agate-ci-verify.py 的『记录值==重跑值』比对逻辑本身不因未知阶段退出码
     语义变化（2→1）而报错或行为异常——.gate-result.json 记录新语义下的 exit_code=1，
-    CI 重跑（真实 check-gate.py 未知阶段）一致时应正确判定 PASS（backstop exit 0）。
+    CI 重跑（真实 check-gate.py 未知阶段）一致时应正确判定 PASS（ci-verify exit 0）。
 
     不需要真实 git 仓库：main() 在 phase 未知（P99）时，check-gate.py 不会访问
     task_dir 下任何文件（BDD-1 分支在 handlers.get 之后立即 exit，早于一切文件 I/O），
-    ci-gate-backstop.py 自身除 timestamp 校验外也不依赖 git（timestamp 字段留空即跳过）。
+    agate-ci-verify.py 自身也不依赖 git。
     """
     import json
 
@@ -3636,13 +3636,13 @@ def test_tag0035_bdd_2_ci_backstop_exit_code_comparison_unaffected(
 
     result = run_cli(
         python_exe,
-        str(agate_scripts / "ci-gate-backstop.py"),
+        str(agate_scripts / "agate-ci-verify.py"),
         cwd=str(repo),
         env={"GITHUB_ACTIONS": "true"},
     )
     assert result.returncode == 0, (
         "未知阶段新语义（check-gate.py exit=1）下，.gate-result.json 记录值=1 应与 "
-        f"CI 重跑值一致并判定 PASS；实际 backstop exit={result.returncode}, "
+        f"CI 重跑值一致并判定 PASS；实际 ci-verify exit={result.returncode}, "
         f"output={result.output!r}"
     )
 

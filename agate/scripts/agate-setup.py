@@ -145,7 +145,10 @@ def _protocol_root():
 
 
 def _install_hook(proto_root, dry_run):
-    """装 git hook（L3 项目侧）——复用唯一安装脚本，不重复实现。"""
+    """装 git hook（L3 项目侧）——复用唯一安装脚本，不重复实现。
+
+    install-hook.py 内部还会自动 `agate-config init` 生成项目声明（幂等，不覆盖）。
+    """
     installer = os.path.join(proto_root, "scripts", "install-hook.py")
     if not os.path.isfile(installer):
         sys.stderr.write(f"错误: {installer} 不存在（协议根={proto_root}）\n")

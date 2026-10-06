@@ -162,6 +162,26 @@ def _chmod_x(path):
         pass
 
 
+def _init_declaration(agate_root, repo_root):
+    """接入时自动生成项目声明（`agate.config.yaml`；幂等，已存在不覆盖）。
+
+    TAG0042 批 2 / BDD-7：经 `agate-config init`（唯一实现）生成，不在本安装器里
+    重复实现声明模板——`agate-config.py` 缺失（如 fake 安装根）时只提示不阻断。
+    """
+    config_script = os.path.join(agate_root, "scripts", "agate-config.py")
+    if not os.path.isfile(config_script):
+        print(f"提示: {config_script} 不存在，跳过项目声明自动生成")
+        return
+    proc = subprocess.run(
+        [sys.executable, config_script, "init"],
+        cwd=repo_root, capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    for line in (proc.stdout or "").splitlines():
+        print(f"  {line}")
+    if proc.returncode != 0:
+        print(f"提示: 项目声明自动生成失败（rc={proc.returncode}），可手动运行 agate-config init")
+
+
 def main():
     # 默认根用 agate_home()（尊重 AGATE_HOME 覆盖）——此前写死 ~/.agate，
     # 覆盖安装时会指错（2026-09-21 修）。
@@ -265,6 +285,9 @@ def main():
         print(f"pre-push hook 已安装: {pre_push_hook} -> {pre_push_source} (协议文件大改动自动提示)")
     else:
         print(f"pre-push hook 已安装（复制模式）: {pre_push_hook}")
+
+    # 项目声明自动生成（TAG0042 批 2 / BDD-7）：接入时 init 声明，幂等不覆盖。
+    _init_declaration(agate_root, repo_root)
 
     # .gitignore 检测：.state.yaml 被忽略时提醒用 git add -f
     gitignore = os.path.join(repo_root, ".gitignore")

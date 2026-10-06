@@ -695,8 +695,8 @@ def test_bdd_67_kernel_files_exist_for_p5_diff_gate():
 
 
 def test_bdd_68_check_mvwu_not_registered_in_gate_hook_ci_surfaces():
-    """BDD-68①：check-mvwu 不在 agate/rules、check-gate.py、pre-commit-gate.py、ci-gate-backstop.py、agate-summary.py、.github/ 登记（长期不变量：观测脚本不挂 gate）。"""
-    targets = [SCRIPTS / n for n in ("check-gate.py", "pre-commit-gate.py", "ci-gate-backstop.py", "agate-summary.py")]
+    """BDD-68①：check-mvwu 不在 agate/rules、check-gate.py、pre-commit-gate.py、agate-ci-verify.py、agate-summary.py、.github/ 登记（长期不变量：观测脚本不挂 gate）。"""
+    targets = [SCRIPTS / n for n in ("check-gate.py", "pre-commit-gate.py", "agate-ci-verify.py", "agate-summary.py")]
     files = [p for p in targets if p.is_file()]
     files += list(_text_files_under(AGATE / "rules", {".md", ".yaml", ".yml", ".json", ".txt", ".py"}))
     gh = REPO / ".github"

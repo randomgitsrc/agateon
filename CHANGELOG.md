@@ -10,6 +10,29 @@
 
 ## [Unreleased]
 
+## [0.79.0] - 2026-10-06
+
+### 新增
+
+- **TAG0042：项目形态命令化 + 规则脚本化**——把「项目形态」（技术栈 / 验证命令 / 发布方式）
+  从协议硬编码改为**项目根声明**驱动，并把一批阶段义务从「靠记忆」收敛到「不可绕开路径上的
+  脚本判定」，同时为「判断类义务」保留**强制独立评审**归宿。分 6 批交付：
+
+  | 批 | 主题 | 主要新增 / 变更 |
+  |---|---|---|
+  | 批 1 | phase 语义统一 | `agate-next` 推进时**不再预写**下一阶段（`phase` 一律由本 commit 的产出阶段写入）+ 5 处权威文档改述 |
+  | 批 2 | 声明层 `agate-config` | 新增项目根声明 `agate.config.yaml` + `agate-config` 命令（`init`/`validate`/`get`/`list`/`show`）+ `project-config.schema.json` + 唯一读取函数 `read_project_config`；`agate-setup`/`install-hook` 接入时幂等生成初始声明；`gate_p0` 迁移期校验（缺声明 → WARNING，不 `exit 1`） |
+  | 批 3 | 执行层 `agate-run` | 新增 `agate-run`（按声明 `verify.commands` 执行验证命令，产物落 `.out` 证据 + 追加 `cmd_run` 事件）；`pre-commit-gate` 暂存账本行为统一 |
+  | 批 4 | 关卡层分级 + P8 交付收尾 | `phases.yaml` 新增 `gate_layer`（按提交类型选择关卡集合 + 转换表）；P8 语义改述为「交付收尾」且须声明 `delivery` 字段（缺失 → `gate_p8` exit 1）；发版逻辑迁移 `preset: semver-changelog-tag` 等价物 |
+  | 批 5 | `agate-ci-verify` + `agate-doctor` | 新增 `agate-ci-verify`（实际重跑 gate 判定，替代退役 `ci-gate-backstop.py`；「跳过」与「通过」输出可区分）+ `agate-doctor`（诊断，退出码固定） |
+  | 批 6 | obligations 登记表 | 新增 `rules/obligations.yaml`（义务三态归宿 M/C/R，无「无归宿」项）+ `check-obligations.py`（进 CHECK 9 锚点表） |
+
+### 变更
+
+- **迁移截止版本 v0.80.0**（TAG0042 批 2 / 批 4）：`agate.config.yaml` 声明文件缺失 / 非法将在
+  v0.80.0 起改为 `exit 1` 硬拦截；请在此之前用 `agate-config init` 生成声明并填写自身形态
+  （语言 / 包管理器 / 验证命令 / 发版方式 `release.preset`）。详见 `agate/UPGRADING.md`「v0.79.0」节。
+
 ## [0.78.3] - 2026-10-05
 
 ### 修复

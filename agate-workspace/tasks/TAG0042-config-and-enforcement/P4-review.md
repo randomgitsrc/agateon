@@ -1,0 +1,591 @@
+---
+phase: P4
+task_id: TAG0042
+type: review
+parent: P4-implementation-batch6.md
+batch1_parent: P4-implementation-batch1.md
+batch2_parent: P4-implementation-batch2.md
+batch3_parent: P4-implementation-batch3.md
+batch4_parent: P4-implementation-batch4.md
+batch5_parent: P4-implementation-batch5.md
+status: approved
+agent: review
+review_round: 8
+review_date: 2026-10-06
+role: review (偏执 Staff Engineer，工程视角)
+scope: batch1（approved）+ batch2（C1 闭合）+ batch3（C1 闭合）+ batch4（approved）+ batch5（approved）+ batch6-obligations（round 8，approved——0 CRITICAL）
+prod_isolation: "[PROD_NOT_TOUCHED]"
+---
+
+# P4 实现评审 — TAG0042 batch1-phase-semantics（round 1）
+
+> 评审对象：`git diff` 未 commit 改动（HEAD `d3ba1c5`，P3 已落）。
+> 评审依据：`P4-dispatch-context-review.md`、`P4-implementation-batch1.md`（含修正轮）、`P2-design.md` §1.1 M1/M2/M3、
+> `P3-test-cases-batch1.md`、`P0-brief.md` known_risks、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round2 aligned）。
+> 视角：**工程正确性/边界/回归/测试充分性**；语义对齐已由 protocol-alignment-review round2 判 aligned，本报告不重复、不替代其结论。
+
+## 结论
+
+**status: approved**。Pass 1（CRITICAL/BLOCKER）：**0 条**。Pass 2（INFORMATIONAL）：**5 条**（均非阻断，可 P5/P7/P8 或后续批次承接）。
+
+改动面（`agate-next.py` 去预写/删孤儿函数、P2/P8 卡、UPGRADING v0.79.0、5 处权威文档反传、3 处既有断言同步）
+经独立实跑核对：行为自洽、无残留调用、无回归、新用例覆盖 BDD-1/BDD-2 全部门槛。可进入 P5。
+
+---
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+**0 条。** 逐项排查（派发重点 1-4）结论如下：
+
+### 1. `_advance()` 推进判定链自洽 — 通过
+
+- **gate exit 三态消费**（`agate-next.py:367-402`）未被本批触及：`rc ∈ pass_set` → 普通 phase 查 `next`、P6 走 `_p6_pass` 条件式；`rc == 1` → 查 `retreat` 委托 / 提示重试；`else` → 落 exit2-resolution。结构不变、分支互斥、无遗漏。
+- **P6 条件式裁决**（`_p6_pass` / `_p6_judge_advance`，`:229-297`）不变：`provenance` 通过的判据含 exit 2（DEBT0045），judge 启用时 `check-gate P6.5 exit 0` 才消费 `next`。`_advance` 的内部改动（不再写 phase/git add）不影响其调用契约（仍返回「已处理」语义）。
+- **retreat 委托**（`_delegate_retreat`，`:300-325`）不变，仍以 `repo_root` 为 cwd 调 `agate-retreat-to.py`；retreat-to 自身写 phase 的路径未动。
+- **孤儿函数删除无残留调用**：`grep -n "_write_state\|_git" agate/scripts/agate-next.py` → **0 命中**；全仓 `agate/**/*.py` 中 `_write_state`/`_git` 仅命中各文件**同名局部 helper**（`test_check_gate.py` 的 `_write_state_judge` 等）与注释，无对被删函数的 import/调用。`_advance` 调用点（`:279/:288/:386`）与保留形参兼容。
+- `_advance` 不再做 git 操作，主 Agent 负责 `git add` 与 commit——与 `git-integration.md` 规则 2「一阶段一 commit、phase 随产出同 commit」一致。
+
+### 2. 跳变合法性校验仍有效 — 通过
+
+- `check-state-transition.py:251-269` 的触发面是**暂存区含 `.state.yaml`**（`git diff --cached --name-only`），**不读账本**。去预写后 phase 变更改由「下一阶段产出 commit 暂存 `.state.yaml`」触发，`pre-commit-gate.py:243-255`（2b 检测 `phase:` 变更 → 2c 调 `check-state-transition.py`）**同一机械路径不变** → 校验**未弱化**，仅触发时机后移一个 commit（与设计意图一致）。
+- 实测回归：`test_check_state_transition.py` 全绿（见验证清单）。
+
+### 3. `state_transition` 事件 `.phase=target` 而 `.state.yaml` 保持旧 phase — 不构成 CRITICAL
+
+- **无硬消费者**：`grep` 全 `agate/scripts/*.py`，`state_transition` 事件只被**生产**（`agate-next.py:158`、`pre-commit-gate.py:415`），无脚本**解析**其字段（`check-events.py` 仅校哈希链/ts/已知类型，`check-judge-verdict.py` 不读该事件）→ 不破链、不触发审计、不改变 gate 判定。
+- 残留歧义（事件语义/重复）不足以上升为 CRITICAL，记入 Pass 2 #1。
+
+### 4. 测试充分性 — 通过
+
+- 新增 `test_tag0042_batch1_phase_semantics.py`（6 例）覆盖 **BDD-1**（不预写 phase / 不 `git add`）与 **BDD-2**（`_advance` 无 `state["phase"]=target` / 卡片表述与行为一致 / UPGRADING 记载 / 全 `agate/scripts/*.py` 无预写实现）→ 派发重点所列 6 条新红灯测试到位。
+- 既有同步**完整**：`test_tag0027_b1_agate_next_cli.py` 仅 4 处 `_read_state_phase` 断言（`:156` P5、`:317` P6、`:336` gate_p65 exit 1 停留 P6、`:371` P5）；3 处「推进后 phase」已同步为新语义，`:336` 非预写断言（保留正确）。**无遗留「推进后 phase 被写」断言**（跨 `agate/tests/` 复核，无其它文件在 agate-next 后断言 phase 前进）。
+
+### 5. UPGRADING v0.79.0 版本号假设 — 属已登记 DESIGN_GAP，非缺陷
+
+`P4-implementation-batch1.md`「[DESIGN_GAP]」节显式登记：P2 §1.1 M3 未指定版本节标题，实现自主采用 `### v0.79.0`，P8 发版时同步。**登记齐备**，P8 需据实版本号核对（不阻断本批）。
+
+---
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 边界观察
+
+### [INFORMATIONAL-1] `state_transition` 事件语义分裂 + 同转移双写
+`agate-next.py:158-163` 在 gate 通过时追加 `state_transition`（from=old,to=target,phase=target），相位**未变**；而 `pre-commit-gate.py:413-420` 在**真实提交**相位变更时**也**追加一条同 from/to/phase 的事件（「双写语义」为既有设计）。差别：
+- 批 1 前，agate-next 已把 phase 写盘，两条事件指向**同一次真实提交**；批 1 后，agate-next 的事件语义变为「**建议推进**」（可能对应未来某 commit，甚至在任务中止时成为**从未落地的幻影转移**）。
+- 当前无消费者（Pass 1 §3 已证），**不阻断**。建议（非必须）：P7/P8 或观测器侧若要区分「已提交/仅建议」，可在事件内加 `committed: true|false` 或备注字段；或在 `CONTEXT.md` 账本事件表补一句语义说明。交由 P7/P8 判断，不在本批硬改。
+
+### [INFORMATIONAL-2] 逐阶段卡片步「phase 保持 Pn」措辞在去预写后不再精确
+批 1 后，进入 Pn 时 `.state.yaml` 的 phase 实际为 **P(n-1)**（agate-next 不再预写），须由主 Agent 在 Pn 产出 commit 时写入 Pn。`P2-design.md` / `P8-release.md` 已由本批补「agate-next 亦不预写」注；但 `P1/P3/P4/P5/P6/P7` 卡第 5 步仍写「此时 `.state.yaml` 的 phase 保持 Pn，不要提前写 P(n+1)」——「保持」隐含 phase 已为 Pn。
+- **为何不判 CRITICAL**：手工规格已在两处明文档兜底——`git-integration.md:113`「更新 `.state.yaml` phase（先更新再 commit）」、`state-machine.md:523`「先更新 phase → 再 add → 再 commit」；且各卡第 6/N 步已有「phase 推进 P(n+1) 随 P(n+1) 产出 commit 一起」。流程闭合，属**措辞精确性**而非逻辑缺口。
+- **与 round2 A3b 的差异**：对齐审查判「P1/P3/P4/P5/P6/P7 卡不需改」，工程侧同意其**非阻断**；此处仅补充建议——后续批次/文档整备时为这几张卡各补一句「进入本阶段后由本阶段产出 commit 将 phase 写为 Pn」，可消除主 Agent 漏写 phase 导致 pre-commit 按旧 phase 跑 gate 的静默风险（去预写把该写入从机械动作变为 Agent 手工动作，与本任务「规则不靠记忆」的立项动机存在张力）。不阻断本批。
+
+### [INFORMATIONAL-3] `_advance` 的 `repo_root` 形参已成死参数
+`agate-next.py:166` 保留 `repo_root` 但函数体不再使用（docstring `:173` 已如实注明「批 1 后不再做 git 操作」）。保留理由（避免级联改 `_p6_judge_advance`/`main` 签名）合理，ruff 不报。可在后续批次顺手移除，或保持现状；**不影响正确性**。
+
+### [INFORMATIONAL-4] `P4-evidence/batch1-phase-semantics.log` 未含本批新增测试文件
+日志 command 沿用 P2 §6.1b 声明的「既有 3 文件」filter（`test_agate_next_card` + `test_tag0027_b1_agate_next_cli` + `test_check_state_transition`，实测 93 passed / exit 0），**未包含**本批专属新用例 `test_tag0042_batch1_phase_semantics.py`。声明如实、命令实跑合规（MVWU 不阻断）；仅作过程提示：作为「本批绿灯」证据，若把新增 6 例一并纳入 filter（共 99 passed）会更完整。供 P8/后续批参考。
+
+### [INFORMATIONAL-5] 一致性 WARNING 基线口径
+实跑 `check-protocol-consistency.py --strict-errors-only` → **0 ERROR / 398 WARNING**，与 `P0-brief.md` 基线一致（对齐审查 round2 记 398；round1 因派发文件瞬时引用曾记 400，现已回落到冻结基线 398）。无新增 WARNING。信息性登记。
+
+---
+
+## 验证清单（本次评审独立实跑，证据先于结论）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| 批 1 相关 4 文件 | `pytest test_tag0042_batch1_phase_semantics test_tag0027_b1_agate_next_cli test_check_state_transition test_agate_next_card -q` | **99 passed**（12.77s） |
+| UPGRADING 契约文档 | `pytest test_upgrading_contract_doc test_upgrading_lifecycle -q` | **27 passed** |
+| ruff | `ruff check agate-next.py test_tag0027_b1_agate_next_cli.py test_tag0042_batch1_phase_semantics.py` | `All checks passed!` |
+| 平台假设扫描（改动文件） | `check-platform-assumptions.py <3 文件>` | exit 0（0 命中） |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 398 WARNING** |
+| 用例数 | `bash agate/tests/scripts/count-tests.sh` | **2687**（未漂移） |
+| 残留调用 | `grep "_write_state\|_git" agate-next.py` | 0 命中 |
+| 残留旧行为文档 | `grep "写回 .state.yaml + git add\|更新 .state.yaml phase + git add" agate/*.md` | 0 命中（其余命中均为手工 fallback 规格，已显式限定） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试（pytest tmp_path 夹具、ruff、平台扫描、一致性、count-tests）。未修改任何被评审文件、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。实跑命令均无对仓库内已提交文件的写副作用（pytest 用例经 `tmp_path`/`git_repo` 夹具隔离；一致性/ruff/scan 为只读扫描）。
+
+<!--
+增量复评说明（供后续批次）：本文件按轮次追加（参照 TAG0034 P4-review.md 形态），保留前轮全文。
+round 1 = batch1-phase-semantics（approved）；round 2 = batch2-agate-config（rejected）。
+-->
+
+---
+
+# P4 实现评审 — round 2（增量）：batch2-agate-config（声明层）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `48091f2`，batch1 已落）。
+> 评审依据：`P4-dispatch-context-review-batch2.md`、`P4-implementation-batch2.md`（含 4 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M4-M8 / §4.1、`P3-test-cases-batch2.md`、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 3 aligned）。
+> 视角：**工程正确性/边界/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 3 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: rejected**。Pass 1（CRITICAL/BLOCKER）：**1 条**（C1，可复现）。Pass 2（INFORMATIONAL）：**6 条**（非阻断）。
+
+> frontmatter 的 `status` 为**聚合门禁态**：round 1（batch1）结论不变（approved），但 batch2 存在 1 条 CRITICAL，
+> 按 review 角色门槛映射「有 CRITICAL → rejected」。须修复 C1（1 行改动 + 1 条测试）后复审 batch2，P4 gate 方可放行。
+
+---
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+### [CRITICAL] `agate/scripts/agate_common.py:871`（`read_project_config`）— 非法 YAML 未按契约优雅返回，抛未捕获异常
+
+**问题**：`read_project_config` 的 docstring（`:855-859`）与 `P4-implementation-batch2.md`（§3）均声称
+「文件存在但 YAML 非法 / 顶层非映射 → 返回默认 dict + `present=False` + `parse_error`」。但实现只捕获
+`except (OSError, ValueError)`（`:871`），而 PyYAML 的语法/扫描/组合错误（`yaml.parser.ParserError` /
+`yaml.scanner.ScannerError` / `yaml.composer.ComposerError`）都继承自 **`yaml.YAMLError` → `Exception`**，
+**既不是 `ValueError` 也不是 `OSError`**（本机实测 `issubclass(ParserError, ValueError) == False`）。
+
+**复现（本次评审实测）**：
+
+```text
+$ printf 'not: [a mapping\n' > <proj>/agate.config.yaml
+$ python3 agate/scripts/agate-config.py validate          # cwd=<proj>
+  Traceback (most recent call last):
+    ...
+    File ".../agate_common.py", line 870, in read_project_config
+      loaded = yaml.safe_load(f)
+  yaml.parser.ParserError: while parsing a flow sequence ...
+  rc=1
+```
+
+进程内调用同样抛出（`read_project_config(d)` → `RAISED: yaml.parser.ParserError`），**不返回** `present=False`/`parse_error`。
+
+**影响**：
+- `agate-config validate` 对非法声明打印**完整 traceback**（而非契约的逐条报错），违反「退出码语义 + 客观报错」的交付面；`UPGRADING.md` / BDD-8 明确把「声明文件**非法**」纳入迁移契约，故该路径是**约定内输入**，非边缘情况。
+- 本批 `gate_p0` 经**子进程**调 validate，rc≠0 仍被吸收为 WARNING（恒 return 2 不变量未被破坏）——故**迁移期用户可见行为尚可**；但 `read_project_config` 是 P2 §4.1 指定的**唯一读取函数**，batch3+（`agate-run` / `agate-doctor`）将**进程内**消费它，届时非法声明会让消费方**直接崩溃**，而不是拿到默认值 + `parse_error`。这正与该函数「让所有消费方免于各自处理解析错误」的设计目的相悖。
+- 测试未覆盖该路径（`test_agate_config.py` / `test_config_schema.py` 只测「文件缺失」，无非法 YAML 用例）→ 缺陷未被红灯拦住。
+
+**建议 Fix（最小、单一）**：
+1. `:871` 的 `except (OSError, ValueError)` 增补 `yaml.YAMLError`（`yaml` 在 `agate_common` 顶部已 import，import 失败会 `sys.exit(1)`，无需额外守卫）；与**同文件**既有惯例一致（`read_rules_yaml:1212` 直接 `except Exception`）。
+2. 补 1 条红灯/绿灯测试（如 `test_bdd_6_read_project_config_malformed_yaml_is_graceful`）：写非法 YAML → 断言 `read_project_config` **不抛**、`present is False`、`parse_error` 非空；并可加 `agate-config validate` 对该输入 rc≠0 且**无 traceback**（stderr 不含 `Traceback`）。
+
+---
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 边界观察
+
+### [INFORMATIONAL-1] `gate_p0` 经**调用方 cwd** 定位声明，未用 `task_dir`/项目根（WARNING 可假阳性/假阴性）
+`check-gate.py::gate_p0`（`:631-652`）以 `subprocess.run([sys.executable, config_script, "validate"])` 调 validate，**未传 `cwd`** → 继承 check-gate 进程的 cwd；而 `agate-config.py` 用 `os.getcwd()` 作 project_root。实测：从**有合法声明**的目录跑 `check-gate.py P0 <task>` → **无 WARNING**；从无声明目录跑 → 有 WARNING。即 WARNING 取决于调用方 cwd，而非被检查任务的所属项目根。
+- pre-commit hook 路径 cwd=仓库根（正确）；但 `gate_p0` 的 `task_dir` 形参被闲置，任何从其它目录调用（子目录 / 不同项目）都会给出**错误 WARNING**。
+- **建议**：由 `task_dir` 确定项目根（如 `agate_common.resolve_workspace(task_dir)` 或 `git -C task_dir rev-parse --show-toplevel`），并显式 `cwd=<repo_root>` 调 validate。
+
+### [INFORMATIONAL-2] BDD-8 测试依赖「仓库根当前无 `agate.config.yaml`」，环境决定红绿
+`test_bdd_8_gate_p0_missing_declaration_keeps_passing_exit` / `..._emits_warning` 通过 `run_cli`（`cwd=None`）继承 pytest 进程 cwd = 仓库根，其 WARNING 断言**隐含要求 agateon 仓库根没有 `agate.config.yaml`**。而本批新增的 `install-hook` 自动 init 会在项目根生成该文件——一旦 agateon 自身被接入（或在仓库根手动 `init`），这两条测试即变红。这与 conftest `_run_cli_impl` docstring 明确反对的「本机环境决定红绿」同类。**建议**：给这两条用例传显式隔离 `cwd`（tmp 项目根），与 INFORMATIONAL-1 的确定性定位一并解决。
+
+### [INFORMATIONAL-3] `agate-config.py` shebang `#!/usr/bin/env python` 偏离主流惯例（测试驱动的工作绕过）
+仓内 78 个脚本用 `#!/usr/bin/env python3`，仅 `agate-config.py`（及 1 个既有文件）用 `python`——原因是为规避 `test_bdd_3_protocol_does_not_hardcode_md_product_shape` 对**源码任意位置** `python3` 字面量的扫描（连 shebang 一并命中）。本机 `command -v python` **不存在** ⇒ `./agate-config.py` 直接执行会失败（虽常规路径经 `sys.executable` 调用，无功能影响）。**建议**：收窄该测试扫描（跳过 shebang/注释行）并恢复 `python3`，避免测试倒逼脚本偏离惯例。
+
+### [INFORMATIONAL-4] DESIGN_GAP ④（默认注入使 schema `required` 不可达）— 独立复现，确认非阻断
+实测：仅 `schema_version: 1`（缺 required 的 `project`）→ validate **rc=0**；空映射文件（0 字节 → `safe_load` 返回 `None`）→ 走 `present=False` → rc=1。即顶层 `required`（`schema_version`/`project`）在「先注入默认值再校验」的 effective-config 模型下**永不触发**。与 round 3 判定一致（DESIGN_GAP 交 P7）。**建议 P7 明确裁决**：或从 schema 移除 `required`（与 effective 语义对齐），或让 validate 针对「用户实际声明的键集合」判 required（需 `read_project_config` 额外暴露声明键集）。
+
+### [INFORMATIONAL-5] `read_project_config` 把元数据（`present`/`parse_error`）混入数据 dict
+消费方须自行用 `_public_config` 剥除内部键；后续消费方（batch3+）若忘记剥除，会把 `present` 误当声明字段。**建议**：返回 `(config, present)` 或专用结果对象，或至少在 P2/文档固化「消费方必须剥除内部键」的约定。非阻断。
+
+### [INFORMATIONAL-6] `_load_schema()` 无缺失/损坏守卫
+`agate-config.py:98-101` 直接 `open` + `json.load` schema；schema 缺失或非法 JSON → 未捕获异常。schema 是随协议发布的固定产物，风险低；与「唯一读取函数」的优雅风格不一致。**建议**：捕获并给出明确报错（非阻断）。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| batch2 红→绿 | `pytest test_agate_config test_config_schema test_agate_scripts_encoding -q` | **24 passed** |
+| 关联回归（5 文件） | `pytest test_check_gate test_install_hook test_agate_common test_agate_config test_config_schema -q` | **277 passed** |
+| ruff | `ruff check agate/` | `All checks passed!` |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 401 WARNING**（冻结面） |
+| 用例数 | `count-tests.sh` | **2687**（未漂移） |
+| 平台扫描（改动文件） | `check-platform-assumptions.py <6 脚本 + 1 测试>` | 仅 5 条 R2 **存量行**（`agate_common:332`/`install-hook:257`/`agate-setup:157,848,945`）；`git diff` 新增行含 `python3` **0 命中** |
+| C1 复现（非法 YAML） | `printf 'not: [a mapping\n' > agate.config.yaml && agate-config.py validate` | **Traceback + `yaml.parser.ParserError`**（契约应为 present=False + parse_error） |
+| gate_p0 cwd 依赖 | 从有/无合法声明的目录各跑一次 `check-gate.py P0 <task>` | WARNING 出现与否**随 cwd 翻转**（INFORMATIONAL-1 实证） |
+| DESIGN_GAP ④ | `validate`（仅 schema_version / 空文件） | 仅 schema_version → rc=0；空文件 → rc=1（确认 required 不可达） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与 CLI 探针。C1 复现与 DESIGN_GAP ④ 探针全部在 `/tmp/opencode/cfgprobe/` 下以自建 `agate.config.yaml` 运行，**未在仓库内写入/修改任何文件**；pytest 经 `tmp_path`/`git_repo` 夹具隔离；未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 3（复审）：batch2-agate-config C1 闭合
+
+> 复审对象：round 2 判定的唯一 CRITICAL = **C1**（`read_project_config` 漏捕 `yaml.YAMLError`）。
+> 修复面：`agate/scripts/agate_common.py::read_project_config()`（`:871`）+ 新增测试
+> `agate/tests/unit/test_config_schema.py::test_bdd_6_read_project_config_malformed_yaml_is_graceful`。
+> 依据：`P4-dispatch-context-review-batch2-rereview.md`；只复核 C1 闭合与回归，不重开其它面。
+
+## 结论
+
+**status: approved**。**C1 已闭合**，无剩余 CRITICAL/BLOCKER。round 2 的 6 条 INFORMATIONAL **仍为非阻断**（按派发指引不在本轮修，留 P7/P8 或后续批次）。
+
+## C1 闭合核验（独立实跑）
+
+1. **代码**：`agate_common.py:871` 已改为 `except (OSError, ValueError, yaml.YAMLError) as exc`，并附注释说明 `yaml.YAMLError`（`ParserError`/`ScannerError`/`ComposerError`）不继承 `ValueError`/`OSError`。`yaml` 在 `agate_common` 顶部 import（失败即 `sys.exit(1)`），无需额外守卫——修复正确、无副作用。
+2. **进程内**（本次评审自建非法 YAML 复跑）：`read_project_config(<dir with 'not: [a mapping\n'>)` → **不再抛异常**，返回 `present=False` 且 `parse_error` 非空（与 docstring 契约一致）。
+3. **CLI**：`agate-config.py validate` 对非法 YAML → **rc=1，输出干净报错、`Traceback` 计数 = 0**（修复前为完整 traceback）。
+4. **新增测试**：`test_bdd_6_read_project_config_malformed_yaml_is_graceful` **1 passed**（断言不抛 + `present is False` + `parse_error` 非空）——C1 契约已由红灯测试锁定。
+5. **无新回归**：`test_agate_common.py` + `test_agate_config.py` + `test_config_schema.py` + `test_agate_scripts_encoding.py` → **52 passed**；`test_check_gate.py` + `test_install_hook.py` + `test_agate_common.py` → **255 passed**；`ruff check` 两改动文件 → `All checks passed!`。
+6. **用例数**：`count-tests.sh` → **2688**（较上轮 2687 +1 = C1 回归测试，符合预期）。
+
+## 验证清单
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| C1 回归测试 | `pytest test_config_schema.py::test_bdd_6_read_project_config_malformed_yaml_is_graceful -q` | **1 passed** |
+| 进程内不抛 | 自建非法 YAML 调 `read_project_config` | `present=False` + `parse_error` 非空，**无异常** |
+| CLI 无 traceback | `agate-config.py validate`（非法 YAML） | rc=1，`Traceback` 计数 **0** |
+| 关联回归（4 文件） | `pytest test_agate_common test_agate_config test_config_schema test_agate_scripts_encoding -q` | **52 passed** |
+| 关联回归（3 文件） | `pytest test_check_gate test_install_hook test_agate_common -q` | **255 passed** |
+| ruff | `ruff check agate_common.py test_config_schema.py` | `All checks passed!` |
+| 用例数 | `count-tests.sh` | **2688**（+1） |
+
+## [PROD_NOT_TOUCHED]
+
+本轮复核**只读**改动集并运行**只读/隔离**测试与 CLI 探针。非法 YAML 探针在 `/tmp/opencode/c1probe/` 下自建 `agate.config.yaml` 运行（探针文件已清理），**未在仓库内写入/修改任何文件**；pytest 经 `tmp_path` 夹具隔离；未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 4（增量）：batch3-agate-run（执行层）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `18b3e3d`，batch2 已落）。
+> 评审依据：`P4-dispatch-context-review-batch3.md`、`P4-implementation-batch3.md`（含修正轮 + 2 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M9/M10 / §4.2、`P3-test-cases-batch3.md`、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 5 aligned）。
+> 视角：**工程正确性/边界/平台/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 5 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: rejected**。Pass 1（CRITICAL/BLOCKER）：**1 条**（C1，跨平台正确性，静态可判定）。Pass 2（INFORMATIONAL）：**5 条**（非阻断）。
+
+> frontmatter `status` 为聚合门禁态：batch1/batch2 结论不变（approved），batch3 存在 1 条 CRITICAL → 按角色门槛映射 rejected。
+> 须修复 C1（1 行 + 1 条平台面测试）后复审 batch3。
+
+---
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+### [CRITICAL] `agate/scripts/agate-run.py:121`（`_write_evidence`）— `.out` 证据以**文本模式默认换行**落盘，与**逐字节比对**不一致（Windows 恒报 baseline mismatch）
+
+**问题**：`_write_evidence` 用 `open(path, "w", encoding="utf-8")` 写证据（默认 `newline=None` → **写时把 `\n` 翻译成 `os.linesep`**），而比对侧 `_read_bytes(evidence_path) != output.encode("utf-8")`（`:180`/`:182`）是**字节精确**。二者在 POSIX 上重合（`os.linesep="\n"`），在 Windows（`os.linesep="\r\n"`，CI = `actions/setup-python` 原生 Python）**必然不一致**：命令输出经 `text=True` 读取已被归一化为 `\n`，写入时又被翻译为 `\r\n`，再读回是 `\r\n`，与 `output.encode("utf-8")`（`\n`）不等。
+
+**后果**：Windows 上 `agate-run --baseline` **首次落盘后，任何后续执行（含输出完全一致）都判 `baseline mismatch` 并返回 1**——BDD-10「逐字节比对二值判定」在 Windows 上失效（恒红）。这是**假阴性（false failure）**：不违反「不静默报绿」（ADR-015），但使该功能在受支持平台上不可用，且报错内容（diff 存在）是**误导**。
+
+**为何是 CRITICAL（而非观察）**：
+1. **违反本批契约**：P2 §4.2 / BDD-10 明确要求「**逐字节**比对」；写盘必须产出与比对同一字节序列。
+2. **违反仓库既有硬约定**：仓库对「字节精确 I/O」一律用 `newline=""`/`newline="\n"`（`agate_package.py:813/845/848` 快照、`agate-release.py:143`），`agate-run` 是唯一偏离点；AGENTS.md「平台无关是硬约束」。
+3. **测试盲区**：`test_bdd_10_*` 均非 `windows_smoke`，Windows CI（`protocol-tests.yml:155` 只跑 `-m windows_smoke`）**不执行**，故红灯拦不住。
+
+**建议 Fix（最小、单一）**：
+- 写证据改为**字节精确**：`with open(path, "wb") as fh: fh.write(output.encode("utf-8"))`；或保留文本写但显式 `newline=""`（与 `agate_package` 同款）。二者择一即可让写/读字节一致。
+- 补 1 条测试锁定「落盘字节 == `output.encode("utf-8")`」（读 `"rb"` 断言），并（可选）加 `windows_smoke` 面用 `newline` 敏感输入（含多行）验证后续比对 rc=0。注：纯 Linux 运行无法复现换行翻译，故建议同时以源码面守卫（断言 `_write_evidence` 用 `"wb"` 或 `newline=""`）防回归。
+
+---
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 边界观察
+
+### [INFORMATIONAL-1] `agate-run` 以 `os.getcwd()` 作 project_root（cwd 依赖，同 batch2 I1）
+`main` 取 `project_root = os.getcwd()`（`:148`）读取声明、定位证据。约定「从项目根运行」，但与 `gate_p0`（batch2 I1）同属 cwd 依赖；从子目录/他处调用会读错声明与证据槽位。**建议**：由显式项目根（或 `AGATE_PROJECT_ROOT` env）解析，与 gate_p0 一并统一。非阻断。
+
+### [INFORMATIONAL-2] DESIGN_GAP ②（命令文本匹配 + 下标槽位）确认语义自洽，但有重排脆弱性
+实现按命令文本精确匹配、以**声明下标**为证据槽位（`cmd-<n>.out`），使「原地改命令文本 → 仍与旧基线比对」成立（BDD-10-03）。但若**重排/插入/删除** `verify.commands`，其后命令的下标漂移 → 与既有基线**错配**（假 mismatch）。P2 与 schema 的接口张力（schema 无命名 key）已登记为 DESIGN_GAP 交 P7。**同意交 P7**；建议 P7 明确「按声明下标」是否可接受，或扩展 schema 引入命名 key。
+
+### [INFORMATIONAL-3] DESIGN_GAP ①（P2 M10「修正 formatter 计数」）确认无可执行落点 → 交 P7
+复核：`agate_common._fallback_json`（无 formatter 时 total/passed/failed 恒 0）为**既有设计**，A/B 出口码依赖它；`is_gate_meta_key` 后缀排除已有 GPC 测试锁定；`agate-capture-env-baseline` 一致性检查不在本批 output 面。**无可复现缺陷**，改动反而违反 P2 §1.2 N3。实现「未做」正确。**同意交 P7**（建议 P2 删/细化该条）。
+
+### [INFORMATIONAL-4] `test_bdd_12_hook_stages_ledger` 为源码面弱断言（未端到端验证暂存）
+该用例仅以正则断言 `pre-commit-gate.py` 源码含「账本 + add」逻辑（`:242-253`），不验证真实 commit 上下文下账本确被暂存。hook 端到端暂存由既有 `test_pre_commit_hook.py`（61 passed）间接覆盖，但无**针对本批新增 2h.1d 暂存逻辑**的端到端用例。**建议**（非阻断）：后续批次或 P7 补一条在 `git_repo` 中真实 commit、断言 `git diff --cached --name-only` 含 `gate-events.jsonl` 的用例。
+
+### [INFORMATIONAL-5] `_is_ignored` 的 `os.path.relpath` 跨盘符/异常边界
+`os.path.relpath(path, project_root)` 在 Windows 上若证据路径与项目根**不同盘符**会抛 `ValueError`（未捕获）→ agate-run 崩溃而非「无法判定 → WARNING」。属极边缘（证据目录通常同盘）。**建议**：包一层 `try/except ValueError → None`。非阻断。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| batch3 红→绿 | `pytest test_agate_run test_events_ledger test_check_events -q` | **29 passed** |
+| hook 集成回归 | `pytest agate/tests/integration/test_pre_commit_hook.py -q` | **61 passed** |
+| ruff | `ruff check agate-run.py pre-commit-gate.py` | `All checks passed!` |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 402 WARNING**（冻结面） |
+| 平台扫描（本批改动） | `check-platform-assumptions.py agate-run.py pre-commit-gate.py` | exit 0（0 命中） |
+| C1 静态判定 | 读 `agate-run.py:121`（文本写）vs `:180/:182`（字节比）+ `agate_package.py:813/845/848`（`newline=""` 约定）+ `protocol-tests.yml:155`（Windows 只跑 smoke） | 写/比字节不一致，Windows 恒 mismatch（C1 成立） |
+| DESIGN_GAP ① 复核 | 读 `_fallback_json` / `is_gate_meta_key` / capture-env-baseline | 无可复现缺陷（同意交 P7） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对（pytest 经 `tmp_path`/`git_repo` 夹具隔离；ruff / 平台扫描 / 一致性为只读）。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。C1 为**静态判定**（读源码 + 仓库既有字节精确约定 + CI 配置），未在 Windows 上实跑。
+
+---
+
+# P4 实现评审 — round 5（复审）：batch3-agate-run C1 闭合
+
+> 复审对象：round 4 判定的唯一 CRITICAL = **C1**（`_write_evidence` 文本模式默认换行 vs 逐字节比对不一致，Windows 恒 mismatch）。
+> 修复面：`agate/scripts/agate-run.py::_write_evidence`（`:117`）+ 新增测试
+> `agate/tests/unit/test_agate_run.py::test_bdd_10_baseline_evidence_is_byte_exact`（端到端字节相等 + 源码面守卫，标 `windows_smoke`）。
+> 依据：`P4-dispatch-context-review-batch3-rereview.md`；只复核 C1 闭合与回归。
+
+## 结论
+
+**status: approved**。**C1 已闭合**，无剩余 CRITICAL/BLOCKER。round 4 的 5 条 INFORMATIONAL **仍为非阻断**（按派发指引不在本轮修）。
+
+## C1 闭合核验（独立实跑）
+
+1. **代码**：`_write_evidence`（`:128-129`）已改为 `with open(path, "wb") as handle: handle.write(output.encode("utf-8"))`——**字节精确写**，与比对侧 `_read_bytes(...) != output.encode("utf-8")`（`:180`/`:182`）字节一致；docstring 记录了「文本模式 `newline=None` 会把 `\n` 翻译为 `os.linesep`」的根因。POSIX/Windows 行为现一致。
+2. **新增测试**：`test_bdd_10_baseline_evidence_is_byte_exact` **1 passed**——① 端到端：多行命令输出，断言证据 `read_bytes()` == 命令输出 UTF-8 字节；② 源码面守卫：断言 `_write_evidence` 的 `with open(...)` 调用行含 `"wb"` 或 `newline=""`（只查调用行、不搜 docstring，避免被注释误导）。
+3. **守卫有效性**（本次评审独立模拟，未改仓库）：对当前源码 `call_lines=['with open(path, "wb") as handle:']` → 守卫 **True**；对模拟的 buggy 行 `with open(path, "w", encoding="utf-8")` → 守卫 **False**（能抓住回归）。
+4. **无新回归**：batch3 两文件（`test_agate_run.py` + `test_events_ledger.py`）→ **16 passed**；`test_pre_commit_hook.py` → **61 passed**；`ruff check` 两改动文件 → `All checks passed!`。
+5. **用例数**：`count-tests.sh` → **2689**（较上轮 2688 +1 = C1 回归测试，符合预期）。
+
+## 验证清单
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| C1 回归测试 | `pytest test_agate_run.py::test_bdd_10_baseline_evidence_is_byte_exact -q` | **1 passed** |
+| batch3 两文件 | `pytest test_agate_run.py test_events_ledger.py -q` | **16 passed** |
+| hook 集成回归 | `pytest agate/tests/integration/test_pre_commit_hook.py -q` | **61 passed** |
+| ruff | `ruff check agate-run.py test_agate_run.py` | `All checks passed!` |
+| 守卫有效性 | 对当前/模拟 buggy 写盘行跑守卫正则 | 当前 True / buggy False（有效） |
+| 用例数 | `count-tests.sh` | **2689**（+1） |
+
+## [PROD_NOT_TOUCHED]
+
+本轮复核**只读**改动集并运行**只读/隔离**测试与静态核对。守卫有效性以内存字符串模拟验证（未改仓库源码）；pytest 经 `tmp_path`/`git_repo` 夹具隔离；ruff 为只读。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 6（增量）：batch4-gate-layer（关卡层分级 + P8 交付收尾）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `68a796e`，batch3 已落）。
+> 评审依据：`P4-dispatch-context-review-batch4.md`、`P4-implementation-batch4.md`（含修正轮 + 6 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M11/M12/M19 / §4.3、`P3-test-cases-batch4.md`、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 7 aligned）。
+> 视角：**工程正确性/边界/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 7 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: approved**。Pass 1（CRITICAL/BLOCKER）：**0 条**。Pass 2（INFORMATIONAL）：**6 条**（非阻断，多交 P7）。
+
+改动面（`gate_p8` 新增 `delivery` 校验且既有检查全保留、`gate_layer` 数据面 + schema 扩展、P8 叙事同步、UPGRADING 批 4 节）
+经独立实跑核对：gate_p8 未破坏既有检查、`gate_pass_exit`/`next`/`retreat` 未变、schema/structure/consistency 全绿、无新回归。
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+**0 条。** 逐项排查（派发重点 1-4）：
+
+### 1. `gate_p8` 新增 `delivery` 校验未破坏既有检查 — 通过
+读 `check-gate.py::gate_p8`（`:1430-1560`）逐条核对：`bump_type` → `debt_check` → **新增 `delivery`**（缺 → `return 1`，输出含 `delivery`）→ roadmap-done → version/CHANGELOG 双路径 → 声明缺失 WARNING → tag → RM-AG0075 卫生告警。**既有检查全部保留**、顺序未被破坏；`delivery` 检查只查子串留痕（`"delivery:" in p8_text`），未新增文件读写/竞态/TOCTOU。实跑 `test_check_p8_delivery.py`（未声明→非0、声明→rc=2）+ `test_check_gate.py` G8 系列（夹具补 `delivery`）全绿。
+
+### 2. `gate_layer` 结构与 `gate_pass_exit`/`next`/`retreat` 语义 — 通过
+`phases.yaml` 仅改 P8 `name`/`gates` 描述并**追加**顶层 `gate_layer`（`commit_types` 3 类集合互异 + `transitions` forward/retreat/pause 含字面 `paused_from`）；各 phase 的 `gate_pass_exit`/`next`/`retreat` **逐字未变**（`test_gate_layer::_EXPECTED_GATE_PASS_EXIT` 回归基线断言通过）。schema 在 `additionalProperties:false` 下同步新增 `gate_layer`，`check-yaml-schema.py` → `SCHEMA-phases: OK`。
+
+### 3. 回归 — 通过
+`test_gate_layer + test_check_p8_delivery + test_check_gate` → **227 passed**；P8 相邻回归（`test_v060_p8_internal_only`/`test_v060_r4_cached`/`test_check_pruning`/`test_tag0027_b1_phases_transfer_fields`/`test_tag0027_b3b_structure_s1s2_next_retreat`/`test_protocol_dedup_audit`）→ **61 passed**；`test_agate_scripts_encoding`/`test_t41_platform_hygiene`/`test_check_yaml_schema`/`test_check_structure_consistency`/`test_agate_debt_check` → **62 passed**；`check-structure-consistency.py` → S0-S6 全 OK；consistency → **0 ERROR / 404 WARNING**；count-tests **2689**（未漂移）；ruff 通过。
+
+### 4. 测试充分性 — 通过（含 1 条观察）
+`test_gate_layer.py`（BDD-14 结构键名无关 + `paused_from` + gate_pass_exit 回归；BDD-21 preset/UPGRADING/WARNING）、`test_check_p8_delivery.py`（BDD-15 未声明拦截/声明放行/语义面）覆盖 P3 契约。夹具缺陷修复（`copytree(dir=dirs_exist_ok=True)`）未改断言，正确。观察见 INFORMATIONAL-2。
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 文档 / 边界
+
+### [INFORMATIONAL-1] UPGRADING 批 4 节标题「（迁移期无破坏性变更）」与正文矛盾
+标题：`批 4 … P8 交付收尾 + 发版逻辑迁移 preset（迁移期无破坏性变更）`；正文却写「`P8-release.md` 须声明 `delivery` 字段，缺失 → `check-gate.py P8` **exit 1（硬拦截）**。升级后请在 `P8-release.md` 补一行 `delivery:`，否则 P8 gate 会拦」。**`delivery` 是即时硬拦**（在途 P8 任务不加字段即被阻断）= 对既有任务的**破坏性变更**，与标题的「无破坏性变更」不符（batch2 节标题正确，因其行为确未变）。正文已明确告知用户，故**非阻断**。**建议**：标题改为「P8 交付收尾（`delivery` 即时强制）+ 发版逻辑迁移（迁移期无破坏性变更）」，或明示 delivery 为即时生效项。
+
+### [INFORMATIONAL-2] `gate_layer` 目前**无运行时消费者**——BDD-14「不同类型走不同关卡」仅数据面成立
+`grep gate_layer agate/ --include=*.py`（非测试）→ **0 命中**；仅测试 + schema 引用。即 `commit_types` 的「不同集合」是可查数据，但**无脚本按提交类型选择关卡**。BDD-14 Then 的「不同类型走**不同关卡**」在行为层尚未落地（P3 用例亦只断言结构）。DESIGN_GAP ① 覆盖「成员未定」，未覆盖「消费者归属」。**建议 P7 裁决**：`gate_layer` 的消费者是 batch5 `agate-ci-verify` 还是后续批次；否则 BDD-14 行为子句需明确为「数据面即达成」。非阻断。
+
+### [INFORMATIONAL-3] `gate_layer.transitions` 数据完备性：`forward` 无 P6.5 边而 `retreat` 有
+`transitions.forward` 为 P6→P7 直连（无 P6.5 边），而 `retreat` 含 `{from: P6.5, to: P6}`；`commit_types.code-only` 又含 P6.5。P6.5 是挂载于 P6→P7 的子阶段（`phases.yaml:118-121` 注明「非独立转移边」），故 forward 省略 P6.5 可能**有意**，但两侧不对称、易误读。**建议 P7 明确** forward 是否应含 P6.5 语义（或加注释）。非阻断。
+
+### [INFORMATIONAL-4] P8 卡片引用了**不随协议发布**的任务内部文件
+`phase-cards/P8-release.md` 新句含「（见 `P4-implementation-batch4.md` `[DESIGN_GAP]`）」。phase-cards 随协议发布到用户（`~/.agate/current/agate/phase-cards/`），而 `P4-implementation-batch4.md` 在任务目录、**不随发布**——引用悬空。**建议**改为不含内部任务路径的表述。非阻断（纯文档卫生）。
+
+### [INFORMATIONAL-5] 6 条 DESIGN_GAP 判定：同意交 P7；另记 P0-brief 迁移原则与 BDD-15 的张力
+- ① 提交类型成员/矩体未定 → **交 P7**（并见 INFORMATIONAL-2）。
+- ② `phases.schema.json` 不在 output 列但 `additionalProperties:false` 强制同步 → **已同步，正确**，交 P7。
+- ③ `WORKFLOW.md` 不在 output 列但 S-1 强制名称一致 → **已同步，正确**，交 P7。
+- ④ `delivery` 取值集合未定（只查子串）→ **交 P7**（子串检查可被注释/正文误满足，收紧取值需扩 schema）。
+- ⑤ 发版逻辑删除时机/顺序 → **交 P7**（本批只提供等价物 + WARNING + 截止版本，符合 BDD-21 Then）。
+- **张力**：`P0-brief` known_risks「第 2 批起文件缺失时行为与现状一致 + WARNING，到截止版本改 exit 1」vs BDD-15「未声明 `delivery` → 即时拦截」。`delivery` 是字段非文件、且 BDD-15 为验收基线，实现随 BDD；**建议 P7 裁决**该即时强拦是否需给出迁移窗口（否则与 INFORMATIONAL-1 一并处理）。
+
+### [INFORMATIONAL-6] schema `transitions.forward/retreat` 的 `from`/`to` 未做 phase-id 枚举
+`phases.schema.json` 的 `gate_layer.transitions.forward/retreat` 项把 `from`/`to` 声明为自由 `string`（无 `enum`），而 `pause.paused_from` 用了 phase-id `enum`。即 schema 不阻止 `forward` 写入非法 phase id。**建议**统一为 phase-id `enum`。非阻断。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| batch4 目标 | `pytest test_gate_layer test_check_p8_delivery test_check_gate -q` | **227 passed** |
+| P8 相邻回归（6 文件） | `pytest test_v060_p8_internal_only test_v060_r4_cached test_check_pruning test_tag0027_b1_phases_transfer_fields test_tag0027_b3b_structure_s1s2_next_retreat test_protocol_dedup_audit -q` | **61 passed** |
+| 编码/卫生/schema/structure/debt（5 文件） | `pytest test_agate_scripts_encoding test_t41_platform_hygiene test_check_yaml_schema test_check_structure_consistency test_agate_debt_check -q` | **62 passed** |
+| structure | `check-structure-consistency.py` | S0-S6 **全 OK** |
+| schema | `check-yaml-schema.py` | `SCHEMA-phases: OK`（+dispatch/roles/markers） |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 404 WARNING**（冻结面） |
+| ruff | `ruff check agate/scripts/check-gate.py` | `All checks passed!` |
+| 用例数 | `count-tests.sh` | **2689**（未漂移） |
+| gate_layer 消费者 | `grep gate_layer agate/ --include=*.py`（非测试） | **0 命中**（INFORMATIONAL-2 依据） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对（pytest 经 `tmp_path`/`git_repo` 夹具隔离；schema/structure/consistency/ruff 为只读扫描）。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 7（增量）：batch5-ci-doctor（CI 重跑兜底 + 接入诊断）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `fb56964`，batch4 已落）。
+> 评审依据：`P4-dispatch-context-review-batch5.md`、`P4-implementation-batch5.md`（含 5 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M13/M14/M15 / §4.4、`P3-test-cases-batch5.md`、`docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 8 aligned）。
+> 视角：**工程正确性/边界/退役完整性/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 8 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: approved**。Pass 1（CRITICAL/BLOCKER）：**0 条**。Pass 2（INFORMATIONAL）：**6 条**（非阻断，多交 P7）。
+
+核心正确性（BDD-16「无假绿」）经独立核对成立：`agate-ci-verify` **实际重跑** `check-gate.py`；gate 失败（exit 1）→ `FAIL` + rc 1；跳过面显式 `SKIP:` + 原因；workflow step 有 `set -o pipefail` + 默认 `bash -e`，脚本 rc 1 会**使 job 红**（exit code 未被 `tee` 吞掉）。退役完整性、doctor 四维 + rc 固定、回归均通过。
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+**0 条。** 逐项排查（派发重点 1-4）：
+
+### 1. `agate-ci-verify` 无假绿（BDD-16 核心）— 通过
+- `_run_gate` 子进程调 `check-gate.py PHASE TASK_DIR`（源码含 `check-gate.py`）；gate exit 1 → `FAIL` + `return 1`（TC-B16-02 实测）；无 `.gate-result.json`（`--no-verify` 场景）时以重跑 gate 为权威；有记录时 `phase`/`exit_code` 不一致 → `FAIL`。
+- 「跳过」与「通过」输出可区分：`_skip()` 打印 `SKIP: <原因>` + 「本次**未实际执行**」块，正常路径打印 `PASS:`/`FAIL:`。
+- **CI 层不吞退出码**：workflow step `set -o pipefail`（`:304`）+ GitHub 默认 `bash -e` ⇒ `agate-ci-verify.py | tee` 的 pipeline 在脚本 rc 1 时失败 → job 红（核对 workflow 全文确认，非假绿）。
+
+### 2. `agate-doctor` 四维诊断客观 + rc 固定 — 通过
+四维（声明文件经 `read_project_config` 唯一读取函数 / git hook / 版本解析 / 账本 `prev_hash` 链）逐项给客观值；异常项进「修复建议」（含可执行命令）；`main()` **恒 `return 0`**，单维度异常被捕获为「诊断异常」行（不漂移退出码，TC-B17-08）。
+
+### 3. 退役完整性 — 通过
+`ci-gate-backstop.py` + 其测试已删；`check-protocol-consistency.py` 移除锚点 + `uncovered_gate_scripts` extras + 锚点 callers，`SCRIPT_REF_RE` 保留退役名作**回引拦截**；`agate-summary.py`/workflow/6 协议文档/README/formatters-README 全部同步。实跑 consistency → **0 ERROR / 406 WARNING**（CHECK10-scriptref 无新 ERROR）；`test_bdd_16_ci_verify_protocol_refs_synced` + `grep` 复核：CHECK10 扫描面无残留引用（剩余命中均为「退役说明/拦截保留/测试注释」，非协议文档回引）。
+
+### 4. 回归 / 测试充分性 — 通过
+batch5 目标 14 passed；相邻回归 348 + `test_protocol_alignment_review` 13 = **361 passed**（与自报吻合）；regression + integration **198 passed**；SG.6 `-k sg_6` **1 passed**；structure S0-S6 全 OK；ruff 通过；count-tests **2671**（-18 = 删退役测试 17 + 退役锚点测试 1，符合预期）；平台扫描新增脚本 0 命中。
+
+## Pass 2（INFORMATIONAL）— 代码健康 / 边界 / 文档
+
+### [INFORMATIONAL-1] `_run_gate` 的「脚本缺失」哨兵 `2` 与通过码 `2` 冲突 → 破损安装下 `PASS`（残留假绿面）
+`agate-ci-verify.py:44-45`：`check-gate.py` 不存在时 `_run_gate` 返回 `(2, "check-gate.py not found")`；`main` 对 `ci_exit != 1` 判 `PASS` + rc 0（`:131-137`）。多数 phase 的通过码恰为 `2`，故**破损/不完整安装**（缺 `check-gate.py`）会被报成 `PASS`。属**残留假绿路径**（旧 backstop 同样返回 2、但标 `WARN`；本脚本标 `PASS`）。**建议**：用与退出码域不冲突的哨兵（如 `-1`/显式 not-found 分支 → `FAIL`）。非阻断（正常安装下不可达）。
+
+### [INFORMATIONAL-2] agateon 本仓 CI 恒 `SKIP`（多任务歧义）——主消费场景不实际重跑
+`_locate_state` 在无仓库根 `.state.yaml` 且 `{tasks_dir}/*/.state.yaml` > 1 时判 `ambiguous` → `SKIP`（`:116-117`）。agateon 本仓即多任务 ⇒ 其 CI 的 `gate-backstop` job **恒 SKIP**（仅出 warning 注解）。即「实际重跑」只对单任务/有根状态的项目生效；协议自身仓库的 CI 兜底仍不执行。**已在 DESIGN_GAP ① 登记**（「如何唯一定位本仓待兜底任务」）。**建议 P7 裁决**定位约定（如按 `AGATE_TASK_DIR`/push diff 定位）。非阻断（输出显式 SKIP，非假绿）。
+
+### [INFORMATIONAL-3] `agate-doctor._diagnose_hooks` 只查 `<root>/.git/hooks`，漏 worktree / `core.hooksPath`
+`_diagnose_hooks`（`:62-73`）直接看 `project_root/.git/hooks`。worktree 下 `.git` 是**文件**（`hooks_dir.is_dir()` False → 误报「非 git 仓库」）；`core.hooksPath` 指向共享目录时亦漏检。AGENTS.md 明确 worktree 共享 hook、权威取值 `git rev-parse --git-path hooks`。**建议**用该命令/`core.hooksPath` 解析。非阻断（诊断误报，rc 仍 0）。
+
+### [INFORMATIONAL-4] `agate-doctor._check_chain` 未守卫非 dict JSON 行
+`_check_chain`（`:101-108`）对 `json.loads` 只捕获 `ValueError`；若某行是合法 JSON 但非对象（如 `42` / `[1,2]`），`event.get("prev_hash")` 抛 `AttributeError`，被 `main` 的**兜底 except** 记为「诊断异常」而非干净的「第 N 行非法」。`check-events.py` 有 `isinstance(ev, dict)` 守卫。**建议**同样加类型判断。非阻断。
+
+### [INFORMATIONAL-5] `agate-doctor._diagnose_version` 只回显 AGATE_ROOT/.agate-version 字符串，未解析版本链
+`_diagnose_version`（`:76-91`）展示 `AGATE_ROOT`（env 或脚本自定位）与 `.agate-version` 原文，**未调用** `agate-resolve.py` 解析实际生效版本（版本链 `.agate-version` → `current`）。「版本解析」维度偏浅，可能不反映真实解析结果/回退原因。**建议**接解析链。非阻断。
+
+### [INFORMATIONAL-6] 5 条 DESIGN_GAP 判定：同意交 P7；① 为最需裁决项
+- ① 调用接口（无参数 + cwd 定位，未用 `AGATE_TASK_DIR`；多任务 → SKIP）→ **交 P7**（并见 INFORMATIONAL-2，影响本仓 CI 实效）。
+- ② doctor 退出码语义（rc 恒 0 = 「诊断完成」）→ **交 P7**（与 TC-B17-08 一致；若意图「发现异常即非 0」须改测试）。
+- ③ 退役 backstop 的 P3-TDD-red / P6 provenance CI 层重跑未移植 → **交 P7**（BDD-16 只要求 gate 重跑；P6.5 judge/events 由 `check-gate.py P6.5` 覆盖）。
+- ④ `formatters/README.md` 不在派发退役清单但属 CHECK10 扫描面 → **已同步，正确**（否则新增 ERROR），交 P7 核对。
+- ⑤ workflow job 名保留 `gate-backstop` → **交 P7**（M15 只要求改调用脚本）。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| batch5 目标 | `pytest test_agate_ci_verify test_agate_doctor -q` | **14 passed** |
+| 相邻回归 | `pytest test_check_gate test_check_protocol_consistency test_mvwu_protocol_docs test_doc_sweep test_agate_scripts_encoding test_t43_check_registration_surface -q` | **348 passed** |
+| SG 对齐集成 | `pytest integration/test_protocol_alignment_review.py -q` | **13 passed**（`-k sg_6` → 1 passed） |
+| regression + integration | `pytest agate/tests/regression/ agate/tests/integration/ -q -n auto` | **198 passed** |
+| structure | `check-structure-consistency.py` | S0-S6 全 OK |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 406 WARNING** |
+| ruff | `ruff check agate-ci-verify.py agate-doctor.py` | `All checks passed!` |
+| 用例数 | `count-tests.sh` | **2671**（-18，符合删退役测试） |
+| 平台扫描 | `check-platform-assumptions.py agate-ci-verify.py agate-doctor.py` | exit 0（0 命中） |
+| 退役残留 | `grep ci-gate-backstop`（agate/ + .github/，排除 UPGRADING） | 仅退役说明/拦截保留/测试注释，无协议文档回引 |
+| workflow 退出码 | 读 `.github/workflows/protocol-tests.yml:303-319` | step 有 `set -o pipefail` + 默认 `bash -e` → 脚本 rc 1 使 job 红 |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对（pytest 经 `tmp_path`/`git_repo` 夹具隔离；structure/consistency/ruff/平台扫描为只读）。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 8（增量）：batch6-obligations（义务三态归宿登记表 + 校验）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `082aba3`，batch5 已落）。
+> 评审依据：`P4-dispatch-context-review-batch6.md`、`P4-implementation-batch6.md`（含 6 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M16/M17/M18 / §4.5 / §1.4、`P1-requirements.md`（BDD-13/18/19）、
+> `docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 9 aligned）。
+> 视角：**工程正确性/可追溯性/登记面/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 9 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: approved**。Pass 1（CRITICAL/BLOCKER）：**0 条**。Pass 2（INFORMATIONAL）：**6 条**（非阻断，多交 P7）。
+
+`check-obligations.py` 判定正确（无归宿/M 占比下降两类负向独立复现 → exit 1）；**可追溯性独立抽验 123 条 anchor 全部指回真实文件/节/键、evidence 引用均可在仓库找到（无编造）**；登记面 SG.6 转绿、CHECK9-coverage 无新 WARNING、consistency 0 ERROR；无回归。
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+**0 条。** 逐项排查（派发重点 1-4）：
+
+### 1. `check-obligations.py` 判定正确 — 通过
+- 读 `rules/obligations.yaml`（`_resolve_root`：AGATE_ROOT→脚本相对→cwd）→ 每条 `disposition ∈ {M,C,R}`（缺/非法 → 无归宿）；`anchor`/`statement` 非空；M 占比用**整数交叉相乘**（`counts["M"]*base_total >= base_m*total`，避浮点）≥ 基线；exit 0/1/2。
+- **负向路径独立复现**（合成树，`AGATE_ROOT` 指向临时目录）：① 抽掉一条 `disposition` → `FAIL 存在「无归宿」项 … OBL-P0-01（disposition=None）` + **exit 1**；② `baseline 2/2` 而实际 `M=1/2` → `FAIL M 类占比低于基线` + **exit 1**。均成立。
+- 结构自洽：`yaml.safe_load` 实测 **123 条、无重复 id、disposition 分布 M=60/C=33/R=30、无缺 anchor/statement**（与基线一致）。`_load` 正确捕获 `yaml.YAMLError`（未复现 batch2 C1 类漏捕）。
+
+### 2. 可追溯性（本批关键）— 独立抽验通过（无编造）
+- **anchor 文件面**：123 条 anchor 覆盖 17 个真实文件（WORKFLOW.md 19 / phases.yaml 16 / P6 卡 10 / P8 卡 12 / P2 卡 10 / dispatch-protocol 10 / P1 卡 8 / P5 卡 6 / P3 卡 6 / P0 卡 5 / review-mapping 5 / P7 卡 5 / state-machine 4 / …），**全部存在**。
+- **anchor 节/键面**：16 条 `rules/phases.yaml#<phase>.<outputs|gates|task_fields>` 全部解析成功；md anchor 均指向真实节标题（10 条为前缀/近似，见 INFORMATIONAL-1；**无凭空节**）。
+- **statement↔anchor 抽验**：P1 ceremony 四要素 → `P1-requirements.md#ceremony fail-closed 声明 checklist`（含「四要素」）；P2 dispatch_plan → `#dispatch_plan 机器字段`；P6 vision 三态 → `#vision-helper 结论绑定`（含 `blocker_count`）；dispatch 铁律 2 → `#铁律 2`；P8 roadmap → `#gate 规则`（含 RM-AG0043）；P6 refactor → `#P6-acceptance.md（refactor 任务：回归验收口径）`。**均对得上**。
+- **evidence 面**：抽验 token（TAG0036/M18、T046、T005、peekview、T085、DEBT0046、DEBT0048、TAG0016、TAG0025、TAG0009）**均可在仓库既有记录中定位**，未见编造。
+
+### 3. 登记面（CHECK9 + SG.6）— 通过
+`check-protocol-consistency.py` 新增锚点条目（`script: agate/scripts/check-obligations.py`，keywords `["obligations.yaml","M 类占比","无归宿"]`）；三串在脚本文本中**字面出现**（实测命中 9/9/7）。`check-obligations.py` 属 `check-*.py` glob，登记后 `uncovered_gate_scripts()` 无未登记项。实跑：`test_protocol_alignment_review.py -k sg_6` → **1 passed**（转绿）；consistency → **0 ERROR / 407 WARNING**（无新增 ERROR）。
+
+### 4. 回归 / 测试充分性 — 通过（含 1 观察）
+相邻回归（`test_t43_check_registration_surface` + `test_check_protocol_consistency` + `test_check_yaml_schema` + `test_check_structure_consistency` + `test_tag0027_b3b_protocol_check14_check15`）→ **80 passed**；structure S0-S6 全 OK；ruff 通过；count-tests **2671**（未漂移）；平台扫描改动脚本 0 命中。观察见 INFORMATIONAL-4（无 P3 专门红灯测试）。
+
+## Pass 2（INFORMATIONAL）— 可追溯性 / 登记面 / 文档 / 范围
+
+### [INFORMATIONAL-1] 「可追溯」未机械强制：`check-obligations` 只校验 anchor **非空**，不校验可解析
+`check-obligations.py` 对 `anchor` 仅判 `str(...).strip()` 非空（`:114`），**不校验** anchor 是否解析到真实文件/节/键。独立抽验：123 条 anchor 全部指回真实文件（**无编造**），但 **10 条非逐字节标题**（5 条为标题前缀/含反引号如 `P3_xxx 禁止声明`、5 条近似），其中 **OBL-X-16** 的 anchor `state-machine.md#回退机制（诊断→跳转→PAUSED→批准→重跑）` 所指节**不含**其陈述「回退须先归档旧阶段产出」的内容（该内容在 `rules/state-transitions.md#回退规则`，即 OBL-X-17 的 anchor）。**建议**：加 anchor 可解析性校验（至少文件存在；进阶：节/键命中），否则「可追溯」保证弱于字面。非阻断。
+
+### [INFORMATIONAL-2] `check-obligations.py` 未接入任何**不可绕开路径**——BDD-19「只增不减」守卫未被自动执行
+`grep check-obligations` 确认：hook / `.github/workflows/` / `gate_commands` / `check-*.py` 互调**均不调用**它；仅 CHECK9 锚点登记 + README 索引。故「M 类占比只增不减」的守卫目前**只能靠人手动运行**，与本任务「规则由脚本在**不可绕开的路径**上执行、防止『靠记忆的规则』再长出来」的立项命题存在张力。**注意**：BDD-13 仅要求「登记面（SG.6 转绿）」、P2 §4.5 仅要求「进 CHECK 9 锚点表」，故**实现符合书面规格**，属规格级缺口。**建议 P7/后续批次裁决**是否把 `check-obligations.py` 接入 pre-commit / CI consistency job。非阻断。
+
+### [INFORMATIONAL-3] 文档化退出码与实现不符（`exit 2` vs 实测 `exit 1`）
+docstring（`:21`）与 `scripts/README.md:92` 称 `exit 2 = …baseline 字段缺失`；但 `_evaluate` 在 `baseline` 缺失/非整数时 `return (not errors), errors, None` → `main` 返回 **1**（非 2）；`schema_version` 缺失亦为 1。**建议**订正文档，或让结构性错误返回 2。非阻断。
+
+### [INFORMATIONAL-4] `check-obligations.py` 无 committed 回归测试（判定逻辑仅由 SG.6 守护）
+P3 批 6 的 `tests_filter` 用既有 SG.6（登记面），未产出 BDD-18/19 的专门用例；`check-obligations.py` 的两类负向判定无回归测试锁定（本评审用合成树独立复现，均 exit 1）。已登记 DESIGN_GAP ⑥。**建议**补正式用例（无归宿→exit 1 / M 下降→exit 1），否则后续改动可静默破坏判定。非阻断。
+
+### [INFORMATIONAL-5] 123 vs 外部 160：条目边界由本次重盘定义（DESIGN_GAP ①-④ 交 P7）
+外部「160 项逐条清单」不在仓库（P0-brief §四），按 fallback 从协议原文重盘为 123（M60/C33/R30）vs 外部 M38/C29/N70；分类语义（M/C/**R** vs M/C/**N**）、颗粒度、「不可绕开」判据均不同，**不可逐条对齐**。已如实登记 DESIGN_GAP ①（重盘）/②（M/C/R 边界自定）/③（N→R 映射）/④（基线 0.4878 自定）。**建议 P7 逐条裁决**是否可接受，或索取原始表对齐。非阻断。
+
+### [INFORMATIONAL-6] 范围记录：P0-brief 批 6 提及的「§4 通用化清理」未做（P2 output 未列）
+`P0-brief §二` 批 6 含「§4 的通用化清理」，但 `P2 §6.1b batch6` 的 `output` 只列 3 文件；实现按 P2 output 只做 BDD-13/18/19，并在 P4-implementation §7 记为**范围记录**（非静默跳过）。**建议**主 Agent/P7 明确该项归属批次。另：`obligations.yaml` 无 JSON schema（不属 `check-yaml-schema` S-5 覆盖面），其结构由 `check-obligations.py` 承担——信息性，可接受。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| 登记表结构 | 解析 `obligations.yaml` | **123 条 / 无重复 id / M60 C33 R30 / 无缺 anchor-statement** |
+| 判定正向 | `python3 agate/scripts/check-obligations.py` | `M 类占比: 60/123 = 0.4878`；**exit 0** |
+| 判定负向①（无归宿） | 合成树抽掉 disposition，`AGATE_ROOT=<tmp>` | `FAIL 存在「无归宿」项`；**exit 1** |
+| 判定负向②（M 下降） | 合成树 baseline 2/2 vs M 1/2 | `FAIL M 类占比低于基线`；**exit 1** |
+| anchor 可追溯（独立抽验） | 解析 123 anchor → 文件存在 + 节/键命中 | 全部指回真实文件/节（10 条近似，0 条凭空） |
+| evidence 抽验 | `grep` TAG0036/T046/T005/T085/DEBT0046/0048/TAG0016/0025/0009 | 均可定位（无编造） |
+| CHECK9 关键词 | `grep -c` obligations.yaml / M 类占比 / 无归宿 | 9 / 9 / 7（字面命中） |
+| SG.6 | `pytest integration/test_protocol_alignment_review.py -k sg_6` | **1 passed**（转绿） |
+| 相邻回归（5 文件） | `pytest test_t43_check_registration_surface test_check_protocol_consistency test_check_yaml_schema test_check_structure_consistency test_tag0027_b3b_protocol_check14_check15 -q` | **80 passed** |
+| structure | `check-structure-consistency.py` | S0-S6 全 OK |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 407 WARNING** |
+| ruff / count / 平台扫描 | `ruff` / `count-tests.sh` / `check-platform-assumptions.py <2 脚本>` | pass / **2671** / 0 命中 |
+| 接入面 | `grep check-obligations`（hook/CI/gate_commands） | **无调用**（INFORMATIONAL-2 依据） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对。负向路径探针在 `mktemp` 临时目录中以合成登记表运行（已清理），**未在仓库内写入/修改任何文件**；pytest 经 `tmp_path`/`git_repo` 夹具隔离；structure/consistency/ruff/平台扫描为只读。未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。

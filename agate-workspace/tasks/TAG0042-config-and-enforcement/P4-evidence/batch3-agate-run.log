@@ -1,0 +1,7 @@
+command: python3 -m pytest agate/tests/unit/test_agate_run.py agate/tests/unit/test_events_ledger.py -q
+exit_code: 0
+git_head: 18b3e3dfa78ec80ecd411a5c09370ff946f9a960
+timestamp: 2026-10-06T05:47:49+08:00
+expected_red: []
+failed_tests: []
+duration_seconds: 1

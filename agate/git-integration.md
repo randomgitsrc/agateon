@@ -174,7 +174,7 @@ hook 场景下 `--cached` 是唯一正确选择。
 
 **commit 里一并暂存的东西**：阶段产出文件 + `.state.yaml`（phase = 本 commit 产出阶段）+
 `active-tasks.md` 自己那一行 + **`gate-events.jsonl` 事件账本**（`gate_run` / `state_transition` /
-`judge_verdict` / `dispatch_route` 追加行，pre-commit hook 会追加、随本 commit 一起入库；哈希链由
+`judge_verdict` / `dispatch_route` / `cmd_run` 追加行，pre-commit hook 会追加、随本 commit 一起入库；哈希链由
 `check-events.py` 审计）。
 
 **SELF-GATE trailer（改 Agateon 协议本体 / 脚本时）**：暂存区含 `agate/*.md` / `agate/scripts/*` /

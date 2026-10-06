@@ -39,13 +39,6 @@ def test_check_9_agate_alignment_review_threshold_anchor_exists(agate_scripts):
     )
 
 
-def test_check_9_ci_gate_backstop_anchor_in_scan(agate_scripts):
-    cpc = _load_cpc(agate_scripts)
-    anchors = cpc.SCRIPT_ALIGNMENT_ANCHORS
-    cb_anchors = [a for a in anchors if "ci-gate-backstop.py" in a.get("script", "")]
-    assert len(cb_anchors) >= 1, f"Expected >=1 ci-gate-backstop.py anchor, got {len(cb_anchors)}"
-
-
 # ── CHECK 10（协议文档脚本名引用漂移）新增用例，TAG0013（追加，不改既有） ──────
 # 夹具：最小假协议树（pytest tmp_path 下 agate/scripts/ 假脚本 + 协议文档面扫描文件），
 #   直接调 check_script_name_refs(root, rep) 断言 rep.errors / rep.ok。

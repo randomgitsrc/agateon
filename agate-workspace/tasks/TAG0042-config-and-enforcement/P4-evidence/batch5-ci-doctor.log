@@ -1,0 +1,7 @@
+command: python3 -m pytest agate/tests/unit/test_agate_ci_verify.py agate/tests/unit/test_agate_doctor.py -q
+exit_code: 0
+git_head: fb569648dd9971d2b24c8b9e9ed6269d280b2db7
+timestamp: 2026-10-06T06:33:37+08:00
+expected_red: []
+failed_tests: []
+duration_seconds: 1

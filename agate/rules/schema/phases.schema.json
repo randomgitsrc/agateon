@@ -93,6 +93,76 @@
         },
         "additionalProperties": false
       }
+    },
+    "gate_layer": {
+      "type": "object",
+      "required": ["commit_types", "transitions"],
+      "properties": {
+        "commit_types": {
+          "type": "object",
+          "properties": {
+            "code-only": {
+              "type": "array",
+              "items": {"type": "string", "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P6.5", "P7", "P8"]}
+            },
+            "docs-only": {
+              "type": "array",
+              "items": {"type": "string", "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P6.5", "P7", "P8"]}
+            },
+            "release": {
+              "type": "array",
+              "items": {"type": "string", "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P6.5", "P7", "P8"]}
+            }
+          },
+          "additionalProperties": false
+        },
+        "transitions": {
+          "type": "object",
+          "properties": {
+            "forward": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to"],
+                "properties": {
+                  "from": {"type": "string"},
+                  "to": {"type": "string"}
+                },
+                "additionalProperties": false
+              }
+            },
+            "retreat": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to"],
+                "properties": {
+                  "from": {"type": "string"},
+                  "to": {"type": "string"}
+                },
+                "additionalProperties": false
+              }
+            },
+            "pause": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["to", "paused_from"],
+                "properties": {
+                  "to": {"type": "string"},
+                  "paused_from": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P6.5", "P7", "P8"]}
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

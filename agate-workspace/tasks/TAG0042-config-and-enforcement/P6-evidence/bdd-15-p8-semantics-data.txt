@@ -1,0 +1,8 @@
+### BDD-15: P8 交付收尾语义（phases.yaml P8 name + 卡片 delivery）
+
+P8 name = '交付收尾'
+P8 outputs = [{'file': 'P8-release.md', 'required': True}]
+
+## phase-cards/P8-release.md 中 delivery 命中
+70:- `delivery` 字段——交付方式声明（P8 为**交付收尾**，须声明交付方式；缺失 → `check-gate.py P8` exit 1）。
+84:- `delivery` 字段存在（缺失 → exit 1；交付收尾须声明交付方式）

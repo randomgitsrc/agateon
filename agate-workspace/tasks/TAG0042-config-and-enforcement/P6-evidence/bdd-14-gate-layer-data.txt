@@ -1,0 +1,11 @@
+### BDD-14: 关卡层按提交类型分级（phases.yaml 数据面实读）
+
+  /gate_layer/commit_types/code-only = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P6.5', 'P7', 'P8']
+  /gate_layer/commit_types/docs-only = ['P0', 'P1', 'P2', 'P7', 'P8']
+  /gate_layer/commit_types/release = ['P7', 'P8']
+  /gate_layer/transitions/pause[0]/paused_from = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P6.5', 'P7', 'P8']
+
+paused_from 命中: True
+
+## gate_pass_exit 语义（不得因分级改变）
+{'P0': 2, 'P1': 2, 'P2': 2, 'P3': 2, 'P4': 0, 'P5': 2, 'P6': 2, 'P6.5': 0, 'P7': 0, 'P8': 2}

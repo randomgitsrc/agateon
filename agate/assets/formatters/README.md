@@ -112,7 +112,7 @@ gate_commands:
 
 ### ⚠️ 两个必看的实现陷阱（`TAG0039` 实测，两者都曾造成静默故障）
 
-**① 不要把整份输出经环境变量传给 `python3`。** 常见写法 `OUTPUT="$(cat)"; export OUTPUT` 在输出超过 execve 的 `MAX_ARG_STRLEN`（128 KB，见 `getconf ARG_MAX` 相关限制）时会让 `python3` **启动即失败**（`参数列表过长`，退出码 126）。真实规模：某前端项目全量输出约 1.5 MB，超限 11 倍 → formatter 失败 → 上游 `check-tdd-red.py` 回退 `raw_output` 并**误判为红灯**，`ci-gate-backstop.py` 据此判 **FAIL**。
+**① 不要把整份输出经环境变量传给 `python3`。** 常见写法 `OUTPUT="$(cat)"; export OUTPUT` 在输出超过 execve 的 `MAX_ARG_STRLEN`（128 KB，见 `getconf ARG_MAX` 相关限制）时会让 `python3` **启动即失败**（`参数列表过长`，退出码 126）。真实规模：某前端项目全量输出约 1.5 MB，超限 11 倍 → formatter 失败 → 上游 `check-tdd-red.py` 回退 `raw_output` 并**误判为红灯**，CI 兜底据此判 **FAIL**。
 
 正确做法：**bash 薄壳 + 独立 `.py`，数据经 stdin 直连**（内置 formatter 现在都是这个结构）：
 

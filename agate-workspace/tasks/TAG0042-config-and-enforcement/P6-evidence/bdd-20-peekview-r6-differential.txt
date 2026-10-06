@@ -1,0 +1,116 @@
+BDD-20 证据：peekview 只读副本 R6 双向差分（TAG0042 P6 补证）
+================================================================
+
+## 0. 环境与方法（可复现）
+
+- 被测对象：BDD-20「项目形态声明化不引入只适用于单一项目的规则」——
+  Given 每批 R6 双向差分除 agateon 外加一份 peekview 只读副本；When 对副本运行改动后的
+  consistency + 相关 gate；Then 副本新转红/告警面全部可解释、无「只适用于 agateon 一个项目」的规则引入。
+- peekview 原仓库：/home/kity/oclab/peekview（HEAD 4ea7b8f7d0977de30ec232cd3c93758beedb53d3）
+  **全程只读，未改动**（见 §5 git status 核验）。
+- 只读副本根：/tmp/opencode/tag0042-r6/（AGENTS.md 工作流 0a：判据脚本有写副作用，必须在 /tmp 副本上跑）
+  - peekview-src/：peekview 副本（rsync -a，排除 node_modules 与 .git——二者均不在 consistency 扫描面内）
+  - pv/：在 peekview-src 上叠加协议后运行 gate 的副本
+- 双向差分口径：同一份 peekview 副本上，**先跑基线协议、再跑改动后协议**，逐条比对：
+  - 基线协议 = 稳定版 /home/kity/.agate/v0.78.3/agate（当前 hook/gate 判定同源）
+  - 改动后协议 = 本 checkout /home/kity/oclab/agateon/agate（TAG0042 六个批次改动，HEAD d3c3300）
+- 副本准备（对基线/改动后**同样处理**，保证差分公平）：
+  peekview 的 docs/converse/agents/orchestrator.md 是指向 /home/kity/.agate/orchestrator-template.md
+  的**绝对软链**，而该目标不存在（peekview 既有断链，与本次改动无关），会让 consistency 在
+  check_yaml_parseable 阶段抛 FileNotFoundError。故在 /tmp 副本内把该断链替换为对应协议版本的
+  orchestrator-template.md 内容（基线用 v0.78.3 版，改动后用本 checkout 版）——**只在副本内做，原仓库不动**。
+  （真实 peekview 直接跑该脚本同样会因断链崩溃，属 peekview 既有状态，非本任务引入。）
+
+命令（均在 /tmp 副本上执行，未对真实仓库运行）：
+
+  # 基线：peekview 副本 + v0.78.3 协议
+  python3 /home/kity/.agate/v0.78.3/agate/scripts/check-protocol-consistency.py \
+      --root /tmp/opencode/tag0042-r6/pv --strict-errors-only --json
+  # 改动后：同副本叠加本 checkout 协议
+  rsync -a --delete /home/kity/oclab/agateon/agate/ /tmp/opencode/tag0042-r6/pv/agate/
+  python3 /tmp/opencode/tag0042-r6/pv/agate/scripts/check-protocol-consistency.py \
+      --root /tmp/opencode/tag0042-r6/pv --strict-errors-only --json
+  # 相关 gate（改动后协议，AGATE_ROOT 指向副本协议根）
+  AGATE_ROOT=/tmp/opencode/tag0042-r6/pv/agate python3 .../check-yaml-schema.py
+  AGATE_ROOT=/tmp/opencode/tag0042-r6/pv/agate python3 .../check-structure-consistency.py
+  AGATE_ROOT=/tmp/opencode/tag0042-r6/pv/agate python3 .../check-obligations.py
+
+## 1. 原始输出摘要（计数）
+
+| 口径 | ERROR | WARNING（总 / live） | 退出码 |
+|---|---|---|---|
+| 基线 v0.78.3 协议 @ peekview 副本 | 42 | 1043 / 4 | 1（--strict-errors-only 判 ERROR） |
+| 改动后协议 @ peekview 副本 | 38 | 1042 / 3 | 1 |
+
+改动后 ERROR 分布：CHECK1-yaml 12、CHECK2-refs 23、CHECK10-scriptref 1、CHECK13-upgrading 1、CHECK6-license 1。
+改动后 WARNING 分布：CHECK1-yaml 5、CHECK2-refs 1035、CHECK7-version 1、CHECK9-callers 1（其中 live 3 条，余为冻结文件）。
+
+相关 gate（改动后协议 @ 副本）全部绿：
+  check-yaml-schema.py          → SCHEMA-phases/dispatch/roles/markers 全 OK，rc=0
+  check-structure-consistency.py→ S0-S6 全 OK，rc=0
+  check-obligations.py          → CHECK-OBLIGATIONS: OK，rc=0
+
+## 2. 新转红 / 新告警面逐条 + 可解释性
+
+### 2.1 新增 ERROR（3 条，全部为「同一既有问题行号位移」，非新规则）
+
+| 改动后位置 | 消息 | 解释 |
+|---|---|---|
+| agate/UPGRADING.md:470 | 引用了不存在的文件: docs/research/agateon-value-assessment-20260929.md | 基线同一问题在 UPGRADING.md:421；批 1 在 UPGRADING 新增 v0.79.0 章节致行号下移。**同一处既有引用**，非新增规则 |
+| agate/UPGRADING.md:645 | 引用了不存在的文件: docs/research/cross-platform-dispatch-mechanics.md | 基线同一问题在 UPGRADING.md:596；同上，行号位移 |
+| agate/dispatch-protocol.md:592 | 引用了不存在的文件: docs/design-notes/design-dispatch-routing.md | 基线同一问题在 dispatch-protocol.md:590；批 1 编辑该文件致行号位移 |
+
+逐条比对确认：上述 3 条的 `msg` 文本与基线条目**逐字相同**，仅 `loc` 行号不同 ⇒ 属行号位移，
+不构成新红面。根因是协议文件引用了 agateon 仓库的 docs/（peekview 副本中不存在）——基线协议
+同样报（是「协议引用 agateon 仓库开发资料」这一既有属性，非本任务引入，也非 agateon-only 规则；
+agateon 本 checkout 中这些 docs 存在故不报）。
+
+### 2.2 新增 WARNING：无（0 条）
+
+### 2.3 减少的 ERROR（4 条，副本/版本面 artifact，非规则变化）
+
+- CHECK10-scriptref ×4（agate/CONTEXT.md:35、agate/scripts/README.md:3、agate/scripts/README.md:33、
+  agate/assets/templates/handoff-template.md:74）：均报「引用了不存在的脚本: count-tests.sh」。
+  解释：稳定版安装目录 v0.78.3/agate **不含 tests/**（安装包设计上不带 tests/，见 agate/AGENTS.md），
+  故基线副本找不到 count-tests.sh 而判红；本 checkout 含 agate/tests/scripts/count-tests.sh，引用可解析故转绿。
+  属「基线协议安装形态 vs 开发 checkout 形态」差异，**非规则变化**，方向为减红。
+
+### 2.4 减少的 WARNING（1 条，批 5 有意替换）
+
+- CHECK9-callers：基线报 agate/scripts/ci-gate-backstop.py 未被任何流程文件调用（死代码）。
+  解释：批 5 用 agate-ci-verify.py **替换**了 ci-gate-backstop（P0-brief §二批 5、P2 M15），
+  改动后协议中 ci-gate-backstop.py 已不存在 ⇒ 该告警自然消失。属「本批有意收紧/替换且已在设计登记」，
+  方向为减警。
+
+### 2.5 改动后 live WARNING（3 条，均为 peekview 侧既有项）
+
+- CHECK1-yaml scripts/seed-data/dsh-architecture/ARCHITECTURE.md:182 —— peekview 项目内 md 的示例 YAML（基线亦有）
+- CHECK7-version README.md —— peekview README 无 version badge（基线亦有）
+- CHECK9-callers agate/scripts/check-ledger-pollution.py —— 协议脚本在 peekview 无调用（基线亦有）
+  三者均**非**本任务改动引入（基线同项），且与「agateon-only 规则」无关。
+
+## 3. 结论（对 BDD-20 的差分面）
+
+- 改动后协议在 peekview 只读副本上**未引入任何新 ERROR / 新 WARNING 面**（新增 3 条 ERROR 经逐条比对
+  确认为既有问题的行号位移；WARNING 新增 0）。
+- 全部差异均可解释：行号位移（批 1 编辑）、版本形态差异（安装版无 tests/）、批 5 有意替换（ci-gate-backstop→agate-ci-verify）。
+- 未发现任何「只适用于 agateon 一个项目」的规则引入：新增/修改的判据（check-obligations 锚点、
+  关卡层分级、agate-config/agate-run 等）在 peekview 副本上不产生新红/新警；check-structure /
+  check-yaml-schema / check-obligations 在副本上全绿。
+
+## 4. 逐条 BDD-20 Then 对照（事实陈述，不代 judge 裁决）
+
+- 「新转红/告警面全部可解释」：满足（§2，逐条给出归属）。
+- 「无只适用于 agateon 一个项目的规则」：差分面未见（§3）。
+
+## 5. 真实仓库无污染核验（跑完）
+
+  git -C /home/kity/oclab/peekview status --porcelain   → 空（原仓库未动，HEAD 仍 4ea7b8f）
+  git -C /home/kity/oclab/peekview rev-parse HEAD       → 4ea7b8f7d0977de30ec232cd3c93758beedb53d3
+  git -C /home/kity/oclab/agateon status --porcelain agate/ → 空（无协议源码改动）
+  git -C /home/kity/oclab/agateon status --porcelain    → 仅本任务元数据
+      （?? P6-dispatch-context-verifier-remediation.md / ?? P6.5-*.md；M gate-events.jsonl，
+       其 mtime 09:41 早于本次 R6 运行 10:41，非本次产生）
+
+⇒ R6 差分全程只在 /tmp/opencode/tag0042-r6/ 上运行；真实仓库（agateon 与 peekview）均无本次运行引入的污染。
+（/tmp 副本为临时产物，用完可删。）

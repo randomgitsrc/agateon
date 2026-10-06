@@ -19,7 +19,7 @@ OLD_PHASE（可选第 3 参数）：上一个 phase。省略时行为与之前�
 P0-P8 全部分支均已实现（2f-2 补齐 P5-P8），与 sh 版 check-gate.sh 逐分支等价：
   P5: gate_commands.P5 动态读取提示 + 多命令 WARNING + pre-task-baseline 机械 diff
   P6: P6-acceptance.md pass/fail 汇总 + P6-evidence/ 非空（provenance 审计由
-      pre-commit-gate.sh / ci-gate-backstop.py 单独调用 check-p6-provenance，不在本
+      pre-commit-gate.sh 单独调用 check-p6-provenance，不在本
       分支内执行——与 sh 版一致，sh check-gate.sh P6 同样不调）
   P7: BLOCKER/DEVIATION-CRITICAL + DESIGN_GAP 配对 + P4/P7 转抄交叉核对
   P8: P8-release.md bump_type/debt_check + version/CHANGELOG/tag 检查
@@ -629,6 +629,24 @@ def _gate_p2_ui_design_section(p2_file):
 
 
 def gate_p0(task_dir):
+    # TAG0042 批 2：调用 agate-config validate 做声明校验，但**迁移期只 WARNING**——
+    # validate 的退出码**只决定是否打印 WARNING**，绝不参与本函数返回值（BDD-8）。
+    # 存量项目无声明的行为与引入前一致：无论 validate 返回 0 还是非 0，恒 return 2。
+    config_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agate-config.py")
+    validate_rc = 0
+    if os.path.isfile(config_script):
+        try:
+            proc = subprocess.run(
+                [sys.executable, config_script, "validate"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+            validate_rc = proc.returncode
+        except OSError:
+            validate_rc = 0
+    if validate_rc != 0:
+        sys.stderr.write(
+            "WARNING: agate.config.yaml 缺失或非法（迁移期不阻断；截止版本起将 exit 1）\n"
+        )
     sys.stderr.write(
         "GATE P0: 立项阶段无需脚本 gate（仅 P0-brief.md）。主 Agent 确认 P0-brief 四字段齐全即可推进 P1。\n"
     )
@@ -1426,6 +1444,14 @@ def gate_p8(task_dir):
     if "debt_check:" not in p8_text:
         sys.stderr.write("GATE P8: P8-release.md 缺 debt_check 字段（须确认债务清单并留痕，可为 none）\n")
         return 1
+    # BDD-15（TAG0042 批 4）：P8 语义为**交付收尾**——delivery 声明缺失 → 拦截（非 0）。
+    # 只查留痕存在（合法取值集合设计未定，见 P4-implementation-batch4.md [DESIGN_GAP]），
+    # 内容任意放行；未声明则说明交付收尾未完成。
+    if "delivery:" not in p8_text:
+        sys.stderr.write(
+            "GATE P8: P8-release.md 缺 delivery 字段（P8 为交付收尾，须声明交付方式）\n"
+        )
+        return 1
 
     # RM-AG0043（BDD-5/6）：P8 完成时反查 roadmap.md 关联 RM 条目是否已回写 done
     # DEBT0020：roadmap_path 按仓库根锚定（而非 CWD 相对拼接），非仓库根 CWD 下仍能
@@ -1490,6 +1516,24 @@ def gate_p8(task_dir):
         sys.stderr.write(
             f"GATE P8 WARNING: 暂存区和最近 {lookback_num} 个 commit 均无 {changelog_file} 变更\n"
         )
+
+    # BDD-21（TAG0042 批 4）：声明文件缺失 + 有发版痕迹 → 显眼 WARNING（不静默失去保护）。
+    # 迁移期：项目未采纳 agate.config.yaml 时，既有发版检查（version/CHANGELOG/tag）仍生效，
+    # 但提示可迁移到等价物 `release.preset: semver-changelog-tag`（一行声明即保持现状）。
+    # 仓库定位以 **task_dir** 为基准（与上方 DEBT0020 / RM-AG0075 同取向）。
+    if cached_version or recent_version or cached_changelog or recent_changelog:
+        rc_cfg, cfg_root = _git(["rev-parse", "--show-toplevel"], cwd=task_dir)
+        cfg_root_out = (cfg_root or "").strip()
+        if (
+            rc_cfg == 0
+            and cfg_root_out
+            and not os.path.isfile(os.path.join(cfg_root_out, "agate.config.yaml"))
+        ):
+            sys.stderr.write(
+                "GATE P8 WARNING: 未发现项目声明 agate.config.yaml——发版检查（version/"
+                "CHANGELOG/tag）仍按既有逻辑执行；建议迁移为一行声明 "
+                "`release.preset: semver-changelog-tag`（等价物，保持现状），详见 UPGRADING.md\n"
+            )
 
     # 检查 tag 存在性（WARNING，不阻断——tag 通常在 gate 通过后才打）
     version_tag_prefix = os.environ.get("VERSION_TAG_PREFIX", "v")

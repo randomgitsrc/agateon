@@ -1,0 +1,7 @@
+command: python3 -m pytest agate/tests/unit/test_agate_next_card.py agate/tests/unit/test_tag0027_b1_agate_next_cli.py agate/tests/unit/test_check_state_transition.py -q
+exit_code: 0
+git_head: d3ba1c5d58824078fd7792404feaf3fbcdaca92a
+timestamp: 2026-10-06T04:39:53+08:00
+expected_red: []
+failed_tests: []
+duration_seconds: 12

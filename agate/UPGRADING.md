@@ -276,6 +276,77 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.79.0 — TAG0042 批 1：统一 phase 语义（**无破坏性变更**）
+
+> **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。
+> 本节记录 TAG0042「项目形态命令化 + 规则脚本化」**批 1** 的行为变更。
+
+**升级方式**：`python3 ~/.agate/scripts/agate-install.py latest`（幂等）。
+
+**⚠️ 会改变你项目的一处（编排惯例）**：
+
+1. **`agate-next` 推进时不再预写下一阶段**：原行为是「gate 通过即把 `Pn+1` 写入
+   `.state.yaml` 的 `phase` 并 `git add`」；批 1 起改为**不预写**——`agate-next` 只输出
+   「下一阶段建议」并追加 `state_transition` 事件（账本可查），`phase` 一律由**本 commit
+   的产出阶段**写入。
+   ⇒ 编排侧须相应调整：**phase 推进随下一阶段的产出 commit 一起**（不再由 `agate-next`
+   自动写入 phase + 单独 phase commit）。这也消除了历史上「预写 phase vs pre-commit 校验」
+   冲突导致的 `--no-verify`（如 peekview T085 的 8 次）。
+   （v0.44.0 的「阶段卡片 phase 语义（文档，无强制）」现由本批在不可绕开路径上落地：
+   `agate-next` 亦**不预写**下一阶段，卡片表述与行为一致。）
+
+**批 2（声明层，TAG0042）— 项目声明 `agate.config.yaml`（迁移期无破坏性变更）**：
+
+- 新增项目根声明文件 `agate.config.yaml` 与 `agate-config` 命令（`init` / `validate` /
+  `get` / `list` / `show`；退出码 0=成功 / 非 0=失败）。`agate-setup` / `install-hook`
+  接入时自动生成初始声明（**幂等**，不覆盖既有声明）。
+- **迁移期行为与引入前一致**：**没有** `agate.config.yaml` 的存量项目，`gate_p0` 仍返回
+  通过码（**exit 2**），只输出显眼 WARNING，**不** `exit 1`——存量项目不会因此静默变红。
+- **截止版本：v0.80.0** 起，声明文件缺失 / 非法将改为 **`exit 1`**（硬拦截）。请在此之前用
+  `agate-config init` 生成声明并填写自身形态（语言 / 包管理器 / 验证命令 / 发版方式）。
+
+**批 4（关卡层分级，TAG0042）— P8 交付收尾 + 发版逻辑迁移 `preset: semver-changelog-tag`（迁移期无破坏性变更）**：
+
+- **关卡层分级**：`phases.yaml` 新增 `gate_layer`——按**提交类型**（纯代码 / 纯文档 / 发版）选择
+  关卡集合 + 转换表（含 `paused_from`）。各 phase 的 `gate_pass_exit` / `next` / `retreat`
+  **语义不变**（无回归）。
+- **P8 语义改述为「交付收尾」**（原「发布准备」）：`P8-release.md` 须声明 `delivery` 字段，
+  缺失 → `check-gate.py P8` **exit 1**（硬拦截）。升级后请在 `P8-release.md` 补一行
+  `delivery:`（交付方式），否则 P8 gate 会拦。
+- **发版逻辑迁移（一行声明即保持现状）**：协议内既有发版检查（version 文件 / CHANGELOG / tag）
+  的等价物为项目声明 `release.preset: semver-changelog-tag`：
+  ```yaml
+  release:
+    preset: semver-changelog-tag
+  ```
+  迁移期：**没有** `agate.config.yaml` 的存量项目，P8 gate **仍执行**既有发版检查
+  （不静默失去保护），只输出指向该声明 / preset 迁移的显眼 WARNING。
+- **截止版本：v0.80.0**（与批 2 的声明文件硬切同版本）——请在此版本前用 `agate-config init`
+  生成声明并填写 `release.preset`；届时未声明的项目将失去协议内发版检查的等价保护
+  （发版逻辑删除由后续批次执行，本批只提供等价物 + WARNING）。
+
+**批 3（执行层，TAG0042）— 项目验证命令统一执行 `agate-run`（无破坏性变更）**：
+
+- 新增 `agate-run` 命令：按项目声明 `verify.commands` 执行验证命令，产物落 `.out` 证据并追加
+  `cmd_run` 事件到任务账本。属**增量能力**——既有手写验证命令仍可用。
+- `pre-commit-gate` 暂存账本行为统一（2 处账本事件枚举改述）；`.state.yaml` schema 与既有任务
+  数据格式均未变。
+
+**批 5（CI 与诊断，TAG0042）— `agate-ci-verify` 替换 backstop + `agate-doctor`（无破坏性变更）**：
+
+- 新增 `agate-ci-verify` 命令：实际重跑 gate 判定（替代退役的 `ci-gate-backstop.py`），
+  **「跳过」与「通过」输出可区分**（无假绿；多个任务级 `.state.yaml` 时显式 SKIP 而非误判）。
+- 新增 `agate-doctor` 命令：诊断项目接入 / 环境状态；**退出码固定**（诊断正常完成即成功，
+  报告问题 ≠ 自身失败）。
+- 本仓 CI 的 `gate-backstop` job 改调 `agate-ci-verify.py`（job 名保留）。**不影响你项目**
+  （你项目不跑本仓 CI 流水线）。
+
+**批 6（义务登记表，TAG0042）— 规则义务三态归宿登记（无破坏性变更）**：
+
+- 新增 `agate/rules/obligations.yaml`：协议义务登记表，逐条标**三态归宿**（M=机械门禁 /
+  C=命令 / R=强制独立评审），**无「无归宿」项**；`current ≥ baseline`（只增不减）。
+- 新增 `check-obligations.py`（进一致性 CHECK 9 锚点表）。**不影响既有任务数据**。
+
 ### v0.78.3 — §6 改动的独立评审整改（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。

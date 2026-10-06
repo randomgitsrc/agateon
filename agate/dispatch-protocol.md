@@ -288,9 +288,11 @@ agate 的标准模式假设主 Agent 所在平台支持派发 subagent。若运�
     门槛失败 → 重试（retries 记录 +1，超限则停下报告）
 ```
 
-> 步骤 6 的「跑 gate → 判定 → 前进写 `.state.yaml` phase → git add」这一段查表机械动作由 `agate next`
-> 完成（不做临场判断，消费 `phases.yaml` 的 `next`/`gate_pass_exit`；gate exit 1 且表有 `retreat` 时
-> 委托 `agate-retreat-to.py` 逐阶回退）；权威定义在 `state-machine.md`「主 Agent 的单步执行」。手工执行为 fallback。
+> 步骤 6 的「跑 gate → 判定 → 前进」这一段查表机械动作由 `agate next` 完成——它只输出「下一阶段
+> 建议」并追加 `state_transition` 事件，**不预写** `.state.yaml` 的 `phase`、**不** `git add`（`phase`
+> 由下一阶段产出 commit 写入）；不做临场判断，消费 `phases.yaml` 的 `next`/`gate_pass_exit`；gate exit 1
+> 且表有 `retreat` 时委托 `agate-retreat-to.py` 逐阶回退。权威定义在 `state-machine.md`「主 Agent 的单步
+> 执行」。手工执行为 fallback（手工 fallback 按该节手工规格写 `phase`）。
 
 ---
 
@@ -607,7 +609,7 @@ tmux 3.4（非容器 / CI runner / 纯物理机 Linux）——目标部署环境
 | **耦合度** | 与既有代码零耦合 | 与 1-2 个模块耦合 | 与 ≥3 个模块耦合 / 共享文件牵动多包 |
 | **认知负荷** | 纯机械执行（复制模式 / 单一模式） | 需理解局部上下文 | 需读全貌才能动手（结构不明 / 历史包袱重） |
 
-**综合定级规则**：任一维 high → 整体 high（必须拆分，见模式 2/3/4/5）；全部 ≤medium 且无 high → medium（按需拆批）；全部 low → low（模式 1 单发即可）。**high 复杂度必须拆分**——单 subagent 过载是本机制要解决的核心问题（TAG0010 批次 0 实证：agate_common 整库 + ci-gate-backstop + 3 bats 一次派发导致用户中止）。
+**综合定级规则**：任一维 high → 整体 high（必须拆分，见模式 2/3/4/5）；全部 ≤medium 且无 high → medium（按需拆批）；全部 low → low（模式 1 单发即可）。**high 复杂度必须拆分**——单 subagent 过载是本机制要解决的核心问题（TAG0010 批次 0 实证：agate_common 整库 + CI 兜底改造 + 3 bats 一次派发导致用户中止）。
 
 ### 2. 五模式编排
 
@@ -876,7 +878,7 @@ setTimeout(() => {
 | P5→P6 | 技术验证通过 | 从 P2-design.md `gate_commands.P5` 读取命令执行 → exit 0 AND failed==0 + N5 最小校验（grep -cE '^(PASSED|FAILED|passed|failed|ok|not ok)' P5-test-results/unit.md → 计数 >0）+ 行首锚点扫描（主 Agent 参照 pre-commit 三步逻辑手动判断：正向→PAUSED / 不合规→修正 / 缺失→静默通过）+ 若 ui_affected：从 gate_commands.P5 读取 E2E 命令执行 → exit 0 |
 | P6→P7 | BDD 验收通过 ⚠️ self-authored（降级缓解：provenance 审计 + R1a 截图实质检查，根治待 Phase 3） | `scripts/check-gate.py P6` → exit 2（FAIL=0/NC=0/证据非空已验）+ `scripts/check-p6-evidence.py` UI 截图 > 1KB（R1a 客观证据 barrier）+ `scripts/check-p6-provenance.py` → exit 0/2（2 = 协作规范 WARNING［缺 agent 字段］，不阻塞；证据-结论对应 + dispatch-context 审计 + BDD 总数对照由审计 3 自动执行，P1 `#### BDD-NN` 标题数与 P6 `grep -cE '^\s*- (PASS|FAIL)'` 结果数不符时 exit 1 硬阻 + UI vision YAML 审计 [R1b hook 化]）（UI 条件须截图 + vision-analyst YAML 引用 + `summary.blocker_count → =0`）。**截图质量标准**：操作类 BDD 截图必须互不相同（md5 去重，hook 强制），查询类 BDD 可不截图但须有断言记录文件（response.json / assert.log 等，hook 强制）。任何 BDD 标 FAIL → gate 不通过 → 回 P4 |
 | P7→P8 | 一致性通过（consistency-reviewer subagent 产出） | `grep -E '^\s*-?\s*\[BLOCKER\]' P7-consistency.md | grep -cvE '\[BLOCKER\][:：]?\s*\d+\s*条?\s*$'` → =0 + 同理 `[DEVIATION-CRITICAL]` → =0（声明行如 `[BLOCKER]: 0 条` 被排除，不计为实际 BLOCKER）（已知限制：定性分析，P5 回归测试兜底）|
-| P8→READY | 发布准备完成（bump-version + commit + tag 由主 Agent 在 gate 验证后亲自执行） | `scripts/check-gate.py P8` → 脚本化部分通过（exit 2）+ 从 P2-design.md `gate_commands` 逐包读取发布检查命令执行 → 全部 exit 0 + bump-version 后重跑 P5 gate（`gate_commands.P5` exit 0 AND failed==0）+ `git log v{prev_version}..HEAD --oneline` 对照 CHANGELOG 条目 → 无遗漏 + 从 P2 `packages` 验证 version 文件路径变更 + `grep -q 'bump_type:' P8-release.md` → 命中 + version 文件双路径检查（暂存区或最近 5 commit，WARNING 级）+ CHANGELOG 双路径检查（`git diff --cached` + `git diff HEAD~5..HEAD`，WARNING 级，`CHANGELOG_FILE` 环境变量可覆盖默认 CHANGELOG.md）|
+| P8→READY | 交付收尾完成（bump-version + commit + tag 由主 Agent 在 gate 验证后亲自执行） | `scripts/check-gate.py P8` → 脚本化部分通过（exit 2）+ 从 P2-design.md `gate_commands` 逐包读取发布检查命令执行 → 全部 exit 0 + bump-version 后重跑 P5 gate（`gate_commands.P5` exit 0 AND failed==0）+ `git log v{prev_version}..HEAD --oneline` 对照 CHANGELOG 条目 → 无遗漏 + 从 P2 `packages` 验证 version 文件路径变更 + `grep -q 'bump_type:' P8-release.md` → 命中 + version 文件双路径检查（暂存区或最近 5 commit，WARNING 级）+ CHANGELOG 双路径检查（`git diff --cached` + `git diff HEAD~5..HEAD`，WARNING 级，`CHANGELOG_FILE` 环境变量可覆盖默认 CHANGELOG.md）|
 
 **反例（禁止用作门槛）：**
 - ❌ "unit.md 里 failed: 0"（信 subagent 写的数字）

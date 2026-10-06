@@ -151,7 +151,7 @@ P6 --[retry>=MAX]--> PAUSED（正确路由：上游问题需人工介入，非 a
 P6.5 --[judge 启用任务：存在 P6.5-judge-verdict.md AND scripts/check-judge-verdict.py exit 0（Header 字段完备 + criteria_total==P1 BDD 数 + 结论编号集零挑验 + 证据交叉核对 + 信息隔离白名单 + 预算交叉）AND scripts/check-events.py exit 0（事件账本哈希链 + ts 单调 + judge_verdict 计数 ≤2）]--> P7（TAG0020：judge 以 fresh context 逐条重验所有 BDD，只信证据与 git log，`status: passed` 才放行）
      （P6.5 是挂载于 P6→P7 的强门槛子阶段，非独立 phase 值——.state.yaml phase 保持 P6 直至 P7；
        commit-time 由 pre-commit-gate 2i.1 注入硬边界（judge.enabled && verdict 存在 → 双脚本任一
-       exit 1 → 阻断 commit）；CI 由 ci-gate-backstop 兜底重跑；历史任务（.state.yaml 无
+       exit 1 → 阻断 commit）；CI 由 agate-ci-verify 兜底重跑；历史任务（.state.yaml 无
        judge.enabled: true）→ check-gate.py P6.5 早退 0，全链跳过（BDD-2））
 P6.5 --[status: needs-revision / rejected]--> P6 重验（judge 复核轮次 +1；
      judge.rounds 递增 + 账本 judge_verdict 事件计数 ≤2 机械兜底；超限 → 人工接管）
@@ -164,7 +164,7 @@ P7 --[retry>=MAX]--> PAUSED（正确路由：上游问题需人工介入，非 a
 
 P8 --[每个声明的 package 的发布检查命令 exit 0 + 主 Agent 亲自执行 bump-version 后重跑 P5 gate（gate_commands.P5 exit 0 AND failed==0）+ 主 Agent 亲自执行 git commit + git tag + P8-release.md 含 bump_type: 字段 + version 文件双路径检查（暂存区或最近 5 commit，WARNING）+ CHANGELOG 双路径检查（暂存区或最近 5 commit，WARNING）+ git tag -l "${VERSION_TAG_PREFIX}{version}" 存在（推荐，不阻断）+ 若 roadmap.md 有关联 RM 条目须已回写 done（RM-AG0043，check-gate.py P8 反查）]--> READY
       （gate 命令集由 P2-design.md 的 packages + gate_commands 字段动态生成，不同项目不同命令，agate 不硬编码。规则见 dispatch-protocol.md「packages 动态注入（B4/B6）」节）
-     （⑨ P8 subagent 化：releaser subagent 执行发布准备（产出文件 + 验证命令），主 Agent 亲自执行 bump-version + commit + tag + READY 收尾）
+     （⑨ P8 subagent 化：releaser subagent 执行交付收尾（产出文件 + 验证命令），主 Agent 亲自执行 bump-version + commit + tag + READY 收尾）
 
 ### READY 收尾检查（P8 gate 通过后、标记 READY 前）
 
@@ -308,11 +308,11 @@ PAUSED 恢复协议：
 
 **P8 与 READY 的说明**：
 
-P8 是**「发布准备」**，不是「发布」。P8 gate 通过后进入 READY 状态——表示每个受影响包的版本 bump、CHANGELOG 更新、测试全通过，**已准备好发布**。实际的 `make publish`（上传到 PyPI）由人手动触发。
+P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READY 状态——表示每个受影响包的版本 bump、CHANGELOG 更新、测试全通过，**已准备好发布**。实际的 `make publish`（上传到 PyPI）由人手动触发。
 
 | 概念 | 含义 | 谁执行 |
 |------|------|--------|
-| 发布准备 (READY) | 各包 version bump + CHANGELOG + lint + test 全通过 | Subagent + 主 Agent 验证 |
+| 交付收尾 (READY) | 各包 version bump + CHANGELOG + lint + test 全通过 | Subagent + 主 Agent 验证 |
 | 发布 (DONE) | 上传到 PyPI | 人手动触发 |
 
 **多包发布**：一个任务可能涉及多个独立版本的包（如 backend + mcp-server）。P8 必须为 P2 声明的**每一个** package 执行 version bump 和发布检查，gate 命令由 packages 列表动态生成。漏 bump 某个包 = gate 不通过。
@@ -323,12 +323,16 @@ P8 是**「发布准备」**，不是「发布」。P8 gate 通过后进入 READ
 
 主 Agent 不跑 while 循环，而是执行"单步函数"，每次调用推进一个阶段：
 
-> **机械化（RM-AG0054，v0.66.0）**：下面步骤 5-7（跑 gate → 按转移规则算下一状态 → 写回
-> `.state.yaml` + git add）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
+> **机械化（RM-AG0054，v0.66.0；TAG0042 批 1 更新）**：下面步骤 5-7（跑 gate → 按转移规则算下一
+> 状态 → 建议推进）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
 > 消费 `phases.yaml` 的 `next`/`retreat`/`gate_pass_exit`，不做临场判断；gate exit 1 且表有
-> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。P6/P6.5 的条件式
-> 推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。**手工执行下面
-> 全流程是 fallback**（工具不可用时）；本节的手工规格是 `agate next` 实现所依据的权威语义。
+> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。`agate next`
+> 只**输出「下一阶段建议」并追加 `state_transition` 事件，不预写 `.state.yaml` 的 `phase`、不 `git add`**
+> ——`phase` 一律由**下一阶段产出 commit**写入（`phase` = 本 commit 的产出阶段，见 `git-integration.md`）。
+> P6/P6.5 的条件式推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。
+> **手工执行下面全流程是 fallback**（工具不可用时），此时步骤 7 的「写回 `.state.yaml`」按手工规格执行
+> （手工 fallback 仍写 `phase`，与 `agate next` 自动化路径不同）；本节的手工规格是 `agate next`
+> 判定所依据的权威语义。
 
 ```
 function 执行一步(task_id):
@@ -394,6 +398,9 @@ function 执行一步(task_id):
           再写回 .state.yaml
        else:
            写回 .state.yaml（新阶段 / 重试记录 / PAUSED）
+       （本步「写回 .state.yaml」为**手工 fallback 规格**——手工推进时写 `phase`；
+        `agate next` 自动化路径**不写** `phase`，只输出「下一阶段建议」+ `state_transition`
+        事件，`phase` 由下一阶段产出 commit 写入）
     8. 返回：下一状态是什么
 ```
 
@@ -428,7 +435,7 @@ P6，由 `check-routing.py` / `check-pruning.py` 双闸兜底）。转移表与�
 | P5 | 2 | 技术验证，少轮次 |
 | P6 | 2 | 验收，少轮次 |
 | P7 | 2 | 一致性检查，少轮次 |
-| P8 | 2 | 发布准备，少轮次 |
+| P8 | 2 | 交付收尾，少轮次 |
 
 **P6.5 judge 复核轮次预算（≤2 轮，TAG0020）**：judge 轮次是**复核预算**而非状态机重试，**不新增
 `| P6.5 | N |` 表行、不使用 `retries.P6.5` 键**（保持 CHECK 12 重试表锚点与

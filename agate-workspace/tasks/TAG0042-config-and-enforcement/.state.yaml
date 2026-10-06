@@ -1,6 +1,7 @@
 task_id: TAG0042
-phase: P0
+phase: READY
 status: active
+retries: {}
 judge:
   enabled: true
-retries: {}
+p5_pass_commit: 33413cf4f52df580ae21123dcc40347720544a64

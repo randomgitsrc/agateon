@@ -64,7 +64,8 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | 复盘协议文档条文 | unit/test_retrospective_protocol_docs.py |
 | check-tdd-red.py | unit/test_check_tdd_red.py |
 | formatters | unit/test_check_tdd_red_formatter.py |
-| ci-gate-backstop.py | unit/test_ci_gate_backstop.py |
+| agate-ci-verify.py | unit/test_agate_ci_verify.py |
+| agate-doctor.py | unit/test_agate_doctor.py |
 | agate-json-get.py | unit/test_agate_json_get.py |
 | agate-read-p5-commands.py | unit/test_agate_read_p5_commands.py |
 | agate-state-get.py | unit/test_agate_state_get.py |
@@ -91,6 +92,7 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | 测试 helper（PYTHON 探测） | unit/test_helpers_python.py |
 | check-platform-assumptions.py | agate/tests/scripts/test_check_platform_assumptions.py |
 | check-mvwu.py（MVWU 观测器） | unit/test_check_mvwu.py |
+| check-obligations.py（义务三态归宿登记校验） | integration/test_protocol_alignment_review.py（SG.6 登记面守护：锚点表覆盖） |
 | MVWU 协议文档断言（TAG0036） | unit/test_mvwu_protocol_docs.py |
 | 文档/CI 断言（shellcheck/ruff/matrix） | unit/test_env_adapt_docs.py |
 | DSH 平台模板结构（TAG0018） | unit/test_dsh_preset.py |

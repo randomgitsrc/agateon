@@ -17,6 +17,7 @@
 agate-state-get.py）。Python 3.8+（禁 match / str.removeprefix）。
 """
 
+import copy
 import hashlib
 import json
 import os
@@ -826,6 +827,64 @@ def resolve_workspace(project_root):
             workspace = os.path.join(project_root, "agate-workspace")
             tasks_dir = os.path.join(workspace, "tasks")
     return workspace, tasks_dir
+
+
+# ── 项目形态声明（agate.config.yaml 唯一读取函数，TAG0042 批 2）─────────────
+#
+# **唯一读取函数**（BDD-6）：声明文件的解析只此一处；所有消费方（gate / agate-run /
+# agate-doctor / agate-config）只经 read_project_config 取值，不得另写第二处解析
+# 实现（P2-design §1.3 R2）。读取路径完全由声明驱动，不写死任何单一项目名/技术栈
+# （BDD-20）。
+
+PROJECT_CONFIG_FILENAME = "agate.config.yaml"
+
+# 缺字段时的默认值（P2-design §4.1）。以深拷贝打底、声明内容合并覆盖。
+PROJECT_CONFIG_DEFAULTS = {
+    "schema_version": 1,
+    "project": {"language": "", "package_manager": ""},
+    "verify": {"commands": []},
+    "release": {"preset": "semver-changelog-tag"},
+    "paths": {"evidence": ".agate-evidence"},
+}
+
+
+def read_project_config(project_root):
+    """读取项目根声明（`agate.config.yaml`）→ dict（缺字段用默认值）。
+
+    行为（P2-design §4.1 / BDD-8）：
+      * 文件存在且可解析 → 以默认值打底并合并声明内容，`present` 置 True。
+      * 文件缺失 → 返回默认 dict 且 `present=False`（**不抛异常、不退出**）——
+        迁移期由调用方决定是否 WARNING（gate_p0 迁移兼容即经此返回）。
+      * 文件存在但 YAML 非法 / 顶层非映射 → 返回默认 dict + `present=False`
+        + `parse_error` 说明。
+
+    形态值完全来自声明；本函数不假设任何具体语言 / 包管理器 / 命令集。
+    """
+    cfg = copy.deepcopy(PROJECT_CONFIG_DEFAULTS)
+    cfg["present"] = False
+    path = os.path.join(str(project_root), PROJECT_CONFIG_FILENAME)
+    if not os.path.isfile(path):
+        return cfg
+    try:
+        with open(path, encoding="utf-8") as f:
+            loaded = yaml.safe_load(f)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        # yaml.YAMLError（ParserError/ScannerError/ComposerError 等）不继承 ValueError/OSError，
+        # 须显式列出，否则非法 YAML 会抛未捕获异常，违反本函数「优雅返回」契约（C8 C1）。
+        cfg["parse_error"] = str(exc)
+        return cfg
+    if not isinstance(loaded, dict):
+        cfg["parse_error"] = "声明文件顶层不是映射（mapping）"
+        return cfg
+    for key, value in loaded.items():
+        if isinstance(value, dict) and isinstance(cfg.get(key), dict):
+            merged = dict(cfg[key])
+            merged.update(value)
+            cfg[key] = merged
+        else:
+            cfg[key] = value
+    cfg["present"] = True
+    return cfg
 
 
 # ── 项目侧安装台账（2026-09-21）──────────────────────────────────────────────

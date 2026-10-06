@@ -10,7 +10,7 @@ agate 的所有自动化脚本。产品逻辑已全部 Python 化（TAG0010）�
 
 > **什么时候看**：往 `agate/scripts/` 加任何脚本时。**先读本节，再动手**——
 > ⚠️ **实测更正（2026-09-29）**：① 的机械判据 `uncovered_gate_scripts()` **只 glob `check-*.py`**
-> （+ `pre-commit-gate.{sh,py}` + `ci-gate-backstop.py`）——**`agate-*.py` 不在门禁覆盖面内**。
+> （+ `pre-commit-gate.{sh,py}`）——**`agate-*.py` 不在门禁覆盖面内**。
 > 本节初版写「加任何 `check-*.py` / `agate-*.py` 时」是**过度声称**（实测：新建一个 `agate-*.py`
 > 不触发任何 CHECK9-coverage 告警）。`agate-*.py` 为工具/观测类，登记属**约定**（④⑤ 行）。
 > 否则会踩 DEBT0046：既有测试反向覆盖会令新脚本红灯或告警，而"要同步哪些面"过去没有清单，
@@ -89,6 +89,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-platform-assumptions.py` | 平台假设静态扫描器（R1-R5，扫描覆盖 .bats/.bash/.sh/.py）| 0=零命中, 1=有命中, 2=目标不存在 |
 | `check-debt.py` | 技术债登记校验：默认 FILE 模式=DEBT 条目 schema 校验（fail-closed）；`--retreat-coverage`=回退覆盖比对（`git log retreat:` 提交 vs `source: retreat` 条目，缺失 WARNING）| FILE 模式 0=通过, 1=校验失败；回退模式：依赖加载失败 exit 2（需主 Agent 自判），无 retreat 提交等有意跳过 exit 0 |
 | `check-mvwu.py` | MVWU 阶段 1 观测器（TAG0036）：读任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，每批输出一行 `MVWU_RESULT: <VERDICT> batch=<id>`（verdict = PASS/FAIL/EXPECTED_RED/UNKNOWN）；`--observe`=输出 7 列观察表行。仅观测、不阻断（不挂 gate/hook/CI）| 0=任一 verdict（含 FAIL/UNKNOWN，不阻断）, 2=用法/目标错误 |
+| `check-obligations.py` | 义务三态归宿登记校验（TAG0042 批6）：读 `rules/obligations.yaml`，校验无「无归宿」项（三态 M 脚本执行 / C 命令生成 / R 强制评审完整）+ M 类占比 ≥ 基线（只增不减）+ 每条义务有可追溯来源锚点 | 0=通过, 1=不通过（无归宿项 / M 类占比低于基线）, 2=目标/YAML 错误 |
 | `check-ledger-pollution.py` | 账本/状态文件**事后**污染兜底（DEBT0040③）：`git status --porcelain` 限定 `agate-workspace/` + `agate/tests/fixtures/`（三族已提交状态文件的两个落点），非空即报被污染路径。**须挂在 `pytest` job 内、全量测试之后**（独立 job 的干净 checkout 观测不到跑测副作用）| 0=干净, 1=发现污染, 2=无法判定（fail-closed，调用方按失败处理）|
 | `agate-dispatch-cost.py` | 派发成本度量（RM-AG0074 前置）：统计任务目录的 `*dispatch-context*.md` 份数/字节、`-revN` 修订**整份重发**占比、AGATE_CARD 注入占比及其**纯重复**占比（同卡第 2..N 次）。阶段耗时**仅当 `.state.yaml` 的 `history` 覆盖任务全部阶段时**才给数值，否则报 `duration_available: false` 并说明原因（实测 TPV0099 history 仅 7 条、缺 P3-P7 ⇒ 不可算）——**拒绝把不可判定伪装成可判定**。仅观测、不阻断 | 0=成功, 2=用法错误/目标非目录 |
 
@@ -100,9 +101,15 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 ### CI 兜底
 
-| 脚本 | 用途 |
-|------|------|
-| `ci-gate-backstop.py` (P1.3) | push 后重跑 gate + provenance 审计重跑 + git blame 单 author WARNING；多平台自动检测（GitHub/GitLab/Gitea）|
+| 脚本 | 用途 | 退出码语义 |
+|------|------|-----------|
+| `agate-ci-verify.py` (TAG0042 批5) | push 后**实际重跑** gate 判定（`check-gate.py`），防 `--no-verify` 绕过 hook；无参数 + cwd 定位（兼容仓库根 / 任务级 `.state.yaml`）；每个「跳过」面显式 `SKIP:` + 原因（与 `PASS:` 可区分，不再假绿）| 0=通过/跳过, 1=判定失败 |
+
+### 诊断
+
+| 脚本 | 用途 | 退出码语义 |
+|------|------|-----------|
+| `agate-doctor.py` (TAG0042 批5) | 诊断项目接入状态（声明文件 / git hook / 版本解析 / 账本完整性）+ 对异常项给出可执行修复指引 | 0=诊断正常完成（退出码固定；报告问题 ≠ 自身失败）|
 
 ### 安装
 
@@ -153,6 +160,8 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 |
 |------|------|
+| `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
+| `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；`--baseline` 落 `.out` 证据并逐字节比对（差异 → 非 0）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|
 | `agate-extract-context.py` | 提取任务上下文（BDD 计数 / implementation_dir / P5 失败参考）|
 | `agate-archive-stale-outputs.py` | 回退时归档旧阶段产出（`.archived/{ts}-{phase}` + breadcrumb）|
