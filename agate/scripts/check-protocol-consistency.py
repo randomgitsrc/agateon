@@ -842,6 +842,12 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         # 观测不到跑测副作用），该约束由 test_t43_ledger_pollution_backstop.py 守护。
         "callers": [".github/workflows/protocol-tests.yml"],
     },
+    {
+        "desc": "义务三态归宿登记校验（M/C/R 完整 + M 类占比不下降，TAG0042 批6 BDD-13/18/19）",
+        "script": "agate/scripts/check-obligations.py",
+        # keywords 定值（P2-design §1.4 N4）：三串须在脚本文本中字面出现。
+        "keywords": ["obligations.yaml", "M 类占比", "无归宿"],
+    },
 ]
 
 

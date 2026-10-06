@@ -24,6 +24,11 @@ change_summary: >-
   账本四维诊断 + 修复指引，rc 恒 0）；删除 ci-gate-backstop.py 及其测试；workflow gate-backstop job
   改调新脚本；check-protocol-consistency 移除退役锚点/extras/callers 并保留退役名拦截；agate-summary/
   scripts/README/check-gate 注释/6 协议文档/formatters-README/tests-README 同步。
+  【round 9 / 批 6（batch6-obligations）】义务三态归宿登记：新增 agate/rules/obligations.yaml
+  （schema_version + baseline + 123 条义务，M60/C33/R30，每条带 anchor/statement/disposition/script/
+  evidence）+ agate/scripts/check-obligations.py（校验无「无归宿」项 + M 类占比 ≥ 基线，exit 0/1/2）；
+  check-protocol-consistency.py 的 CHECK9 锚点表加 check-obligations.py（keywords 定值）使 SG.6 转绿；
+  scripts/README + tests/README + CODE-MAP 登记。
 files_changed:
   - agate/scripts/agate-next.py
   - agate/phase-cards/P2-design.md
@@ -82,13 +87,16 @@ files_changed:
   - agate/tests/unit/test_ci_gate_backstop.py  # 删除（测退役对象）
   - agate/tests/unit/test_check_protocol_consistency.py
   - agate/tests/unit/test_mvwu_protocol_docs.py
+  # round 9 / 批 6（batch6-obligations）
+  - agate/rules/obligations.yaml
+  - agate/scripts/check-obligations.py
 review_scope: >-
   TAG0042 批 1 的 agate/** 未 commit 改动（SELF-GATE 语义 gate，agent≠main）。
   变更触发模式：意图分析 → 反向传播 → 变更文件全文 + 反向传播文件 + 权威规则源（state-machine.md /
   dispatch-protocol.md / WORKFLOW.md）→ A1-A8。单轮审查。
 prod_isolation: "[PROD_NOT_TOUCHED] —— 仅读取仓库 + 写 /tmp 留痕/日志 + 本报告；未触碰被评审改动集、主 checkout 与 ~/.agate。"
 conclusion: aligned
-review_rounds: 8
+review_rounds: 9
 round1_conclusion: >-
   批 1 首审：misaligned。A1/A2/A3b/A5.3 同一根因 = 反向传播漏改 5 处权威文档——它们仍描述旧行为
   「agate-next 更新 .state.yaml phase + git add」（state-machine.md:326-331 / dispatch-protocol.md:291-292 /
@@ -208,6 +216,23 @@ round8_conclusion: >-
   job 名保留 gate-backstop。观察（非阻塞）：docs/guides/project-map.md:59 活文档仍写
   ci-gate-backstop.py（非协议面/CHECK10 不扫）；agate-doctor 硬编码 .git/hooks（本仓未设
   core.hooksPath → 实测一致）。NEEDS_HUMAN_REVIEW 0 条。
+round9_conclusion: >-
+  TAG0042 批 6（batch6-obligations）增量复审（round 9）：aligned。变更面为义务三态归宿登记——
+  新增 agate/rules/obligations.yaml（schema_version + baseline + 123 条，M60/C33/R30，每条带
+  anchor/statement/disposition/script/evidence）+ agate/scripts/check-obligations.py（无「无归宿」+
+  M 类占比 ≥ 基线，exit 0/1/2）；check-protocol-consistency 锚点表加 check-obligations.py（keywords
+  定值）使 SG.6 转绿；scripts/README + tests/README + CODE-MAP 登记。A1/A2 ALIGNED（判定逻辑 vs
+  BDD-18/19；锚点 keywords 字面出现 9/9/7）；A3a/A3b ALIGNED（CHECK9-coverage 无新增 WARNING；
+  SG.6 1 passed 转绿；登记面完备）；A4 ALIGNED（全量 pytest 1 failed/2668 passed——唯一失败为既有
+  环境失败 opencode debug agent→agents，非本批；count-tests 2671）；A6 ALIGNED（锚点条目 script +
+  keywords 完整）；A7 ALIGNED；A8 ALIGNED（123 条/M60/baseline 0.4878/evidence 33 条/anchor 17 文件
+  均逐条可追溯、无编造：T046/T005/TAG0009/162路径10token/38-16/worktree/5bdcd90/X1-X3/DEBT0039-0048
+  均指回原文）；consistency 0 ERROR / 407 WARNING；structure S1-S6/S0 OK；ruff 绿；平台扫描 0 命中。
+  6 条 [DESIGN_GAP] 全判 DESIGN_GAP（交 P7）：① 外部 160 vs 重盘 123（implementer dispatch-context
+  明示采 P0-brief fallback 重新盘点，BDD-18 Then 已满足；建议 P1 BDD-18 的 160 对账）；② M/C/R 边界
+  自定；③ N→R 映射；④ baseline 0.4878 自定；⑤ root 解析脚本相对优先；⑥ check-obligations 无独立
+  P3 红灯测试（建议补两类负向回归）。观察/范围记录：obligations.yaml 无 schema（设计未要求）；
+  「§4 通用化清理」不在 §6.1b batch6 output（后续派发）。NEEDS_HUMAN_REVIEW 0 条。
 ---
 
 # 协议-脚本对齐审查 — TAG0042 批 1（batch1-phase-semantics）
@@ -1231,3 +1256,145 @@ FAILED agate/tests/unit/test_agate_scripts_encoding.py::test_bdd_5_all_test_py_t
 | **观察（非阻塞）** | `docs/guides/project-map.md:59` 活文档仍写退役名（非协议面）；`agate-doctor` 硬编码 `.git/hooks`（本仓未设 `core.hooksPath` → 实测一致）| 建议后续更新 project-map.md。 |
 
 **round 8 结论：ALIGNED（可 commit）。**
+
+---
+
+## round 9 复审（batch6 增量）（2026-10-06）
+
+> 复审范围：TAG0042 批 6（`batch6-obligations`，义务三态归宿登记）的 agate 协议/脚本未 commit 改动（HEAD `082aba3`，batch5 已落）。
+> 触发模式：SELF-GATE「变更触发模式」A1-A8。**本批重点 = A8 声称-命令绑定**（123 条 / M60 / baseline / evidence / anchor 可追溯性）。
+> 变更文件：新增 `agate/rules/obligations.yaml`、`agate/scripts/check-obligations.py`；改 `agate/scripts/check-protocol-consistency.py`、`agate/scripts/README.md`、`agate/tests/README.md`、`agate-workspace/agents/CODE-MAP.md`。
+
+### 复审结论汇总
+
+| # | 审查项 | 结论 |
+|---|--------|------|
+| A1 | 文档→脚本对齐 | **ALIGNED** |
+| A2 | 脚本→文档对齐 | **ALIGNED** |
+| A3 | 一致性连锁 + 反向传播 | A3a **ALIGNED** / A3b **ALIGNED** |
+| A4 | 测试覆盖 | **ALIGNED**（全量 pytest 实跑；check-obligations 专门用例缺口 → DESIGN_GAP ⑥） |
+| A5 | 下游影响 + 文档传播 | A5.1 **ALIGNED** / A5.2 **ALIGNED**（待 P8）/ A5.3 **ALIGNED** |
+| A6 | 锚点表覆盖 | **ALIGNED** |
+| A7 | 设计原则一致性 | **ALIGNED** |
+| A8 | 声称-命令绑定 | **ALIGNED**（123/M60/baseline/evidence/anchor 逐条可追溯，无编造） |
+
+**总结论：aligned**。MISALIGNED 0 条、NEEDS_HUMAN_REVIEW 0 条。6 条 `[DESIGN_GAP]` 全部判 **DESIGN_GAP（交 P7）**。CHECK9-coverage 无新增 WARNING，**SG.6 转绿**。
+
+### A1: 文档→脚本对齐 — ALIGNED
+
+- **`check-obligations.py` 判定逻辑 vs BDD-18/19 / P2 §4.5**：`_evaluate()` 校验 ① 每条义务 `disposition ∈ {M,C,R}`（缺失/非法 → 「无归宿」项 → FAIL，BDD-18）；② `counts["M"] * baseline_total >= baseline_m * total`（整数交叉相乘，M 类占比只增不减，BDD-19）；③ `anchor`/`statement` 非空（可追溯）。exit 0/1/2 与 README 一致。
+- **锚点 keywords 字面出现（CHECK9-align 判据）**：`["obligations.yaml", "M 类占比", "无归宿"]` 在 `check-obligations.py` 文本中**字面出现**（实测计数 9 / 9 / 7）——否则 CHECK9-align 会新增 WARNING。
+- **数据面**：`obligations.yaml` 的 `baseline: {m:60, total:123, m_ratio:0.4878}` 与实测 `M/total = 60/123 = 0.4878` 一致。
+
+**结论**：ALIGNED。
+
+### A2: 脚本→文档对齐 — ALIGNED
+
+| 脚本/数据 | 文档对应 | 判定 |
+|---|---|---|
+| `check-obligations.py`（exit 0/1/2）| `scripts/README.md`「Gate 检查」表新增行 | ALIGNED |
+| `obligations.yaml`（三态归宿登记表）| `CODE-MAP.md`「义务登记族」行 | ALIGNED |
+| `check-obligations.py` 测试映射 | `tests/README.md` 新增映射行（→ SG.6 登记面守护） | ALIGNED |
+
+**结论**：ALIGNED。
+
+### A3: 一致性连锁 + 反向传播 — A3a ALIGNED / A3b ALIGNED
+
+#### A3a（连锁：已知衍生改动）— ALIGNED
+
+- **锚点表**：`check-protocol-consistency.py` 的 `SCRIPT_ALIGNMENT_ANCHORS` 新增 `check-obligations.py` 条目（`desc` + `script` + `keywords` 定值）——`check-*.py` 门禁面必须登记（锚点表或 `GATE_SCRIPT_EXEMPT` 二选一，P2 §1.1 M17）。
+- **登记面约定**：`scripts/README.md`（Gate 检查表）+ `tests/README.md`（映射表）+ `CODE-MAP.md`（义务登记族）同步。
+
+#### A3b（反向传播：应被本批影响但未在 diff 中的文件）— ALIGNED
+
+| 应被影响候选 | 影响到了没 | 判定 |
+|---|---|---|
+| `check-protocol-consistency.py` CHECK9-coverage | **无新增 WARNING**（`uncovered_gate_scripts()` 现覆盖该脚本）| ALIGNED |
+| `test_protocol_alignment_review.py::test_sg_6_*` | **转绿**（1 passed）| ALIGNED |
+| `agate/rules/schema/`（是否需 obligations schema）| 设计（§1.1 M16/M17/M18）未要求 schema；`rules/*.yaml` 由 CHECK 15 平台名扫描覆盖（PASS）| ALIGNED |
+| 协议文档面（WORKFLOW/state-machine/...）| 无 `obligations` 概念需传播（本批为数据面 + 门禁脚本，非流程语义变更）| ALIGNED |
+
+**结论**：A3b ALIGNED（CHECK9-coverage 0 新增；SG.6 转绿）。
+
+### A4: 测试覆盖 — ALIGNED
+
+- **全量 pytest 实跑（A4 强制项，本轮执行）**：`python3 -m pytest agate/tests/ -q -n auto -p no:cacheprovider` →
+  ```
+  1 failed, 2668 passed, 2 skipped in 53.82s
+  ```
+  唯一失败 `test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent` 为**既有环境失败**（本机 `opencode debug agent` 子命令已改名 `agents`，batch4 已登记），**非本批引入**。
+- **批 6 相关测试**：`check-obligations.py` 自身实跑 exit 0；`test_protocol_alignment_review.py -k sg_6` → **1 passed**（`test_sg_6_check9_anchor_table_covers_all_gate_scripts` 转绿，BDD-13）。
+- **用例总数**：`count-tests.sh` → **2671**（未漂移）。
+- **⚠️ 测试覆盖缺口（→ DESIGN_GAP ⑥）**：`check-obligations.py` 的**判定逻辑**（两类负向：无归宿项 → exit 1；M 类占比下降 → exit 1）**无独立 P3 红灯测试**——P3 批 6 的 `tests_filter` 用既有 SG.6（只测登记面，不测脚本逻辑）。P4 已用合成树手工验证两类负向（`P4-implementation-batch6.md` §5），但**无持久回归守护**。建议 P7 裁决补专门用例。
+
+**结论**：ALIGNED（无回归；专门用例缺口登记为 DESIGN_GAP ⑥）。
+
+### A5: 下游影响 + 文档传播 — A5.1 ALIGNED / A5.2 ALIGNED（待 P8）/ A5.3 ALIGNED
+
+- **A5.1 破坏性变更 / 向后兼容 — ALIGNED**：`obligations.yaml` 为新增数据面（不改既有 rules）；`check-obligations.py` 为新增门禁脚本（不在 pre-commit/CI 必经路径，P2 未要求挂载）→ 对使用者项目无破坏。
+- **A5.2 CHANGELOG — ALIGNED（待 P8，非 MISALIGNED）**：`check-changelog.py` 仅 P8 触发；`CHANGELOG.md` 待 P8 统一补。
+- **A5.3 文档传播 — ALIGNED**：登记面（scripts/README + tests/README + CODE-MAP）已同步；无协议流程文档需传播。
+
+**结论**：合计 ALIGNED。
+
+### A6: 锚点表覆盖 — ALIGNED
+
+- **锚点条目完整性**：`check-obligations.py` 条目含 `desc` + `script`（`agate/scripts/check-obligations.py`）+ `keywords`（`["obligations.yaml", "M 类占比", "无归宿"]`）——三关键词均字面命中。CHECK9-align **无新增 WARNING**。
+- **CHECK9-coverage / SG.6**：`check-obligations.py` 是 `check-*.py`（门禁 glob）→ 必须登记，现已进锚点表 → `uncovered_gate_scripts()` 不含它。**实测** `CHECK 9 ✅ PASS`；SG.6 → 1 passed。
+- **新数据面 `obligations.yaml`**：由 CHECK 15（数据面平台名扫描）覆盖（PASS）；设计未要求 schema。
+
+**结论**：ALIGNED。
+
+### A7: 设计原则一致性 — ALIGNED
+
+- **ADR-014（判据单一权威源）**：三态归宿登记表是「靠记忆的规则」的单源登记；`check-obligations.py` 是唯一校验判据（M 占比基线整数交叉相乘，无浮点）。**一致**。
+- **ADR-002（可判定性）**：无归宿项 / M 类占比 ≥ 基线均为机械判定（exit code）。**一致**。
+- **ADR-004（安全网分层）**：登记表 + 门禁脚本构成「防规则再长出来」的防线。**一致**。
+- **是否存在未记录的新架构决策？** 「义务三态归宿登记」是 ADR-002/014 的应用，**不引入新架构决策** → 无需新增 ADR。
+
+**结论**：ALIGNED。
+
+### A8: 声称-命令绑定（本批重点）— ALIGNED
+
+逐条给出产出命令：
+
+| 声称 | 产出命令 | 结论 |
+|---|---|---|
+| `obligations.yaml` **123 条** | `python3 -c "import yaml;print(len(yaml.safe_load(open('agate/rules/obligations.yaml'))['obligations']))"` → **123** | ✅ 成立 |
+| **M60 / C33 / R30** | `python3` 计数 `collections.Counter(disposition)` → **{M:60, C:33, R:30}** | ✅ 成立 |
+| **baseline 0.4878**（m60/total123）| 实测 `M/total = 60/123 = 0.4878048`；`check-obligations.py` 输出 `M 类占比: 60/123 = 0.4878` | ✅ 成立 |
+| 无重复 id / 无缺 anchor / 无缺 statement | `python3` 检查 → dup=0 / missing anchor=0 / missing statement=0 | ✅ 成立 |
+| `anchor` 指回协议原文 | 17 个 anchor 文件**全部存在**（WORKFLOW×19 / phases.yaml×16 / P8 卡×12 / dispatch×10 / P2 卡×10 / P6 卡×10 / P1 卡×8 / P3 卡×6 / P5 卡×6 / P0 卡×5 / review-mapping×5 / P7 卡×5 / state-machine×4 / P4 卡×3 / implementer×2 / scripts-README×1 / state-transitions×1）；初筛 10 个 md 章节「未精确命中」逐个复核 → **全部为真实章节**（缩写/加粗段/带反引号），无编造 | ✅ 成立 |
+| `evidence` 引用真实（未编造）| 33 条抽验：`T046`→`P5-verification.md:97`；`T005`→`WORKFLOW.md:264`；`TAG0009`→`dispatch-protocol.md:933`（11.7 小时）；`162 路径 10 token`→`P8-release.md:113`；`38/16`→`agate-design-review-2026-10-04-batch0-rereview.md:466`（"22/38 从未"）；`worktree 路径过滤`→`P8-release.md:143`；`5bdcd90`→`git cat-file -t 5bdcd90` = commit；`X1`/`X3`→`design-tag0042-batch0-defects.md`；`DEBT0039/0046/0048`→`agate-workspace/debt/tech-debt.md` | ✅ 成立 |
+| `check-obligations.py` 判定 | `python3 agate/scripts/check-obligations.py` → **exit 0** | ✅ 成立 |
+| SG.6 转绿（BDD-13）| `pytest .../test_protocol_alignment_review.py -k sg_6 -q` → **1 passed** | ✅ 成立 |
+
+**无「无法给出命令」的无据声称；无编造。** 说明：`M/C/R` 的**分类边界**属设计判定（非客观数字声称），已登记为 DESIGN_GAP ②/③ 交 P7。
+
+### [DESIGN_GAP] 逐条判定（6 条）
+
+| # | DESIGN_GAP | 判定 | 依据 |
+|---|---|---|---|
+| ① | 外部审计 160 项逐条清单不在仓库 ⇒ 重盘 123（M60/C33/R30），与外部 160（M38/C29/N70）**不可逐条对齐** | **DESIGN_GAP（交 P7）** | implementer dispatch-context **明示**采 P0-brief §四 fallback「没有就得重新盘点」；BDD-18 的 **Then**（每项有三态归宿 + 无「无归宿」项）**已满足**（160 仅出现在 BDD-18 的 Given/title）。**建议** P1 BDD-18 的「160」与重盘口径对账（P2 §10 曾主张「前置不足则阻塞」，与 P0-brief fallback 有张力） |
+| ② | M/C/R 三态判定边界 P2 §4.5 未逐条定义（P4 自定：M=不可绕开路径脚本 / C=有命令但依赖记得运行 / R=判断类交强制评审）| **DESIGN_GAP（交 P7）** | P2 §4.5 未给逐条边界；属设计未定面 |
+| ③ | 外部第三态 N「无任何脚本」在归宿中归 R（强制评审）| **DESIGN_GAP（交 P7）** | BDD-18 要求「无『无归宿』项」+ P0-brief「判断类交强制评审」支持 N→R；「现状无脚本」与「归宿为强制评审」是否等价 P2 未明确 |
+| ④ | 基线 M 占比 0.4878 由重盘自定（与外部 24% 不可比）| **DESIGN_GAP（交 P7）** | 基线取值合理性属设计决策；一旦写入只增不减 |
+| ⑤ | `check-obligations.py` 协议根解析取「AGATE_ROOT → 脚本相对 → cwd」而非 `agate_common.resolve_agate_root` | **DESIGN_GAP（交 P7）** | 版本布局解耦后 resolve_agate_root 会解析到稳定版；脚本相对优先保证命中本 checkout；P2 未指定解析口径 |
+| ⑥ | `check-obligations.py` 无独立 P3 红灯测试（P3 tests_filter = SG.6）| **DESIGN_GAP（交 P7）** | 判定逻辑（两类负向）无持久回归守护；P4 仅手工验证；建议补「无归宿→exit 1」「M 占比下降→exit 1」用例 |
+
+**判定合计**：6 条**全部 DESIGN_GAP（交 P7）**；**MISALIGNED 0 条**。按角色原则 6——6 条均不对应「`agate/` 协议文档↔脚本不一致」（① 是前置输入缺失下的授权 fallback，②③④ 是设计未定/选择，⑤ 是解析口径，⑥ 是测试覆盖），故判 DESIGN_GAP。
+
+### 范围记录（非阻塞）
+
+- **「§4 通用化清理」**（P0-brief §二 / P1 提及）不在 P2 §6.1b batch6 的 `output`（只列 `check-obligations.py` / `obligations.yaml` / `check-protocol-consistency.py`）——本次派发约束亦未含。**判定：后续派发**（若确属批 6，请主 Agent 在后续派发中明确落点），非 MISALIGNED。
+- `obligations.yaml` **无 schema**（`check-yaml-schema.py` 仅校验 4 对 rules；设计未要求 obligations schema）——**观察**，非缺口（由 CHECK 15 数据面扫描覆盖）。
+
+### round 9 闭环规则表
+
+| 结论态 | 项 | 主 Agent 动作 |
+|---|---|---|
+| **ALIGNED** | A1 / A2 / A3a / A3b / A4 / A5.1 / A5.2 / A5.3 / A6 / A7 / A8 | 通过，**可 commit**。 |
+| **DESIGN_GAP（交 P7）** | ①-⑥（见上表）| P7 逐条裁决并转抄 `DESIGN_GAP_REVIEWED`；① 建议 P1 BDD-18 对账，⑥ 建议补专门用例。 |
+| **范围记录** | 「§4 通用化清理」不在 batch6 output | 后续派发明确落点。 |
+
+**round 9 结论：ALIGNED（可 commit）。**

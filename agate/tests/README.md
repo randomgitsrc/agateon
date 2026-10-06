@@ -92,6 +92,7 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | 测试 helper（PYTHON 探测） | unit/test_helpers_python.py |
 | check-platform-assumptions.py | agate/tests/scripts/test_check_platform_assumptions.py |
 | check-mvwu.py（MVWU 观测器） | unit/test_check_mvwu.py |
+| check-obligations.py（义务三态归宿登记校验） | integration/test_protocol_alignment_review.py（SG.6 登记面守护：锚点表覆盖） |
 | MVWU 协议文档断言（TAG0036） | unit/test_mvwu_protocol_docs.py |
 | 文档/CI 断言（shellcheck/ruff/matrix） | unit/test_env_adapt_docs.py |
 | DSH 平台模板结构（TAG0018） | unit/test_dsh_preset.py |

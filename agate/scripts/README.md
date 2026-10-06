@@ -89,6 +89,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-platform-assumptions.py` | 平台假设静态扫描器（R1-R5，扫描覆盖 .bats/.bash/.sh/.py）| 0=零命中, 1=有命中, 2=目标不存在 |
 | `check-debt.py` | 技术债登记校验：默认 FILE 模式=DEBT 条目 schema 校验（fail-closed）；`--retreat-coverage`=回退覆盖比对（`git log retreat:` 提交 vs `source: retreat` 条目，缺失 WARNING）| FILE 模式 0=通过, 1=校验失败；回退模式：依赖加载失败 exit 2（需主 Agent 自判），无 retreat 提交等有意跳过 exit 0 |
 | `check-mvwu.py` | MVWU 阶段 1 观测器（TAG0036）：读任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，每批输出一行 `MVWU_RESULT: <VERDICT> batch=<id>`（verdict = PASS/FAIL/EXPECTED_RED/UNKNOWN）；`--observe`=输出 7 列观察表行。仅观测、不阻断（不挂 gate/hook/CI）| 0=任一 verdict（含 FAIL/UNKNOWN，不阻断）, 2=用法/目标错误 |
+| `check-obligations.py` | 义务三态归宿登记校验（TAG0042 批6）：读 `rules/obligations.yaml`，校验无「无归宿」项（三态 M 脚本执行 / C 命令生成 / R 强制评审完整）+ M 类占比 ≥ 基线（只增不减）+ 每条义务有可追溯来源锚点 | 0=通过, 1=不通过（无归宿项 / M 类占比低于基线）, 2=目标/YAML 错误 |
 | `check-ledger-pollution.py` | 账本/状态文件**事后**污染兜底（DEBT0040③）：`git status --porcelain` 限定 `agate-workspace/` + `agate/tests/fixtures/`（三族已提交状态文件的两个落点），非空即报被污染路径。**须挂在 `pytest` job 内、全量测试之后**（独立 job 的干净 checkout 观测不到跑测副作用）| 0=干净, 1=发现污染, 2=无法判定（fail-closed，调用方按失败处理）|
 | `agate-dispatch-cost.py` | 派发成本度量（RM-AG0074 前置）：统计任务目录的 `*dispatch-context*.md` 份数/字节、`-revN` 修订**整份重发**占比、AGATE_CARD 注入占比及其**纯重复**占比（同卡第 2..N 次）。阶段耗时**仅当 `.state.yaml` 的 `history` 覆盖任务全部阶段时**才给数值，否则报 `duration_available: false` 并说明原因（实测 TPV0099 history 仅 7 条、缺 P3-P7 ⇒ 不可算）——**拒绝把不可判定伪装成可判定**。仅观测、不阻断 | 0=成功, 2=用法错误/目标非目录 |
 

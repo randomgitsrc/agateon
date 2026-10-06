@@ -2,17 +2,18 @@
 phase: P4
 task_id: TAG0042
 type: review
-parent: P4-implementation-batch5.md
+parent: P4-implementation-batch6.md
 batch1_parent: P4-implementation-batch1.md
 batch2_parent: P4-implementation-batch2.md
 batch3_parent: P4-implementation-batch3.md
 batch4_parent: P4-implementation-batch4.md
+batch5_parent: P4-implementation-batch5.md
 status: approved
 agent: review
-review_round: 7
+review_round: 8
 review_date: 2026-10-06
 role: review (偏执 Staff Engineer，工程视角)
-scope: batch1（approved）+ batch2（C1 闭合）+ batch3（C1 闭合）+ batch4（approved）+ batch5-ci-doctor（round 7，approved——0 CRITICAL）
+scope: batch1（approved）+ batch2（C1 闭合）+ batch3（C1 闭合）+ batch4（approved）+ batch5（approved）+ batch6-obligations（round 8，approved——0 CRITICAL）
 prod_isolation: "[PROD_NOT_TOUCHED]"
 ---
 
@@ -507,3 +508,84 @@ batch5 目标 14 passed；相邻回归 348 + `test_protocol_alignment_review` 13
 ## [PROD_NOT_TOUCHED]
 
 本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对（pytest 经 `tmp_path`/`git_repo` 夹具隔离；structure/consistency/ruff/平台扫描为只读）。**未在仓库内写入/修改任何文件**、未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
+
+---
+
+# P4 实现评审 — round 8（增量）：batch6-obligations（义务三态归宿登记表 + 校验）
+
+> 评审对象：`git status --short` + `git diff` 未 commit 改动（HEAD `082aba3`，batch5 已落）。
+> 评审依据：`P4-dispatch-context-review-batch6.md`、`P4-implementation-batch6.md`（含 6 条 DESIGN_GAP）、
+> `P2-design.md` §1.1 M16/M17/M18 / §4.5 / §1.4、`P1-requirements.md`（BDD-13/18/19）、
+> `docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md`（round 9 aligned）。
+> 视角：**工程正确性/可追溯性/登记面/回归/测试充分性**；语义对齐已由 protocol-alignment-review round 9 判 aligned，本报告不重复、不替代。
+
+## 结论
+
+**status: approved**。Pass 1（CRITICAL/BLOCKER）：**0 条**。Pass 2（INFORMATIONAL）：**6 条**（非阻断，多交 P7）。
+
+`check-obligations.py` 判定正确（无归宿/M 占比下降两类负向独立复现 → exit 1）；**可追溯性独立抽验 123 条 anchor 全部指回真实文件/节/键、evidence 引用均可在仓库找到（无编造）**；登记面 SG.6 转绿、CHECK9-coverage 无新 WARNING、consistency 0 ERROR；无回归。
+
+## Pass 1（CRITICAL）— 数据安全与正确性
+
+**0 条。** 逐项排查（派发重点 1-4）：
+
+### 1. `check-obligations.py` 判定正确 — 通过
+- 读 `rules/obligations.yaml`（`_resolve_root`：AGATE_ROOT→脚本相对→cwd）→ 每条 `disposition ∈ {M,C,R}`（缺/非法 → 无归宿）；`anchor`/`statement` 非空；M 占比用**整数交叉相乘**（`counts["M"]*base_total >= base_m*total`，避浮点）≥ 基线；exit 0/1/2。
+- **负向路径独立复现**（合成树，`AGATE_ROOT` 指向临时目录）：① 抽掉一条 `disposition` → `FAIL 存在「无归宿」项 … OBL-P0-01（disposition=None）` + **exit 1**；② `baseline 2/2` 而实际 `M=1/2` → `FAIL M 类占比低于基线` + **exit 1**。均成立。
+- 结构自洽：`yaml.safe_load` 实测 **123 条、无重复 id、disposition 分布 M=60/C=33/R=30、无缺 anchor/statement**（与基线一致）。`_load` 正确捕获 `yaml.YAMLError`（未复现 batch2 C1 类漏捕）。
+
+### 2. 可追溯性（本批关键）— 独立抽验通过（无编造）
+- **anchor 文件面**：123 条 anchor 覆盖 17 个真实文件（WORKFLOW.md 19 / phases.yaml 16 / P6 卡 10 / P8 卡 12 / P2 卡 10 / dispatch-protocol 10 / P1 卡 8 / P5 卡 6 / P3 卡 6 / P0 卡 5 / review-mapping 5 / P7 卡 5 / state-machine 4 / …），**全部存在**。
+- **anchor 节/键面**：16 条 `rules/phases.yaml#<phase>.<outputs|gates|task_fields>` 全部解析成功；md anchor 均指向真实节标题（10 条为前缀/近似，见 INFORMATIONAL-1；**无凭空节**）。
+- **statement↔anchor 抽验**：P1 ceremony 四要素 → `P1-requirements.md#ceremony fail-closed 声明 checklist`（含「四要素」）；P2 dispatch_plan → `#dispatch_plan 机器字段`；P6 vision 三态 → `#vision-helper 结论绑定`（含 `blocker_count`）；dispatch 铁律 2 → `#铁律 2`；P8 roadmap → `#gate 规则`（含 RM-AG0043）；P6 refactor → `#P6-acceptance.md（refactor 任务：回归验收口径）`。**均对得上**。
+- **evidence 面**：抽验 token（TAG0036/M18、T046、T005、peekview、T085、DEBT0046、DEBT0048、TAG0016、TAG0025、TAG0009）**均可在仓库既有记录中定位**，未见编造。
+
+### 3. 登记面（CHECK9 + SG.6）— 通过
+`check-protocol-consistency.py` 新增锚点条目（`script: agate/scripts/check-obligations.py`，keywords `["obligations.yaml","M 类占比","无归宿"]`）；三串在脚本文本中**字面出现**（实测命中 9/9/7）。`check-obligations.py` 属 `check-*.py` glob，登记后 `uncovered_gate_scripts()` 无未登记项。实跑：`test_protocol_alignment_review.py -k sg_6` → **1 passed**（转绿）；consistency → **0 ERROR / 407 WARNING**（无新增 ERROR）。
+
+### 4. 回归 / 测试充分性 — 通过（含 1 观察）
+相邻回归（`test_t43_check_registration_surface` + `test_check_protocol_consistency` + `test_check_yaml_schema` + `test_check_structure_consistency` + `test_tag0027_b3b_protocol_check14_check15`）→ **80 passed**；structure S0-S6 全 OK；ruff 通过；count-tests **2671**（未漂移）；平台扫描改动脚本 0 命中。观察见 INFORMATIONAL-4（无 P3 专门红灯测试）。
+
+## Pass 2（INFORMATIONAL）— 可追溯性 / 登记面 / 文档 / 范围
+
+### [INFORMATIONAL-1] 「可追溯」未机械强制：`check-obligations` 只校验 anchor **非空**，不校验可解析
+`check-obligations.py` 对 `anchor` 仅判 `str(...).strip()` 非空（`:114`），**不校验** anchor 是否解析到真实文件/节/键。独立抽验：123 条 anchor 全部指回真实文件（**无编造**），但 **10 条非逐字节标题**（5 条为标题前缀/含反引号如 `P3_xxx 禁止声明`、5 条近似），其中 **OBL-X-16** 的 anchor `state-machine.md#回退机制（诊断→跳转→PAUSED→批准→重跑）` 所指节**不含**其陈述「回退须先归档旧阶段产出」的内容（该内容在 `rules/state-transitions.md#回退规则`，即 OBL-X-17 的 anchor）。**建议**：加 anchor 可解析性校验（至少文件存在；进阶：节/键命中），否则「可追溯」保证弱于字面。非阻断。
+
+### [INFORMATIONAL-2] `check-obligations.py` 未接入任何**不可绕开路径**——BDD-19「只增不减」守卫未被自动执行
+`grep check-obligations` 确认：hook / `.github/workflows/` / `gate_commands` / `check-*.py` 互调**均不调用**它；仅 CHECK9 锚点登记 + README 索引。故「M 类占比只增不减」的守卫目前**只能靠人手动运行**，与本任务「规则由脚本在**不可绕开的路径**上执行、防止『靠记忆的规则』再长出来」的立项命题存在张力。**注意**：BDD-13 仅要求「登记面（SG.6 转绿）」、P2 §4.5 仅要求「进 CHECK 9 锚点表」，故**实现符合书面规格**，属规格级缺口。**建议 P7/后续批次裁决**是否把 `check-obligations.py` 接入 pre-commit / CI consistency job。非阻断。
+
+### [INFORMATIONAL-3] 文档化退出码与实现不符（`exit 2` vs 实测 `exit 1`）
+docstring（`:21`）与 `scripts/README.md:92` 称 `exit 2 = …baseline 字段缺失`；但 `_evaluate` 在 `baseline` 缺失/非整数时 `return (not errors), errors, None` → `main` 返回 **1**（非 2）；`schema_version` 缺失亦为 1。**建议**订正文档，或让结构性错误返回 2。非阻断。
+
+### [INFORMATIONAL-4] `check-obligations.py` 无 committed 回归测试（判定逻辑仅由 SG.6 守护）
+P3 批 6 的 `tests_filter` 用既有 SG.6（登记面），未产出 BDD-18/19 的专门用例；`check-obligations.py` 的两类负向判定无回归测试锁定（本评审用合成树独立复现，均 exit 1）。已登记 DESIGN_GAP ⑥。**建议**补正式用例（无归宿→exit 1 / M 下降→exit 1），否则后续改动可静默破坏判定。非阻断。
+
+### [INFORMATIONAL-5] 123 vs 外部 160：条目边界由本次重盘定义（DESIGN_GAP ①-④ 交 P7）
+外部「160 项逐条清单」不在仓库（P0-brief §四），按 fallback 从协议原文重盘为 123（M60/C33/R30）vs 外部 M38/C29/N70；分类语义（M/C/**R** vs M/C/**N**）、颗粒度、「不可绕开」判据均不同，**不可逐条对齐**。已如实登记 DESIGN_GAP ①（重盘）/②（M/C/R 边界自定）/③（N→R 映射）/④（基线 0.4878 自定）。**建议 P7 逐条裁决**是否可接受，或索取原始表对齐。非阻断。
+
+### [INFORMATIONAL-6] 范围记录：P0-brief 批 6 提及的「§4 通用化清理」未做（P2 output 未列）
+`P0-brief §二` 批 6 含「§4 的通用化清理」，但 `P2 §6.1b batch6` 的 `output` 只列 3 文件；实现按 P2 output 只做 BDD-13/18/19，并在 P4-implementation §7 记为**范围记录**（非静默跳过）。**建议**主 Agent/P7 明确该项归属批次。另：`obligations.yaml` 无 JSON schema（不属 `check-yaml-schema` S-5 覆盖面），其结构由 `check-obligations.py` 承担——信息性，可接受。
+
+---
+
+## 验证清单（本次评审独立实跑）
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| 登记表结构 | 解析 `obligations.yaml` | **123 条 / 无重复 id / M60 C33 R30 / 无缺 anchor-statement** |
+| 判定正向 | `python3 agate/scripts/check-obligations.py` | `M 类占比: 60/123 = 0.4878`；**exit 0** |
+| 判定负向①（无归宿） | 合成树抽掉 disposition，`AGATE_ROOT=<tmp>` | `FAIL 存在「无归宿」项`；**exit 1** |
+| 判定负向②（M 下降） | 合成树 baseline 2/2 vs M 1/2 | `FAIL M 类占比低于基线`；**exit 1** |
+| anchor 可追溯（独立抽验） | 解析 123 anchor → 文件存在 + 节/键命中 | 全部指回真实文件/节（10 条近似，0 条凭空） |
+| evidence 抽验 | `grep` TAG0036/T046/T005/T085/DEBT0046/0048/TAG0016/0025/0009 | 均可定位（无编造） |
+| CHECK9 关键词 | `grep -c` obligations.yaml / M 类占比 / 无归宿 | 9 / 9 / 7（字面命中） |
+| SG.6 | `pytest integration/test_protocol_alignment_review.py -k sg_6` | **1 passed**（转绿） |
+| 相邻回归（5 文件） | `pytest test_t43_check_registration_surface test_check_protocol_consistency test_check_yaml_schema test_check_structure_consistency test_tag0027_b3b_protocol_check14_check15 -q` | **80 passed** |
+| structure | `check-structure-consistency.py` | S0-S6 全 OK |
+| 一致性 | `check-protocol-consistency.py --strict-errors-only` | exit 0 / **0 ERROR / 407 WARNING** |
+| ruff / count / 平台扫描 | `ruff` / `count-tests.sh` / `check-platform-assumptions.py <2 脚本>` | pass / **2671** / 0 命中 |
+| 接入面 | `grep check-obligations`（hook/CI/gate_commands） | **无调用**（INFORMATIONAL-2 依据） |
+
+## [PROD_NOT_TOUCHED]
+
+本评审**只读**改动集、任务数据与协议文档，并运行**只读/隔离**测试与静态核对。负向路径探针在 `mktemp` 临时目录中以合成登记表运行（已清理），**未在仓库内写入/修改任何文件**；pytest 经 `tmp_path`/`git_repo` 夹具隔离；structure/consistency/ruff/平台扫描为只读。未触碰主 checkout 状态、未访问 `~/.agate` 生产安装、未运行任何写生产环境/生产数据库/生产 API 的操作。
