@@ -178,3 +178,17 @@ delivery: PR 普通 merge（--no-ff，禁止 squash）+ tag v0.79.0 + GitHub Rel
 
 > 注：本文件不含 PASS/FAIL 预判——所有结果均为 releaser 本轮自检的客观运行输出，
 > gate 判定由主 Agent 亲自执行。
+
+## 10. P5 重跑证据（audit7=reuse_blocked ⇒ 完整重跑）
+
+- 触发：check-p6-provenance.py --audit7-only → AUDIT7_RESULT: reuse_blocked
+  （P8 bump 改动 README/CHANGELOG/UPGRADING 属非产出文件改动，故须重跑而非复用）
+- 运行 HEAD：33e4598
+- 命令与结果（逐条独立跑）：
+  - python3 -m pytest agate/tests/ -q --tb=no → exit 1；2668 passed / 1 failed / 2 skipped（214.75s）
+    唯一失败 = 预存失败 test_bdd_43（opencode CLI 漂移，见 known-failures.md；非本任务回归）
+  - check-protocol-consistency.py --strict-errors-only → exit 0（0 ERROR / 408 WARNING 冻结面）
+  - check-structure-consistency.py → exit 0（S0-S6 OK）
+  - ruff check agate/ → exit 0（All checks passed）
+  - check-platform-assumptions.py → exit 0（0 命中）
+- 结论：除已登记预存失败外全绿；本任务新增回归 = 0
