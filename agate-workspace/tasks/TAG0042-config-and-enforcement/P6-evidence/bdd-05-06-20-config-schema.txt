@@ -1,0 +1,22 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 11 items
+
+agate/tests/unit/test_config_schema.py::test_bdd_5_schema_file_exists_and_is_isomorphic PASSED [  9%]
+agate/tests/unit/test_config_schema.py::test_bdd_5_validate_rejects_illegal_enum_value PASSED [ 18%]
+agate/tests/unit/test_config_schema.py::test_bdd_5_validate_rejects_unknown_top_level_field PASSED [ 27%]
+agate/tests/unit/test_config_schema.py::test_bdd_5_validate_accepts_legal_declaration PASSED [ 36%]
+agate/tests/unit/test_config_schema.py::test_bdd_6_read_project_config_exists PASSED [ 45%]
+agate/tests/unit/test_config_schema.py::test_bdd_6_read_project_config_returns_declared_values PASSED [ 54%]
+agate/tests/unit/test_config_schema.py::test_bdd_6_read_project_config_malformed_yaml_is_graceful PASSED [ 63%]
+agate/tests/unit/test_config_schema.py::test_bdd_6_two_readers_agree_single_source PASSED [ 72%]
+agate/tests/unit/test_config_schema.py::test_bdd_6_no_second_independent_yaml_parser_in_config PASSED [ 81%]
+agate/tests/unit/test_config_schema.py::test_bdd_20_read_project_config_not_project_specific PASSED [ 90%]
+agate/tests/unit/test_config_schema.py::test_bdd_20_config_read_path_is_declaration_driven PASSED [100%]
+
+============================== 11 passed in 0.21s ==============================

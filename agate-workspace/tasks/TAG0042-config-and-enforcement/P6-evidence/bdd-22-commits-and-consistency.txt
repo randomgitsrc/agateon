@@ -1,0 +1,28 @@
+### BDD-22: 每批不回退（协议语义）—— 6 批 commit + self-gate-review 留痕 + consistency
+
+## 6 批 commit 清单（P4 batch1..6 + 聚合）
+33413cf wf(TAG0042-P4): 聚合主文件 P4-implementation.md（6 批一览 + 新增文件核对表 + 25 条 DESIGN_GAP 汇总）
+b19a425 wf(TAG0042-P4): batch6-obligations —— 义务三态归宿登记表 + check-obligations（SG.6 转绿）
+082aba3 wf(TAG0042-P4): batch5-ci-doctor —— agate-ci-verify 替换 backstop（无假绿）+ agate-doctor 诊断
+fb56964 wf(TAG0042-P4): batch4-gate-layer —— 关卡层分级 + P8 交付收尾（delivery）+ preset 迁移
+68a796e wf(TAG0042-P4): batch3-agate-run —— 执行层（agate-run + .out 证据 + cmd_run 事件 + hook 暂存账本）
+18b3e3d wf(TAG0042-P4): batch2-agate-config —— 声明层（agate-config + schema + 唯一读取函数 + gate_p0 validate）
+48091f2 wf(TAG0042-P4): batch1-phase-semantics —— agate-next 不预写下一阶段 + 权威文档同步
+d3ba1c5 wf(TAG0042-P3): TDD 红灯批——65 用例（batch1-5）+ check-tdd-red exit 0 + 平台扫描 0 命中
+a2b8fb1 wf(TAG0042-P2): 方案设计——3 候选 + 6 批编排 + plan-eng-review approved
+
+## self-gate-review 留痕（各批 commit message 尾部 trailer）
+--- 48091f2 ---
+self-gate-review: docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md
+--- 18b3e3d ---
+self-gate-review: docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md
+--- 68a796e ---
+self-gate-review: docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md
+--- fb56964 ---
+self-gate-review: docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md
+--- 082aba3 ---
+self-gate-review: docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md
+--- b19a425 ---
+self-gate-review: docs/reviews/agate-alignment-review-2026-10-06-TAG0042.md
+
+## consistency 0 ERROR（--strict-errors-only，见 bdd-22-consistency.txt）

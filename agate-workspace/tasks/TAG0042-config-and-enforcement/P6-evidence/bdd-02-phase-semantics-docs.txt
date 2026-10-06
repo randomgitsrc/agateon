@@ -1,0 +1,18 @@
+### BDD-2: phase 语义一致性扫描（5 权威文档 + 行为代码）
+
+## ① agate-next.py 预写行为代码扫描（期望：无命中）
+  (无命中)
+
+## ② 5 权威文档「不预写」表述命中（期望：均有）
+  agate/state-machine.md: 不预写 命中 1 次
+  agate/dispatch-protocol.md: 不预写 命中 1 次
+  agate/CONTEXT.md: 不预写 命中 1 次
+  agate/loop-orchestration.md: 不预写 命中 1 次
+  agate/orchestrator-template.md: 不预写 命中 1 次
+
+## ③ agate-next 实际推进输出（实跑，观察 phase 未预写）
+（见下方 pytest test_tag0042_batch1_phase_semantics 6 passed 输出）
+
+## ④ UPGRADING.md 批1 节「agate-next ... 不预写」命中
+289:   `.state.yaml` 的 `phase` 并 `git add`」；批 1 起改为**不预写**——`agate-next` 只输出
+296:   `agate-next` 亦**不预写**下一阶段，卡片表述与行为一致。）

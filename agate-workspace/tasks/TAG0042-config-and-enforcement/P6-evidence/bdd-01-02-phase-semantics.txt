@@ -1,0 +1,17 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 6 items
+
+agate/tests/unit/test_tag0042_batch1_phase_semantics.py::test_bdd_1_advance_does_not_prewrite_next_phase_into_state_yaml PASSED [ 16%]
+agate/tests/unit/test_tag0042_batch1_phase_semantics.py::test_bdd_1_advance_does_not_git_add_state_yaml PASSED [ 33%]
+agate/tests/unit/test_tag0042_batch1_phase_semantics.py::test_bdd_2_agate_next_source_has_no_prewrite_behavior PASSED [ 50%]
+agate/tests/unit/test_tag0042_batch1_phase_semantics.py::test_bdd_2_phase_cards_align_with_phase_is_current_commit_output PASSED [ 66%]
+agate/tests/unit/test_tag0042_batch1_phase_semantics.py::test_bdd_2_upgrading_documents_agate_next_no_prewrite PASSED [ 83%]
+agate/tests/unit/test_tag0042_batch1_phase_semantics.py::test_bdd_2_no_prewrite_behavior_code_anywhere_in_scripts PASSED [100%]
+
+============================== 6 passed in 0.32s ===============================

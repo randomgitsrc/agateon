@@ -1,0 +1,11 @@
+### BDD-21: 删除发版逻辑前提供等价 preset（UPGRADING 实读 + preset 可声明）
+
+## ① UPGRADING.md 发版逻辑迁移节（semver-changelog-tag + 截止版本）
+305:- **截止版本：v0.80.0** 起，声明文件缺失 / 非法将改为 **`exit 1`**（硬拦截）。请在此之前用
+308:**批 4（关卡层分级，TAG0042）— P8 交付收尾 + 发版逻辑迁移 `preset: semver-changelog-tag`（迁移期无破坏性变更）**：
+317:  的等价物为项目声明 `release.preset: semver-changelog-tag`：
+320:    preset: semver-changelog-tag
+324:- **截止版本：v0.80.0**（与批 2 的声明文件硬切同版本）——请在此版本前用 `agate-config init`
+
+## ② schema 允许 preset 枚举（semver-changelog-tag 合法）
+release.preset enum = ['semver-changelog-tag']

@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 10 items
+
+agate/tests/unit/test_agate_run.py::test_bdd_9_run_executes_declared_command_and_propagates_exit_code PASSED [ 10%]
+agate/tests/unit/test_agate_run.py::test_bdd_9_run_propagates_nonzero_exit_code PASSED [ 20%]
+agate/tests/unit/test_agate_run.py::test_bdd_9_run_posix_pipefail_propagates_left_side_failure PASSED [ 30%]
+agate/tests/unit/test_agate_run.py::test_bdd_9_run_nonposix_pipefail_degrades_with_warning PASSED [ 40%]
+agate/tests/unit/test_agate_run.py::test_bdd_10_baseline_writes_out_evidence_file PASSED [ 50%]
+agate/tests/unit/test_agate_run.py::test_bdd_10_subsequent_run_matches_baseline_no_diff PASSED [ 60%]
+agate/tests/unit/test_agate_run.py::test_bdd_10_baseline_diff_is_objectively_reported PASSED [ 70%]
+agate/tests/unit/test_agate_run.py::test_bdd_10_baseline_evidence_is_byte_exact PASSED [ 80%]
+agate/tests/unit/test_agate_run.py::test_bdd_11_baseline_evidence_is_gitignored PASSED [ 90%]
+agate/tests/unit/test_agate_run.py::test_bdd_11_run_reports_error_when_evidence_not_ignored PASSED [100%]
+
+============================== 10 passed in 0.55s ==============================
