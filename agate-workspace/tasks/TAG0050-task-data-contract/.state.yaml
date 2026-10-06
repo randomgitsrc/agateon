@@ -1,6 +1,10 @@
 task_id: TAG0050
-phase: P0
+phase: P1
 status: active
+retries:
+  P1:
+    - round: 1
+      failure_mode: quality
+      prompt_changed: true
 judge:
   enabled: true
-retries: {}

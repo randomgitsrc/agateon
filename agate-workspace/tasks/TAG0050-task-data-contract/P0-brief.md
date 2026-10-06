@@ -46,7 +46,7 @@ env_constraints:
   debug_env: "无独立 debug 环境；验证＝本 checkout 内 pytest 全量 + check-protocol-consistency.py（用本 checkout 自己的）+ repro-tag0050.sh 改坏即红复验 + agateon/peekview 只读副本上的双向 R6 差分（/tmp 副本，跑完核验真实仓库 git status 为空）"
   consistency_baseline: "0 ERROR / 409 WARNING（main 720c97d3 v0.79.0，2026-10-06 实测；落盘本任务设计文档后 408→409，+1 为 review-r2.md 对 docs/roadmap/improvement-backlog.md 的历史叙事引用，属冻结 WARNING，无 live WARNING）"
 executor_env:
-  platform: "dsh"
+  platform: "opencode"
   has_task_tool: true
   has_local_runtime: true
   network: "full"
