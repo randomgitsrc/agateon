@@ -325,6 +325,28 @@ git commit
   生成声明并填写 `release.preset`；届时未声明的项目将失去协议内发版检查的等价保护
   （发版逻辑删除由后续批次执行，本批只提供等价物 + WARNING）。
 
+**批 3（执行层，TAG0042）— 项目验证命令统一执行 `agate-run`（无破坏性变更）**：
+
+- 新增 `agate-run` 命令：按项目声明 `verify.commands` 执行验证命令，产物落 `.out` 证据并追加
+  `cmd_run` 事件到任务账本。属**增量能力**——既有手写验证命令仍可用。
+- `pre-commit-gate` 暂存账本行为统一（2 处账本事件枚举改述）；`.state.yaml` schema 与既有任务
+  数据格式均未变。
+
+**批 5（CI 与诊断，TAG0042）— `agate-ci-verify` 替换 backstop + `agate-doctor`（无破坏性变更）**：
+
+- 新增 `agate-ci-verify` 命令：实际重跑 gate 判定（替代退役的 `ci-gate-backstop.py`），
+  **「跳过」与「通过」输出可区分**（无假绿；多个任务级 `.state.yaml` 时显式 SKIP 而非误判）。
+- 新增 `agate-doctor` 命令：诊断项目接入 / 环境状态；**退出码固定**（诊断正常完成即成功，
+  报告问题 ≠ 自身失败）。
+- 本仓 CI 的 `gate-backstop` job 改调 `agate-ci-verify.py`（job 名保留）。**不影响你项目**
+  （你项目不跑本仓 CI 流水线）。
+
+**批 6（义务登记表，TAG0042）— 规则义务三态归宿登记（无破坏性变更）**：
+
+- 新增 `agate/rules/obligations.yaml`：协议义务登记表，逐条标**三态归宿**（M=机械门禁 /
+  C=命令 / R=强制独立评审），**无「无归宿」项**；`current ≥ baseline`（只增不减）。
+- 新增 `check-obligations.py`（进一致性 CHECK 9 锚点表）。**不影响既有任务数据**。
+
 ### v0.78.3 — §6 改动的独立评审整改（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。
