@@ -281,8 +281,9 @@ implicit_coupling: true
 
 ### 功能组：批 6 — 义务登记表
 
-#### BDD-18: obligations.yaml 登记 160 项义务的三态归宿 (Batch 6)
-- Given 160 项阶段义务的逐条清单已入库（前置输入，见 §2 隐含需求 1 / §4 待确认）
+#### BDD-18: obligations.yaml 登记协议本体重新盘点的阶段义务三态归宿（外部 160 清单未入库，按 P0-brief §四 fallback 重盘） (Batch 6)
+[BASELINE_CHANGE: 外部 160 项逐条清单不在仓库（P0-brief §四/P2 §10/handoff 确认须向评审索取）；采 P0-brief §四明示 fallback「没有就得重新盘点」；用户 2026-10-06 批准]
+- Given 按 P0-brief §四 fallback 从协议本体重新盘点阶段义务（外部 160 项逐条清单未入库，登记为前置输入缺口）；每条带可追溯来源锚点
 - When 生成 `rules/obligations.yaml` 并运行 `check-obligations`
 - Then 每项义务有明确三态归宿（脚本执行 M / 命令生成 C / 强制评审 R），且无「无归宿」项
 
