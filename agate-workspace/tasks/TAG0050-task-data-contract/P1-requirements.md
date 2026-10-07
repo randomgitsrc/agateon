@@ -412,10 +412,12 @@ domains: [backend, cli, security]
 - When 提交
 - Then 仍中止提交（T4 优先于字段）
 
-#### BDD-55: [PROD_TOUCHED]: 无 被 T1 指向字段
+#### BDD-55: [PROD_TOUCHED]: 无 否定写法继续阻断并给专门指引
 - Given 正文出现否定写法 `- [PROD_TOUCHED]: 无`
 - When 提交
-- Then T1 将其指向字段（不误当声明中止），修复 F4
+- Then 仍中止提交（否定写法由 T4 安全门继续阻断，fail-safe），报错信息给出专门指引：「疑似否定写法：未触达生产请在主产出写 `prod_touched: false`，并删除正文中的标记」，修复 F4
+
+> [BASELINE_CHANGE: P2 §3.1 F4 规格取代旧口径，经主 Agent 批准] 原 Then「T1 将其指向字段（不误当声明中止）」与新规格方向相反——T1 标记表已去掉 `PROD_TOUCHED`，否定写法改由 **T4 继续阻断**（靠专门指引而非改正则）。Given/When 意图不变。
 
 ### 批次 D — 验收结论与证据绑定
 

@@ -208,7 +208,7 @@ dispatch_plan: {mode: static-batch, parallel_limit: 10, batches: [{id: A0, compl
 > - 「**committed ledger 含该事件**」的断言归 **A3**（由 **BDD-38** 一并覆盖：进入 PAUSED/READY/DONE 的转换事件随本次提交入库）；
 > - **A3 的验收用例必须用真实 `git commit` + 指向 checkout 协议的 hook**（不能只手动调脚本），否则会重演「版本错位误诊」（§10 G3）。
 >
-> 上述是对 **P1 活基线**的措辞澄清（P1 §4 的 BDD-01/38 文本在 P1 下次触及时同步收窄；本 P2 先按此口径设计，避免留下永假判据）。
+> 上述是对 **P1 活基线**的措辞澄清（P1 §4 的 BDD-01/38 文本在 P1 下次触及时同步收窄；**BDD-55 同列**——本次已按 §3.1 改写其 Then 并标 `[BASELINE_CHANGE]`；本 P2 先按此口径设计，避免留下永假判据）。
 
 ### 3.1 F4 生产接触安全门规格（BLOCKER-1 闭合，外部专家规格）
 

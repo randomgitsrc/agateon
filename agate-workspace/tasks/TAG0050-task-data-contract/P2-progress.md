@@ -75,3 +75,11 @@
 - [P2][rereview] G3/env_constraints/非阻塞项逐项核验通过
 - [P2][rereview] 下一步：写 P2-review.md（覆盖 rejected 版）+ frontmatter
 - [P2][rereview] 已写 P2-review.md（status: approved；三项闭合 + 3 项非阻塞残留）；真实仓库 git status 无新增写副作用
+
+## P2-progress (analyst — P2 非阻塞残留同步 R1/R2/R3)
+- [P2][sync] 已读 analyst.md 角色定义 + P2-dispatch-context-sync-residuals.md（R1/R2/R3 三项强制指引）
+- [P2][sync] 已读 P2-review.md §4（R1–R3）+ P2-design.md §3.1 F4 规格 / §3 note + P1-requirements.md BDD-54/55 + design note §1/§3.6/§4
+- [P2][sync] R1：design note §3.6（T4 行后）+ §4（「T4 优先」后）各加「[已被取代 2026-10-07]」醒目注记（保留原文，不删）
+- [P2][sync] R2：改写 P1 BDD-55 Then 为「否定写法由 T4 继续阻断 + 专门指引」（Given/When 意图不变，标题同步口径），加 [BASELINE_CHANGE: P2 §3.1 F4 规格取代旧口径，经主 Agent 批准]；P2 §3 note 的「P1 下次触及时同步」清单扩到 BDD-55
+- [P2][sync] R3：design note §1 边界段补「CI 保证留痕是在 gate-backstop required 生效时；未设 required 时连 SELF-GATE trailer 痕迹也不校验」
+- [P2][sync] 下一步：自检 check-frontmatter.py P1-requirements.md
