@@ -1,8 +1,12 @@
 task_id: TAG0050
-phase: P1
+phase: P2
 status: active
 retries:
   P1:
+    - round: 1
+      failure_mode: quality
+      prompt_changed: true
+  P2:
     - round: 1
       failure_mode: quality
       prompt_changed: true
