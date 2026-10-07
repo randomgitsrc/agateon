@@ -367,7 +367,7 @@ def main():
                     f"GATE WARNING: PAUSED 提交扫描到 [PROD_TOUCHED]（{task_id}）——"
                     "本阶段只扫描不阻断（任务已被人工接管）；已记入账本\n")
                 try:
-                    append_event(task_dir, "prod_touched_in_paused", {"task_id": task_id})
+                    append_event(task_dir, {"event": "prod_touched_in_paused", "task_id": task_id})
                 except Exception:
                     sys.stderr.write("GATE WARNING: 账本留痕失败（不阻断）\n")
             continue

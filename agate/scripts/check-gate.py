@@ -1623,6 +1623,13 @@ def main():
     task_dir = sys.argv[2]
     old_phase = sys.argv[3] if len(sys.argv) > 3 else ""
 
+    # 单点早检（TAG0050 A0 §10 G1）：任务目录不存在时**所有 phase** 统一返回 1
+    # （含 P7/P5 等原本会误判为通过码的出口）——不存在的任务目录绝不能假 PASS。
+    # 置于 handlers 分派之前，避免各 gate_p* 对缺失目录的降级出口分叉。
+    if not os.path.isdir(task_dir):
+        sys.stderr.write(f"GATE {phase}: 任务目录不存在: {task_dir}\n")
+        sys.exit(1)
+
     # 回退抵达检测（可选第 3 参数，向后兼容：不传 = 行为与之前完全一致）。
     if old_phase:
         old_num = re.search(r"[0-9]+", old_phase)

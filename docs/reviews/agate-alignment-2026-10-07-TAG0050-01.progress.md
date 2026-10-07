@@ -1,0 +1,15 @@
+- start: rm progress file done; HEAD=75b8add; A0 changes uncommitted
+- read: agate_common.append_event(task_dir, event) 2-param (line 524); pre-commit-gate.py:370 fixed to 2-arg; check-gate.py main() early-check line 1626-1631 isdir->exit 1
+- gate_p0 return 2 always; gate_p5 return 2 when no baseline/post_fails; gate_p7 returns 0 when P7 file absent -> confirms pre-fix missing-dir rc divergence (P0/P5->2, P7->0)
+- found: design-notes already had correct 2-arg append_event (:313); review-r1 F8 CONFIRMED; P2 §10 G1 裁决 all-phase rc=1
+- UPGRADING.md:407 claims 'PAUSED 只扫不阻断，但会在任务账本留痕' -> F8 fix makes claim true (A1 doc->script now aligned)
+- manual verify: check-gate P0/P5/P7/P1/P6.5/ZZ <missing> all rc=1 (was P0/P5->2, P7->0)
+- design §2.4 is CI replay; missing-dir rc claim only in design-notes/review-r2 (not protocol docs) -> no protocol doc propagation needed for rc
+- HEAD behavior confirmed: P0->2 P5->2 P7->0 P1->1 P6.5->0; post-fix all ->1
+- A5 precedent: TAG0032/TAG0034 treat CHANGELOG as P8 deferral -> A5 ALIGNED with P8 checklist
+- A4: BDD-01/02 4 passed; full pytest 79 failed/2672 passed/2 skipped; 78 tag0050 red + 1 env (opencode debug agent->agents)
+- A8: dispatch '82 red' imprecise -> 82 total new, 78 red; HEAD 75b8add confirmed; consistency 0 ERROR (442 frozen WARN)
+- A1: UPGRADING.md:407 claim now true; design-note:242/review-r2:93 missing-dir rc=1 now true
+- A7: ADR-002/004/005 relevant, all ALIGNED
+- repo clean: only the two reviewed files modified; no stray writes
+- [PROD_NOT_TOUCHED]
