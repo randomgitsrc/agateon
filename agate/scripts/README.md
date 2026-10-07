@@ -163,6 +163,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
 | `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；`--baseline` 落 `.out` 证据并逐字节比对（差异 → 非 0）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|
+| `agate-task-init.py` | 任务初始化入口（TAG0050 批 A1）：新建任务（`<TASK_ID> --slug --title [--priority] [--depends]`）创建目录 + `.state.yaml` + P0-brief 骨架，并在账本第 1 行写 `task_created`（记当前契约等级）；存量迁移 `--existing <dir>`（前置写入创建事件并重建哈希链）/ `--adopt <dir>`（写 `task_adopted`）/ `--upgrade <dir>`（写 `task_upgraded`，只升不降）| 0=成功, 1=用法/校验失败 |
 | `agate-extract-context.py` | 提取任务上下文（BDD 计数 / implementation_dir / P5 失败参考）|
 | `agate-archive-stale-outputs.py` | 回退时归档旧阶段产出（`.archived/{ts}-{phase}` + breadcrumb）|
 | `agate-capture-env-baseline.py` | P5 环境基线捕获（gate_commands 结果快照 + fail-list）|

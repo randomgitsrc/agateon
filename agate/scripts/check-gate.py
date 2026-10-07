@@ -80,6 +80,7 @@ try:
         reconcile_enabled,
         reconcile_field,
         reconcile_summary,
+        requirement_active,
         resolve_rules_root,
         split_frontmatter,
     )
@@ -165,6 +166,10 @@ except ImportError:
         return []
 
     def read_rules_yaml(rules_root, name):
+        return None
+
+    def requirement_active(task_dir, name, phase, script_path=None):
+        # agate_common 缺失（安装破损）→ None（走旧逻辑，与 legacy 同路径；DEBT0018 面外）
         return None
 
     def count_kf_entries(text):
@@ -753,7 +758,18 @@ def gate_p1(task_dir):
     #     created 为 ISO 且 ≥ cutoff → exit 1（机制后新任务缺/未启用 judge）；否则（pre-cutoff /
     #     created 缺失或非 ISO）→ 跳过（fail-open，R5）。
     judge = _load_state_yaml(task_dir).get("judge")
-    if not (isinstance(judge, dict) and judge.get("enabled")):
+    judge_enabled = isinstance(judge, dict) and judge.get("enabled")
+    # TAG0050 批 A1（修复 F3a）：非 legacy 任务的 judge 强制由**契约**决定
+    # （快照 requires.judge），不再读 P1 的 created 日期门槛。
+    _judge_req = requirement_active(task_dir, "judge", "P1")
+    if _judge_req is not None:
+        if _judge_req and not judge_enabled:
+            sys.stderr.write(
+                "GATE P1: 契约要求 judge（level-1 requires.judge: true）须在 .state.yaml "
+                "声明 judge.enabled: true（TAG0050 A1；不读 created 日期门槛）\n"
+            )
+            return 1
+    elif not judge_enabled:
         # DEBT0018：read_rules_yaml 是无条件调用点——agate_common 不可导入时须 fail-closed，
         # 不再因 dispatch_rules 静默为 None 导致 cutoff 判据被跳过（fail-open，误判为 PASS）。
         if _reader_missing(read_rules_yaml):
@@ -1228,7 +1244,15 @@ def gate_p65(task_dir):
     """
     state_yaml = _load_state_yaml(task_dir)
     judge = state_yaml.get("judge") if isinstance(state_yaml, dict) else None
-    if not (isinstance(judge, dict) and judge.get("enabled")):
+    judge_enabled = isinstance(judge, dict) and judge.get("enabled")
+    # TAG0050 批 A1（修复 F3b）：非 legacy 任务的 judge 强制由**契约**决定
+    # （快照 requires.judge），不再读可随手改的 judge.enabled 开关。
+    _judge_req = requirement_active(task_dir, "judge", "P6")
+    if _judge_req is not None:
+        if not _judge_req:
+            sys.stderr.write("GATE P6.5: 契约不要求 judge，跳过\n")
+            return 0
+    elif not judge_enabled:
         sys.stderr.write("GATE P6.5: judge 机制未启用（历史任务），跳过\n")
         return 0
     verdict = os.path.join(task_dir, "P6.5-judge-verdict.md")

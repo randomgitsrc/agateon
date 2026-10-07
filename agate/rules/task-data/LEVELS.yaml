@@ -1,0 +1,9 @@
+# LEVELS.yaml — 契约等级登记表（TAG0050 批 A1）
+#
+# 顶层为已登记快照列表；当前等级 = 各条 level 的最大值。
+# 每个快照文件的 **LF 归一 sha256** 必须等于登记值（check-protocol-consistency.py 的
+# 快照冻结 CHECK 逐条核对；黄金 fixture 在 CI 对全部已登记等级回归）。
+# 改动已发布快照、或新增快照未登记，一律判 ERROR（设计 §2.1 冻结规则 1）。
+- level: 1
+  file: level-1.yaml
+  sha256: "f0b18bd39b41e98dd9437f1c49e494f3e254c81d8ea3039c484385a484fc9467"

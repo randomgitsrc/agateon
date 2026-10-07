@@ -251,6 +251,12 @@ P8 gate 通过 ≠ 直接标记 READY。主 Agent 必须逐项检查：
 特殊转移：
 READY --[人手动触发 make publish]--> DONE
 
+**legacy 任务不可重开（TAG0050 批 A1，设计 §2.3 规则 6）**：
+legacy 任务（账本无 `task_created` / `task_adopted` 创建事件）从 READY 或 DONE 回到任意 Pn
+→ `check-state-transition.py` 判 ERROR（`state-machine.md` 旧口径把 old_num 当作 0，对
+`DONE → P1` 误返回 rc=0），提示用 `agate-task-init.py --adopt`（`at_phase` 记为重开的阶段）
+或新建任务。非 legacy 任务不受此限——按契约等级判定。
+
 PAUSED 恢复协议：
   PAUSED --[人工确认/决策]--> 恢复到 PAUSED 前的阶段
 

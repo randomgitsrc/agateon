@@ -51,12 +51,14 @@ try:
         append_event,
         read_rules_yaml,
         read_state_phase,
+        requirement_active,
         resolve_rules_root,
     )
 except Exception:  # pragma: no cover - 独立副本降级
     append_event = None
     read_state_phase = None
     read_rules_yaml = None
+    requirement_active = None
     resolve_rules_root = None
 
 CHECK_GATE = os.path.join(SCRIPT_DIR, "check-gate.py")
@@ -270,8 +272,17 @@ def _p6_judge_advance(task_dir, state, phases, repo_root):
     """
     p6_entry = phases.get("P6", {})
     next_phase = p6_entry.get("next")
-    judge = state.get("judge")
-    judge_enabled = bool(isinstance(judge, dict) and judge.get("enabled"))
+    # TAG0050 批 A1（设计 §2.5）：非 legacy 任务的 judge 由**契约**决定
+    # （requirement_active(task_dir, "judge", "P6")），不读可被改写的 judge.enabled；
+    # legacy 任务（返回 None）回退旧逻辑。与 check-gate / pre-commit 的既有改法一致。
+    judge_enabled = None
+    if requirement_active is not None:
+        req = requirement_active(task_dir, "judge", "P6")
+        if req is not None:
+            judge_enabled = bool(req)
+    if judge_enabled is None:
+        judge = state.get("judge")
+        judge_enabled = bool(isinstance(judge, dict) and judge.get("enabled"))
     if not judge_enabled:
         # 历史任务 / judge 未启用 → gate_p65 早退 0 → 裁决成立，直推 P7
         if next_phase:

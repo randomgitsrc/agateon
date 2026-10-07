@@ -57,13 +57,56 @@ def _init_commit(run_cli, agate_root, git_repo, repo):
     return _git_commit(run_cli, agate_root, repo, "-q", "-m", "init")
 
 
-def _write_state_yaml(task_dir, task_id, phase):
-    """等价 bats `cat > task_dir/.state.yaml` heredoc（retries 空表）。"""
+def _seed_task_created(task_dir, task_id="T001", contract_level=1):
+    """TAG0050 A1（设计 §2.3 规则 1）：为新任务目录写 task_created 首行账本。
+
+    规则 1 要求新建任务目录的账本第 1 行为 task_created。既有"新建任务目录并提交"
+    用例（设计 §8 允许改用 init_task 的同类）经本 helper 满足该规则；已存在账本时不覆盖
+    （保持"只追加"）。
+    """
+    import hashlib
+    import json
+
+    ledger = task_dir / "gate-events.jsonl"
+    if ledger.exists():
+        return
+    genesis = hashlib.sha256(b"").hexdigest()
+    row = {
+        "event": "task_created",
+        "task_id": task_id,
+        "contract_level": contract_level,
+        "ts": "2026-10-07T00:00:00.000000Z",
+        "prev_hash": genesis,
+    }
+    line = json.dumps(row, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    ledger.write_text(line + "\n", encoding="utf-8")
+
+
+def _write_state_yaml(task_dir, task_id, phase, legacy=False):
+    """等价 bats `cat > task_dir/.state.yaml` heredoc（retries 空表）。
+
+    TAG0050 A1：默认同时写 task_created 首行账本（规则 1：新任务目录须有创建事件），并声明
+    `judge.enabled: true`——非 legacy 任务的 judge 由契约强制（快照 requires.judge），
+    否则 P1 gate 会因缺 judge 而失败（本 helper 的用例期望 P1 正常通过）。
+
+    `legacy=True`：只写 `.state.yaml`，**不写** task_created（保持 legacy 任务）——供
+    phase-span 类用例使用（它们验证的是阶段产出与 phase 的一致性 WARNING，与契约等级
+    无关；非 legacy 会触发规则 7 后半「按被暂存产出所属阶段重跑 gate」而改变判定，见
+    设计 §8 例外）。
+    """
     task_dir.mkdir(parents=True, exist_ok=True)
+    if legacy:
+        (task_dir / ".state.yaml").write_text(
+            f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
+            encoding="utf-8",
+        )
+        return
     (task_dir / ".state.yaml").write_text(
-        f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
+        f"task_id: {task_id}\nphase: {phase}\nstatus: active\n"
+        "judge:\n  enabled: true\nretries: {}\n",
         encoding="utf-8",
     )
+    _seed_task_created(task_dir, task_id)
 
 
 def _write_min_valid_dispatch_context(
@@ -406,7 +449,7 @@ def test_phase_span_1_late_p1_p2_outputs_no_warning(
 
     task_dir = repo / "agate-workspace" / "tasks" / "T001"
     task_dir.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(task_dir, "T001", "P3")
+    _write_state_yaml(task_dir, "T001", "P3", legacy=True)
     (task_dir / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     _write_min_valid_dispatch_context(
         run_cli, python_exe, agate_scripts, agate_root, task_dir, "P3", "test-designer"
@@ -439,12 +482,12 @@ def test_phase_span_2_existing_p1_restaged_warns(
 
     task_dir = repo / "agate-workspace" / "tasks" / "T001"
     task_dir.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(task_dir, "T001", "P1")
+    _write_state_yaml(task_dir, "T001", "P1", legacy=True)
     _write_p1_requirements(task_dir)
     git_repo.stage("agate-workspace/tasks/T001/")
     _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T001 P1 setup")
 
-    _write_state_yaml(task_dir, "T001", "P3")
+    _write_state_yaml(task_dir, "T001", "P3", legacy=True)
     (task_dir / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
     git_repo.stage("agate-workspace/tasks/T001/P3-test-cases.md")
@@ -489,7 +532,7 @@ def test_phase_span_4_multi_task_warn_selective(
     # T001: phase=P3, 历史产出晚提交（P1/P2/P3/P1-review 全新增）→ 不 WARNING
     t1 = repo / "agate-workspace" / "tasks" / "T001"
     t1.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(t1, "T001", "P3")
+    _write_state_yaml(t1, "T001", "P3", legacy=True)
     _write_p1_requirements(t1)
     (t1 / "P2-design.md").write_text(
         "---\nagent: test\nphase: P2\ntask_id: T001\ntype: design\n"
@@ -516,11 +559,11 @@ def test_phase_span_4_multi_task_warn_selective(
     # T002: phase=P3, 已存在 P1 产出被修改 → WARNING
     t2 = repo / "agate-workspace" / "tasks" / "T002"
     t2.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(t2, "T002", "P1")
+    _write_state_yaml(t2, "T002", "P1", legacy=True)
     _write_p1_requirements(t2)
     git_repo.stage("agate-workspace/tasks/T002/")
     _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T002 P1 setup")
-    _write_state_yaml(t2, "T002", "P3")
+    _write_state_yaml(t2, "T002", "P3", legacy=True)
     (t2 / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     git_repo.stage("agate-workspace/tasks/T002/.state.yaml")
     git_repo.stage("agate-workspace/tasks/T002/P3-test-cases.md")
@@ -531,7 +574,7 @@ def test_phase_span_4_multi_task_warn_selective(
     # T003: phase=P3, 新增 P4 产出（提前产出）→ WARNING
     t3 = repo / "agate-workspace" / "tasks" / "T003"
     t3.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(t3, "T003", "P3")
+    _write_state_yaml(t3, "T003", "P3", legacy=True)
     _write_p1_requirements(t3)
     (t3 / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     git_repo.stage("agate-workspace/tasks/T003/")

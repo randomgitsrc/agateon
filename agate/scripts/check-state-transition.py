@@ -23,10 +23,11 @@ from pathlib import Path
 
 try:
     from agate_common import MAX_RETRY_MAP as _DEFAULT_MAX_RETRY_MAP
-    from agate_common import run_git
+    from agate_common import run_git, task_level
 except ImportError:
     _DEFAULT_MAX_RETRY_MAP = "P1:3,P2:3,P3:2,P4:3,P5:2,P6:2,P7:2,P8:2"
     run_git = None
+    task_level = None
 
 try:
     import yaml
@@ -267,6 +268,22 @@ def main():
 
     old_phase = get_old_phase(state_file, state_basename)
     new_phase = get_new_phase(state_file)
+
+    # TAG0050 批 A1（设计 §2.3 规则 6）：legacy 任务不可重开——从 READY/DONE 回到 Pn
+    # → ERROR（提示 --adopt 或新建任务）。非 legacy 任务（有创建事件）不受限。
+    if old_phase in ("READY", "DONE") and re.match(r"^P[0-8]$", new_phase or ""):
+        _lvl = None
+        if task_level is not None:
+            try:
+                _lvl = task_level(os.path.dirname(os.path.abspath(state_file)))
+            except Exception:
+                _lvl = None
+        if _lvl is None:
+            sys.stderr.write(
+                f"GATE STATE: legacy 任务不可从 {old_phase} 回到 {new_phase}（账本无创建事件）——"
+                "请用 agate-task-init.py --adopt 迁入（at_phase 记为重开的阶段），或新建任务\n"
+            )
+            sys.exit(1)
 
     # X9（TAG0042 批0）：**转 READY 不再一律跳过**——须有已提交的 P8 前序。
     #

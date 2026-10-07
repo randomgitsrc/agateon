@@ -239,6 +239,77 @@ def add_agent_field(file_path):
             _write_utf8(p, "---\nagent: test\n---\n\n" + p.read_text(encoding="utf-8"))
 
 
+def _write_ledger_chain(task_dir, events):
+    """构造哈希链合法的 gate-events.jsonl（与 agate_common.append_event 同源约定）。
+
+    GENESIS 首行 + 逐行 sha256 链 + 单调 ts。供 init_task() 写 task_created 首行。
+    """
+    import hashlib
+    import json
+
+    genesis = hashlib.sha256(b"").hexdigest()
+    lines = []
+    prev = genesis
+    for idx, ev in enumerate(events):
+        row = dict(ev)
+        row.setdefault("ts", f"2026-10-07T00:00:{idx:02d}.000000Z")
+        row["prev_hash"] = prev
+        line = json.dumps(row, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+        lines.append(line)
+        prev = hashlib.sha256(line.encode("utf-8")).hexdigest()
+    _write_utf8(Path(task_dir) / "gate-events.jsonl", "\n".join(lines) + "\n")
+
+
+def init_task(base_dir, task_id="T001", slug="test-task", contract_level=1):
+    """TAG0050 批 A1 交付物：建一个**非 legacy** 任务（账本首行 task_created，等级 1）。
+
+    返回任务目录 Path。用于测试引用"契约生效"的非 legacy 任务（旧逻辑与新契约分流的
+    对照面）。内容为最小可判定集：
+      * `.state.yaml`（task_id / phase / retries；**不含** judge.enabled）；
+      * `gate-events.jsonl` 首行 `task_created`（contract_level=contract_level）；
+      * P1-requirements.md（BDD-1 + [NO_NEED_CONFIRM]）+ P1-review.md（approved）；
+      * P4-review.md（approved）+ P4-implementation.md（含一条 [DESIGN_GAP:]）；
+      * P6-acceptance.md（一条无引用的 PASS + 一条 FAIL）+ P6-evidence/。
+    这些内容使：P1 gate 因契约要求 judge 而未声明 judge.enabled 失败；P6 gate 因 FAIL
+    失败；P7 gate 因 P4 散文缺口未配对失败；P4 gate 通过（P4-review approved）。
+    """
+    base = Path(base_dir)
+    task_dir = base / (task_id + "-" + slug)
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_utf8(
+        task_dir / ".state.yaml",
+        f"task_id: {task_id}\nphase: P4\nretries: {{}}\n",
+    )
+    _write_ledger_chain(task_dir, [
+        {"event": "task_created", "task_id": task_id, "contract_level": contract_level},
+    ])
+    _write_utf8(
+        task_dir / "P1-requirements.md",
+        "---\nagent: test\nrisk_level: high\n"
+        "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n---\n\n"
+        "[NO_NEED_CONFIRM]\n\n#### BDD-1: test\n- Given test\n- When test\n- Then test\n",
+    )
+    _write_utf8(
+        task_dir / "P1-review.md",
+        "---\nstatus: approved\nagent: reviewer-subagent\n---\nReviewed BDD-1.\n",
+    )
+    _write_utf8(
+        task_dir / "P4-review.md",
+        "---\nstatus: approved\nagent: reviewer-subagent\n---\nP4 review.\n",
+    )
+    _write_utf8(
+        task_dir / "P4-implementation.md",
+        "---\nagent: implementer\n---\n\n- [DESIGN_GAP: init_task fixture gap]\n",
+    )
+    _write_utf8(
+        task_dir / "P6-acceptance.md",
+        "---\nagent: verifier\n---\n\n- PASS BDD-1\n- FAIL BDD-2 (ev.log)\n",
+    )
+    (task_dir / "P6-evidence").mkdir(parents=True, exist_ok=True)
+    _write_utf8(task_dir / "P6-evidence" / "ev.log", "run\nEXIT_CODE: 0\n")
+    return task_dir
+
+
 def add_given_line(file_path):
     """在 P1 加一个 Given 行（如果还没有）。"""
     p = Path(file_path)

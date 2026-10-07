@@ -8,6 +8,9 @@
 #   * 断言消息不含 A 类关键词（Traceback / ImportError / SyntaxError / ModuleNotFoundError）。
 # 平台无关：tmp_path / git_repo fixture；python_exe；不写字面系统临时目录。
 
+import importlib.util
+import shutil
+
 import pytest
 
 import helpers_tag0050 as h
@@ -318,12 +321,31 @@ def test_bdd_18_legacy_output_only_prod_touched_scanned(
 
 
 def test_bdd_19_non_legacy_staged_output_reruns_phase_gate(
-    tmp_path, agate_scripts, python_exe, run_cli
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
 ):
-    """BDD-19：非 legacy 任务按被暂存产出所属阶段重跑 gate（含 HEAD=READY）。"""
-    d = h.init_task_via_conftest(tmp_path)
-    r = run_cli(python_exe, str(agate_scripts / "check-gate.py"), "P6", str(d))
-    assert r.returncode != 0, f"BDD-19：须按被暂存产出所属阶段重跑 gate，实际 rc={r.returncode}"
+    """BDD-19：非 legacy 任务按被暂存产出所属阶段重跑 gate（含 HEAD=READY）。
+
+    经 **pre-commit hook** 提交：只暂存 P6-acceptance（不改 phase），HEAD 在 P7 →
+    设计 §2.3 规则 7 后半按被暂存产出所属阶段（P6）重跑该阶段 gate；P6 gate 因存在
+    FAIL 未通过 → 中止 commit。（旧用例只直接跑 check-gate，不会因规则 7 后半缺失而红。）
+    """
+    repo = h.make_git_repo(None, git_repo)
+    tasks = repo / "agate-workspace" / "tasks"
+    d = h.init_task_via_conftest(tasks, task_id="T001", slug="rerun")
+    rel = "agate-workspace/tasks/T001-rerun"
+    git_repo.commit("seed non-legacy task")  # hook 尚未安装
+    (d / ".state.yaml").write_text("task_id: T001\nphase: P7\nretries: {}\n", encoding="utf-8")
+    git_repo.stage(rel + "/.state.yaml")
+    git_repo.commit("move to P7")
+    h.install_pre_commit_hook(repo, agate_scripts)  # 仅最终提交经 hook
+    (d / "P6-acceptance.md").write_text(
+        "---\nagent: verifier\n---\n\n- FAIL BDD-1\n", encoding="utf-8")
+    git_repo.stage(rel + "/P6-acceptance.md")
+    result = h.commit_with_hook(run_cli, agate_root, repo, "-m", "stage P6 output only")
+    assert result.returncode != 0, (
+        f"BDD-19：只暂存 P6 产出、未改 phase 时须重跑 P6 gate 并拦截，实际 rc={result.returncode}"
+    )
+    assert "P6" in result.output, f"BDD-19：拦截信息须指明重跑 P6 gate\n{result.output}"
 
 
 def test_bdd_20_p7_adopted_p4_prose_gap_counted(
@@ -354,3 +376,193 @@ def test_bdd_22_r6_differential_deliverable(agate_root):
     allow = agate_root.parent / "docs" / "design-notes" / "r6-allowlist.yaml"
     assert script.is_file(), "BDD-22：须交付 docs/design-notes/r6-differential.sh"
     assert allow.is_file(), "BDD-22：须交付 docs/design-notes/r6-allowlist.yaml"
+
+
+# ── F1–F7 SELF-GATE 整改补充用例（评审 A1/A4/A8）─────────────────────────────
+
+
+def _load_agate_next(agate_scripts):
+    """运行期加载 agate-next.py 模块（不触发 main）。"""
+    path = agate_scripts / "agate-next.py"
+    spec = importlib.util.spec_from_file_location("agate_next_under_test", str(path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_f1_p6_judge_advance_uses_contract(
+    tmp_path, agate_scripts, agate_root, monkeypatch
+):
+    """F1：`agate-next.py:_p6_judge_advance` 依契约（requirement_active），不读 judge.enabled。
+
+    非 legacy（level-1，requires.judge: true）任务即使在 `.state.yaml` 写
+    `judge.enabled: false`，也应走 P6.5 分支（调用 check-gate.py P6.5），而非直推 P7。
+    """
+    monkeypatch.setenv("AGATE_ROOT", str(agate_root))
+    mod = _load_agate_next(agate_scripts)
+    d = h.init_task_via_conftest(tmp_path)
+    state = d / ".state.yaml"
+    state.write_text(
+        state.read_text(encoding="utf-8").rstrip("\n") + "\njudge:\n  enabled: false\n",
+        encoding="utf-8",
+    )
+    calls = []
+    monkeypatch.setattr(
+        mod, "_run_cmd", lambda cmd, task_dir=None: (calls.append(cmd), (0, ""))[1])
+    monkeypatch.setattr(mod, "_advance", lambda *a, **k: None)
+    state_dict = mod._read_state_dict(str(d))
+    mod._p6_judge_advance(str(d), state_dict, {"P6": {"next": "P7"}}, None)
+    assert any("P6.5" in " ".join(str(x) for x in c) for c in calls), (
+        "F1：契约要求 judge → 应走 P6.5 分支（不因 judge.enabled: false 直推 P7）"
+    )
+
+
+def test_f3_current_level_2_existing_level_1_passes(
+    tmp_path, agate_scripts, python_exe, run_cli, agate_root
+):
+    """F3：协议升级到 level 2 后，存量 level-1 非 legacy 任务应放行（不追溯）。
+
+    `check_ledger_events` 只校验「等级已登记」；「等级 = 当前等级」只在 pre-commit 的
+    新建目录分支对新任务单独判（本地、仅新任务）。
+    """
+    fake = tmp_path / "agate_root"
+    td = fake / "rules" / "task-data"
+    td.mkdir(parents=True)
+    shutil.copy(agate_root / "rules" / "task-data" / "level-1.yaml", td / "level-1.yaml")
+    (td / "level-2.yaml").write_text("extends: 1\n", encoding="utf-8")
+    (td / "LEVELS.yaml").write_text(
+        "- {level: 1, file: level-1.yaml, sha256: a}\n"
+        "- {level: 2, file: level-2.yaml, sha256: b}\n",
+        encoding="utf-8",
+    )
+    task = tmp_path / "TAG0001"
+    task.mkdir()
+    h.write_ledger(task, [
+        {"event": "task_created", "task_id": "TAG0001", "contract_level": 1},
+    ])
+    r = run_cli(
+        python_exe, str(agate_scripts / "check-events.py"), str(task),
+        env={"AGATE_ROOT": str(fake)},
+    )
+    assert r.returncode == 0, (
+        f"F3：协议升级后存量 level-1 任务应放行（不追溯），实际 rc={r.returncode}\n{r.output}"
+    )
+
+
+# ── C8 评审整改负向/正向用例（F-1 规则 4 rename 洞；F-3 git rm .state.yaml 洞）──
+
+
+def _seed_non_legacy_task(repo, task_id="TAG0001", phase="P5"):
+    """在 repo 下建一个非 legacy 任务（账本首行 task_created，等级 1）。返回任务目录。"""
+    task = repo / "agate-workspace" / "tasks" / task_id
+    task.mkdir(parents=True)
+    (task / ".state.yaml").write_text(
+        f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
+        encoding="utf-8",
+    )
+    h.write_ledger(task, [
+        {"event": "task_created", "task_id": task_id, "contract_level": 1},
+    ])
+    return task
+
+
+def test_bdd_23_ledger_rename_within_task_dir_errors(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """BDD-23（F-1 负向）：`git mv` 账本到同目录非账本名（`.bak`）→ ERROR。
+
+    Given 非 legacy 任务（账本含 task_created）
+    When `git mv gate-events.jsonl gate-events.bak`（同目录改名，非整目录改名）
+    Then 规则 4 按「删除」判 ERROR（防止任务静默降回 legacy）。
+    """
+    repo = h.make_git_repo(None, git_repo)
+    _seed_non_legacy_task(repo)
+    git_repo.commit("non-legacy task")
+    git_repo.git(
+        "mv",
+        "agate-workspace/tasks/TAG0001/gate-events.jsonl",
+        "agate-workspace/tasks/TAG0001/gate-events.bak",
+    )
+    r = h.run_gate(run_cli, python_exe, agate_scripts, agate_root, "pre-commit-gate.py", cwd=repo)
+    assert r.returncode != 0, (
+        f"BDD-23：同目录改名账本（.bak）须 ERROR（规则 4 rename 洞），实际 rc={r.returncode}\n{r.output}"
+    )
+
+
+def test_bdd_24_ledger_moved_to_other_task_errors(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """BDD-24（F-1 负向）：`git mv` 账本移入**别的任务目录** → ERROR。
+
+    Given 非 legacy 任务 TAG0001（账本含 task_created）与另一任务 TAG0002
+    When `git mv TAG0001/gate-events.jsonl TAG0002/gate-events.jsonl`
+    Then 规则 4 按「删除/移走」判 ERROR（源任务仍存在却失去账本）。
+    """
+    repo = h.make_git_repo(None, git_repo)
+    _seed_non_legacy_task(repo, "TAG0001")
+    other = repo / "agate-workspace" / "tasks" / "TAG0002"
+    other.mkdir(parents=True)
+    (other / ".state.yaml").write_text(
+        "task_id: TAG0002\nphase: P5\nstatus: active\nretries: {}\n", encoding="utf-8"
+    )
+    git_repo.commit("two tasks")
+    git_repo.git(
+        "mv",
+        "agate-workspace/tasks/TAG0001/gate-events.jsonl",
+        "agate-workspace/tasks/TAG0002/gate-events.jsonl",
+    )
+    r = h.run_gate(run_cli, python_exe, agate_scripts, agate_root, "pre-commit-gate.py", cwd=repo)
+    assert r.returncode != 0, (
+        f"BDD-24：账本移入别的任务目录须 ERROR（规则 4 rename 洞），实际 rc={r.returncode}\n{r.output}"
+    )
+
+
+def test_bdd_25_task_dir_rename_with_created_event_passes(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """BDD-25（F-1 正向）：整目录 `git mv` 放行（账本随目录、沿用原任务）。
+
+    Given 非 legacy 任务 TAG0001
+    When `git mv agate-workspace/tasks/TAG0001 .../TAG0001-renamed`（整个目录改名）
+    Then 规则 4 豁免（目录级改名语义），不报错。
+    """
+    repo = h.make_git_repo(None, git_repo)
+    _seed_non_legacy_task(repo)
+    git_repo.commit("non-legacy task")
+    git_repo.git(
+        "mv", "agate-workspace/tasks/TAG0001", "agate-workspace/tasks/TAG0001-renamed"
+    )
+    r = h.run_gate(run_cli, python_exe, agate_scripts, agate_root, "pre-commit-gate.py", cwd=repo)
+    assert r.returncode == 0, (
+        f"BDD-25：整目录改名须放行（沿用原任务），实际 rc={r.returncode}\n{r.output}"
+    )
+
+
+def test_bdd_26_git_rm_state_yaml_still_scans_prod_touched(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """BDD-26（F-3 负向）：`git rm .state.yaml` 不得绕过 PROD_TOUCHED 全局面扫描。
+
+    Given legacy 任务，其 `.state.yaml` 以**删除**方式暂存，目录内另有含
+          `[PROD_TOUCHED]` 的产出被暂存
+    When pre-commit 处理该提交
+    Then rc≠0（安全门扫描不再因 `.state.yaml` 被删除而整体跳过）。
+    """
+    repo = h.make_git_repo(None, git_repo)
+    task = repo / "agate-workspace" / "tasks" / "TAG0001"
+    task.mkdir(parents=True)
+    (task / ".state.yaml").write_text(
+        "task_id: TAG0001\nphase: P5\nstatus: active\nretries: {}\n", encoding="utf-8"
+    )
+    git_repo.commit("legacy p5 task")
+    git_repo.git("rm", "-q", "agate-workspace/tasks/TAG0001/.state.yaml")
+    # `git rm` 会连带清掉空目录（含父目录），重建后再放产出
+    task.mkdir(parents=True, exist_ok=True)
+    (task / "P5-verification.md").write_text(
+        "---\nagent: test\n---\n\n[PROD_TOUCHED] 接触生产\n", encoding="utf-8"
+    )
+    git_repo.stage("agate-workspace/tasks/TAG0001/P5-verification.md")
+    r = h.run_gate(run_cli, python_exe, agate_scripts, agate_root, "pre-commit-gate.py", cwd=repo)
+    assert r.returncode != 0, (
+        f"BDD-26：git rm .state.yaml 不得绕过 PROD_TOUCHED 扫描，实际 rc={r.returncode}\n{r.output}"
+    )

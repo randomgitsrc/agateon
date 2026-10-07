@@ -351,6 +351,7 @@ P5 gate 要求「测试环境隔离正常（无 [PROD_TOUCHED]）」，是流程
 |---|---------|---------|-----------|------|
 | 0 | `check-state-yaml.py` | `.state.yaml` 暂存变更时（不依赖 phase 变）| 文件级 | 校验格式合法（必填字段、phase 取值、retries 结构）|
 | 1 | `check-gate.py` | `.state.yaml` phase 变更或阶段产出文件变更 | 阶段级 | P1.1 gate 校验 |
+| 1.1 | `pre-commit-gate.py`「账本与新目录」步骤 | 任意提交（每次提交都跑，不依赖 `.state.yaml` 是否暂存）| 账本级 | 新目录须有创建事件（规则 1）/ 新任务等级 = 当前等级（规则 2，本地仅新任务）/ 账本只追加（规则 3）/ 含创建/迁入事件的账本不可删（规则 4）/ 账本事件规则（规则 5）/ 每个有暂存文件的任务目录做 `[PROD_TOUCHED]` 扫描 + 非 legacy 任务按被暂存产出所属阶段重跑该阶段 gate（规则 7）；违反任一 → 中止 commit（TAG0050 批 A1，设计 §2.3）|
 | 1.2 | — | 全局，任意阶段 | 全局级 | `[PROD_TOUCHED]` 标记三步检测（正向声明→中止 / 声明格式不合规→中止 / 缺失声明→静默通过）|
 | 1.6 | `check-changelog.py` | P8 phase 且 gate 通过后 | 文件级 | `[Unreleased]` 含本次 task_id（P1.6；P2.54：仅 P8 检查，P1-P7 不触发）|
 | 1.7 | `check-p6-evidence.py` | 阶段 ∈ {P6, P7} | 阶段级 | P6-evidence/ 非空 + BDD 行数 ≥ 1 + md5 逐字节去重（阻断）+ 像素方差/average hash 检测（WARNING）|
@@ -368,7 +369,7 @@ P5 gate 要求「测试环境隔离正常（无 [PROD_TOUCHED]）」，是流程
 - **CI 兜底（P1.3）**：push 后 CI 平台（GitHub Actions / GitLab CI / Gitea Actions）经 `agate-ci-verify.py` **实际重跑** `check-gate.py` 判定，捕获 `--no-verify` 绕过 hook 的恶意提交；每个「跳过」面显式声明 `SKIP:` + 原因（「跳过」与「通过」在输出上可区分，不再假绿）。
 - **降级方案**（Phase 3 平台接口未实现前的最优方案）：证据-结论对应是**客观行为审计**——造假 N 个证据文件的成本远高于填写一行 `agent: verifier` 自报字段。详见 `LIMITATIONS.md` 局限 3。
 
-**多任务适配**：`pre-commit-gate.sh` 扫描暂存区中所有变更的 `.state.yaml`（根目录 + `{AGATE_WORKSPACE}/tasks/{Txxx}/`），对每个文件独立跑格式校验 + 状态转移 + gate。单任务架构（根 `.state.yaml`）向后兼容。
+**多任务适配**：`pre-commit-gate.sh` 扫描暂存区中所有变更的 `.state.yaml`（根目录 + `{AGATE_WORKSPACE}/tasks/{Txxx}/`），对每个文件独立跑格式校验 + 状态转移 + gate。单任务架构（根 `.state.yaml`）向后兼容。**此外**，`1.1 账本与新目录` 步骤对**每个含暂存文件的任务目录**执行（不再只扫暂存的 `.state.yaml`）：账本完整性（规则 1/3/4/5）+ 全局面 `[PROD_TOUCHED]` 扫描 + 非 legacy 任务按被暂存产出所属阶段重跑 gate（规则 7）——安全门不再依赖"是否改了 phase"。
 
 **三类 WARNING（均不阻断 commit）**：
 - **phase-产出一致性**：暂存了 `P{n}-*.md` 产出但 `.state.yaml` 的 phase 不匹配 → WARNING。覆盖"产出了但忘改 phase"场景，下次 agent 接手时由「状态标记绑定规则」（见 state-machine.md）兜底。

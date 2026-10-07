@@ -616,11 +616,23 @@ gate 的检查：
 | 11 | `check-gate` 对不存在的任务目录返回 1 | 缺陷修复（§2.4） |
 | 12 | 没有暂存 `.state.yaml` 的任务目录也做 PROD_TOUCHED 扫描（§2.3 规则 7） | 安全门修复。legacy 任务可能出现新的 ERROR，其中也包括现行正则把否定写法 `[PROD_TOUCHED]: 无` 误拦的情况（F4）。R6 差分须单独统计这类新增 ERROR，并逐条列出 |
 
+> **第 12 项的 R6 归属（G2，2026-10-07 补记，A1 P4 整改）**：A1 交付的 `r6-differential.sh`
+> 只回放 **check-gate 面**（`check-gate.py <phase> <task>`）——干净 corpus 无暂存改动，
+> pre-commit 回放无意义。故第 12 项要求的「新增 PROD_TOUCHED ERROR 单独统计并逐条列出」
+> **不由 A1 的 R6 承担**，改由**批 A2 的 `agate-ci-verify` 逐提交回放 pre-commit**（§2.4）
+> 承担。此为**显式声明**，不是默认遗漏；`r6-allowlist.yaml` 中 `gate: pre-commit` 的规则
+> 不在 A1 的 R6 覆盖内（`required_ids` 只校验规则存在，不校验可达）。
+
 **R6 双向差分**：在 agateon 和 peekview 的副本上，按上述口径运行，跑完后核验两个真实仓库的 `git status --porcelain` 为空。
 
-**现有测试**：pytest 全量必须全绿。只有以下两类允许改动用例：
+**现有测试**：pytest 全量必须全绿。只有以下三类允许改动用例：
 - 第 7、8、10、11、12 条所涉及的用例；
-- §2.3 中"新建任务目录并提交"的用例（改用 `init_task()`）。
+- §2.3 中"新建任务目录并提交"的用例（改用 `init_task()`）；
+- **§2.3 规则 7 后半（非 legacy 任务按被暂存产出所属阶段重跑 gate）涉及的用例**：
+  `test_pre_commit_hook.py::test_phase_span_1/2/4`——它们验证的是阶段产出与 phase 的
+  一致性 WARNING（与契约等级无关）；A1 的 `_write_state_yaml` 使这些用例的任务变为非
+  legacy，从而触发规则 7 后半重跑（与用例意图无关）。处置：这三个用例改用 legacy 任务
+  （`_write_state_yaml(..., legacy=True)`，恢复其原形态），重跑行为由重写的 BDD-19 覆盖。
 
 批 A1、A2、A3 的 P1 要给出**逐条清单**，PR 中逐条说明。
 

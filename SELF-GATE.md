@@ -2,7 +2,7 @@
 
 > agate 改自己的协议文档或脚本时，必须走本流程。
 > 和项目侧 agate 流程对等：项目用 check-gate.py + P2 评审；agate 自身用 `check-protocol-consistency.py`
-> 的结构 CHECK 全集（不写死上界，当前 CHECK 1-15，其中 CHECK 9 是协议-脚本结构对齐）+ LLM 语义审查。
+> 的结构 CHECK 全集（不写死上界，当前 CHECK 1-16，其中 CHECK 9 是协议-脚本结构对齐）+ LLM 语义审查。
 
 ## 强制力边界
 
@@ -36,7 +36,7 @@ grep -qE "^(agate/scripts/.*\.(sh|py)|agate/[^/]+\.md|agate/.+/.*\.md|agate/rule
 
 ## 检查清单
 
-1. **跑 check-protocol-consistency.py** — 确认结构 CHECK 全集（当前 1-15）无 ERROR
+1. **跑 check-protocol-consistency.py** — 确认结构 CHECK 全集（当前 1-16）无 ERROR
 2. **派发 protocol-alignment-review subagent** — 语义对齐审查（派发模板见下文，角色定义见 `agate/assets/review-roles/protocol-alignment-review.md`）
 3. **读审查报告** — MISALIGNED 必须修复，NEEDS_HUMAN_REVIEW 需附 `[HUMAN_CONFIRMED: ...]` 标记
 4. **跑全量 pytest** — 确认无退化（`python3 -m pytest agate/tests/`）

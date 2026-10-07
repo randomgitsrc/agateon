@@ -1,0 +1,46 @@
+# level-1.yaml — 任务数据契约 第 1 级（TAG0050 批 A1；发布后冻结）
+#
+# 快照通过 extends 链合并后自成一体（本文件 extends: null）。冻结规则（设计 §2.1）：
+#   1. 快照文件冻结：LF 归一 sha256 必须等于 LEVELS.yaml 登记值；改已发布/新增未登记 → consistency ERROR。
+#   2. 代码语义冻结：本文件引用的名字（要求项键 / render 种类 / derive 算子 / 绊线 id /
+#      判据 id）一经发布即冻结，要改行为须起新名字并由新一级快照引用。
+#   3. 新增或收紧要求时登记新一级（level-2.yaml，extends: 1），避免在途任务被追溯。
+#
+# 说明：批 A1 仅消费 requires.judge / requires.evidence_ref；其余键为后续批次
+# （B/C/D/E/F）的契约数据，随本快照一并冻结登记。
+level: 1
+extends: null
+
+# 要求项：requirement_active(task, name, phase) == snapshot(level(phase)).requires[name]。
+# level(phase) 为 None（legacy）时，消费方走旧逻辑，不读本表。
+requires:
+  judge: true          # 批 A1：非 legacy 任务的 judge 复核强制（取代 judge.enabled / created 日期门槛）
+  evidence_ref: true   # 批 A1：P6 PASS 条目证据引用强制（取代 created ≥ 截止日）
+  prod_touched: true   # 批 C：主产出 prod_touched 字段必填
+  results: false       # 批 D：P6 results 结构化（本任务不启用）
+
+# 各阶段主产出（批 C 消费；设计 §4）
+primary_outputs:
+  P1: P1-requirements.md
+  P2: P2-design.md
+  P3: P3-test-cases.md
+  P4: P4-implementation.md
+  P5: P5-test-results/unit.md
+  P6: P6-acceptance.md
+  P6.5: P6.5-judge-verdict.md
+  P7: P7-consistency.md
+  P8: P8-release.md
+
+# 阶段全集（批 F 消费；设计 §7）
+phase_universe: [P0, P1, P2, P3, P4, P5, P6, P6.5, P7, P8]
+
+# 任务 ID 模式（与 agate_common.TASK_ID_RE 同源；设计 §2.2）
+task_id_pattern: "^[A-Z]+[0-9]+$"
+
+# .state.yaml 契约（批 A3 消费；设计 §2.7）
+state:
+  status_is_system: true
+  fields:
+    phase: {writer: agent, required: true}
+    cancelled: {writer: agent, optional: true}
+    meta: {writer: agent, optional: true}

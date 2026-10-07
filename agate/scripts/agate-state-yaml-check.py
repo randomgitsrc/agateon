@@ -14,6 +14,12 @@ except ImportError:
     sys.stderr.write("agate-state-yaml-check: 需要 pyyaml\n")
     sys.exit(1)
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from agate_common import TASK_ID_RE
+except Exception:  # 安装破损时回退内置（与 agate_common.TASK_ID_RE 同式）
+    TASK_ID_RE = re.compile(r"^[A-Z]+[0-9]+$")
+
 valid_phases = ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "PAUSED", "READY", "DONE"]
 
 state_file = os.environ["STATE_FILE"]
@@ -36,8 +42,8 @@ for field in ("task_id", "phase", "status"):
         errors.append(f"缺必填字段: {field}")
 
 task_id = data.get("task_id", "")
-if task_id and not re.match(r"^T[A-Z]{2}\d+$", str(task_id)):
-    errors.append(f"task_id 格式错误: {task_id}（应为 T + 2 个大写字母项目代号 + 数字，如 TAG0001）")
+if task_id and not TASK_ID_RE.match(str(task_id)):
+    errors.append(f"task_id 格式错误: {task_id}（应为 ≥1 个大写字母 + 数字，如 TAG0001）")
 
 phase = str(data.get("phase", ""))
 if phase and phase not in valid_phases:

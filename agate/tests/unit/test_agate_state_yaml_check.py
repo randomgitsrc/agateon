@@ -16,7 +16,7 @@ def _run_sy(agate_scripts, python_exe, run_cli, state_file):
 
 
 @pytest.mark.windows_smoke
-def test_sy_1_new_format_tag0001_passes_old_t001_rejected(
+def test_sy_1_new_format_tag0001_passes_lowercase_rejected(
     agate_scripts, python_exe, run_cli, tmp_path
 ):
     state_file = tmp_path / ".state.yaml"
@@ -28,8 +28,18 @@ def test_sy_1_new_format_tag0001_passes_old_t001_rejected(
     assert result.returncode == 0
     assert result.output.strip() == ""
 
+    # TAG0050 A1（设计 §8 第 3 项）：任务 ID 正则统一为 ^[A-Z]+[0-9]+$（放宽）——
+    # T001 由"拒绝"变为"通过"（与 peekview 的 T090 同类）。
     state_file.write_text(
         "task_id: T001\nphase: P3\nstatus: active\nretries: {}\n",
+        encoding="utf-8",
+    )
+    result = _run_sy(agate_scripts, python_exe, run_cli, state_file)
+    assert result.returncode == 0
+    assert result.output.strip() == ""
+
+    state_file.write_text(
+        "task_id: T001a\nphase: P3\nstatus: active\nretries: {}\n",
         encoding="utf-8",
     )
     result = _run_sy(agate_scripts, python_exe, run_cli, state_file)

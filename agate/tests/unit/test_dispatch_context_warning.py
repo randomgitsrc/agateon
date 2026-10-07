@@ -57,6 +57,29 @@ def test_b3_warning_staged_missing_dispatch_context_warns(
     )
     git_repo.stage("agate-workspace")
 
+    # TAG0050 A1（设计 §2.3 规则 1）：新任务目录须有 task_created 首行账本。
+    # 在 stage 之后写（不纳入暂存，避免 fake 根缺 rules/task-data/ 时的等级校验）。
+    import hashlib
+    import json
+
+    genesis = hashlib.sha256(b"").hexdigest()
+    (task_dir / "gate-events.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "task_created",
+                "task_id": "TAG0001",
+                "contract_level": 1,
+                "ts": "2026-10-07T00:00:00.000000Z",
+                "prev_hash": genesis,
+            },
+            sort_keys=True,
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
     fake = tmp_path / "agate-fake"
     fake_scripts = fake / "scripts"
     fake_scripts.mkdir(parents=True)

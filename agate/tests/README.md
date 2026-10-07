@@ -82,6 +82,7 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | agate-gate-p5-count.py | unit/test_agate_gate_p5_count.py |
 | agate-extract-context.py | unit/test_agate_extract_context.py |
 | agate-migrate-workspace.py | unit/test_agate_migrate_workspace.py |
+| agate-task-init.py（任务初始化 / 账本创建事件，TAG0050 A1） | integration/test_tag0050_a0_a1_ledger.py |
 | agate-retreat-to.py | unit/test_agate_retreat_to.py |
 | agate-archive-stale-outputs.py | unit/test_agate_archive_stale_outputs.py |
 | agate-capture-env-baseline.py | unit/test_agate_capture_env_baseline.py |

@@ -23,6 +23,7 @@ agate 协议结构一致性检查 (P3-1)
   CHECK 13  CHANGELOG 最新版本 ↔ UPGRADING.md §3 章节对应（防发布漏写章节，RM-AG0052）
   CHECK 14  markdown 叙述段落平台名扫描（护栏 1 机械化，BDD-16/22/24：结构性判据，无文件名单）
   CHECK 15  数据面（rules/*.yaml + rules/schema/*.json）平台名扫描（BDD-15：词边界 + 豁免词典机械生成）
+  CHECK 16  任务数据契约快照冻结（rules/task-data/*.yaml 的 LF 归一 sha256 == LEVELS.yaml 登记值；TAG0050 批 A1）
 
  退出码：0 = 全过；1 = 有 ERROR；2 = 仅有 WARNING（可配置是否失败）。
 
@@ -35,6 +36,7 @@ agate 协议结构一致性检查 (P3-1)
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -1439,6 +1441,63 @@ def check_rules_platform_tokens(root: Path, rep: Report) -> None:
         rep.ok("CHECK15-rules")
 
 
+# ── CHECK 16: 任务数据契约快照冻结（TAG0050 批 A1，设计 §2.1 冻结规则 1）────────
+def check_task_data_snapshot_freeze(root: Path, rep: Report) -> None:
+    """每个快照文件的 LF 归一 sha256 必须等于 LEVELS.yaml 登记值。
+
+    改动已发布快照、或新增 level-N.yaml 未登记，均判 ERROR。只作用于
+    `agate/rules/task-data/`（DEBT0025：新增 CHECK 的扫描面收窄到契约目录）。
+    """
+    data_dir = root / "agate" / "rules" / "task-data"
+    levels_path = data_dir / "LEVELS.yaml"
+    if not levels_path.is_file():
+        rep.warn("CHECK16-taskdata",
+                 "缺 LEVELS.yaml（任务数据契约等级登记）",
+                 "agate/rules/task-data/LEVELS.yaml")
+        return
+    try:
+        import yaml
+        levels = yaml.safe_load(levels_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        rep.error("CHECK16-taskdata", f"LEVELS.yaml 解析失败: {exc}",
+                  "agate/rules/task-data/LEVELS.yaml")
+        return
+    if not isinstance(levels, list):
+        rep.error("CHECK16-taskdata", "LEVELS.yaml 顶层须为快照列表 [{level, file, sha256}]",
+                  "agate/rules/task-data/LEVELS.yaml")
+        return
+    registered = {}
+    for item in levels:
+        if not isinstance(item, dict):
+            continue
+        fname = item.get("file")
+        if isinstance(fname, str):
+            registered[fname] = item.get("sha256")
+    errors = 0
+    for fname, sha in registered.items():
+        fpath = data_dir / fname
+        if not fpath.is_file():
+            rep.error("CHECK16-taskdata", f"登记的快照文件缺失: {fname}",
+                      f"agate/rules/task-data/{fname}")
+            errors += 1
+            continue
+        # read_text 做 LF 归一（universal newlines）——与黄金 fixture 的判定同源
+        actual = hashlib.sha256(fpath.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+        if actual != sha:
+            rep.error("CHECK16-taskdata",
+                      f"快照文件 {fname} 已改动（sha256 {actual} != 登记值 {sha}）——"
+                      "冻结文件不得修改；新增/收紧要求请登记新一级快照",
+                      f"agate/rules/task-data/{fname}")
+            errors += 1
+    for fpath in sorted(data_dir.glob("level-*.yaml")):
+        if fpath.name not in registered:
+            rep.error("CHECK16-taskdata", f"快照文件 {fpath.name} 未登记到 LEVELS.yaml",
+                      f"agate/rules/task-data/{fpath.name}")
+            errors += 1
+    if errors == 0:
+        rep.ok("CHECK16-taskdata")
+
+
 # ── 主流程 ────────────────────────────────────────────────────────────────
 
 def run_all_checks(root: Path, rep: Report) -> None:
@@ -1464,6 +1523,7 @@ CHECKS = [
     ("CHECK 13 CHANGELOG↔UPGRADING 章节对应", check_upgrading_section),
     ("CHECK 14 md 叙述段落平台名扫描", check_md_platform_paragraphs),
     ("CHECK 15 数据面平台名扫描", check_rules_platform_tokens),
+    ("CHECK 16 任务数据契约快照冻结", check_task_data_snapshot_freeze),
 ]
 
 
