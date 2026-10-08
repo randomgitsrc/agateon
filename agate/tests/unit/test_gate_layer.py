@@ -7,7 +7,8 @@
 #     语义**不变**（避免批 0 刚修的判据回归）。
 #   * BDD-21：第 4 批删除协议里的发版逻辑**之前**，先提供等价物 `preset: semver-changelog-tag`
 #     （一行声明即保持现状）；声明文件缺失而仓库存在发版痕迹（CHANGELOG / 版本文件 / `v*` tag）时
-#     给显眼 WARNING；`UPGRADING.md` 写明迁移方式与截止版本。
+#     给显眼 WARNING；`UPGRADING.md` 写明迁移方式与该硬切「未排期」+ `RM-AG0102`
+#     （TAG0050 起协议不预告实施版本号）。
 #
 # 现行为（改动前）：`agate/rules/phases.yaml` **无**「提交类型 → 关卡集合」映射、**无**转换表 /
 #   `paused_from`；协议内**无** `semver-changelog-tag` preset（仅在批 2 的 P3 测试里出现）；
@@ -163,20 +164,27 @@ def test_bdd_21_release_preset_is_declarable(tmp_path, agate_scripts, python_exe
 
 
 def test_bdd_21_upgrading_documents_preset_migration_and_cutoff(agate_root):
-    """BDD-21：`UPGRADING.md` 写明发版逻辑迁移（`semver-changelog-tag`）与截止版本。
+    """BDD-21：`UPGRADING.md` 写明发版逻辑迁移（`semver-changelog-tag`），且该硬切声明为「未排期」+ RM-AG0102。
 
     Given agate/UPGRADING.md（迁移兼容权威文档）
     When 检查批 4 的发版逻辑删除章节
-    Then 出现 `semver-changelog-tag`（迁移方式：一行声明保持现状）与截止版本声明。
+    Then 出现 `semver-changelog-tag`（迁移方式：一行声明保持现状）且该硬切「未排期」并指向 RM-AG0102。
 
-    现行为：UPGRADING.md 无该章节、无 `semver-changelog-tag`、无「截止版本」 ⇒ 红灯（行为未改）。
+    TAG0050 起：协议不预告实施版本号（原 TAG0042 约定「须写明截止版本」已由 RM-AG0102 承接）。
+    断言限定在**批 4（关卡层分级）小节**内，避免「截止版本」字样被无关内容（历史节 / judge 截止）满足。
     """
     text = (agate_root / "UPGRADING.md").read_text(encoding="utf-8")
-    assert "semver-changelog-tag" in text, (
-        "BDD-21：UPGRADING.md 须写明发版逻辑迁移到 `preset: semver-changelog-tag`；当前零命中"
+    start = text.index("批 4（关卡层")
+    end = text.index("批 3（执行层", start)
+    section = text[start:end]
+    assert "semver-changelog-tag" in section, (
+        "BDD-21：批 4 小节须写明发版逻辑迁移到 `preset: semver-changelog-tag`；当前零命中"
     )
-    assert re.search(r"截止版本", text), (
-        "BDD-21：UPGRADING.md 须写明该迁移的**截止版本**（P1 隐含需求 3 明确要求）"
+    assert "未排期" in section, (
+        "BDD-21：批 4 小节应声明该硬切「未排期」（TAG0050 起协议不预告实施版本号）"
+    )
+    assert "RM-AG0102" in section, (
+        "BDD-21：批 4 小节应指向承接该欠账的 RM-AG0102"
     )
 
 

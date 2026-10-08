@@ -509,3 +509,25 @@ FFF.                                                                     [100%]
   ruff 全绿；**R6** 于仓外副本（`/tmp/opencode/r6copy`，提交使树干净后运行）→ legacy 39 / 差异 0 /
   未匹配 0 / exit 0，跑毕删除副本。
 - [PROD_NOT_TOUCHED] 仅本 checkout + pytest tmp_path + `/tmp/opencode`；`git status` 无账本污染。
+
+## P8 反向传播整改：TAG0042 BDD-8/21 断言随截止约定变更更新
+
+- 派发：`P8-dispatch-context-implementer-fix.md`（主 Agent 裁定选项①：测试随新语义更新，不留假绿）。
+- 输入已读：implementer.md、dispatch-context、P0-brief、review（A3/A4）、两测试文件、UPGRADING 新语义节（L474-505）。
+- 旧断言（改前）：
+  - `test_agate_config.py::test_bdd_8_upgrading_documents_cutoff_version` 末条 `re.search(r"v?0\.\d+\.\d+|截止版本", upgrading)`（要求「截止版本号」）——改后无版本号，靠全文其它版本号假绿。
+  - `test_gate_layer.py::test_bdd_21_upgrading_documents_preset_migration_and_cutoff` 末条 `re.search(r"截止版本", text)`——靠历史节/无关 judge 截止假绿。
+- 新语义（UPGRADING L481-484 批 2 / L502-505 批 4）：「硬切**未排期**」+ 指向 `RM-AG0102` + 「本协议不预告实施版本号」。
+- 改法：断言改为在对应小节内同时出现「未排期」与「RM-AG0102」；不再要求版本号/「截止版本」字样。
+
+### 改前红证据（隔离副本，不触碰真实仓库）
+- 构造：`/tmp/opencode/agate-old-root/`（`git show HEAD:agate/UPGRADING.md`，即 TAG0050 P8 改动前的旧语义「截止版本：v0.80.0」，无「未排期」/`RM-AG0102`）。
+- 命令：`AGATE_ROOT=/tmp/opencode/agate-old-root python3 -m pytest <两测试> -q`
+- 结果：`2 failed`（BDD-8 断在 `"未排期" in section`；BDD-21 断在 `"未排期" in section`）→ 证明新断言真实锁定新语义，非靠无关命中假绿。
+- 对照（当前工作区新语义）：同两测试 `2 passed`。
+
+### 自查结果（自查≠gate）
+- `python3 -m pytest agate/tests/unit/test_agate_config.py agate/tests/unit/test_gate_layer.py -q` → `17 passed`，RC=0。
+- `bash agate/tests/scripts/count-tests.sh` → `总计：2866`（未增删用例数）。
+- `python3 agate/scripts/check-protocol-consistency.py` → `仅有 410 个 WARNING，无 ERROR`，RC=0。
+- 状态标记：`[PROD_NOT_TOUCHED]`（仅编辑两个测试文件，未接触生产）。

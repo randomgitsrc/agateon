@@ -276,7 +276,18 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
-### 未发布 — TAG0050 批 G1：CI 逐提交回放（A2）+ state-set（A3）（**无破坏性变更**）
+### v0.80.0 — TAG0050 任务数据契约：结构化判定、可信写入与任务版本（**无破坏性变更**）
+
+> 判定依据从「正文正则 + 自报汇总 + 可改开关 + 作者自标的分类」改为「按**冻结契约快照**
+> （`rules/task-data/level-N.yaml`）登记的结构化字段 + **机械核验**」。10 批（A0/A1/A2/A3/A4/
+> B/C/D/E/F）交付；`[Unreleased]` 期以逐批「未发布」节累积，本节按版本归并。
+> **legacy 任务退出码与 ERROR 集合不变**（R6 双向差分 0 差异）。
+>
+> **本版不含 TAG0042 预告的 config 声明硬切**：v0.79.0 曾预告「截止版本 v0.80.0：`agate.config.yaml`
+> 缺失/非法自 v0.80.0 起 `exit 1`」，该硬切**未实施、未排期**（欠账见 `RM-AG0102`）。**协议不再
+> 预告实施版本号**——落地时在其**实际所在版本的 UPGRADING 节**公告。迁移期行为不变。
+
+**批 G1（A2 CI 逐提交回放 + A3 `agate-state-set` + A4 义务机械核验）**：
 
 > TAG0050「任务数据契约」分批交付；本批（G1）含 A2（`agate-ci-verify` 改为逐提交回放）与
 > A3（`agate-state-set` + 状态事实）。协议语义 / `.state.yaml` schema / 既有任务数据格式均未变。
@@ -357,7 +368,7 @@ git commit
   `python3 <agate_root>/scripts/agate-state-set.py <dir> phase <Pn>`。
 - **新任务一律用 `agate-task-init` 创建，phase 一律用 `agate-state-set` 写入**。
 
-### 未发布 — TAG0050 批 G2：写入工具与契约单源（B）+ 生产接触（C）（**无破坏性变更**）
+**批 G2（B 写入工具与契约单源 + C 生产接触）**：
 
 > TAG0050「任务数据契约」分批交付；本批（G2）含 B（`agate_schema.py` 单源 + `agate-md-field-set`
 > 7 操作 + `agate-config set/unset/explain` + 渲染块 + F10 缺 frontmatter ERROR）与
@@ -390,7 +401,7 @@ git commit
   （`markers.yaml` 的 `lead_variant: default`）；粗体 / 引用块写法仍拦，否定写法
   `- [PROD_TOUCHED]: 无` 继续阻断并给专门指引。
 
-### 未发布 — TAG0050 批 D 前置 hotfix：`agate-run` 基线比对（**无破坏性变更**）
+**批 D 前置 hotfix（`agate-run` 基线比对，I-2）**：
 
 > 修复 TAG0042 实施评审 I-2：`agate-run` 普通运行也会与 `.out` 证据比对，可能因**陈旧证据假失败**
 > （返回 1 而非命令自身退出码）；且 `--baseline` 不一致时声称「diff 已客观报出」却**不真的打印 diff**。
@@ -400,7 +411,7 @@ git commit
 - **基线比对只在 `--baseline` 时进行**：不一致 → 打印**逐行 unified diff**（`--- baseline` / `+++ current`）
   再返回非 0；证据不存在 → 首次落盘（语义不变）。
 
-### 未发布 — TAG0050 批 D/E/F：结构化判定与成对声明（**无破坏性变更**）
+**批 D/E/F（结构化判定与成对声明）**：
 
 > TAG0050「任务数据契约」分批交付；本批含 **D**（P6 `results` 判据 D1–D10、P6.5 `criteria`、
 > `resolve_evidence_ref` + `agate-run --task` 任务内日志、证据入库）、**E**（P7 成对声明跨文件
@@ -467,7 +478,9 @@ git commit
   接入时自动生成初始声明（**幂等**，不覆盖既有声明）。
 - **迁移期行为与引入前一致**：**没有** `agate.config.yaml` 的存量项目，`gate_p0` 仍返回
   通过码（**exit 2**），只输出显眼 WARNING，**不** `exit 1`——存量项目不会因此静默变红。
-- **截止版本：v0.80.0** 起，声明文件缺失 / 非法将改为 **`exit 1`**（硬拦截）。请在此之前用
+- **硬切未排期**：声明文件缺失 / 非法改为 **`exit 1`**（硬拦截）这一变更**尚未实施、未排期**
+  （登记于 `RM-AG0102`，2026-10-09 由 TAG0050 P8 补记）。**本协议不预告实施版本号**——
+  该变更落地时，将在**其实际所在版本的 UPGRADING 节**公告。届时请用
   `agate-config init` 生成声明并填写自身形态（语言 / 包管理器 / 验证命令 / 发版方式）。
 
 **批 4（关卡层分级，TAG0042）— P8 交付收尾 + 发版逻辑迁移 `preset: semver-changelog-tag`（迁移期无破坏性变更）**：
@@ -486,8 +499,9 @@ git commit
   ```
   迁移期：**没有** `agate.config.yaml` 的存量项目，P8 gate **仍执行**既有发版检查
   （不静默失去保护），只输出指向该声明 / preset 迁移的显眼 WARNING。
-- **截止版本：v0.80.0**（与批 2 的声明文件硬切同版本）——请在此版本前用 `agate-config init`
-  生成声明并填写 `release.preset`；届时未声明的项目将失去协议内发版检查的等价保护
+- **硬切未排期**（与批 2 的声明文件硬切同一笔欠账，见 `RM-AG0102`）：请用 `agate-config init`
+  生成声明并填写 `release.preset`；该硬切**落地时将在其实际所在版本的 UPGRADING 节公告**
+  （**本协议不预告实施版本号**）。届时未声明的项目将失去协议内发版检查的等价保护
   （发版逻辑删除由后续批次执行，本批只提供等价物 + WARNING）。
 
 **批 3（执行层，TAG0042）— 项目验证命令统一执行 `agate-run`（无破坏性变更）**：

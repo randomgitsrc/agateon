@@ -1872,3 +1872,212 @@ source: review  # 实现期的独立评审发现
 created_at: 2026-10-04
 task_id: TAG0042-config-and-enforcement
 ```
+
+## DEBT0051
+
+```yaml
+id: DEBT0051
+category: protocol
+title: "发布流程允许在 UPGRADING 预告未排期能力的实施版本号，却不要求同时登记 RM/DEBT——公告发出即无 owner，到期无人兑现"
+status: open
+priority: medium
+evidence:
+  - ref: agate/UPGRADING.md
+    note: >-
+      v0.79.0 节批 2/批 4 写「迁移期 fail-open + WARNING，到截止版本 v0.80.0 改 exit 1」；
+      TAG0042 批 0–6 无一实施该硬切、且未登记 RM/DEBT ⇒ 公告发出、兑现无人；TAG0050 P8 占
+      v0.80.0 时暴露
+  - ref: agate-workspace/roadmap/roadmap.md
+    note: "RM-AG0102 承接该欠账（给 owner）；TAG0050 P8 已删除两处「截止版本：v0.80.0」承诺"
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P8-release.md
+    note: "§1/§7-4 记录版本语义冲突：v0.79.0 预告 v0.80.0 硬切而本任务不含该硬切"
+impact: >-
+  任何「给未排期能力预告未来版本号」的公告都会变成必然过期的承诺——发布时无人负责，等到该版本号
+  被其他任务占用才暴露，此时要么违约发布、要么临时改版本号/改述。
+recommendation: >-
+  发布流程约定明确：不得预告未排期能力的实施版本号；若确需预告，必须在同一提交登记 RM/DEBT（owner）
+  并在 roadmap 可见。落点：agate/UPGRADING.md 发布指引 + AGENTS.md 版本发布清单。
+closure_criteria:
+  - "UPGRADING/发布流程约定含「不得预告未排期能力的实施版本号；确需预告须同时登记 RM/DEBT」条文"
+  - "该条有机械或评审判据（新公告的版本号承诺能反查到对应 RM/DEBT）"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记（机制规则缺口；欠账本身已由 RM-AG0102 承接）
+```
+
+## DEBT0052
+
+```yaml
+id: DEBT0052
+category: protocol
+title: "agate-inject-card.py 遇首个缺占位符文件即 exit 1，其后文件全部静默不注入（无失败清单、无部分完成）"
+status: open
+priority: high
+evidence:
+  - ref: agate/scripts/agate-inject-card.py
+    note: >-
+      TAG0050 实测：P4-dispatch-context-implementer-G1-test-fix.md 缺占位符 ⇒ 排序其后 13 个
+      dispatch-context 均未注入，直到人工发现
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P4-progress.md
+    note: "G1-test-fix 批注入缺失暴露记录（人工发现）"
+impact: >-
+  一次缺占位符即静默丢弃其后全部注入，且只报首错——编排者若无逐个核对会拿到「未注入」的上下文派发，
+  行为与预期不符且难以察觉。
+recommendation: >-
+  遇缺占位符时继续处理其余文件，末尾汇总失败清单并非零退出（消除静默早退）。落点：
+  agate/scripts/agate-inject-card.py。
+closure_criteria:
+  - "缺占位符不再早退——继续注入其余文件 + 末尾汇总失败清单 + 非零退出"
+  - "回归用例：首个文件缺占位符时其余文件仍被注入且汇总列出失败文件"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```
+
+## DEBT0053
+
+```yaml
+id: DEBT0053
+category: protocol
+title: "check-state-transition.py 的 BDD-3 自由文本关键词扫描（「空返回」「重派」）可被散文误命中——RM-AG0101 只排除 AGATE_CARD 块，未收窄扫描面"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/check-state-transition.py
+    note: >-
+      _scan_bdd3_keyword_phases 扫描 P{n}-progress*.md 与 P{n}-dispatch-context-*.md 找关键词；
+      RM-AG0101 已剔除 AGATE_CARD 块，但 TAG0050 主 Agent 的 dispatch-context 散文写「重派」仍触发误报
+  - ref: agate-workspace/roadmap/roadmap.md
+    note: "RM-AG0101（同族，done）——只解决卡片块排除，未解决散文本身误命中"
+impact: >-
+  判据无法区分「真实的空返回重派信号」与「散文里恰好出现该词」——每个含该词的
+  dispatch-context/progress 都会误报，长期靠人工判断削弱判据可信度。
+recommendation: >-
+  把 BDD-3 关键词扫描收窄为结构化信号（或至少排除代码块/行内代码/引用），使散文不触发。
+  落点：agate/scripts/check-state-transition.py。
+closure_criteria:
+  - "散文中的「空返回」「重派」不再触发 BDD-3 告警；真实 progress 中的重派信号仍触发"
+  - "两向回归用例（散文不触发 / 真实信号仍触发）"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```
+
+## DEBT0054
+
+```yaml
+id: DEBT0054
+category: protocol
+title: "implementer 以「保持既有测试全绿」为由不实现设计要求（回退判定/只声明时校验/D5-D7-D9 未实现），implementer.md 未显式禁止且无「设计要求↔实现」机械对照"
+status: open
+priority: high
+evidence:
+  - ref: docs/reviews/agate-alignment-review-2026-10-08-TAG0050-G3.md
+    note: >-
+      GAP-1/2/4/5/6/7/8 判「必须闭合」——G2/G3 两批 implementer 均以「保持既有测试全绿」为由回退设计
+      （如非 legacy 缺 results 回退既有判定、reviewed_bdds 仅在声明时校验）
+  - ref: agate/assets/execution-roles/implementer.md
+    note: "未显式禁止「以保持既有测试全绿为由不实现设计要求」；无「设计要求↔实现」机械对照"
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P4-implementation-G2.md
+    note: "6 条 [DESIGN_GAP] 含「F10/prod_touched 未接 hook」等回退"
+impact: >-
+  设计强制要求被「保持测试绿」的局部便利回退，隐性偏离设计，须靠 SELF-GATE 评审逐条抓出并多轮整改
+  （G1/G2/G3 各 1–3 轮）。
+recommendation: >-
+  implementer.md 明确「不得以『保持既有测试全绿』为由不实现设计要求；契约驱动的夹具演进优先」；
+  并增加「设计要求↔实现」机械/评审对照（如评审角色输出要求列「闭合后既有测试转红 + 夹具更新清单」）。
+closure_criteria:
+  - "implementer.md 含禁止条文"
+  - "评审角色或 gate 有「设计要求↔实现」对照判据（闭合后既有测试转红清单）"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```
+
+## DEBT0055
+
+```yaml
+id: DEBT0055
+category: protocol
+title: "P6 的「pytest 全绿」类 BDD 遇预存失败无机械豁免口径——P5 卡有 known-failures 机制，P6 无对应，judge 据此判 needs-revision"
+status: open
+priority: medium
+evidence:
+  - ref: agate/phase-cards/P6-acceptance.md
+    note: >-
+      P6 卡无 P5 卡同款 known-failures/预存失败豁免口径；BDD-75「pytest 全绿」遇 1 条本机环境预存失败
+      （test_setup_agate_dir.py::test_bdd_43）
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P6.5-judge-verdict.md
+    note: "judge 据 BDD-75 字面全绿判 needs-revision（76/77），须人工裁定「无新增失败」+ 一轮重验"
+  - ref: agate/phase-cards/P5-verification.md
+    note: "P5 卡有预存失败机制（登记 known-failures + 不阻止门槛），P6 无对应"
+impact: >-
+  任何在「pytest 全绿」类 BDD 上遇到与本任务无关的预存失败的任务，都会被 judge 按字面判
+  needs-revision，须人工裁定 + 额外一轮重验（成本随环境漂移概率放大）。
+recommendation: >-
+  P6 卡为「pytest 全绿」类 BDD 补预存失败豁免口径（与 P5 卡 known-failures 一致，须 judge 可机械复核）。
+  落点：agate/phase-cards/P6-acceptance.md + check-judge-verdict.py。
+closure_criteria:
+  - "P6 卡含「pytest 全绿 = 无新增失败」的预存失败豁免口径且 judge 可机械复核"
+  - "回归用例覆盖预存失败存在时的 P6/judge 判定"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```
+
+## DEBT0056
+
+```yaml
+id: DEBT0056
+category: technical
+title: "维护性 god_file_threshold 遇「设计强制改动」无机械豁免——pre-commit-gate.py 因 §3.1 强制 T4 改动 998→1144 越阈，只能走 known-violations.md 登记"
+status: open
+priority: low
+evidence:
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/known-violations.md
+    note: >-
+      pre-commit-gate.py god-file 跨越 before=998 after=1144 threshold=1000，理由=G2 的 T4 安全门
+      （P2 §3.1）+ F10 接线（§3.6）为设计强制改动
+  - ref: agate/scripts/check-maintainability.py
+    note: "god_file_threshold 判定无「设计强制改动」豁免——设计强制的越阈改动只能登记 known-violations.md"
+impact: >-
+  设计强制引入的越阈改动只能走 known-violations 登记（登记数=检测数，可放行），但缺少「设计强制」的
+  机械豁免语义，未来同类任务每次都须人工登记与评审确认。
+recommendation: >-
+  评估在 maintainability 判据中引入「设计强制改动」的机械豁免/标注语义（如由 P2 声明 + gate 核对），
+  或明确 known-violations 登记即为此场景的既定出口。
+closure_criteria:
+  - "明确「设计强制改动越阈」的处置路径（机械豁免或确认 known-violations 为既定出口）并文档化"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```
+
+## DEBT0057
+
+```yaml
+id: DEBT0057
+category: protocol
+title: "dispatch-context 卡片占位符无机械校验——漏写占位符无 gate 拦截，靠 inject 早退暴露（见 DEBT0052）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/agate-inject-card.py
+    note: >-
+      TAG0050 一个 dispatch-context 漏写占位符，无 gate 拦截；暴露路径是 inject 遇缺占位符早退
+      （见 DEBT0052），非主动校验
+  - ref: agate/assets/templates/dispatch-prompt.md
+    note: "主 Agent 写 dispatch-context 无「卡片占位符存在性」的机械校验步骤"
+impact: >-
+  dispatch-context 漏写卡片占位符不会被 gate 拦截，只能靠注入时早退间接暴露（且早退本身有静默缺陷，
+  见 DEBT0052）——两缺陷叠加使漏写长期不可见。
+recommendation: >-
+  为 dispatch-context 卡片占位符存在性加机械校验（gate 或 agate-inject-card.py 的显式检查步骤）；
+  与 DEBT0052 一并修。
+closure_criteria:
+  - "存在对 dispatch-context 卡片占位符存在性的机械校验（gate 或脚本）"
+  - "缺占位符时给出明确失败（不静默）"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```

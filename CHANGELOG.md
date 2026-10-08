@@ -10,8 +10,24 @@
 
 ## [Unreleased]
 
+## [0.80.0] - 2026-10-09
+
 ### 新增
 
+- **TAG0050 批 G1（A2 CI 逐提交回放 + A3 `agate-state-set` + A4 义务机械核验）**：
+  `agate-ci-verify` 改为**逐提交回放** `pre-commit-gate` + `commit-msg-self-gate`（修复 F15
+  恒 SKIP/假 PASS；`--base` / `--push --base`；账本最终状态检查与回放解耦以覆盖合并提交）；
+  新增 `agate-state-set`（phase 唯一写入口，以 **HEAD 版本**为 old_state、回退写 `retries`，
+  与 `check-state-transition::check_transition` 同源）；`check-obligations.py` +
+  `rules/obligations.yaml`（`enforced_at` ast 可达性 + `test` + 负向控制真证伪）。
+- **TAG0050 批 G2（B 写入工具与契约单源 + C 生产接触）**：新增 `agate_schema.py`（**唯一**
+  递归 schema 校验实现，三校验器统一调用）；`agate-md-field-set` 7 操作 +
+  `agate-config set/unset/explain`；`writer: system` 字段**契约驱动拒写** + `derive` **现算读取**；
+  缺 frontmatter → ERROR（F10，gate 侧生效）；渲染块防篡改（CRLF 归一）；`prod_touched` 必填 +
+  **T4 = 唯一 PROD_TOUCHED 安全门**（`markers.yaml` `lead_variant: default` + `agate_markers.pattern()`；
+  扫描面 = 任务目录全部暂存文件，卡片块排除收紧为真实注入块）。
+- **TAG0050 批 D 前置 hotfix**：`agate-run` 普通运行**只返回命令自身退出码**（此前陈旧 `.out`
+  会导致假失败），`--baseline` 才比对并**实际打印 diff**。
 - **TAG0050（任务数据契约）批 D/E/F**：P6 `results` 判据 **D1–D10 全部落地**（非 legacy 缺
   `results` 即 ERROR；含 D5 内容重复 WARNING / D7 evidence JSON 一致性（**双向 + 证据形态 +
   多 JSON 合并**）/ D9 审计 7 读 results / D8 读 P1 视觉三态二选一 `vision`/`manual_review` /
@@ -29,7 +45,16 @@
   任务跳过 `check-p6-format`、`agate-evidence-consistency` 与 provenance 正文解析。
 - **义务基线一次性重设**：批 A4 首轮机械核验（`enforced_at` / `test` / `review_output`）
   使 M 占比下降，已以 `baseline.reset: {from: "60/123", to: "56/119"}` **显式重设**
-  （`rules/obligations.yaml`），此后恢复「只增不减」。详见 `agate/UPGRADING.md`「未发布 — TAG0050」节。
+  （`rules/obligations.yaml`），此后恢复「只增不减」。详见 `agate/UPGRADING.md`「v0.80.0」节。
+
+### 变更
+
+- **更正：TAG0042 预告的 config 声明硬切未在本版落地**。v0.79.0 的 `CHANGELOG` / `UPGRADING`
+  曾预告「**截止版本 v0.80.0**：`agate.config.yaml` 缺失/非法自 v0.80.0 起 `exit 1`」（含
+  `release.preset` 迁移，同版本）。该硬切**未由任何任务实施、亦未排期**；本版（v0.80.0）为
+  TAG0050，**不含**该硬切。**协议不再预告实施版本号**——该变更落地时将在**其实际所在版本的
+  `UPGRADING` 节**公告；欠账登记于 `RM-AG0102`（`agate-workspace/roadmap/roadmap.md`）。
+  迁移期行为不变（无声明 → `gate_p0` 仍 `exit 2` + 显眼 WARNING）。
 
 ## [0.79.0] - 2026-10-06
 
