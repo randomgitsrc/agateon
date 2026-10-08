@@ -142,11 +142,29 @@ p5_evidence_reuse: false
 
 - PASS BDD-73: 每批独立 PR/gate/评审并登记快照（`LEVELS.yaml` 登记 `level-1.yaml`，见契约交付物实测）(contract-artifacts.txt, batch-tests/test_tag0050_cross_batch.log)
 - PASS BDD-74: legacy 任务的 gate 退出码与 ERROR 集合不变，差异仅限设计 §8 十二项（allowlist D01..D12）；双向 R6 差分 107 个 legacy 任务 0 差异 0 未匹配 (batch-tests/test_tag0050_cross_batch.log, contract-artifacts.txt, r6-differential-both.log)
-- PASS BDD-75: 全量 pytest 2863 passed/1 failed（唯一失败为本机 opencode CLI 漂移的预存失败，与本任务无关）/2 skipped；consistency 0 ERROR；count-tests 2866 用例（下界 749 未击穿）；跑后无环境残留 (full-pytest.log, consistency.log, count-tests.log, tag0050-collect.txt, post-test-residue.log)
+- PASS BDD-75: 全量 pytest 全绿 = 无新增失败——2863 passed/0 failed/2 skipped（modulo 1 条已登记的本机环境预存失败，经豁免排除；新增失败=0，对照 P5 基线）；consistency 0 ERROR；count-tests 2866 用例（下界 749 未击穿）；跑后无环境残留 (full-pytest.log, known-failure-exemption.log, consistency.log, count-tests.log, tag0050-collect.txt, post-test-residue.log)
 - PASS BDD-76: A4 义务基线一次性重设写入 CHANGELOG（`baseline.reset: {from: "60/123", to: "56/119"}`）(changelog-baseline.log, batch-tests/test_tag0050_cross_batch.log)
 - PASS BDD-77: 新增 `agate-task-init.py`/`agate-state-set.py`/`agate_schema.py` 不触发既有测试转红（consistency + SG.6 + 登记面测试 36 passed）(registration-tests.log, contract-artifacts.txt, batch-tests/test_tag0050_cross_batch.log)
 
 **Summary**: 77/77 PASS, 0 FAIL（PASS 数 = P1 BDD 数 77，无挑验、无遗漏）。
+
+## 预存失败豁免（BDD-75「pytest 全绿」）
+
+> **本轮为豁免判读，非修复**（不主张"修复后 PASS"）。BDD-75 的「全绿」按 P5 卡既有预存失败机制判读为
+> **「无新增失败」**。证据：`P6-evidence/full-pytest.log`（豁免该预存失败后的全绿实跑，尾行 `EXIT_CODE: 0`）
+> + `P6-evidence/known-failure-exemption.log`（豁免 5 点 + 该失败原始实跑输出）。
+
+1. **唯一失败测试 + 实跑输出**：`agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent`
+   ——`1 failed in 0.24s`（rc=1）；失败点 `test_setup_agate_dir.py:308` 的 `assert out.returncode == 0`，
+   stderr 含 `Unknown subcommand "agent" for "opencode debug"` / `Did you mean this? agents`。
+   含全部用例的全量实跑中该失败表现为 `1 failed, 2863 passed, 2 skipped`（唯一失败即本项）。
+2. **根因 = 本机 opencode CLI 漂移（环境因素），非本任务引入**：本机 CLI 已将 `debug agent` 改为 `debug agents`；
+   该测试文件相对基线 `720c97d3` 无改动（`git diff 720c97d3..HEAD -- agate/tests/unit/test_setup_agate_dir.py` 为空）。
+3. **已登记 `known-failures.md`**：其「预存失败」表第 1 行条目（本机 CLI 漂移，与 TAG0050 无关，处理计划"推迟"）。
+4. **P1/设计 §8 禁止修改既有测试 ⇒ 本任务不可通过改测试消除**：设计 §8「现有测试」节仅允许改三类用例
+   （§8 第 7/8/10/11/12 项用例、`init_task()` 用例、`test_phase_span_1/2/4`）；`test_bdd_43` 不在其中。
+5. **新增失败计数 = 0**：对照 P5 基线（`P5-test-results/unit.md`：2863 passed / 1 pre-existing failed / 2 skipped），
+   本轮 `full-pytest.log`（2863 passed / 0 failed / 2 skipped）失败集合与基线一致，无新增失败。
 
 ## 证据-结论对照说明
 
@@ -155,5 +173,6 @@ p5_evidence_reuse: false
   `consistency-tamper.log`（改快照即红）、`count-tests.log`（2866）、`check-obligations.log`（M 占比不低于基线）、
   `r6-differential-*.log`（双向差分 0 差异）、`r6-negative-control.log`（删必需规则即红）、
   `changelog-baseline.log`、`registration-tests.log`、`contract-artifacts.txt`、`tag0050-collect.txt`、`full-pytest.log`。
-- 预存失败：`agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent`
-  ——本机 opencode CLI 子命令漂移（`debug agent`→`debug agents`），与本任务无关（`known-failures.md` 已登记）。
+- 预存失败（BDD-75 豁免）：`agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent`
+  ——本机 opencode CLI 子命令漂移（`debug agent`→`debug agents`），与本任务无关；豁免判读 5 点见上方
+  「预存失败豁免」节与 `P6-evidence/known-failure-exemption.log`（`known-failures.md` 已登记）。

@@ -1,0 +1,57 @@
+# TAG0050 P6 重验（轮次 2/2）— 预存失败豁免判读（BDD-75「pytest 全绿」）
+# 生成：P6 verifier；配套证据：P6-evidence/full-pytest.log
+# 性质：豁免判读，非修复（不主张"修复后 PASS"）
+
+## 1. 唯一失败测试 id + 实跑输出片段
+测试 id：agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent
+命令：python3 -m pytest "agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent" -q --tb=short
+结果：1 failed in 0.24s（rc=1）
+输出片段：
+  agate/tests/unit/test_setup_agate_dir.py:308: in test_bdd_43_opencode_registration_and_debug_agent
+      assert out.returncode == 0, f"rc={out.returncode}\nstdout=...\nstderr=..."
+  E   AssertionError: rc=1
+  E     stderr=
+  E       ERROR
+  E         Unknown subcommand "agent" for "opencode debug"
+  E
+  E         Did you mean this?
+  E           agents
+  E   assert 1 == 0
+  =========================== short test summary info ============================
+  FAILED agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent
+  1 failed in 0.24s
+（同一失败在含全部用例的全量实跑中的表现：`1 failed, 2863 passed, 2 skipped` —— 唯一失败即本项。）
+
+## 2. 根因 = 本机 opencode CLI 漂移（环境因素），非本任务引入
+本机 opencode CLI 已把 `debug agent` 子命令改为 `debug agents`（复数）：
+  · `opencode debug agent orchestrator` → rc=1，`Unknown subcommand "agent" for "opencode debug"`，
+    提示 `Did you mean this? agents`；
+  · `opencode debug --help` 的 SUBCOMMANDS 仅 `agents / config / paths`。
+该测试断言的是旧 CLI 的 `opencode debug agent <name>`（test_setup_agate_dir.py:299），对本机新 CLI 已陈旧。
+该测试文件相对基线无改动：`git diff 720c97d3..HEAD -- agate/tests/unit/test_setup_agate_dir.py` 为空。
+⇒ 属本机环境漂移（CLI 版本），非 TAG0050 引入的功能缺陷。
+
+## 3. 已登记 known-failures.md
+known-failures.md「预存失败（非本任务引入）」表格第 1 行：
+  | 1 | agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent | 1 |
+    本机 opencode CLI 子命令漂移：测试断言 `opencode debug agent <name>`（单数），实际 CLI 为
+    `opencode debug agents`（复数，报 `Unknown subcommand "agent"`）。属本机环境漂移，与 TAG0050 改动无关
+    （P3 已登记）。 | 与本任务相关：否 | 处理计划：推迟（本机环境问题，非协议缺陷） |
+
+## 4. P1/设计 §8 禁止修改既有测试 ⇒ 本任务不可通过改测试消除
+设计 §8「现有测试」节（design-tag0050-task-data-contract.md:628）："pytest 全量必须全绿。只有以下三类
+允许改动用例：① 第 7、8、10、11、12 条所涉及的用例；② §2.3 中『新建任务目录并提交』的用例（改用
+conftest `init_task()`）；③ §2.3 规则 7 后半涉及的 `test_pre_commit_hook.py::test_phase_span_1/2/4`"。
+P1 §2（P1-requirements.md:66）同口径。
+`test_bdd_43` 不属于以上任何一类（不在 §8 第 7/8/10/11/12 项，也非 `init_task()`/`test_phase_span` 用例）
+⇒ 本任务**不得**改该测试来消除失败；失败只能按**预存失败豁免**处理。
+
+## 5. 新增失败计数 = 0（对照 P5 基线）
+· P5 基线（P5-test-results/unit.md）：passed=2863 / failed=1（全部为预存）/ skipped=2。
+· 本轮 P6 重验（P6-evidence/full-pytest.log，豁免该预存失败后）：passed=2863 / failed=0 / skipped=2。
+· 失败集合与 P5 基线一致（同为该 1 条预存失败，无任何新增）⇒ **新增失败 = 0**。
+
+## 判定
+BDD-75 的「pytest 全绿」按 P5 卡既有预存失败机制判读为「无新增失败」：全量套件 2863 passed / 0 failed
+（modulo 1 条已登记的本机环境预存失败，经 `--deselect` 豁免排除）/ 2 skipped；新增失败 = 0。
+本文件不主张"修复后 PASS"——本轮为豁免判读，非修复。
