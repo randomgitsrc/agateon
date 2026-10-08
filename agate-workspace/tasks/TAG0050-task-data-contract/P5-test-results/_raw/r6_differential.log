@@ -1,0 +1,2 @@
+r6-differential: before=720c97d33f7eff540c41963aa7049794c6a91a76  after=/tmp/opencode/tag0050-r6-clean/agate  allow=/tmp/opencode/tag0050-r6-clean/docs/design-notes/r6-allowlist.yaml
+r6-differential: legacy 任务 39 个，差异 0 条，未匹配 0 条

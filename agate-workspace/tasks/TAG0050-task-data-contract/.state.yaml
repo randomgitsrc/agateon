@@ -1,14 +1,15 @@
 task_id: TAG0050
-phase: P4
+phase: P5
 status: active
+p5_pass_commit: 3b0bd755
 retries:
   P1:
-    - round: 1
-      failure_mode: quality
-      prompt_changed: true
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
   P2:
-    - round: 1
-      failure_mode: quality
-      prompt_changed: true
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
 judge:
   enabled: true
