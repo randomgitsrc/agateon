@@ -68,3 +68,37 @@ def test_bdd_39_non_legacy_status_written_errors(
     )
     r = run_cli(python_exe, str(agate_scripts / "check-state-yaml.py"), str(state))
     assert r.returncode != 0, f"BDD-39：非 legacy 写 status 须 ERROR，实际 rc={r.returncode}"
+
+
+def _seed_created_task(task, task_id, phase):
+    """写非 legacy 任务的 .state.yaml + task_created 首行账本。"""
+    task.mkdir(parents=True, exist_ok=True)
+    (task / ".state.yaml").write_text(
+        f"task_id: {task_id}\nphase: {phase}\njudge:\n  enabled: true\nretries: {{}}\n",
+        encoding="utf-8",
+    )
+    h.write_ledger(task, [{"event": "task_created", "task_id": task_id, "contract_level": 1}])
+
+
+def test_gate_run_and_state_transition_committed_with_real_commit(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """F2 / A4-1 / A4-2：**真实 git commit** 后，**已提交**账本须含 gate_run 与
+    state_transition（不只在工作区；评审 A1-2 的静默回归由此拦截）。"""
+    repo = h.make_git_repo(None, git_repo)
+    h.install_pre_commit_hook(repo, agate_scripts)
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    _seed_created_task(task, "T001", "P5")
+    (task / "P5-verification.md").write_text("[PROD_NOT_TOUCHED]\n", encoding="utf-8")
+    git_repo.stage("agate-workspace/tasks/T001/P5-verification.md")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    git_repo.stage("agate-workspace/tasks/T001/gate-events.jsonl")
+
+    r = h.commit_with_hook(run_cli, agate_root, repo, "-m", "p5 with hook")
+    assert r.returncode == 0, f"经 hook 的提交应通过：{r.output}"
+
+    committed = git_repo.git(
+        "show", "HEAD:agate-workspace/tasks/T001/gate-events.jsonl"
+    ).stdout
+    assert "gate_run" in committed, "F2/A4-1：已提交账本须含 gate_run（不能只留在工作区）"
+    assert "state_transition" in committed, "A4-2：已提交账本须含 state_transition"

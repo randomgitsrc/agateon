@@ -288,25 +288,39 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 逐提交回放需要 merge-base / rev-list（设计 §2.4 点6）——shallow 检出下
+          # `merge-base HEAD origin/<默认分支>` 会失败 ⇒ 恒 SKIP（评审 A3-1）。必须全历史。
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Install PyYAML
         run: pip install pyyaml
       - name: Run CI gate verify (Linux)
-        # TAG0042 批 5（BDD-16 / M15）：本 job 由旧 CI 兜底脚本（5 个 SKIP 面与 PASS
-        #   无法区分 = 假绿）改为 `agate-ci-verify.py`——它**实际重跑** gate 判定，
-        #   且每个「跳过」面**显式**打印 `SKIP:` + 原因，与「通过」（`PASS:`）在输出上可区分。
-        #   绿色 job 日志里的一行字几乎没人看 ⇒ 按 ADR-015 手段②把它抬到
+        # TAG0042 批 5（BDD-16 / M15）建立本 job；TAG0050 批 A2 改造脚本为**逐提交回放
+        #   本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），并把可信锚点
+        #   移到 CI。每个「跳过」面**显式**打印 `SKIP:` + 原因，与「通过」（`PASS:`）在输出上
+        #   可区分。绿色 job 日志里的一行字几乎没人看 ⇒ 按 ADR-015 手段②把它抬到
         #   **GitHub 注解 + job summary**，让它在 PR 检查摘要里就看得见。
         #   ⚠️ 脚本本身**不依赖任何 CI 平台**（保持平台无关性）；平台耦合只在本 step。
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
           set -o pipefail
           if [ "${{ needs.detect-docs-only.outputs.docs_only }}" = "true" ]; then
             echo "docs-only PR: gate-backstop skipped (fast-pass)"
             exit 0
           fi
-          python3 agate/scripts/agate-ci-verify.py 2>&1 | tee /tmp/ci-verify.log
+          args=""
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE" ]; then
+            args="--base $PR_BASE"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE" ]; then
+            args="--push --base $PUSH_BEFORE"
+          fi
+          python3 agate/scripts/agate-ci-verify.py $args 2>&1 | tee /tmp/ci-verify.log
           if grep -q 'SKIP:' /tmp/ci-verify.log; then
             {
               echo "### ⚠️ gate-backstop 本次**跳过**（未实际执行 gate 兜底）"

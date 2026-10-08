@@ -93,6 +93,10 @@ _P_NUM_RE = re.compile(r"P[0-8]")
 _P_OUTPUT_ANY_RE = re.compile(r"(?:^|/)[Pp][^/]*-.*\.md$")
 _STATE_YAML_SUFFIX = ".state.yaml"
 
+# TAG0050 批 A2（设计 §2.4）：回放模式。CI 逐提交回放时设 AGATE_REPLAY=1——
+# 跳过所有会改动文件的修正步骤（只校验），且**不写** .gate-result.json / .gate-history.jsonl。
+_AGATE_REPLAY = os.environ.get("AGATE_REPLAY") == "1"
+
 
 # ---------- 通用工具 ----------
 
@@ -677,6 +681,32 @@ def main():
                     f"GATE: 不合规的 PROD_TOUCHED 标记格式（{task_id}），须用行首 [PROD_TOUCHED] 或 [PROD_NOT_TOUCHED] 声明\n")
                 sys.exit(1)
 
+        # 2h.1c 状态转移事件（TAG0050 A3，设计 §2.7）：**前移到 2g 的 continue 之前**，
+        # 使进入 PAUSED/READY/DONE 的转换也被记录（现状 2g 在 2h.1c 之前 continue ⇒
+        # 这些转换事件从不写入）。`.state.yaml` 仍是权威状态源，事件只记录不改写。
+        if phase_changed:
+            try:
+                append_event(task_dir, {
+                    "event": "state_transition",
+                    "phase": phase,
+                    "from": old_phase or "",
+                    "to": phase,
+                })
+            except Exception as exc:
+                sys.stderr.write(f"GATE WARNING: state_transition 事件写入失败（不阻断 commit）: {exc}\n")
+
+        # 2h.1d 一并暂存账本（TAG0042 BDD-12；TAG0050 A3 前移）：把本 hook 已追加的
+        # state_transition（进入 PAUSED/READY/DONE 的转换在此后的 2g `continue` 之前写入）
+        # `git add`，随本次提交入库。**失败可见**（TAG0050 A3 派生事项②）：检查返回码，
+        # 失败给 WARNING。⚠️ 普通阶段下 gate_run（2h.1b）在本步之后才追加，故另有 2h.1e
+        # 再次 add 覆盖它（否则 gate_run 不进本次 commit，评审 A1-2）。
+        if os.path.isfile(os.path.join(task_dir, "gate-events.jsonl")):
+            _rc_add, _ = run_git(["add", os.path.join(task_dir, "gate-events.jsonl")])
+            if _rc_add != 0:
+                sys.stderr.write(
+                    f"GATE WARNING: 账本 {os.path.join(task_dir, 'gate-events.jsonl')} "
+                    f"git add 失败（rc={_rc_add}）——本事件可能未随本次提交入库\n")
+
         # 2g. 跳过非 gate 阶段
         if phase in ("PAUSED", "READY", "DONE"):
             # PAUSED 的特殊语义（设计 §X1）：`state-machine.md:98` 定义
@@ -701,8 +731,10 @@ def main():
                 if (task_rel + "/" + fm_name) in _staged_name_only() and _run_script_rc("check-frontmatter.py", [os.path.join(task_dir, fm_name)]) != 0:
                     sys.exit(1)
 
-        # 2h. P6 格式自动归一化（①）——verifier 产出后、gate 前
-        if phase == "P6" and os.path.isfile(os.path.join(task_dir, "P6-acceptance.md")):
+        # 2h. P6 格式自动归一化（①）——verifier 产出后、gate 前。
+        # 回放模式（AGATE_REPLAY=1）跳过会改文件的修正步骤，只校验（设计 §2.4）。
+        if (not _AGATE_REPLAY and phase == "P6"
+                and os.path.isfile(os.path.join(task_dir, "P6-acceptance.md"))):
             _run_script_rc("check-p6-format.py", ["--fix", os.path.join(task_dir, "P6-acceptance.md")])
             run_git(["add", os.path.join(task_dir, "P6-acceptance.md")])
 
@@ -712,8 +744,10 @@ def main():
         gate_exit = _gc_rc
         gate_output = gate_output.rstrip("\n")
 
-        # 2h.1 写 gate 结果（供 CI backstop 检测 --no-verify 绕过）
-        write_gate_result(phase, task_id, gate_exit, gate_output)
+        # 2h.1 写 gate 结果（供 CI backstop 检测 --no-verify 绕过）。
+        # 回放模式不写 .gate-result.json / .gate-history.jsonl（设计 §2.4）。
+        if not _AGATE_REPLAY:
+            write_gate_result(phase, task_id, gate_exit, gate_output)
 
         # 2h.1b 事件账本写入（TAG0020 BDD-7：gate_run 事件，append-only 哈希链单点）
         # append_event 内部失败仅 WARNING；此处再兜一层异常，确保任何意外都不阻断 commit
@@ -728,25 +762,16 @@ def main():
         except Exception as exc:
             sys.stderr.write(f"GATE WARNING: gate_run 事件写入失败（不阻断 commit）: {exc}\n")
 
-        # 2h.1c 状态转移事件（TAG0020 BDD-7：phase 变更时记 state_transition；.state.yaml
-        # 仍为权威状态源，事件只记录不改写——双写语义，P2 §3.2 R1）
-        if phase_changed:
-            try:
-                append_event(task_dir, {
-                    "event": "state_transition",
-                    "phase": phase,
-                    "from": old_phase or "",
-                    "to": phase,
-                })
-            except Exception as exc:
-                sys.stderr.write(f"GATE WARNING: state_transition 事件写入失败（不阻断 commit）: {exc}\n")
-
-        # 2h.1d 一并暂存账本（TAG0042 BDD-12）：agate-run 追加的 cmd_run 事件（以及本 hook
-        # 追加的 gate_run / state_transition）写在 gate-events.jsonl（append-only 哈希链）。
-        # 用 `git add` 把它一并纳入本次 commit——**不直接写账本文件**，避免绕过 append_event
-        # 破坏 prev_hash 链（P2 R5）。
+        # 2h.1e 再次暂存账本：2h.1d 的 `git add` 在 gate_run 之前，普通阶段下 gate_run
+        # 于此后追加 ⇒ 需再 add 一次，确保 `gate_run` 随本次提交入库（TAG0042 BDD-12 /
+        # 设计 §8 第 6 项；评审 A1-2）。PAUSED/READY/DONE 在 2g 处 `continue`，不走本步，
+        # 其 state_transition 已由 2h.1d 覆盖。
         if os.path.isfile(os.path.join(task_dir, "gate-events.jsonl")):
-            run_git(["add", os.path.join(task_dir, "gate-events.jsonl")])
+            _rc_add2, _ = run_git(["add", os.path.join(task_dir, "gate-events.jsonl")])
+            if _rc_add2 != 0:
+                sys.stderr.write(
+                    f"GATE WARNING: 账本 {os.path.join(task_dir, 'gate-events.jsonl')} "
+                    f"git add 失败（rc={_rc_add2}）——gate_run 可能未随本次提交入库\n")
 
         # 2i. P6 客观行为审计（P2.1/P2.10）
         if gate_exit != 1 and _run_script_rc("check-p6-provenance.py", [task_dir]) == 1:

@@ -366,7 +366,7 @@ P5 gate 要求「测试环境隔离正常（无 [PROD_TOUCHED]）」，是流程
 
 - **0→1→1.6→1.7→2.* 顺序**：每个阶段有"关卡"——0 是格式关、1 是行为关、2.* 是合规/审计关。任何关卡失败 → 中止 commit。
 - **agent 字段协作规范（P2.1/P2.10 v2 协作层）**：所有阶段产出文件 Header 含 `agent: <角色>`，缺字段 WARNING 不阻塞（向后兼容），`agent=main`（自审）被 check-gate.py 硬拦截 exit 1。
-- **CI 兜底（P1.3）**：push 后 CI 平台（GitHub Actions / GitLab CI / Gitea Actions）经 `agate-ci-verify.py` **实际重跑** `check-gate.py` 判定，捕获 `--no-verify` 绕过 hook 的恶意提交；每个「跳过」面显式声明 `SKIP:` + 原因（「跳过」与「通过」在输出上可区分，不再假绿）。
+- **CI 兜底（P1.3）**：push 后 CI 平台（GitHub Actions / GitLab CI / Gitea Actions）经 `agate-ci-verify.py` **逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），捕获 `--no-verify` 绕过 hook 的恶意提交；每个「跳过」面显式声明 `SKIP:` + 原因（「跳过」与「通过」在输出上可区分，不再假绿）。检出须 `fetch-depth: 0`（merge-base / rev-list 依赖全历史），CI 用 `--base`/`--push --base` 传入回放范围（TAG0050 批 A2，设计 §2.4）。
 - **降级方案**（Phase 3 平台接口未实现前的最优方案）：证据-结论对应是**客观行为审计**——造假 N 个证据文件的成本远高于填写一行 `agent: verifier` 自报字段。详见 `LIMITATIONS.md` 局限 3。
 
 **多任务适配**：`pre-commit-gate.sh` 扫描暂存区中所有变更的 `.state.yaml`（根目录 + `{AGATE_WORKSPACE}/tasks/{Txxx}/`），对每个文件独立跑格式校验 + 状态转移 + gate。单任务架构（根 `.state.yaml`）向后兼容。**此外**，`1.1 账本与新目录` 步骤对**每个含暂存文件的任务目录**执行（不再只扫暂存的 `.state.yaml`）：账本完整性（规则 1/3/4/5）+ 全局面 `[PROD_TOUCHED]` 扫描 + 非 legacy 任务按被暂存产出所属阶段重跑 gate（规则 7）——安全门不再依赖"是否改了 phase"。

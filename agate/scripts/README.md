@@ -103,7 +103,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 | 退出码语义 |
 |------|------|-----------|
-| `agate-ci-verify.py` (TAG0042 批5) | push 后**实际重跑** gate 判定（`check-gate.py`），防 `--no-verify` 绕过 hook；无参数 + cwd 定位（兼容仓库根 / 任务级 `.state.yaml`）；每个「跳过」面显式 `SKIP:` + 原因（与 `PASS:` 可区分，不再假绿）| 0=通过/跳过, 1=判定失败 |
+| `agate-ci-verify.py` (TAG0042 批5；TAG0050 批 A2 改造) | **逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），防 `--no-verify` 绕过 hook（修复 F15）。`--base <sha>`（PR 口径，取 merge-base）/ `--push --base <sha>`（push 口径；`before` 全零时回退 `merge-base HEAD origin/<默认分支>`）；只回放改动任务目录的提交，无则 `SKIP:` + 原因；协议版本：仓库含协议本体（agateon-like）或 `AGATE_ROOT` 提供协议 → merge-base 处的 `agate/`；`.agate-version` 仅用于**单调不降**检查（降级判 FAIL），**不用于选协议根**（分支①「按 `.agate-version` 定位版本目录」未实现，见 P4-implementation-G1 的 DESIGN_GAP）；`AGATE_REPLAY=1` 回放模式；含账本最终状态检查 + legacy 新增 PROD_TOUCHED ERROR 单独统计。每个「跳过」面显式 `SKIP:` + 原因 | 0=通过/跳过, 1=判定失败 |
 
 ### 诊断
 
@@ -164,6 +164,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；`--baseline` 落 `.out` 证据并逐字节比对（差异 → 非 0）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|
 | `agate-task-init.py` | 任务初始化入口（TAG0050 批 A1）：新建任务（`<TASK_ID> --slug --title [--priority] [--depends]`）创建目录 + `.state.yaml` + P0-brief 骨架，并在账本第 1 行写 `task_created`（记当前契约等级）；存量迁移 `--existing <dir>`（前置写入创建事件并重建哈希链）/ `--adopt <dir>`（写 `task_adopted`）/ `--upgrade <dir>`（写 `task_upgraded`，只升不降）| 0=成功, 1=用法/校验失败 |
+| `agate-state-set.py` | 任务状态写入工具（TAG0050 批 A3）：`phase <Pn\|PAUSED\|READY\|DONE>`（以 **HEAD 版本**为 old_state，用 `check-state-transition.py::check_transition` 同源校验，回退时同写 `retries[...]`，原子替换 + `git add`，**不写事件**）/ `meta.priority low` / `cancel --reason "…"` / `--list`；`status` 是系统字段（现算），不提供 setter | 0=成功, 1=非法转换/用法失败 |
 | `agate-extract-context.py` | 提取任务上下文（BDD 计数 / implementation_dir / P5 失败参考）|
 | `agate-archive-stale-outputs.py` | 回退时归档旧阶段产出（`.archived/{ts}-{phase}` + breadcrumb）|
 | `agate-capture-env-baseline.py` | P5 环境基线捕获（gate_commands 结果快照 + fail-list）|

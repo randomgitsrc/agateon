@@ -135,6 +135,12 @@ test_code_dir: agate/tests/
 | BDD-34 | `test_bdd_34_no_task_dir_pr_skips_with_reason` | 无任务目录改动须 SKIP + 原因 |
 | BDD-35 | `test_bdd_35_replay_interface_records_timing` | 回放须记录提交数与耗时（E4） |
 
+> **测试仓库口径（2026-10-08 修正）**：`_task_commit_repo()`（BDD-23/24/25/26/27/28/29/30/35 用）
+> 建的仓库写 `.agate-version`（`agate: v0.79.0`）并 commit——钉版本 ⇒ 可回放（设计 §2.4 分支①）。
+> BDD-31 用**无 `.agate-version`、无协议本体**的使用者项目仓库 ⇒ 命中设计 §2.4 分支③ → FAIL。
+> BDD-30（跨协议升级不误报）与 BDD-31（版本缺失判 FAIL）此前仓库逐字节相同、断言相反，属测试设计
+> 矛盾；现以"是否钉版本"区分（BDD-31 才是"版本缺失"用例），两条断言均不改。
+
 ### 批 A3 — state-set 与状态事实
 
 | BDD | 测试节点 | 先红锚 |

@@ -64,7 +64,7 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | 复盘协议文档条文 | unit/test_retrospective_protocol_docs.py |
 | check-tdd-red.py | unit/test_check_tdd_red.py |
 | formatters | unit/test_check_tdd_red_formatter.py |
-| agate-ci-verify.py | unit/test_agate_ci_verify.py |
+| agate-ci-verify.py（TAG0050 A2 逐提交回放） | unit/test_agate_ci_verify.py + integration/test_tag0050_ci_replay.py |
 | agate-doctor.py | unit/test_agate_doctor.py |
 | agate-json-get.py | unit/test_agate_json_get.py |
 | agate-read-p5-commands.py | unit/test_agate_read_p5_commands.py |
@@ -83,6 +83,7 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | agate-extract-context.py | unit/test_agate_extract_context.py |
 | agate-migrate-workspace.py | unit/test_agate_migrate_workspace.py |
 | agate-task-init.py（任务初始化 / 账本创建事件，TAG0050 A1） | integration/test_tag0050_a0_a1_ledger.py |
+| agate-state-set.py（状态写入 / check_transition 同源，TAG0050 A3） | integration/test_tag0050_state_set.py |
 | agate-retreat-to.py | unit/test_agate_retreat_to.py |
 | agate-archive-stale-outputs.py | unit/test_agate_archive_stale_outputs.py |
 | agate-capture-env-baseline.py | unit/test_agate_capture_env_baseline.py |
@@ -93,7 +94,7 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | 测试 helper（PYTHON 探测） | unit/test_helpers_python.py |
 | check-platform-assumptions.py | agate/tests/scripts/test_check_platform_assumptions.py |
 | check-mvwu.py（MVWU 观测器） | unit/test_check_mvwu.py |
-| check-obligations.py（义务三态归宿登记校验） | integration/test_protocol_alignment_review.py（SG.6 登记面守护：锚点表覆盖） |
+| check-obligations.py（义务三态归宿登记校验；TAG0050 A4 机械核验） | integration/test_protocol_alignment_review.py（SG.6 登记面守护：锚点表覆盖）+ unit/test_tag0050_obligations.py + unit/test_tag0050_obligations_enforcement.py + unit/test_tag0050_obligation_behavior.py（M 义务真实行为凭证，G1-fix3 K2/K3） |
 | MVWU 协议文档断言（TAG0036） | unit/test_mvwu_protocol_docs.py |
 | 文档/CI 断言（shellcheck/ruff/matrix） | unit/test_env_adapt_docs.py |
 | DSH 平台模板结构（TAG0018） | unit/test_dsh_preset.py |

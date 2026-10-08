@@ -16,9 +16,10 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
-    from agate_common import TASK_ID_RE
+    from agate_common import TASK_ID_RE, task_level
 except Exception:  # 安装破损时回退内置（与 agate_common.TASK_ID_RE 同式）
     TASK_ID_RE = re.compile(r"^[A-Z]+[0-9]+$")
+    task_level = None
 
 valid_phases = ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "PAUSED", "READY", "DONE"]
 
@@ -37,9 +38,26 @@ if data is None:
     print("\n".join(errors))
     sys.exit(0)
 
-for field in ("task_id", "phase", "status"):
+# TAG0050 批 A3（设计 §2.7）：非 legacy 任务的 `status` 是**系统字段**（由 phase + cancelled
+# 现算）——文件中**不写**，写了即判 ERROR；`status` 必填只对 legacy 任务生效。
+_is_legacy = True
+if task_level is not None:
+    try:
+        _is_legacy = task_level(os.path.dirname(os.path.abspath(state_file))) is None
+    except Exception:
+        _is_legacy = True
+
+for field in ("task_id", "phase"):
     if field not in data:
         errors.append(f"缺必填字段: {field}")
+if _is_legacy:
+    if "status" not in data:
+        errors.append("缺必填字段: status")
+elif "status" in data:
+    errors.append(
+        "非 legacy 任务不得写 status（系统字段，由 phase + cancelled 现算；"
+        "请在 .state.yaml 中删除该键）"
+    )
 
 task_id = data.get("task_id", "")
 if task_id and not TASK_ID_RE.match(str(task_id)):

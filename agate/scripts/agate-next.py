@@ -48,14 +48,12 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 try:
     sys.path.insert(0, SCRIPT_DIR)
     from agate_common import (
-        append_event,
         read_rules_yaml,
         read_state_phase,
         requirement_active,
         resolve_rules_root,
     )
 except Exception:  # pragma: no cover - 独立副本降级
-    append_event = None
     read_state_phase = None
     read_rules_yaml = None
     requirement_active = None
@@ -153,31 +151,21 @@ def _repo_root(task_dir):
     return out or None
 
 
-def _state_transition_event(task_dir, old_phase, new_phase):
-    """append_event state_transition（BDD-11 可观测证据；写失败仅 WARNING 不阻断）。"""
-    if append_event is None:
-        return
-    append_event(task_dir, {
-        "event": "state_transition",
-        "phase": new_phase,
-        "from": old_phase,
-        "to": new_phase,
-    })
-
-
 def _advance(task_dir, state, target, repo_root):
-    """输出「下一阶段建议」+ append state_transition 证据；**不预写**下一阶段（TAG0042 批 1）。
+    """输出「下一阶段建议」；**不预写**下一阶段、**不写事件**（TAG0050 A3）。
 
     phase 语义统一为「本 commit 的产出阶段」：推进时**不**把 target 写入 .state.yaml 的
-    phase，也**不** git add——phase 由后续在该阶段的产出 commit 时写。仅保留
-    append_event state_transition（from/to/ts）作为「推进已发生」的可观测证据（BDD-11）。
+    phase，也**不** git add——phase 由后续在该阶段的产出 commit 时用 `agate-state-set` 写入。
+    TAG0050 A3 起：`agate-next` **不再追加** `state_transition`（消除与 pre-commit 的重复
+    记录，TAG0042 实施评审 I-6）——`state_transition` 由 pre-commit 统一写入；本函数只打印
+    `agate-state-set` 建议命令。
 
-    `repo_root` 参数保留以兼容既有调用点（批 1 后本函数不再做 git 操作）。
+    `repo_root` 参数保留以兼容既有调用点（本函数不做 git 操作）。
     """
     old = state.get("phase", "")
-    _state_transition_event(task_dir, old, target)
+    state_set = os.path.join(SCRIPT_DIR, "agate-state-set.py")
     _log(f"{old} → 建议下一阶段 {target}：.state.yaml phase **未预写**（保持 {old}）。"
-         f"phase 由 {target} 产出 commit 时写入；推进证据已 append state_transition。")
+         f"下一步：python3 {state_set} {task_dir} phase {target}")
 
 
 def _write_exit2_resolution(task_dir, phase, state, gate_rc):

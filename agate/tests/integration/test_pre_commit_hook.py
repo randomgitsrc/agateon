@@ -101,8 +101,10 @@ def _write_state_yaml(task_dir, task_id, phase, legacy=False):
             encoding="utf-8",
         )
         return
+    # TAG0050 A3（设计 §2.7）：非 legacy 任务的 `status` 是系统字段（由 phase + cancelled
+    # 现算）——文件中**不写**，写了即 ERROR。故非 legacy 分支不写 `status`（legacy 分支保留）。
     (task_dir / ".state.yaml").write_text(
-        f"task_id: {task_id}\nphase: {phase}\nstatus: active\n"
+        f"task_id: {task_id}\nphase: {phase}\n"
         "judge:\n  enabled: true\nretries: {}\n",
         encoding="utf-8",
     )
@@ -1167,7 +1169,7 @@ def test_it11_p2_code_file_warning(git_repo, agate_root, agate_scripts, run_cli,
 
     (repo / "hack.py").write_text("print('hello')\n", encoding="utf-8")
     (task_dir / ".state.yaml").write_text(
-        "task_id: TXX0001\nphase: P2\nstatus: active\n"
+        "task_id: TXX0001\nphase: P2\n"
         "retries:\n  P2:\n    - round: 1\n      failure_mode: test\n",
         encoding="utf-8",
     )
@@ -1645,7 +1647,7 @@ def test_tag0035_bdd_6_pre_commit_nonstandard_phase_output_warns(
     # 触碰 .state.yaml（phase 文本本身不变，只追加一个无关字段）——让其在本次 commit
     # 中"被暂存"以进入 2f 检查范围，同时不触发 2c 状态转移检查（无 "+...phase:" 行）
     (task_dir / ".state.yaml").write_text(
-        "task_id: TXX0001\nphase: P3\nstatus: active\nretries: {}\nnote: touch\n",
+        "task_id: TXX0001\nphase: P3\nretries: {}\nnote: touch\n",
         encoding="utf-8",
     )
     git_repo.stage("agate-workspace/tasks/T001/p-alpha-notes.md")

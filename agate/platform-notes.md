@@ -339,9 +339,9 @@ python3 ~/.agate/scripts/agate-summary.py
 | 独立 git author 追踪（P2.10 根治）| ❌ | ❌ | ❌ | Phase 3 平台功能未实现 |
 | `~/.agate` 版本管理根 / 版本目录 | ✅ | ✅ | ✅ | 文件系统级，无平台差异；TAG0008 起为版本管理根（实体目录 + 指针），无符号链接权限时指针退化为文本文件 |
 
-**CI 兜底说明**：`.github/workflows/protocol-tests.yml` 的 `gate-backstop` job 用 GitHub Actions 实现。`agate-ci-verify.py` **平台无关**（不探测任何 CI 平台环境变量），在任何环境直接调用都会**实际重跑** `check-gate.py` 判定。在自建 CI（Jenkins / 本地）跑 agate 时：
+**CI 兜底说明**：`.github/workflows/protocol-tests.yml` 的 `gate-backstop` job 用 GitHub Actions 实现。`agate-ci-verify.py` **平台无关**（不探测任何 CI 平台环境变量），在任何环境直接调用都会**逐提交回放** pre-commit 与 commit-msg hook（`pre-commit-gate.py` / `commit-msg-self-gate.py`）判定。在自建 CI（Jenkins / 本地）跑 agate 时：
 
-- 需要等价实现：`git push` 后调用 `agate-ci-verify.py`（无参数，cwd = 项目根；它实际重跑 `scripts/check-gate.py` 判定）
+- 需要等价实现：`git push` 后调用 `agate-ci-verify.py`（无参数，cwd = 项目根；它按 `merge-base HEAD origin/<默认分支>` **逐提交回放**本地 hook 判定）
 - 不实现 CI 兜底也能用——只是失去 `--no-verify` 绕过 hook 的兜底审计
 
 **Codex 兼容性**（历史注记，时效见 §2 Codex「子代理派发」小节）：Codex subagent `max_depth=1` 与 P2.1 强制派发独立 subagent（`risk=high`）的兼容性：

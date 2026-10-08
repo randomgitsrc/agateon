@@ -53,7 +53,7 @@ def test_b3_warning_staged_missing_dispatch_context_warns(
     task_dir.mkdir(parents=True)
     (task_dir / "P2-design.md").write_text("content\n", encoding="utf-8")
     (task_dir / ".state.yaml").write_text(
-        "task_id: TAG0001\nphase: P2\nstatus: active\nretries: {}\n", encoding="utf-8"
+        "task_id: TAG0001\nphase: P2\nretries: {}\n", encoding="utf-8"
     )
     git_repo.stage("agate-workspace")
 

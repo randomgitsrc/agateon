@@ -265,3 +265,26 @@ implementation_dir: agate/
 ### 环境隔离
 
 [PROD_NOT_TOUCHED] 整改只在本 checkout 与 pytest `tmp_path` 仓上进行。
+
+## 新增文件核对表
+
+> 本任务采用 `{AGATE_WORKSPACE}/agents/CODE-MAP.md` 机制，新增文件逐条核对如下。
+> 本表覆盖全部已交付批次（A1 + G1）。
+
+| 新增文件 | 所属批 | 用途 | 已核对 |
+|---|---|---|---|
+| `agate/scripts/agate-task-init.py` | A1 | 任务初始化入口（创建/迁移/adopt/upgrade + 账本首行） | ✅ |
+| `agate/scripts/agate-state-set.py` | A3 | 任务状态唯一写入口（phase / meta / cancel，以 HEAD 为 old_state） | ✅ |
+| `agate/rules/task-data/LEVELS.yaml` | A1 | 契约等级冻结快照（LEVELS） | ✅ |
+| `agate/rules/task-data/level-1.yaml` | A1 | 契约等级 1 冻结快照 | ✅ |
+| `agate/rules/obligations.yaml` | A4 | 义务-判据登记表（M 义务机械核验） | ✅ |
+| `agate/scripts/check-obligations.py` | A4 | 义务机械核验（`enforced_at` ast 可达性 + `test` + 负向控制） | ✅ |
+| `docs/design-notes/r6-differential.sh` | A1 | R6 差分脚本（`check-gate` 面） | ✅ |
+| `docs/design-notes/r6-allowlist.yaml` | A1 | R6 允许清单 | ✅ |
+| `agate/tests/integration/test_tag0050_a0_a1_ledger.py` | A1 | 账本七规则用例 | ✅ |
+| `agate/tests/integration/test_tag0050_ci_replay.py` | A2 | 逐提交回放用例 | ✅ |
+| `agate/tests/integration/test_tag0050_state_set.py` | A3 | state-set 用例 | ✅ |
+| `agate/tests/unit/test_tag0050_obligations.py` | A4 | 义务核验用例 | ✅ |
+| `agate/tests/unit/test_tag0050_obligation_behavior.py` | A4(G1) | 行为凭证用例（负向控制真转红） | ✅ |
+| `agate/tests/unit/test_tag0050_obligations_enforcement.py` | A4(G1) | 强制力用例 | ✅ |
+| `agate/tests/helpers_tag0050.py` | A2 | 测试仓库构造辅助 | ✅ |

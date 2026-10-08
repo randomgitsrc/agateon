@@ -456,8 +456,9 @@ def _seed_non_legacy_task(repo, task_id="TAG0001", phase="P5"):
     """在 repo 下建一个非 legacy 任务（账本首行 task_created，等级 1）。返回任务目录。"""
     task = repo / "agate-workspace" / "tasks" / task_id
     task.mkdir(parents=True)
+    # TAG0050 A3（设计 §2.7）：非 legacy 任务不写 `status`（系统字段，由 phase + cancelled 现算）。
     (task / ".state.yaml").write_text(
-        f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
+        f"task_id: {task_id}\nphase: {phase}\nretries: {{}}\n",
         encoding="utf-8",
     )
     h.write_ledger(task, [

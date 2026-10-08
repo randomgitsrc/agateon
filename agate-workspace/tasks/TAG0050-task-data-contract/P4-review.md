@@ -2,121 +2,78 @@
 phase: P4
 task_id: TAG0050
 type: review
-parent: P4-implementation.md
-trace_id: TAG0050-P4-20261007
-agent: review
+parent: P4-implementation-G1.md
+trace_id: TAG0050-P4-20261008
+agent: leader
 status: approved
 ---
 
-# P4 实现评审（专家组终版汇总）— TAG0050 批 A1
+# P4 实现评审（专家组汇总）— TAG0050 合批 G1（A2 + A3 + A4）
 
-> 本文件为 **P4 专家组组长终版汇总产出**，**只汇总、不发表新意见**。
-> 本版**覆盖**原 `rejected` 汇总版（`P4-dispatch-context-leader-A1.md` 中间汇总）。
-> 评审对象：TAG0050 批 A1（契约等级 + 账本完整性 + 任务初始化 + 生效等级）的未提交实现
-> （HEAD `1d5aab2`，分支 `feat/TAG0050-task-data-contract`）。
-> 依据：`P4-dispatch-context-leader-A1-final.md` + `agate/assets/review-roles/review.md`。
+> 角色：`leader`（专家组组长；**只汇总，不发表新意见**）。
+> 对象：G1 未提交改动，HEAD `b0a16c3a`，分支 `feat/TAG0050-task-data-contract`，协议 v0.79.0。
+> 依据：`P4-dispatch-context-leader-G1.md`；输入 = 两评审角色（`review`、`cso`）的首轮 + fix3 复审文件。
+> 汇总规则：不发表新意见，只汇总；任何未解决 BLOCKER → rejected；分歧 → 交人工；全票无 BLOCKER → approved。
+> `[PROD_NOT_TOUCHED]`（组长仅读输入并汇总，未接触生产环境）。
 
 ## 0. 汇总结论
 
-**`status: approved`。**
+**`status: approved`** —— 首轮 `review` 与 `cso` 双双 `rejected`；经 **fix3 整改**后，两方**复审均 `approved`**，
+**K1–K6 全票闭合**，**无未解决 BLOCKER**。
 
-触发依据（组长规则 2）：两位专家的**当前有效结论均为 `approved`**——
-`review`（工程面）与 `cso` **复评**（安全面）均判通过，且原 cso 首评的 `F-1` BLOCKER
-已在复评中确认闭合。无任何专家当前标 BLOCKER ⇒ 门槛 `approved`。
+| 汇总指标 | 值 |
+|---|---|
+| 首轮 verdict | `review` = rejected（2 CRITICAL）／`cso` = rejected（1 BLOCKER） |
+| 复审 verdict | `review` = **approved**（K1–K6 全 ALIGNED）／`cso` = **approved**（K1–K6 全 ALIGNED） |
+| 未解决 BLOCKER | **0** |
+| 残余非阻断项 | 2 MEDIUM + 1 LOW（复审新观察）+ 首轮 MINOR/LOW（未列入本轮 K1–K6 整改范围） |
+| 是否阻塞发布 | **否** |
 
-| 来源专家 | 当前有效文件 | 结论 | 维度 |
+> 判定：两角色首轮的阻断项同源（review C1/C2 ≡ cso F-2/F-1），均由 fix3 的 K1–K4 整改闭环，并经两方**独立复现**（负向控制）确认。
+
+## 1. 各角色评审汇总表
+
+| 角色 | 首轮 verdict | 首轮关键 finding | 复审 verdict | 闭合方式（K 项） |
+|---|---|---|---|---|
+| `review` | **rejected** | C1（CRITICAL）A4 凭证自指、C2（CRITICAL）A2 等级检查缺失；M1/M2/M3（MINOR） | **approved** | C1 → **K3**（同 K2）；C2 → **K4** |
+| `cso` | **rejected** | F-1（HIGH，**BLOCKER**）合并提交静默删/改账本；F-2（HIGH）M 义务核验空转；F-3/F-4/F-5（MEDIUM）；F-6/F-7（LOW） | **approved** | F-1 → **K1**；F-2 → **K2**；F-5 → **K5**；F-3 → **K6** |
+
+## 2. K1–K6 闭合明细（经首轮 → fix3 → 复审）
+
+| # | 来源 | 整改项 | 复审判定 | 闭合方式（复审所录证据） |
+|---|---|---|---|---|
+| **K1** | cso F-1（HIGH，BLOCKER） | 合并提交（evil merge）可静默删/改账本，A2 回放漏检 | **ALIGNED** | 账本最终状态检查与逐提交回放**解耦**：`rev-list <base>..<head>`（含合并提交）、`diff --name-status --no-renames`（取改名被摘除的源路径）、在「无任务改动 → SKIP」**之前无条件执行**；补负向用例。两复审**独立复现** evil merge 删账本 → `FAIL 账本` rc=1，并以「回退 `--no-merges` 即退化为 SKIP/rc=0」作因果证明 |
+| **K2** | cso F-2（HIGH） | M 义务机械核验空转，负向控制打错对象（F13 未根治） | **ALIGNED** | `obligations.yaml` 抽样 6 条 M（覆盖 P1/P2/P8）`test` 改指**真实行为凭证** `test_tag0050_obligation_behavior.py::test_obl_*`，`enforced_at.function` 精确到 `gate_p8` 等；BDD-42 改为对**执行分支**真变异。两复审独立复现：删 `check-gate.py` 交付分支 → 行为凭证转红（基线绿/变异红）。设计 §2.9 明确允许**抽样** |
+| **K3** | review C1（CRITICAL） | A4 凭证自指（`test` 只断言 YAML 文本） | **ALIGNED** | 与 K2 同根因；6 条 `test` 改指真实行为凭证，其余 54 条保留登记辅助断言 |
+| **K4** | review C2（CRITICAL） | 设计 §2.4 第 4 点「新任务等级」CI 检查缺失；`test_bdd_30` 形同虚设 | **ALIGNED** | `_ci_level_checks`（新增任务目录 `contract_level` ≥ merge-base 处 `LEVELS.yaml` 最大等级）落地；`test_bdd_30`（跨升级不误报）/`test_bdd_30b`（低于则 FAIL）转绿 |
+| **K5** | cso F-5（MEDIUM） | 协议版本分支①（逐提交 `.agate-version` 选协议根）未实现 | **ALIGNED** | docstring 显式降级「未实现」+ 补齐 F-5 影响 2 已知绕过面说明；`P4-implementation-G1.md` 登记 `[DESIGN_GAP]` |
+| **K6** | cso F-3（MEDIUM） | CI 可信锚点实为 advisory，缺降级声明 | **ALIGNED** | `P4-implementation-G1.md` 专节写明「`gate-backstop` 未设 required ⇒ 回放为 advisory，回放失败不阻塞合并」 |
+
+> SELF-GATE 对齐：`…-G1-rereview2.md` 的 H1–H3 已判 ALIGNED（`P4-review.md` 首轮 §1 第 5 项确认）。
+
+## 3. 残余非阻断项（复审所录，**均非本批引入或非安全绕过**）
+
+| 来源 | 级别 | 内容 | 复审倾向 |
 |---|---|---|---|
-| `review` | `P4-review.md`（本汇总所引原 review 工程面结论）| `approved` | 工程面（6 项重点核验全通过） |
-| `cso`（复评） | `P4-review-cso-rereview.md` | `approved` | 安全面（F-1/G2/G3 ALIGNED；1 项非阻塞残留 F-1R） |
-| `cso`（首评，历史） | `P4-review-cso.md` | `rejected`（**已被复评取代**）| 安全面（1 HIGH/BLOCKER + 2 MEDIUM + 3 LOW） |
+| review 复审 §8 | MEDIUM | `_ci_ledger_checks` 账本路径过滤过宽（仅 `endswith(gate-events.jsonl)`，未限定 `agate-workspace/tasks/` 前缀）→ 把 `agate/tests/fixtures/**/gate-events.jsonl` 黄金夹具当真实账本误报 FAIL；**已核非本轮 fix3 引入** | 建议随本批加 `tasks` 前缀限定 + 回归用例，或登记 DEBT 留痕后放行 |
+| cso 复审 N-1 | MEDIUM | K1 解耦后的账本检查对**整目录任务改名**误判 FAIL——pre-commit 规则 4 对该场景有 BDD-25 显式豁免（rc=0），CI 新检查无该豁免且 `--no-renames` 拆成 D+A ⇒ 同一提交「本地 PASS / CI FAIL」。**误报/过度拦截，非安全绕过**；`gate-backstop` 转 required 后才会升级影响 | 建议复刻 pre-commit 的目录改名豁免（`-M` 取源/目标并按 `_dir_moved_away` 判），或改用 `--name-status -M` |
+| cso 复审 N-2 | LOW | `_ci_level_checks` 用 `--no-renames` 会把改名目录当「新增」，对老任务改名可能等级误报（实际被 N-1 吸收） | 与 N-1 同源，一并修正 |
+| review 首轮 M1/M2/M3 | MINOR | M1 squash 仓库 push「只做账本检查」口径未实现；M2 `scripts/README.md` 声称「只回放改动任务目录的提交」与实现（遍历全部非合并提交）不符；M3 `obligations.yaml` `OBL-X-10` statement 口径陈旧 | 首轮即判**非阻断**，**未列入** K1–K6 整改范围 |
+| cso 首轮 F-6/F-7 | LOW | F-6 phase「唯一写入口」为约定而非机械强制（设计有意取舍）；F-7 `check-obligations.py` docstring 候选顺序与代码不一致（纯文档瑕疵） | 非阻塞观察，**未列入** K1–K6 整改范围 |
+| review 首轮 §4 观察 | 非阻塞 | 分支①未实现（→ 已由 K5 降级登记）；回放遍历全部非合并提交（SELF-GATE A2 备注）；`agate-retreat-state.py` 仍直接写 phase（疑为范围外）；A7 ADR 仍待人工确认 | 供主 Agent 裁定/留痕 |
 
-## 1. 专家结论并列（无分歧）
+## 4. 门槛判定
 
-- `review`（工程面）：无 CRITICAL / 无 BLOCKER，dispatch 的 6 个重点核验项**全部通过**，
-  F3a/F3b/F3c 经变异测试独立证真，legacy 兼容承诺经 R6 + 全量 pytest 复核，SELF-GATE F1–F7 闭合。
-  判定 `approved`（附 1 条 MAJOR 守护观察 `F-A` 与若干 MINOR/INFO，均非阻塞）。
-- `cso`（复评，安全面）：最高严重级别 **MEDIUM**（1 项非阻塞残留 `F-1R`），
-  CRITICAL 0 / HIGH 0；`F-1`（原 BLOCKER 指定两形态）**ALIGNED（已闭合）**、
-  `G2/F-2` **ALIGNED（声明到位）**、`G3/F-3` **ALIGNED（已闭合）**；F-4/F-5/F-6 归属登记如实。
-  **不阻塞发布**，判定 `approved`。
+- **`status: approved`** —— 汇总规则满足：全票无未解决 BLOCKER；两角色复审均 approved；K1–K6 全闭合。
+- **分歧**：无（两角色在 K1–K6 判定上一致 ALIGNED）。
+- **残余项处理建议**（转交主 Agent，组长不裁决）：review 复审 §8 与 cso 复审 N-1/N-2 建议随本批补最小修正 + 回归用例，或登记 DEBT 留痕后放行。
 
-**是否构成专家组分歧：否。** 两位专家结论方向一致（均为 `approved`），且为不同维度
-（工程面 / 安全面），如实并列即可（组长规则 3）。
+## 5. 被汇总文件清单（只读，未编辑）
 
-## 2. 通过项（可追溯）
+- 首轮：`P4-review.md`（原 review 首轮，已被本汇总文件覆盖）、`P4-review-cso-G1.md`
+- 复审：`P4-review-rereview-G1.md`（review，approved）、`P4-review-cso-rereview-G1.md`（cso，approved）
+- 整改指引：`P4-dispatch-context-implementer-G1-fix3.md`
 
-### 2.1 `review` 工程面：6 项重点核验全通过
+## 6. 环境隔离
 
-来源：原 `P4-review.md`（review 工程面结论）。
-
-- 判定依据不可改写的**代码消费方**全部已改（`judge` / `evidence_ref` 判定点均改依契约，
-  legacy 分支保持原逻辑）；
-- 账本完整性七规则（含 A1 新增的规则 7 全局面）；
-- 等级机制「不追溯」存量任务（F3）；
-- PROD_TOUCHED 扫描面偏离方向正确（宁可多拦）；
-- 兼容承诺 §8（legacy 退出码 / ERROR 集不变，check-gate 面）；
-- R6 差分脚本自身可信（自核验 + 负向用例）。
-
-配套独立证真：F3a/F3b/F3c 经变异测试独立证真；legacy 兼容经 R6 + 全量 pytest 复核；
-SELF-GATE F1–F7 复评全 ALIGNED、未发现新 MISALIGNED。
-
-### 2.2 `cso` 复评：ALIGNED / 已闭合项
-
-来源：`P4-review-cso-rereview.md`。
-
-| 项 | 原级别 | 复评判定 | 证据锚点 |
-|---|---|---|---|
-| `F-1`（指定两形态：同目录 `.bak` 改名、移入别任务目录）| HIGH/BLOCKER | **ALIGNED（已闭合）** | 整改 `pre-commit-gate.py:350-368`；副本独立复现 F-1a..F-1e 均 rc=1，整目录改名 rc=0；新增 BDD-23/24/25 |
-| `G2/F-2`（R6 覆盖范围）| MEDIUM | **ALIGNED（声明到位）** | 设计 §8「第 12 项的 R6 归属」+ `r6-allowlist.yaml` / `r6-differential.sh` 头部声明 + `P4-implementation.md` §10，三处口径一致（A1 = check-gate 面 / 第 12 项 → A2） |
-| `G3/F-3`（`git rm .state.yaml` 绕过 PROD_TOUCHED 全局面扫描）| MEDIUM | **ALIGNED（已闭合）** | `pre-commit-gate.py:487-494` 跳过条件收紧为「有暂存且工作区仍存在」；BDD-26 通过 |
-| `F-5`（R6 自核验）| LOW | 已顺手修复 | `r6-differential.sh` 增加运行后 `git status --porcelain` 自核验 |
-| `F-4` / `F-6` | LOW | 归属登记如实（不要求 A1 修） | `P4-implementation.md` §10：F-4 属批 C、F-6 为已接受 DESIGN_GAP |
-
-回归检查（复评 §七）：正常提交无回归；新增 4 用例全绿；未见整改碰坏其它文件或破坏 §8 兼容承诺。
-
-## 3. 闭环痕迹（如实标注）
-
-`cso` 首评 `P4-review-cso.md` 判 **rejected**（`F-1` HIGH/BLOCKER）→ **已整改**（G1–G3）
-→ **复评 ALIGNED**（`P4-review-cso-rereview.md` 判 `approved`）。保留首评为历史引用。
-
-- **首评 BLOCKER（F-1）**：账本「不可删」规则只处理 D（删除），`git mv` 产出的 R（改名）
-  三元组被跳过 → 账本可被一次 `git mv` 摘除 → 任务静默降回 legacy，重开 F3b/F3c
-  （位置 `pre-commit-gate.py:322-333`）。
-- **整改（G1）**：规则 4 同时处理 R——源路径是账本时，仅**整目录改名**（`_is_task_dir_rename`）
-  豁免，否则按删除判 ERROR；新增 BDD-23/24/25。G2 采用显式声明归属 A2；G3 收紧全局面跳过条件。
-- **复评（F-1）**：副本独立复现「同目录 `.bak`」「移入别任务目录」两种 `git mv` 形态均 rc=1
-  （拦截 ✅），整目录改名仍 rc=0（放行 ✅）⇒ **原 BLOCKER 属性（一次 `git mv` 即静默降级）已消除**。
-
-## 4. 非阻塞残留清单（可追溯）
-
-| 编号 | 级别 | 来源 | 现状 / 归属 |
-|---|---|---|---|
-| **F-1R** | MEDIUM（**非阻塞残留**）| cso 复评 §三 | 目录改名豁免判据过宽：先清空源任务目录索引、再把账本 `git mv` 入既有别的任务目录，仍可绕（本地降级）。非本次整改新引入；触发须复合操作、且不产生已提交的 legacy 任务。**不被 A2 的 CI 回放覆盖**。建议：A1 顺手加固（复评给出改法）或登记 DEBT。 |
-| **F-A** | MAJOR（守护强度，**非阻塞**）| review | BDD-16 黄金 fixture 只断言目录存在且非空，未喂给 `check_ledger_events` 比对 `verdict:`；review 判定归属为 P2/P3 设计层收窄、非 P4 违约，建议后续批次补 runner 或转 P7 / DEBT。 |
-| **F-B** | MINOR（覆盖缺口）| review | pre-commit「新任务等级 = 当前等级」分支无 pytest 覆盖；建议补一条经 hook 的用例。 |
-| **F-C** | MINOR（声称精度）| review | `task_adopted`「本次暂存新增」条件未单独实现（由规则 3 蕴含），无功能缺口。 |
-| **F-D** | MINOR（与设计字面不符，fail-closed）| review | `gate_p1` 仍要求 `judge.enabled: true`；性质 fail-closed，建议交 P7 裁量。 |
-| **F-E** | MINOR（覆盖面）| review | R6 只跑 `check-gate.py`，allowlist 的 pre-commit / 转移规则永不命中（与 cso F-2 同源观察）。 |
-| **F-F** | INFO | review | `P4-implementation.md` §6 数字环境依赖（passed/skipped 计数随 Pillow 安装而异）。 |
-| **F-G** | INFO | review | `agate-task-init` 在无 `.agate-version` 时等级解析回退写死 1；对未来 level≥2 是潜在坑。 |
-| **F-H** | INFO | review | `agate/scripts/README.md:67`「9 项检查」未随新增步骤更新。 |
-| **F-4** | LOW | cso | 安全门粗体漏拦 / `[PROD_TOUCHED]: 无` 误拦——属批 C（不在 A1 范围）。 |
-| **F-6** | LOW（信息）| cso | 新建目录在控制态（PAUSED）可跳过规则 1/2；属已接受 DESIGN_GAP，实际无法借此养成 legacy。 |
-
-> 上述残留均**非阻塞**：`F-1` / `F-2` / `F-3` / `F-5` 已在复评中 ALIGNED 或修复；
-> `F-1R` 及其余 MINOR/INFO 由复评 / review 明确标注为非阻塞并给出归属。
-
-## 5. 专家组分歧
-
-**无。** 两位专家当前有效结论均为 `approved`，无冲突，无需交人工裁定分歧。
-
-## 6. 门槛判定
-
-- **`status: approved`**（组长规则 2：两位专家当前有效结论均为 approved，无 BLOCKER）。
-- 阻塞项：无（原 `F-1` BLOCKER 已在复评中确认闭合）。
-- 非阻塞残留：`F-1R`（MEDIUM）等，见 §4；由主 Agent 决定是否 A1 顺手加固或登记 DEBT。
-
-## 7. 只读声明
-
-本汇总仅读取专家评审与相关输入文件，未编辑被评审文件（仅覆盖本产出 `P4-review.md`），
-未执行破坏性/写仓命令。`[PROD_NOT_TOUCHED]` 未接触生产环境。
+`[PROD_NOT_TOUCHED]` —— 组长仅读取上述输入文件并写出本汇总文件，未接触生产环境，未执行任何写仓/破坏性命令。

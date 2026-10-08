@@ -171,11 +171,14 @@ def test_bdd_6_p6_judge_disabled_direct_p7_anchor(
     _write_p6_pass_fixture(td)
     result = _run_next(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0, f"P6 judge 未启用直推应 exit 0；当前 rc={result.returncode}"
-    events = _ledger_events(td)
-    assert any(
-        ev.get("event") == "state_transition" and ev.get("from") == "P6" and ev.get("to") == "P7"
-        for ev in events
-    ), "P6→P7 推进应记 state_transition 事件（A1 裁决成立）"
+    # TAG0050 A3（设计 §2.7 / §8 第 7 项）：`agate-next` 不再追加 state_transition——
+    # 事件由 pre-commit 统一写入（消除重复记录）；本命令通过时只打印 state-set 建议命令。
+    assert not any(
+        ev.get("event") == "state_transition" for ev in _ledger_events(td)
+    ), "TAG0050 A3：agate-next 不再写 state_transition"
+    assert "agate-state-set.py" in result.output and "phase P7" in result.output, (
+        "TAG0050 A3：agate-next 通过时应打印 agate-state-set 建议命令"
+    )
 
 
 # ── BDD-7：gate exit 1 回退（委托 retreat-to，retry 同步） ──────────────
@@ -317,10 +320,13 @@ def test_bdd_9_p6_judge_enabled_gate_p65_pass_advances_p7(
     assert _read_state_phase(td) == "P6", (
         "TAG0042 批 1：不预写——gate_p65 exit 0 后 phase 应保持 P6（由 P7 产出 commit 写）"
     )
-    events = _ledger_events(td)
-    assert any(
-        ev.get("event") == "state_transition" and ev.get("to") == "P7" for ev in events
-    ), "P6→P7 推进应 append state_transition 事件"
+    # TAG0050 A3：agate-next 不再写 state_transition（由 pre-commit 统一写入）。
+    assert not any(
+        ev.get("event") == "state_transition" for ev in _ledger_events(td)
+    ), "TAG0050 A3：agate-next 不再写 state_transition"
+    assert "agate-state-set.py" in result.output and "phase P7" in result.output, (
+        "TAG0050 A3：agate-next 通过时应打印 agate-state-set 建议命令"
+    )
 
 
 def test_bdd_9_p6_judge_gate_p65_fail_stays_p6(
@@ -342,18 +348,19 @@ def test_bdd_9_p6_judge_gate_p65_fail_stays_p6(
 def test_bdd_11_state_transition_event_observable(
     task_dir, agate_scripts, python_exe, run_cli
 ):
-    """BDD-11：推进后 gate-events.jsonl 含 state_transition 记录（from/to/ts）——
-    档位 C「推进均经 agate next」的可观测证据面（§3.7）。用真实 exit 0 的 P7 场景
-    （干净 P7-consistency.md → gate_p7 exit 0 → 消费 P7.next=P8 推进出事件）。"""
+    """BDD-11（TAG0050 A3 更新）：推进建议可观测——`agate-next` 通过时**不再**写
+    state_transition 事件（改由 pre-commit 统一写入），只打印 `agate-state-set` 建议命令。
+    用真实 exit 0 的 P7 场景（干净 P7-consistency.md → gate_p7 exit 0 → 消费 P7.next=P8）。"""
     td = task_dir()
     _write_state(None, td, "P7")
     result = _run_next(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0, f"推进应成功；rc={result.returncode}"
-    events = _ledger_events(td)
-    transitions = [ev for ev in events if ev.get("event") == "state_transition"]
-    assert len(transitions) >= 1, "推进记录应含 state_transition 事件（BDD-11 证据面）"
-    ev = transitions[0]
-    assert "from" in ev and "to" in ev and "ts" in ev, "state_transition 字段 from/to/ts 齐全"
+    assert not any(
+        ev.get("event") == "state_transition" for ev in _ledger_events(td)
+    ), "TAG0050 A3：agate-next 不再写 state_transition"
+    assert "agate-state-set.py" in result.output and "phase P8" in result.output, (
+        "TAG0050 A3：agate-next 通过时应打印 agate-state-set 建议命令（P7→P8）"
+    )
 
 
 def test_bdd_11_healthy_exit2_full_advance_no_resolution(
@@ -371,11 +378,13 @@ def test_bdd_11_healthy_exit2_full_advance_no_resolution(
     assert _read_state_phase(td) == "P5", (
         "TAG0042 批 1：不预写——P5 exit 2 后 phase 保持 P5（由 P6 产出 commit 写）"
     )
-    events = _ledger_events(td)
-    transitions = [ev for ev in events if ev.get("event") == "state_transition"]
-    assert any(
-        ev.get("from") == "P5" and ev.get("to") == "P6" for ev in transitions
-    ), "P5→P6 推进应记 state_transition 事件（BDD-11 证据面）"
+    # TAG0050 A3：agate-next 不再写 state_transition（由 pre-commit 统一写入）。
+    assert not any(
+        ev.get("event") == "state_transition" for ev in _ledger_events(td)
+    ), "TAG0050 A3：agate-next 不再写 state_transition"
+    assert "agate-state-set.py" in result.output and "phase P6" in result.output, (
+        "TAG0050 A3：agate-next 通过时应打印 agate-state-set 建议命令（P5→P6）"
+    )
     assert not list(td.glob("*-exit2-resolution.md")), "健康任务无 resolution 落盘（exit 2 正常通过）"
 
 
@@ -420,11 +429,13 @@ def test_debt0045_warning_only_still_advances_p6_to_p7(
     assert result.returncode == 0, (
         f"仅协作规范警告就阻断了推进；rc={result.returncode}\n{result.output[:400]}"
     )
-    events = _ledger_events(td)
-    assert any(
-        ev.get("event") == "state_transition" and ev.get("from") == "P6" and ev.get("to") == "P7"
-        for ev in events
-    ), "缺 agent 字段（不阻塞）不应阻止 P6→P7 推进"
+    # TAG0050 A3：agate-next 不再写 state_transition；仍应给出 P7 的 state-set 建议。
+    assert not any(
+        ev.get("event") == "state_transition" for ev in _ledger_events(td)
+    ), "TAG0050 A3：agate-next 不再写 state_transition"
+    assert "agate-state-set.py" in result.output and "phase P7" in result.output, (
+        "缺 agent 字段（不阻塞）不应阻止 P6→P7 推进（应打印 state-set 建议）"
+    )
     # 且不应落盘占位 resolution（那是"真暂停"的产物）
     assert not (td / "P6-exit2-resolution.md").exists(), (
         "警告不该落盘 exit2-resolution（会被 git add 一并提交）"

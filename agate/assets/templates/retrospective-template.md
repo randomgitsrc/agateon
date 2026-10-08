@@ -141,7 +141,7 @@ feedback_ready: false     # bool：为 true 时下方「## agate 反馈」节内
 | P8 internal_only_reason | 裁剪 P8 时声明 internal_only + 理由字段 | check-pruning.py |
 | dispatch-context.md | 主 Agent 派发前查证的客观信息落盘 | dispatch-protocol.md |
 | pre-commit hook | git commit 时自动跑 gate / 状态转移 / 裁剪检查 | pre-commit-gate.sh |
-| CI 兜底 | push 后重跑 gate 判定，捕获 --no-verify 绕过 | agate-ci-verify.py |
+| CI 兜底 | push 后逐提交回放 pre-commit + commit-msg hook 判定，捕获 --no-verify 绕过 | agate-ci-verify.py |
 | 技术债登记 | 复盘/评审发现缺陷或缺口（影响验收真实性 或 让未来变更更贵）→ 登记 DEBT（tech-debt-template，source: review/retrospective）或 roadmap backlog，二选一注明去向。**未登记 = 机制缺口**（DEBT0001 教训：复盘发现 CHECK 10 缺口但零登记） | tech-debt-template.md + check-debt.py |
 
 ## agate 反馈

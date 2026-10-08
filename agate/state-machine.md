@@ -151,7 +151,7 @@ P6 --[retry>=MAX]--> PAUSED（正确路由：上游问题需人工介入，非 a
 P6.5 --[judge 启用任务：存在 P6.5-judge-verdict.md AND scripts/check-judge-verdict.py exit 0（Header 字段完备 + criteria_total==P1 BDD 数 + 结论编号集零挑验 + 证据交叉核对 + 信息隔离白名单 + 预算交叉）AND scripts/check-events.py exit 0（事件账本哈希链 + ts 单调 + judge_verdict 计数 ≤2）]--> P7（TAG0020：judge 以 fresh context 逐条重验所有 BDD，只信证据与 git log，`status: passed` 才放行）
      （P6.5 是挂载于 P6→P7 的强门槛子阶段，非独立 phase 值——.state.yaml phase 保持 P6 直至 P7；
        commit-time 由 pre-commit-gate 2i.1 注入硬边界（judge.enabled && verdict 存在 → 双脚本任一
-       exit 1 → 阻断 commit）；CI 由 agate-ci-verify 兜底重跑；历史任务（.state.yaml 无
+       exit 1 → 阻断 commit）；CI 由 agate-ci-verify 兜底逐提交回放 pre-commit + commit-msg hook；历史任务（.state.yaml 无
        judge.enabled: true）→ check-gate.py P6.5 早退 0，全链跳过（BDD-2））
 P6.5 --[status: needs-revision / rejected]--> P6 重验（judge 复核轮次 +1；
      judge.rounds 递增 + 账本 judge_verdict 事件计数 ≤2 机械兜底；超限 → 人工接管）
@@ -329,15 +329,19 @@ P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READ
 
 主 Agent 不跑 while 循环，而是执行"单步函数"，每次调用推进一个阶段：
 
-> **机械化（RM-AG0054，v0.66.0；TAG0042 批 1 更新）**：下面步骤 5-7（跑 gate → 按转移规则算下一
+> **机械化（RM-AG0054，v0.66.0；TAG0042 批 1 / TAG0050 批 A3 更新）**：下面步骤 5-7（跑 gate → 按转移规则算下一
 > 状态 → 建议推进）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
 > 消费 `phases.yaml` 的 `next`/`retreat`/`gate_pass_exit`，不做临场判断；gate exit 1 且表有
 > `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。`agate next`
-> 只**输出「下一阶段建议」并追加 `state_transition` 事件，不预写 `.state.yaml` 的 `phase`、不 `git add`**
+> 只**输出「下一阶段建议」**（打印建议的 `agate-state-set.py <dir> phase <Pn>` 命令），
+> **不追加 `state_transition` 事件、不预写 `.state.yaml` 的 `phase`、不 `git add`**
 > ——`phase` 一律由**下一阶段产出 commit**写入（`phase` = 本 commit 的产出阶段，见 `git-integration.md`）。
+> **phase 的唯一写入口是 `agate-state-set.py`**（设计 §2.7；进入 PAUSED/READY/DONE 的转换由
+> pre-commit 统一写 `state_transition` 事件并随本次提交入库）。
 > P6/P6.5 的条件式推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。
 > **手工执行下面全流程是 fallback**（工具不可用时），此时步骤 7 的「写回 `.state.yaml`」按手工规格执行
-> （手工 fallback 仍写 `phase`，与 `agate next` 自动化路径不同）；本节的手工规格是 `agate next`
+> （手工 fallback 仍写 `phase`——但推荐改用 `agate-state-set.py`，使"工具当时判定合法"与"提交时判定合法"一致，
+> 与 `agate next` 自动化路径不同）；本节的手工规格是 `agate next`
 > 判定所依据的权威语义。
 
 ```
@@ -401,12 +405,14 @@ function 执行一步(task_id):
        注意：仅检查**回退**方向，不检查前向跨阶跳。前向跳（P2→P5）通常是裁剪后的合法跳变（state-machine.md:160-161），由 P5 gate 的阶段产出文件检查兜底。
     7. if 下一状态 == READY:
           输出交付小结（强制）：见「进入 READY 时」的格式要求
-          再写回 .state.yaml
+          用 agate-state-set.py 写回 .state.yaml（phase=READY）
        else:
-           写回 .state.yaml（新阶段 / 重试记录 / PAUSED）
-       （本步「写回 .state.yaml」为**手工 fallback 规格**——手工推进时写 `phase`；
-        `agate next` 自动化路径**不写** `phase`，只输出「下一阶段建议」+ `state_transition`
-        事件，`phase` 由下一阶段产出 commit 写入）
+           用 agate-state-set.py 写回 .state.yaml（新阶段 / 重试记录 / PAUSED）
+       （本步为**手工 fallback 规格**——手工推进时写 `phase`；推荐用
+        `python3 {agate_root}/scripts/agate-state-set.py <task_dir> phase <Pn>`
+        使"工具当时判定合法"与"提交时判定合法"一致；
+        `agate next` 自动化路径**不写** `phase`，只输出「下一阶段建议」+ 建议命令，
+        `phase` 由下一阶段产出 commit 写入）
     8. 返回：下一状态是什么
 ```
 
@@ -628,7 +634,7 @@ T019 中 .state.yaml 标记 P5 但 P5-test-results/ 目录不存在——状态�
     prompt_changed: true | false,
     adjustment: split_task | add_navigation | switch_type | null
   })
-  → 写回 .state.yaml
+  → 用 agate-state-set.py 写回 .state.yaml（回退转换时由该工具自动追加 retries）
 ```
 
 **关键：不要"进入新阶段就把所有计数归零"。** 否则存在绕过上限的漏洞：

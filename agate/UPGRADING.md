@@ -276,6 +276,87 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### 未发布 — TAG0050 批 G1：CI 逐提交回放（A2）+ state-set（A3）（**无破坏性变更**）
+
+> TAG0050「任务数据契约」分批交付；本批（G1）含 A2（`agate-ci-verify` 改为逐提交回放）与
+> A3（`agate-state-set` + 状态事实）。协议语义 / `.state.yaml` schema / 既有任务数据格式均未变。
+> 版本号与 CHANGELOG 条目在 P8 统一落（见任务 `P4-implementation-G1.md`）。
+
+**A2 — CI 接入（使用者项目）**：
+
+- **`agate-ci-verify` 改为逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），
+  捕获 `--no-verify` 绕过 hook 的提交；可信锚点移到 CI。原「重跑当前 phase gate」行为（恒 SKIP/假
+  PASS，F15）已删除。
+- **写 `.agate-version`**（项目根，内容 `agate: vX.Y.Z`）：回放**逐提交**读取它，且**单调不降**
+  （PR 把它降级 → FAIL）。未写且仓库不含协议本体 → FAIL（提示写 `.agate-version`）。
+  > ⚠️ 当前**未实现**「按逐提交 `.agate-version` 定位/安装对应版本目录」（分支①，依赖 CI 安装各
+  > 版本）——`.agate-version` 只用于**单调不降**检查；协议根取「仓库含协议本体」或 `AGATE_ROOT`
+  > 提供者所在仓库的 merge-base 处 `agate/`。见任务 `P4-implementation-G1.md` 的 DESIGN_GAP。
+- **CI 检出必须 `fetch-depth: 0`**（回放用 `merge-base` / `rev-list`，浅检出会恒 SKIP）。
+- **GitHub Actions 示例**（PR 与 push 两种口径）：
+
+  ```yaml
+  # .github/workflows/agate.yml
+  name: agate
+  on: [push, pull_request]
+  jobs:
+    gate-backstop:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0                      # ← 必须：回放依赖全历史
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.10'
+        - run: pip install pyyaml
+        - name: 安装协议本体（装到 ~/.agate/current）
+          run: bash <(curl -sSL https://raw.githubusercontent.com/<owner>/agateon/main/install.sh) --versions
+        - name: agate CI 回放
+          env:
+            AGATE_ROOT: ${{ github.workspace }}/.agate/current/agate  # 按实际安装路径调整
+            PR_BASE: ${{ github.event.pull_request.base.sha }}
+            BEFORE: ${{ github.event.before }}
+          run: |
+            args=""
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              args="--base $PR_BASE"
+            elif [ "${{ github.event_name }}" = "push" ]; then
+              args="--push --base $BEFORE"          # before 全零时脚本自动回退 merge-base
+            fi
+            python3 "$AGATE_ROOT/scripts/agate-ci-verify.py" $args
+  ```
+
+- **GitLab CI 等价写法**：`GIT_DEPTH: 0`（对应 `fetch-depth: 0`）；PR 口径用
+  `CI_MERGE_REQUEST_DIFF_BASE_SHA`，push 口径用 `CI_COMMIT_BEFORE_SHA`：
+
+  ```yaml
+  agate:
+    variables:
+      GIT_DEPTH: "0"
+    script:
+      - args=""; if [ -n "$CI_MERGE_REQUEST_DIFF_BASE_SHA" ]; then
+          args="--base $CI_MERGE_REQUEST_DIFF_BASE_SHA";
+        else
+          args="--push --base $CI_COMMIT_BEFORE_SHA";
+        fi
+      - python3 "$AGATE_ROOT/scripts/agate-ci-verify.py" $args
+  ```
+
+- **squash 合并的仓库**：分支上的原始提交不进 main，故 **push 事件只做「账本前缀与事件规则」
+  检查**（不逐提交回放）；逐提交回放由 **PR 事件**承担（在合并前对分支提交执行）。
+- **本仓 CI**：`gate-backstop` job 已加 `fetch-depth: 0` 并按事件传 `--base`/`--push --base`。
+
+**A3 — `agate-state-set`（phase/meta 的唯一写入口）**：
+
+- 新增 `agate-state-set.py`：`phase <Pn|PAUSED|READY|DONE>` / `meta <k> <v>` /
+  `cancel --reason <text>` / `--list`。以 HEAD 版本为基准做合法性判定（与提交期判定同源），
+  原子替换 `.state.yaml` 并 `git add`；**不写事件**（进入 PAUSED/READY/DONE 的
+  `state_transition` 由 pre-commit 统一写入并随本次提交入库）。
+- `agate-next` 推进时**不再追加** `state_transition`，只打印建议命令
+  `python3 <agate_root>/scripts/agate-state-set.py <dir> phase <Pn>`。
+- **新任务一律用 `agate-task-init` 创建，phase 一律用 `agate-state-set` 写入**。
+
 ### v0.79.0 — TAG0042 批 1：统一 phase 语义（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。
