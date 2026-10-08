@@ -88,16 +88,66 @@ def _count_resolved_body(p1_file):
     return len(SCOPE_RESOLVED_RE.findall(text))
 
 
+def _aggregate_declaration_ids(task_dir, field):
+    """跨声明文件聚合 `field` 的 id 集合（TAG0050 批 E）。
+
+    返回 `(is_non_legacy, {id…})`。legacy 任务返回 `(False, set())`（调用方走正文路径）。
+    """
+    try:
+        import agate_common
+    except ImportError:
+        return False, set()
+    try:
+        level = agate_common.task_level(task_dir, __file__)
+    except Exception:
+        return False, set()
+    if level is None:
+        return False, set()
+    try:
+        contract = agate_common.load_contract(level, __file__) or {}
+        # GAP-8 闭合（2026-10-08）：聚合面回归设计 §6 的 `declaration_files`（单源）。
+        globs = contract.get("declaration_files") or []
+    except Exception:
+        globs = []
+    ids = set()
+    for path in agate_common.declaration_file_paths(task_dir, globs):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                fm, _body = agate_common.split_frontmatter(fh.read())
+        except OSError:
+            continue
+        if not isinstance(fm, dict) or not isinstance(fm.get(field), list):
+            continue
+        for item in fm[field]:
+            if isinstance(item, dict) and item.get("id"):
+                ids.add(str(item["id"]))
+    return True, ids
+
+
 def main():
     args = sys.argv[1:]
     if not args:
         sys.stderr.write("用法: check-scope-resolved.py TASK_DIR\n")
         sys.exit(1)
     task_dir = args[0]
-    p1_file = os.path.join(task_dir, "P1-requirements.md")
 
     if not os.path.isdir(task_dir):
         sys.exit(2)
+
+    # TAG0050 批 E（设计 §6）：非 legacy 任务读**聚合结果**（结构化 scope_plus/scope_resolved）。
+    is_non_legacy, sp_ids = _aggregate_declaration_ids(task_dir, "scope_plus")
+    if is_non_legacy:
+        _unused, sr_ids = _aggregate_declaration_ids(task_dir, "scope_resolved")
+        dangling = sp_ids - sr_ids
+        if dangling:
+            sys.stderr.write(
+                f"GATE SCOPE: 结构化 scope_plus 悬空 id 未被 scope_resolved 覆盖：{sorted(dangling)}\n"
+            )
+            sys.exit(1)
+        sys.stderr.write("GATE SCOPE: 结构化 scope_plus/scope_resolved 集合一致\n")
+        sys.exit(0)
+
+    p1_file = os.path.join(task_dir, "P1-requirements.md")
 
     scope_found = _scan_scope_plus(task_dir)
     if not scope_found:

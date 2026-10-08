@@ -10,6 +10,27 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **TAG0050（任务数据契约）批 D/E/F**：P6 `results` 判据 **D1–D10 全部落地**（非 legacy 缺
+  `results` 即 ERROR；含 D5 内容重复 WARNING / D7 evidence JSON 一致性（**双向 + 证据形态 +
+  多 JSON 合并**）/ D9 审计 7 读 results / D8 读 P1 视觉三态二选一 `vision`/`manual_review` /
+  D3 pre-commit「已跟踪或已暂存」）、P6.5 `criteria`（**BLOCKER-1 修复：`read_judge_verdict`
+  透传 `criteria`，非 legacy 先现算系统字段后校验**）、`resolve_evidence_ref`（相对路径 /
+  `run:<k>`；**cmd_run 事件缺 `k`/`log`/`sha256` 或日志为空 → fail-closed**）、
+  P7 成对声明跨文件聚合（ID 带路径前缀、`basis: followup:DEBT<n>` 双向回指、
+  `design_gap_reviews` 的 `verdict`/`basis` **取值域枚举校验**、`blocker_count`/`deviation_critical_count`
+  **登记为系统字段**）、P1 `reviewed_bdds` **必填且等于** P1 BDD 集合、P2 `ui_design` 按快照
+  `shape_dimensions` 校验**必填维度**、骨架标题级判定、P8 `delivery` 结构化、`check-pruning`
+  **恒检** `phases ∪ pruned == phase_universe`（`[P1..P8]`，排除 P0/P6.5）、T2 绊线；快照
+  `declaration_files` 扩展为 glob 面（`*-review.md` / `P4-implementation-*.md` /
+  `P4-implementation/**/*.md`，删除设计外 `declaration_globs`），**聚合面与 frontmatter 强制面
+  统一为同一 glob 语义**（cso F-2：`P4-implementation/**/*.md` 直接子文件亦强制）；非 legacy
+  任务跳过 `check-p6-format`、`agate-evidence-consistency` 与 provenance 正文解析。
+- **义务基线一次性重设**：批 A4 首轮机械核验（`enforced_at` / `test` / `review_output`）
+  使 M 占比下降，已以 `baseline.reset: {from: "60/123", to: "56/119"}` **显式重设**
+  （`rules/obligations.yaml`），此后恢复「只增不减」。详见 `agate/UPGRADING.md`「未发布 — TAG0050」节。
+
 ## [0.79.0] - 2026-10-06
 
 ### 新增

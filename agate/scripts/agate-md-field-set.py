@@ -256,7 +256,7 @@ def _contract_fields(file_path):
 
     等级优先取任务账本等级，回退协议当前等级；快照不可用 → {}（不阻断旧写法）。
     """
-    task_dir = os.path.dirname(os.path.abspath(file_path))
+    task_dir = _task_dir_for(file_path)
     try:
         level = agate_common.task_level(task_dir, __file__) or agate_common.current_level(__file__)
         contract = agate_common.load_contract(level, __file__) if level else {}
@@ -272,6 +272,45 @@ def _contract_fields(file_path):
     return fields if isinstance(fields, dict) else {}
 
 
+def _task_dir_for(file_path):
+    """文件所属任务目录：自文件所在目录向上找含 `.state.yaml` / 账本的目录；
+    找不到则退回文件所在目录（裸文件/非任务场景）。"""
+    cur = os.path.dirname(os.path.abspath(file_path))
+    probe = cur
+    for _ in range(10):
+        if (
+            os.path.isfile(os.path.join(probe, ".state.yaml"))
+            or os.path.isfile(os.path.join(probe, "gate-events.jsonl"))
+        ):
+            return probe
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    return cur
+
+
+def _declaration_fields(file_path):
+    """快照 `declaration_fields` 节 → {key: spec}（TAG0050 批 E；无登记 → {}）。"""
+    task_dir = _task_dir_for(file_path)
+    try:
+        level = agate_common.task_level(task_dir, __file__) or agate_common.current_level(__file__)
+        contract = agate_common.load_contract(level, __file__) if level else {}
+    except Exception:
+        contract = {}
+    decl = contract.get("declaration_fields") if isinstance(contract, dict) else None
+    return decl if isinstance(decl, dict) else {}
+
+
+def _relative_stem(file_path):
+    """`<任务目录内相对路径去掉 .md>`（设计 §6 的 ID 前缀）。"""
+    task_dir = _task_dir_for(file_path)
+    rel = os.path.relpath(os.path.abspath(file_path), task_dir).replace("\\", "/")
+    if rel.endswith(".md"):
+        rel = rel[:-3]
+    return rel
+
+
 def _field_spec(file_path, key):
     return _contract_fields(file_path).get(key)
 
@@ -284,8 +323,7 @@ def _declared_safety_keys(file_path):
     `set prod_touched …` 修复命令对非 P6 主产出（如 P4-implementation.md）须**真能执行**
     （修复 H1 / cso 复审：原可写面仅覆盖 P6 契约字段）。
     """
-    basename = os.path.basename(file_path)
-    task_dir = os.path.dirname(os.path.abspath(file_path))
+    task_dir = _task_dir_for(file_path)
     try:
         level = agate_common.task_level(task_dir, __file__) or agate_common.current_level(__file__)
         contract = agate_common.load_contract(level, __file__) if level else {}
@@ -293,11 +331,13 @@ def _declared_safety_keys(file_path):
         contract = {}
     if not isinstance(contract, dict):
         return frozenset()
-    names = {str(x) for x in (contract.get("declaration_files") or [])}
+    # GAP-8 闭合（2026-10-08）：`declaration_files` 为 glob 模式——按相对路径 + basename 匹配。
+    # cso F-2（2026-10-09）：匹配语义统一到 `agate_common.match_declaration_file`（glob 单源）。
+    names = [str(x) for x in (contract.get("declaration_files") or [])]
     outputs = contract.get("primary_outputs")
     if isinstance(outputs, dict):
-        names.update(str(v) for v in outputs.values())
-    if basename in names:
+        names.extend(str(v) for v in outputs.values())
+    if agate_common.match_declaration_file(file_path, task_dir, names):
         return frozenset({"prod_touched", "prod_touched_detail"})
     return frozenset()
 
@@ -544,11 +584,34 @@ def _load_fm_body(file_path):
 def _require_list_field(file_path, key):
     spec = _field_spec(file_path, key)
     if spec is None:
+        # 声明字段（批 E，设计 §6）：可写在任意声明文件 frontmatter，由快照
+        # `declaration_fields` 声明契约；写入工具对这类字段支持自动编号。
+        spec = _declaration_fields(file_path).get(key)
+    if spec is None:
         sys.stderr.write(
-            f"ERROR: {key!r} 不在本文件契约字段中（见快照 files 节；用 explain 查看可用字段）\n"
+            f"ERROR: {key!r} 不在本文件契约字段中（见快照 files / declaration_fields 节；用 explain 查看可用字段）\n"
         )
         return None
     return spec
+
+
+def _autonumber_id(file_path, spec, item, current):
+    """列表字段带 `id_prefix` 且元素未给 id 时，生成 `<相对路径去 .md>:<前缀><n>`。
+
+    每个文件独立编号（BDD-63）：n = 本字段已有同前缀条目的最大编号 + 1；跨文件互不影响。
+    """
+    prefix = spec.get("id_prefix")
+    if not prefix or "id" in item:
+        return item
+    max_n = 0
+    for existing in current:
+        if not isinstance(existing, dict):
+            continue
+        m = re.search(rf"{re.escape(str(prefix))}(\d+)\s*$", str(existing.get("id", "")))
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    item["id"] = f"{_relative_stem(file_path)}:{prefix}{max_n + 1}"
+    return item
 
 
 def _cmd_append(file_path, key, pairs):
@@ -565,6 +628,7 @@ def _cmd_append(file_path, key, pairs):
     cur = fm.get(key)
     if not isinstance(cur, list):
         cur = [] if cur is None else [cur]
+    item = _autonumber_id(file_path, spec, item, cur)
     cur.append(item)
     fm[key] = cur
     try:

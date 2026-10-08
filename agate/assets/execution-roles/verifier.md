@@ -43,6 +43,12 @@ agent: verifier
 - {AGATE_WORKSPACE}/tasks/{Txxx}/P5-test-results/e2e.md — 若 ui_affected：Playwright/E2E 实跑结果 + 截图路径
 - 必要时 evidences/（截图、日志）
 
+> **TAG0050 批 D（非 legacy 任务）结构化产出**：`P6-acceptance.md` frontmatter 须写 `results:
+> [{bdd, verdict: PASS|FAIL, evidence: [ref…], vision?, manual_review?}]`（bdd 集合 = P1 的
+> `#### BDD-N:` 集合，全 PASS；缺 `results` 即 ERROR）。`P6.5-judge-verdict.md` 须写
+> `criteria: [{bdd, verdict, evidence}]`。用 `agate-md-field-set.py` 写入、`agate-md-field-get.py`
+> 读回；证据引用相对 `P6-evidence/`（可用 `../` 上溯）或 `run:<k>`。
+
 ### 质量门槛
 - 跑完整测试，unit.md 明确写 failed 数量
 - **若 P2 声明 ui_affected：必须实跑 Playwright，e2e.md 记录每个交互点的结果 + 截图。跳过 UI 实跑 = 门槛不通过**

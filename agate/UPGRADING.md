@@ -400,6 +400,47 @@ git commit
 - **基线比对只在 `--baseline` 时进行**：不一致 → 打印**逐行 unified diff**（`--- baseline` / `+++ current`）
   再返回非 0；证据不存在 → 首次落盘（语义不变）。
 
+### 未发布 — TAG0050 批 D/E/F：结构化判定与成对声明（**无破坏性变更**）
+
+> TAG0050「任务数据契约」分批交付；本批含 **D**（P6 `results` 判据 D1–D10、P6.5 `criteria`、
+> `resolve_evidence_ref` + `agate-run --task` 任务内日志、证据入库）、**E**（P7 成对声明跨文件
+> 聚合、ID 带路径前缀、`basis: followup:DEBT<n>` 双向回指、补登记 5 个绊线标记）、
+> **F**（`reviewed_bdds`、P2 `ui_design`、骨架标题级判定、P8 `delivery` 结构化、`pruned` 闭合、T2 绊线）。
+> **协议语义对 legacy 任务不变**（§8 承诺：退出码与 ERROR 集合不变）；新契约只对**非 legacy 任务**
+> （账本有创建事件）生效。版本号与 CHANGELOG 条目在 P8 统一落。
+
+- **非 legacy 任务**（`agate-task-init` 创建），要求项由契约快照决定（`requires.results: true`）：
+  - **P6** 必须声明结构化 `results: [{bdd, verdict, evidence,…}]`（`pass`/`fail` 由 `results` 现算；
+    **缺 `results` 即 ERROR**，不回退正文）；`results` 的 `bdd` 集合须**等于** P1 的 `#### BDD-N:`
+    集合、不得重复、verdict 全 PASS；证据引用经 `resolve_evidence_ref` 解析（相对路径或 `run:<k>`，
+    后者要求 `cmd_run` 事件带 `k`/`log`/`sha256` 且日志非空——**缺字段即 fail-closed**），
+    被 `.gitignore` 忽略 → ERROR，**pre-commit 中还须已跟踪/已暂存**；PASS 条目日志尾行
+    `EXIT_CODE` 非 0 → ERROR；不同证据文件内容相同 → WARNING（可共享引用）；evidence JSON 与
+    `results` 结论不一致 → ERROR（判据 D1–D10 已全部落地，含 D5/D6/D7/D9；**D7 为双向一致 +
+    证据 JSON 形态校验 + 多 JSON 合并语义**）。截图条目须带 `vision`；P1 视觉能力三态=`GAP`
+    时改须 `manual_review`（D8；截图按路径目录段名结构化判定）。
+  - **P6.5** 读结构化 `criteria: [{bdd, verdict, evidence}]`（`criteria_total`/`criteria_passed`/
+    `verdict_evidence` 现算）。
+  - **P7** 跨文件聚合声明（`design_gaps`/`code_map`/`findings`/`scope_plus`/`scope_resolved`/
+    `need_confirm`/`suggest`）；声明聚合面 = 快照 `declaration_files`（glob：各阶段主产出 +
+    `*-review.md` + `P4-implementation-*.md` + `P4-implementation/**/*.md`；**聚合面与 frontmatter
+    强制面统一为同一 glob 语义**，`P4-implementation/**/*.md` 的直接子文件亦强制）；`design_gap_reviews`
+    的 `verdict` 取 `accepted`/`rejected`/`followup`、`basis` 取 `in_bdd`/`out_of_scope`/`followup:DEBT<n>`
+    （**越界 → ERROR**），`followup` 要求 DEBT 条目存在且其 `source_ref` 回指 `<task_id>:<DG id>`；
+    `blocker_count`/`deviation_critical_count` 为**系统字段**（按 `findings` 现算）。
+  - **P1** `reviewed_bdds` **必须声明且等于** P1 BDD 集合（缺省即 ERROR）；**P2** `ui_design`
+    须按 `shape` 声明快照定义的**必填维度**（`shape_dimensions`），`status: na` 须带 `reason`；
+    **P8** `delivery: {method, ref, reason}` 结构化；**`pruned`** 条目须含 `phase`/`reason`/`risk`，
+    且 `set(phases) ∪ set(pruned.phase)` **恒等于**快照 `phase_universe`（`[P1..P8]`，排除 P0/P6.5）
+    且不相交（恒检，非仅声明时）。
+  - **非 legacy 跳过**：`check-p6-format.py`（含 2h 段）与 `agate-evidence-consistency.py`、以及
+    `check-p6-provenance.py` 的**正文解析**（审计 1/3/4/5/6）——由 P6 结构化判据 D1–D10 取代。
+- **任务内运行日志**：`agate-run --task <TASK_DIR> <命令>` 写 `<任务目录>/runs/<k>.log`
+  （尾行 `EXIT_CODE: n`），`cmd_run` 事件记 `k`/`log`/`sha256`；该日志**须入库**（见
+  `assets/templates/gitignore-fragment.txt` 的取反规则）。
+- **legacy 任务**：以上结构化路径**不生效**，走原正文/子串判定（`delivery:` 子串、`- PASS BDD-N`
+  计数等），退出码与 ERROR 集合不变。
+
 ### v0.79.0 — TAG0042 批 1：统一 phase 语义（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。

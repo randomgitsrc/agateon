@@ -291,7 +291,8 @@ def init_task(base_dir, task_id="T001", slug="test-task", contract_level=1):
     )
     _write_utf8(
         task_dir / "P1-review.md",
-        "---\nstatus: approved\nagent: reviewer-subagent\n---\nReviewed BDD-1.\n",
+        "---\nstatus: approved\nagent: reviewer-subagent\nreviewed_bdds: ['1']\n---\n"
+        "Reviewed BDD-1.\n",
     )
     _write_utf8(
         task_dir / "P4-review.md",

@@ -119,6 +119,42 @@ def _scan_scope_plus(task_dir):
     return ""
 
 
+def _aggregate_scope_plus_ids(task_dir):
+    """TAG0050 批 E：非 legacy 任务读**聚合结果**（结构化 scope_plus id 集合）。
+
+    返回 (is_non_legacy, {id…})；legacy → (False, set())。
+    """
+    try:
+        import agate_common
+    except ImportError:
+        return False, set()
+    try:
+        level = agate_common.task_level(task_dir, __file__)
+    except Exception:
+        return False, set()
+    if level is None:
+        return False, set()
+    try:
+        contract = agate_common.load_contract(level, __file__) or {}
+        # GAP-8 闭合（2026-10-08）：聚合面回归设计 §6 的 `declaration_files`（单源）。
+        globs = contract.get("declaration_files") or []
+    except Exception:
+        globs = []
+    ids = set()
+    for path in agate_common.declaration_file_paths(task_dir, globs):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                fm, _body = agate_common.split_frontmatter(fh.read())
+        except OSError:
+            continue
+        if not isinstance(fm, dict) or not isinstance(fm.get("scope_plus"), list):
+            continue
+        for item in fm["scope_plus"]:
+            if isinstance(item, dict) and item.get("id"):
+                ids.add(str(item["id"]))
+    return True, ids
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -138,6 +174,10 @@ def main():
         hit = _scan_scope_plus(task_dir)
         if hit:
             warnings.append(f"SCOPE+ 触发（{hit}）")
+        # TAG0050 批 E：非 legacy 任务读**聚合结果**（结构化 scope_plus）。
+        _is_non_legacy, _sp_ids = _aggregate_scope_plus_ids(task_dir)
+        if _is_non_legacy and _sp_ids:
+            warnings.append(f"SCOPE+ 触发（结构化：{', '.join(sorted(_sp_ids))}）")
 
     p1_file = os.path.join(task_dir, "P1-requirements.md")
     if os.path.isdir(task_dir) and os.path.isfile(p1_file):

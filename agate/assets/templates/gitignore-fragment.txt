@@ -17,3 +17,17 @@
 
 # ── Agateon 临时产物（探针 / 一次性脚本 / 抓取物；非任务产出，不入库）──
 .agate-tmp/
+
+# ── 任务证据入库（TAG0050 批 D，RM-AG0097）──
+# 任务证据（P6-evidence/ 下的日志/截图/JSON，以及 `agate-run --task` 的 runs/<k>.log）
+# **必须入库**（D3 据此校验 sha256）。若项目 .gitignore 含 `*.log` 之类的宽规则，
+# 用下面的取反规则重新包含它们。
+#
+# ⚠️ **取反规则必须写在 `*.log` 之后**（Git 按顺序求值，后出现的规则覆盖前面）。
+#
+# ⚠️ **Git 父目录排除限制（cso LOW-2）**：若 `agate-workspace/` 或其某级父目录本身
+#    被忽略（如 `agate-workspace/`），则 `!` **无法**重新包含其下文件——Git 不会
+#    读取被排除目录内部（性能优化）。此时须改为逐级取反（先 `!agate-workspace/`
+#    再 `!agate-workspace/tasks/` …），或不要忽略父目录。
+!agate-workspace/tasks/**/P6-evidence/**
+!agate-workspace/tasks/**/runs/**

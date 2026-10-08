@@ -50,6 +50,7 @@ try:
         check_ledger_events,
         current_level,
         load_contract,
+        match_declaration_file,
         read_ledger_events,
         read_staged_state_phase,
         read_state_phase,
@@ -592,6 +593,15 @@ def _declaration_files(task_dir):
     return _FALLBACK_DECLARATION_FILES
 
 
+def _is_declaration_path(file_path, task_dir):
+    """file_path 是否命中快照 `declaration_files`（glob 模式；GAP-8 闭合）。
+
+    cso F-2：与 `check-frontmatter._is_declaration_file` 同口径，统一到
+    `agate_common.match_declaration_file`（glob 语义单源，含 `**` 递归/零层）。
+    """
+    return match_declaration_file(file_path, task_dir, _declaration_files(task_dir))
+
+
 def _primary_output_for(task_dir, phase):
     """当前阶段的主产出相对路径（快照 primary_outputs；不可用 → None）。"""
     lvl = task_level(task_dir)
@@ -692,6 +702,10 @@ def main():
 
     # AGATE_ROOT = 协议本体路径（env 优先 → 脚本真实路径上溯 → 复制模式 .agate-root 恢复）
     resolve_agate_root(os.path.abspath(__file__))
+
+    # TAG0050 G3（GAP-6 / D3）：标记本进程为 pre-commit 上下文，供 check-gate.py 的
+    # P6 结构化判据 D3 启用「证据须已跟踪或已暂存」附加检查（直接调 check-gate 时不做）。
+    os.environ["AGATE_PRECOMMIT_GATE"] = "1"
 
     # 工作区路径单点解析（TAG0003 v2.0）：.agate.env > env AGATE_TASKS_DIR > 默认
     # agate-workspace/。resolve_workspace 等价 agate-workspace-resolve.sh 的 source 语义。
@@ -873,13 +887,24 @@ def main():
         # 2g.2 frontmatter schema 校验（P2-design.md §3.1.3，BDD-8 挂载点）
         # 与 2a 同机制：扫描本任务暂存的 P1/P2/P6/P7 产出文件，逐个跑 check-frontmatter
         if os.path.isfile(os.path.join(SCRIPT_DIR, "check-frontmatter.py")):
-            for fm_name in _declaration_files(task_dir):
-                if (task_rel + "/" + fm_name) in _staged_name_only() and _run_script_rc("check-frontmatter.py", [os.path.join(task_dir, fm_name)]) != 0:
+            # GAP-8 闭合（2026-10-08）：`declaration_files` 为 glob 模式——遍历该任务下**已暂存**
+            # 且命中声明模式的产出文件逐个校验（不再按字面文件名拼接）。
+            for _staged_name in _staged_name_only():
+                if not _staged_name.startswith(task_rel + "/"):
+                    continue
+                _abs = os.path.join(repo_root, _staged_name)
+                if not os.path.isfile(_abs):
+                    continue
+                if not _is_declaration_path(_abs, task_dir):
+                    continue
+                if _run_script_rc("check-frontmatter.py", [_abs]) != 0:
                     sys.exit(1)
 
         # 2h. P6 格式自动归一化（①）——verifier 产出后、gate 前。
+        # TAG0050 批 D（设计 §5.1）：**非 legacy 任务跳过** check-p6-format（包括 2h 段）——
+        # P6 走结构化 results 判据 D1–D10，不再依赖正文格式归一化。
         # 回放模式（AGATE_REPLAY=1）跳过会改文件的修正步骤，只校验（设计 §2.4）。
-        if (not _AGATE_REPLAY and phase == "P6"
+        if (not _AGATE_REPLAY and phase == "P6" and task_level(task_dir) is None
                 and os.path.isfile(os.path.join(task_dir, "P6-acceptance.md"))):
             _run_script_rc("check-p6-format.py", ["--fix", os.path.join(task_dir, "P6-acceptance.md")])
             run_git(["add", os.path.join(task_dir, "P6-acceptance.md")])

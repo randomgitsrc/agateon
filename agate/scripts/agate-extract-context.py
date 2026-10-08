@@ -16,10 +16,60 @@ import contextlib
 import glob
 import os
 import re
+import subprocess
 import sys
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+try:
+    import agate_common
+except ImportError:  # pragma: no cover - 安装破损时降级
+    agate_common = None
 
 _BDD_HEAD = re.compile(r"^#### BDD-")
 _BDD_LIST = re.compile(r"^#### (BDD-[^:]+):")
+
+
+def _is_non_legacy(task_dir):
+    if agate_common is None:
+        return False
+    try:
+        return agate_common.task_level(task_dir, __file__) is not None
+    except Exception:
+        return False
+
+
+def _read_field(file_path, op):
+    """经 agate-md-field-get.py 读字段（env FILE）；失败回退 ""。"""
+    env = dict(os.environ)
+    env["FILE"] = file_path
+    script = os.path.join(SCRIPT_DIR, "agate-md-field-get.py")
+    try:
+        proc = subprocess.run(
+            [sys.executable, script, op],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
+        )
+    except OSError:
+        return ""
+    if proc.returncode != 0:
+        return ""
+    return (proc.stdout or "").strip()
+
+
+def _infer_phase(task_dir):
+    """单参形式：从 .state.yaml 的 phase 推断（非 legacy 任务）；否则 None。"""
+    if agate_common is None:
+        return None
+    state_file = os.path.join(task_dir, ".state.yaml")
+    if not os.path.isfile(state_file):
+        return None
+    try:
+        phase = agate_common.read_state_phase(state_file)
+    except Exception:
+        return None
+    return phase if isinstance(phase, str) and phase else None
 
 
 def _read_lines(path):
@@ -188,12 +238,26 @@ def extract(phase, task_dir):
                 output += "- " + "\n".join(pkgs) + "\n"
         p6 = os.path.join(task_dir, "P6-acceptance.md")
         if os.path.isfile(p6):
-            lines = _read_lines(p6)
-            output += "- P6 验收: {} PASS, {} FAIL\n".format(
-                _grep_count(lines, r"^\s*- PASS"),
-                _grep_count(lines, r"^\s*- FAIL"),
-            )
-            gaps = _grep(lines, r"\[DESIGN_GAP:")
+            # TAG0050 批 D（设计 §5.1）：非 legacy 任务的计数经 md-field-get 读取
+            # （`pass`/`fail` 为系统字段，按 `results` 现算），不再正文 grep。
+            if _is_non_legacy(task_dir):
+                pass_fm = _read_field(p6, "pass")
+                fail_fm = _read_field(p6, "fail")
+                if pass_fm != "" and fail_fm != "":
+                    output += f"- P6 验收: {pass_fm} PASS, {fail_fm} FAIL\n"
+                else:
+                    lines = _read_lines(p6)
+                    output += "- P6 验收: {} PASS, {} FAIL\n".format(
+                        _grep_count(lines, r"^\s*- PASS"),
+                        _grep_count(lines, r"^\s*- FAIL"),
+                    )
+            else:
+                lines = _read_lines(p6)
+                output += "- P6 验收: {} PASS, {} FAIL\n".format(
+                    _grep_count(lines, r"^\s*- PASS"),
+                    _grep_count(lines, r"^\s*- FAIL"),
+                )
+            gaps = _grep(_read_lines(p6), r"\[DESIGN_GAP:")
             if gaps:
                 output += "- DESIGN_GAP 列表:" + "\n" + "\n".join(gaps) + "\n"
     elif phase == "P8":
@@ -205,8 +269,15 @@ def extract(phase, task_dir):
                 output += "- " + "\n".join(pkgs) + "\n"
         p7 = os.path.join(task_dir, "P7-consistency.md")
         if os.path.isfile(p7):
+            # TAG0050 批 D：非 legacy 任务的 P7 计数经字段读取（系统字段）。
+            blocker_fm = ""
+            if _is_non_legacy(task_dir):
+                blocker_fm = _read_field(p7, "blocker_count")
             lines = _read_lines(p7)
-            output += "- P7 BLOCKER 数: " + _grep_count(lines, r"\[BLOCKER\]") + "\n"
+            if blocker_fm != "":
+                output += f"- P7 BLOCKER 数: {blocker_fm}\n"
+            else:
+                output += "- P7 BLOCKER 数: " + _grep_count(lines, r"\[BLOCKER\]") + "\n"
             deviations = _grep(lines, r"\[DEVIATION")
             if deviations:
                 output += "- DEVIATION 列表:" + "\n" + "\n".join(deviations) + "\n"
@@ -220,13 +291,25 @@ def extract(phase, task_dir):
 
 
 def main():
-    if len(sys.argv) < 3 or len(sys.argv) > 4:
-        sys.stderr.write("用法: agate-extract-context.py PHASE TASK_DIR [--write]\n")
-        sys.exit(1)
-
-    phase = sys.argv[1]
-    task_dir = sys.argv[2]
-    write_mode = sys.argv[3] if len(sys.argv) > 3 else ""
+    argv = sys.argv[1:]
+    # TAG0050 批 D：也接受单参形式 `agate-extract-context.py TASK_DIR`
+    # （非 legacy 任务按 .state.yaml 的 phase 推断）——供 BDD-60 的字段现算计数使用。
+    if len(argv) == 1 and os.path.isdir(argv[0]):
+        phase = _infer_phase(argv[0])
+        if phase is None:
+            sys.stderr.write(
+                "agate-extract-context.py: 单参形式需任务目录含 .state.yaml 的 phase\n"
+            )
+            sys.exit(1)
+        task_dir = argv[0]
+        write_mode = ""
+    else:
+        if len(argv) < 2 or len(argv) > 3:
+            sys.stderr.write("用法: agate-extract-context.py PHASE TASK_DIR [--write]\n")
+            sys.exit(1)
+        phase = argv[0]
+        task_dir = argv[1]
+        write_mode = argv[2] if len(argv) > 2 else ""
 
     if phase not in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"):
         sys.stderr.write(f"agate-extract-context.py: phase '{phase}' 不在 P1-P8 范围内\n")

@@ -74,6 +74,13 @@ test_code_dir: agate/tests/
 - `agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent`
   ——本机 `opencode` CLI 子命令 `debug agent` 已更名为 `debug agents`（环境漂移，非 TAG0050 引入）。
 
+### C8 整改（第 2 轮）新增用例（计数变化登记）
+
+> C8 评审（`P4-review-G3.md` BLOCKER-1/MINOR-2/3/4、`P4-review-cso-G3.md` F-1/F-2）整改随批补测。
+> 新增 **16** 条：`test_tag0050_evidence.py` 11 条（BLOCKER-1 正/负、MINOR-2 D8×3、MINOR-3 D7×4、
+> cso F-1、cso F-3）、`test_tag0050_declarations.py` 5 条（MINOR-4×2、cso F-2×2、cso F-4）。
+> 全量 count-tests 由 **2850 → 2866**（+16）。BLOCKER-1 正向用例改前为红（`read_judge_verdict` 丢 `criteria`）。
+
 ## 2. 平台无关自查
 
 - `python3 agate/scripts/check-platform-assumptions.py agate/tests/` → **exit 0（0 命中）**。

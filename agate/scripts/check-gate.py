@@ -29,6 +29,8 @@ P0-P8 全部分支均已实现（2f-2 补齐 P5-P8），与 sh 版 check-gate.sh
 """
 
 import fnmatch
+import glob
+import hashlib
 import json
 import os
 import re
@@ -48,6 +50,11 @@ except ImportError:
     run_git = None
     resolve_workspace = None
 
+try:
+    from agate_common import resolve_evidence_ref
+except ImportError:
+    resolve_evidence_ref = None
+
 # DEBT0018 fail-closed 标记：agate_common 整体不可导入时置 True，供 gate_p1/p6/p7 四个
 # "关键读取器"消费点（read_rules_yaml/count_p6_pass_fail/count_p7_markers/
 # count_code_map_lines）在使用返回值前判定——命中则显式失败（安装破损），不再静默用
@@ -64,6 +71,7 @@ try:
         count_p2_declared_fields,
         count_p6_pass_fail,
         count_p7_markers,
+        declaration_file_paths,
         design_trivial_declared,
         extract_bdd_titles,
         extract_embedded_yaml_blocks,
@@ -185,6 +193,10 @@ except ImportError:
 
     def task_level(task_dir, script_path=None):
         return None
+
+    def declaration_file_paths(task_dir, patterns):
+        # agate_common 缺失（安装破损）→ 空枚举（调用方按无声明处理）
+        return []
 
 # RM-AG0046（TAG0026）：维护性反模式检测器 check-maintainability.py——gate_p4 三重门槛
 # 数据源。ImportError 降级 = WARNING 不阻断（检测未部署 ≠ 判定缺失，R2；
@@ -481,6 +493,34 @@ def _canonical_shape(value):
     return stripped or None
 
 
+def _delivery_spec(task_dir):
+    """快照 `delivery` 节（P8 交付声明契约）；不可用 → 默认规格。"""
+    default = {"required": ["method"], "none_requires_reason": True, "non_none_requires_ref": True}
+    level = task_level(task_dir)
+    if level is None:
+        return default
+    try:
+        contract = load_contract(level, __file__) or {}
+    except Exception:
+        contract = {}
+    spec = contract.get("delivery") if isinstance(contract, dict) else None
+    return spec if isinstance(spec, dict) else default
+
+
+def _ui_shape_dimensions(task_dir):
+    """快照 `ui_design.shape_dimensions`（shape → 必填维度 slot 列表）；不可用 → {}（跳过）。"""
+    level = task_level(task_dir)
+    if level is None:
+        return {}
+    try:
+        contract = load_contract(level, __file__) or {}
+    except Exception:
+        contract = {}
+    spec = contract.get("ui_design") if isinstance(contract, dict) else None
+    dims = spec.get("shape_dimensions") if isinstance(spec, dict) else None
+    return dims if isinstance(dims, dict) else {}
+
+
 def _gate_p1_vision_capability(p1_file):
     """P1 检查：domains 含 frontend → capability_requirements 必须含视觉能力三态条目（BDD-3）。
 
@@ -581,6 +621,40 @@ def _gate_p2_ui_design_section(p2_file):
     if ui_affected != "true":
         return True
     p2_text = _read_text(p2_file)
+
+    # TAG0050 批 F（BDD-67）：结构化 `ui_design.dimensions.<维度>.status == na` 必须带
+    # `reason`（"不适用"须给理由，取代只看关键词的判定）。
+    # GAP-5 闭合（2026-10-08）：必填维度由快照 `ui_design.shape_dimensions` 决定（shape → slots）；
+    # A5：结构化判据仅对非 legacy 任务生效（§8 legacy ERROR 集合不变）。
+    _task_dir = os.path.dirname(os.path.abspath(p2_file))
+    _fm, _body = split_frontmatter(p2_text)
+    ui_design = _fm.get("ui_design") if isinstance(_fm, dict) else None
+    if isinstance(ui_design, dict) and task_level(_task_dir) is not None:
+        dims = ui_design.get("dimensions")
+        dims = dims if isinstance(dims, dict) else {}
+        for dim_name, dim_spec in dims.items():
+            if (
+                isinstance(dim_spec, dict)
+                and dim_spec.get("status") == "na"
+                and not dim_spec.get("reason")
+            ):
+                sys.stderr.write(
+                    f"GATE P2: ui_design.dimensions.{dim_name} 标 status: na 但缺 reason"
+                    "（维度不适用须给理由）\n"
+                )
+                return False
+        # 必填维度存在（快照 shape → slots；每 slot 至少一个维度名被声明，且带 status）。
+        shape = _canonical_shape(str(ui_design.get("shape") or ""))
+        slots = _ui_shape_dimensions(_task_dir).get(shape) if shape else None
+        if isinstance(slots, list):
+            for slot in slots:
+                alts = slot if isinstance(slot, list) else [slot]
+                if not any(str(a) in dims for a in alts):
+                    sys.stderr.write(
+                        f"GATE P2: ui_design 缺必填维度（shape={shape}，须至少声明 "
+                        f"{alts} 之一；必填维度由快照 ui_design.shape_dimensions 定义）\n"
+                    )
+                    return False
 
     # M2-0038 C 组：UI 设计节定位 + 渲染形态/适用维度声明提取迁 agate_common
     # parse_ui_design_section（BDD-3：节标题/声明行正则不在本文件字面出现）
@@ -686,6 +760,55 @@ def gate_p1(task_dir):
         sys.stderr.write("GATE P1: P1-review.md status:approved 但 agent=main（主 Agent 不可自行批准评审）\n")
         return 1
 
+    p1_file = os.path.join(task_dir, "P1-requirements.md")
+    p1_text = _read_text(p1_file)
+    p1_lines = _lines(p1_text)
+
+    # TAG0050 批 F（BDD-71）：T2 绊线——P1 的 BDD 标题必须用统一格式 `#### BDD-N:`。
+    # 「命中即拦」：非 legacy 任务扫正文中形如 `^#{1,6}\s*\**BDD-` 但不匹配
+    # `^#### BDD-[0-9]+[a-z]?:` 的标题（如 `### BDD-1:`），指向统一格式。
+    # ⚠️ 置于 reviewed_bdds 之前：标题格式不合法时须先报 T2（否则 reviewed_bdds 的集合差
+    # 会先命中，掩盖真正的格式问题——BDD-71 用例）。
+    if task_level(task_dir) is not None:
+        _t2_bad = []
+        for line in p1_lines:
+            if re.match(r"^#{1,6}\s*\**BDD-", line) and not re.match(
+                r"^####\s+BDD-[0-9]+[a-z]?:", line
+            ):
+                _t2_bad.append(line.strip())
+        if _t2_bad:
+            sys.stderr.write(
+                "GATE P1: T2 绊线——BDD 标题须用统一格式 `#### BDD-N:`（如 `#### BDD-1:`）；"
+                "检测到非规范标题：\n"
+            )
+            for bad in _t2_bad[:5]:
+                sys.stderr.write(f"  - {bad}\n")
+            return 1
+
+    # TAG0050 批 F（BDD-68）：非 legacy 任务的 P1-review 必须声明 `reviewed_bdds`，
+    # 且必须**等于** P1 的 BDD 集合（不再是"出现任意 BDD-数字"的下限判定）。
+    # GAP-2 闭合（2026-10-08）：缺省即 ERROR（设计 §7「必须等于」）。
+    if task_level(task_dir) is not None:
+        rv_fm, _rv_body = split_frontmatter(_read_text(p1_review))
+        rv = rv_fm.get("reviewed_bdds") if isinstance(rv_fm, dict) else None
+        if rv is None:
+            sys.stderr.write(
+                "GATE P1: 非 legacy 任务的 P1-review.md 须声明 `reviewed_bdds`"
+                "（= P1 的 BDD 集合，设计 §7）\n"
+            )
+            return 1
+        declared = {str(x) for x in (rv if isinstance(rv, list) else [rv])}
+        actual_bdds = set(
+            re.findall(r"^#### BDD-([0-9]+[a-z]?):", _read_text(
+                os.path.join(task_dir, "P1-requirements.md")), re.MULTILINE)
+        )
+        if declared != actual_bdds:
+            sys.stderr.write(
+                f"GATE P1: reviewed_bdds（{sorted(declared)}）与 P1 BDD 集合"
+                f"（{sorted(actual_bdds)}）不相等\n"
+            )
+            return 1
+
     review_text = _read_text(p1_review)
     if not re.search(r"BDD-[0-9]", review_text):
         sys.stderr.write("GATE P1: P1-review.md 不含 BDD 编号引用（裸 approved 极可能是假完成，review 结论须引用具体 BDD 编号）\n")
@@ -694,9 +817,6 @@ def gate_p1(task_dir):
     # P1 NEED_CONFIRM 检查（v0.30.2 三值分级：[NEED_CONFIRM] 阻塞 / [SUGGEST:] 不阻塞 / [NO_NEED_CONFIRM] 负向）
     # M2-0038 B 组：行首标记计数/描述提取迁 agate_common count_markers/has_marker/
     # extract_marker_desc（BDD-3：正则不在本文件字面出现）
-    p1_file = os.path.join(task_dir, "P1-requirements.md")
-    p1_text = _read_text(p1_file)
-    p1_lines = _lines(p1_text)
     nc_blocking = count_markers(p1_text, "NC")
     nc_suggest = count_markers(p1_text, "SUGGEST")
 
@@ -985,7 +1105,14 @@ def gate_p2(task_dir):
     project_phase = _md_field_get("project_phase", p1_file)
     if project_phase == "bootstrap":
         skeleton_file = os.path.join(task_dir, "P2-skeleton.md")
-        if not os.path.isfile(skeleton_file) or "## 骨架声明" not in _read_text(skeleton_file):
+        # RM-AG0085（TAG0050 批 F）：标题级判定——只有**行首标题行** `## 骨架声明`
+        # 才算「标题已存在」；散文里提到 `## 骨架声明`（如"参见 ## 骨架声明 一节"）
+        # 不计（回归用例 BDD-69）。
+        skeleton_text = _read_text(skeleton_file) if os.path.isfile(skeleton_file) else ""
+        has_heading = bool(
+            re.search(r"^#{1,6}\s*骨架声明\s*$", skeleton_text, re.MULTILINE)
+        )
+        if not os.path.isfile(skeleton_file) or not has_heading:
             sys.stderr.write(
                 "GATE P2: project_phase: bootstrap 但 P2-skeleton.md 不存在或缺少「## 骨架声明」标题\n"
             )
@@ -1244,6 +1371,297 @@ def _check_render_blocks(file_path):
     return 0
 
 
+def _p6_results_items(p6_file):
+    text = _read_text(p6_file)
+    fm, _body = split_frontmatter(text)
+    if not isinstance(fm, dict):
+        return None
+    results = fm.get("results")
+    return results if isinstance(results, list) else None
+
+
+def _bdd_id_set_from_p1(task_dir):
+    p1 = os.path.join(task_dir, "P1-requirements.md")
+    if not os.path.isfile(p1):
+        return set()
+    return set(re.findall(r"^#### BDD-([0-9]+[a-z]?):", _read_text(p1), re.MULTILINE))
+
+
+def _is_ignored(path, task_dir):
+    if run_git is None:
+        return False
+    rc, _ = run_git(["check-ignore", "-q", path], cwd=task_dir)
+    return rc == 0
+
+
+def _is_tracked_or_staged(path, task_dir):
+    """证据文件是否**已跟踪或已暂存**（D3 的 pre-commit 附加判据）。不可判定 → True（fail-open）。"""
+    if run_git is None:
+        return True
+    rc, _ = run_git(["ls-files", "--error-unmatch", path], cwd=task_dir)
+    if rc == 0:
+        return True
+    rc2, out2 = run_git(["diff", "--cached", "--name-only", "--", path], cwd=task_dir)
+    return rc2 == 0 and bool(out2.strip())
+
+
+def _p6_reuse_blocked(task_dir):
+    """审计 7 的现算（D9）：p5_pass_commit..HEAD 有非产出改动 → 返回错误描述；否则 None。
+
+    产出目录 `agate-workspace/tasks/` 前缀的改动不计（与 provenance 同口径）。
+    """
+    if run_git is None:
+        return None
+    state = _load_state_yaml(task_dir)
+    p5_commit = (state or {}).get("p5_pass_commit") if isinstance(state, dict) else None
+    if not p5_commit:
+        return None
+    rc, out = run_git(["diff", f"{p5_commit}..HEAD", "--name-only"], cwd=task_dir)
+    if rc != 0:
+        return (
+            f"git diff {p5_commit}..HEAD 执行失败，无法判定 P5 证据可否复用（fail-closed）"
+        )
+    changed = [
+        ln for ln in out.splitlines()
+        if ln and not ln.startswith("agate-workspace/tasks/")
+    ]
+    if changed:
+        return "声明引用 P5 证据但检测到非产出文件改动，须重跑 P5：" + ", ".join(changed)
+    return None
+
+
+def _is_screenshot_ref(ref):
+    """证据引用是否指向截图（**结构化**：路径分段含名为 `screenshots` 的目录）。
+
+    MINOR-2：原判定用 `"screenshots/" in refs_str` 子串（会把 `xscreenshots/` 等误命中）。
+    改为按路径分隔符切分、精确比较目录段名。
+    """
+    parts = re.split(r"[\\/]+", str(ref))
+    return "screenshots" in parts
+
+
+def _gate_p6_structured(task_dir, p6_file):
+    """非 legacy 任务的 P6 判据 D1–D10（设计 §5.1）。返回 gate 退出码。"""
+    items = _p6_results_items(p6_file)
+    if items is None:
+        sys.stderr.write(
+            "GATE P6: 非 legacy 任务须在 P6-acceptance.md 声明结构化 `results`（设计 §5.1）\n"
+        )
+        return 1
+
+    # D1：bdd 集合与 P1 相等，且不重复（修复 F1-B / F1-C）。
+    bdds = []
+    for it in items:
+        if not isinstance(it, dict):
+            sys.stderr.write("GATE P6: results 元素须为映射（key: value）\n")
+            return 1
+        bdds.append(str(it.get("bdd", "")))
+    if len(bdds) != len(set(bdds)):
+        sys.stderr.write("GATE P6: results 的 bdd 存在重复条目（D1）\n")
+        return 1
+    expected = _bdd_id_set_from_p1(task_dir)
+    if set(bdds) != expected:
+        sys.stderr.write(
+            "GATE P6: results 的 bdd 集合与 P1 不相等（D1）——"
+            f"P6={sorted(set(bdds))}, P1={sorted(expected)}\n"
+        )
+        return 1
+
+    # D2：所有 verdict == PASS（修复 F1-A）。
+    for it in items:
+        if str(it.get("verdict", "")) != "PASS":
+            sys.stderr.write(
+                f"GATE P6: BDD-{it.get('bdd')} verdict={it.get('verdict')!r}"
+                "（D2：须全部 PASS）\n"
+            )
+            return 1
+
+    evidence_dir = os.path.join(task_dir, "P6-evidence")
+    referenced = set()
+    content_hashes = {}
+    # D8（MINOR-2）：读 P1 视觉能力三态——能力=GAP → 截图须 `manual_review`；否则须 `vision`。
+    _p1_file = os.path.join(task_dir, "P1-requirements.md")
+    vision_state = (
+        read_vision_tri_state(_p1_file) if read_vision_tri_state is not None else None
+    )
+    is_gap = vision_state == "GAP"
+    for it in items:
+        refs = it.get("evidence")
+        if not isinstance(refs, list) or not refs:
+            sys.stderr.write(f"GATE P6: BDD-{it.get('bdd')} 缺证据引用（D3）\n")
+            return 1
+        for ref in refs:
+            if resolve_evidence_ref is None:
+                sys.stderr.write(
+                    "GATE P6: 安装破损：resolve_evidence_ref 不可用，无法解析证据引用\n"
+                )
+                return 1
+            path, err = resolve_evidence_ref(task_dir, str(ref))
+            if err:
+                sys.stderr.write(
+                    f"GATE P6: BDD-{it.get('bdd')} 引用 {ref!r} —— {err}（D3）\n"
+                )
+                return 1
+            referenced.add(os.path.realpath(path))
+            if _is_ignored(path, task_dir):
+                sys.stderr.write(
+                    f"GATE P6: 证据 {ref!r} 被 .gitignore 忽略（D3，证据须入库）\n"
+                )
+                return 1
+            # D3（pre-commit 附加）：证据文件须**已跟踪或已暂存**（设计 §5.1，修复 F9）。
+            if os.environ.get("AGATE_PRECOMMIT_GATE") == "1" and not _is_tracked_or_staged(
+                path, task_dir
+            ):
+                sys.stderr.write(
+                    f"GATE P6: 证据 {ref!r} 在 pre-commit 中未跟踪且未暂存"
+                    "（D3：证据须入库）\n"
+                )
+                return 1
+            # D5：记录内容 sha256（不同文件内容相同 → WARNING，提示可共享引用）。
+            try:
+                with open(path, "rb") as fh:
+                    content_hashes.setdefault(hashlib.sha256(fh.read()).hexdigest(), set()).add(
+                        os.path.basename(path)
+                    )
+            except OSError:
+                pass
+            # D6：PASS 条目引用的日志带 EXIT_CODE 尾行且非 0 → ERROR。
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    tail = fh.read().rstrip().splitlines()
+            except OSError:
+                tail = []
+            if tail:
+                m = re.match(r"^EXIT_CODE:\s*(-?\d+)\s*$", tail[-1])
+                if m and m.group(1) != "0":
+                    sys.stderr.write(
+                        f"GATE P6: BDD-{it.get('bdd')} 引用的日志尾行 "
+                        f"EXIT_CODE={m.group(1)}（D6：PASS 条目须为 0）\n"
+                    )
+                    return 1
+        # D8：UI 条目（引用截图，结构化判定）须带 vision；无视觉能力（P1 三态=GAP）时
+        # 须带 manual_review（设计 §5.1；MINOR-2：读 read_vision_tri_state 二选一）。
+        if any(_is_screenshot_ref(r) for r in refs):
+            if is_gap:
+                if not it.get("manual_review"):
+                    sys.stderr.write(
+                        f"GATE P6: BDD-{it.get('bdd')} 引用截图且 P1 视觉能力=GAP，"
+                        "须带 manual_review（D8）\n"
+                    )
+                    return 1
+            elif not it.get("vision"):
+                sys.stderr.write(
+                    f"GATE P6: BDD-{it.get('bdd')} 引用截图但缺 vision（D8）\n"
+                )
+                return 1
+
+    # D5：不同文件内容相同时给 WARNING（提示"可以共享引用"，不阻断）。
+    for _digest, names in content_hashes.items():
+        if len(names) > 1:
+            sys.stderr.write(
+                "GATE P6 WARNING: 证据文件内容相同（"
+                + ", ".join(sorted(names))
+                + "）——可以共享引用（D5）\n"
+            )
+
+    # D7：证据 JSON 与结论一致（取代审计 6；设计 §5.1；MINOR-3 补全判据面）。
+    # 判据面（不得窄于被取代的 agate-evidence-consistency.py）：
+    #   ① 正向：results 标 PASS 而 evidence 标 FAIL → ERROR；
+    #   ② 反向：results 标 FAIL 而 evidence 标 PASS → ERROR；
+    #   ③ 形态：JSON 声明了 results/bdd_results 但值非列表、或元素非映射 → ERROR；
+    #   ④ 多 JSON 合并：同一 bdd 跨多个 JSON 出现冲突状态（PASS 与 FAIL 并存）→ ERROR。
+    if os.path.isdir(evidence_dir):
+        evidence_status = {}  # bdd id → {status…}（跨 JSON 合并）
+        for json_path in glob.glob(os.path.join(evidence_dir, "**/*.json"), recursive=True):
+            try:
+                with open(json_path, encoding="utf-8", errors="replace") as fh:
+                    data = json.load(fh)
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            if "bdd_results" in data:
+                raw = data.get("bdd_results")
+            elif "results" in data:
+                raw = data.get("results")
+            else:
+                continue  # 非结果 JSON：跳过（无该列表键）
+            if not isinstance(raw, list):
+                sys.stderr.write(
+                    f"GATE P6: {os.path.basename(json_path)} 的 results/bdd_results 非列表"
+                    "（D7：证据形态非法）\n"
+                )
+                return 1
+            for r in raw:
+                if not isinstance(r, dict):
+                    sys.stderr.write(
+                        f"GATE P6: {os.path.basename(json_path)} 的 results 元素非映射"
+                        "（D7：证据形态非法）\n"
+                    )
+                    return 1
+                bid = str(r.get("id", r.get("bdd", ""))).strip()
+                st = str(r.get("status", "")).strip().lower()
+                if bid and st:
+                    evidence_status.setdefault(bid, set()).add(st)
+        for it in items:
+            bid = str(it.get("bdd"))
+            sts = evidence_status.get(bid)
+            if not sts:
+                continue
+            verdict = str(it.get("verdict", "")).strip().lower()
+            ev_pass = "pass" in sts
+            ev_fail = "fail" in sts
+            if ev_pass and ev_fail:
+                sys.stderr.write(
+                    f"GATE P6: BDD-{bid} 跨 evidence JSON 状态冲突（PASS/FAIL 并存）"
+                    "（D7：多 JSON 合并语义）\n"
+                )
+                return 1
+            if verdict == "pass" and ev_fail:
+                sys.stderr.write(
+                    f"GATE P6: evidence JSON 显示 FAIL 但 results 标 PASS：['{bid}']（D7）\n"
+                )
+                return 1
+            if verdict == "fail" and ev_pass:
+                sys.stderr.write(
+                    f"GATE P6: evidence JSON 显示 PASS 但 results 标 FAIL：['{bid}']（D7 反向）\n"
+                )
+                return 1
+
+    # D9：审计 7（P5 证据复用）改为从 `results` 读取复用声明（设计 §5.1）。复用声明取
+    # P6 frontmatter `p5_evidence_reuse`（truthy）或 results 证据引用 `P5-test-results/`；
+    # 若声明复用而 p5_pass_commit..HEAD 有非产出改动 → reuse_blocked → ERROR。
+    fm6, _b6 = split_frontmatter(_read_text(p6_file))
+    declares_reuse = (
+        str((fm6 or {}).get("p5_evidence_reuse", "")).strip().lower() == "true"
+    ) or any(
+        "P5-test-results" in str(r)
+        for it in items
+        for r in (it.get("evidence") or [])
+    )
+    if declares_reuse:
+        reuse_err = _p6_reuse_blocked(task_dir)
+        if reuse_err:
+            sys.stderr.write(f"GATE P6: {reuse_err}（D9：从 results 读取复用声明，审计 7）\n")
+            return 1
+
+    # D4：P6-evidence/ 下每个非隐藏文件至少被引用一次。
+    if os.path.isdir(evidence_dir):
+        for _root, _dirs, names in os.walk(evidence_dir):
+            for name in names:
+                if name.startswith("."):
+                    continue
+                fp = os.path.realpath(os.path.join(_root, name))
+                if fp not in referenced:
+                    sys.stderr.write(
+                        f"GATE P6: P6-evidence/{name} 未被任何条目引用（D4）\n"
+                    )
+                    return 1
+
+    sys.stderr.write("GATE P6: 结构化 results 判据 D1–D10 通过\n")
+    return 2
+
+
 def gate_p6(task_dir):
     # T001 v2.0 流 B（BDD-16/18，P2-design.md §3.2.1）：frontmatter pass/fail 汇总判定，
     # 无汇总（旧格式）回退正文 grep 计数（只认行首 `- PASS|FAIL ... BDD-N`，消除 F11 误判）。
@@ -1252,6 +1670,12 @@ def gate_p6(task_dir):
     # TAG0050 批 B（BDD-48）：渲染块防篡改（含 CRLF 归一化）。
     if _check_render_blocks(p6_file) != 0:
         return 1
+
+    # TAG0050 批 D（设计 §5.1）：非 legacy 任务走结构化判据 D1–D10（读 `results`）。
+    # GAP-1 闭合（2026-10-08）：要求项由契约单源决定（快照 requires.results: true）——
+    # 非 legacy 任务未声明 `results` 时 `_gate_p6_structured` 自身报 ERROR（不再回退既有判定）。
+    if requirement_active(task_dir, "results", "P6") is True:
+        return _gate_p6_structured(task_dir, p6_file)
 
     # ── v2.0 refactor 口径分流（TAG0002 Phase A，P2-design.md §3.3）──
     change_type = ""
@@ -1335,11 +1759,237 @@ def gate_p65(task_dir):
     return 0
 
 
+def _declaration_globs(task_dir):
+    """快照 `declaration_files`（批 B/C/E 单源：声明文件 + 跨文件声明聚合面）；不可用 → []。
+
+    GAP-8 闭合（2026-10-08）：键已回归设计 §6 的 `declaration_files`（glob 模式），
+    设计外新键 `declaration_globs` 已删除（单源）。
+    """
+    level = task_level(task_dir)
+    if level is None:
+        return []
+    try:
+        contract = load_contract(level) or {}
+    except Exception:
+        contract = {}
+    globs = contract.get("declaration_files") if isinstance(contract, dict) else None
+    return globs if isinstance(globs, list) else []
+
+
+def _aggregate_list(task_dir, field):
+    """跨声明文件聚合 `field` 列表 → [(文件名, 元素 dict), …]（批 E，设计 §6）。
+
+    cso F-2：枚举经 `agate_common.declaration_file_paths`（glob 语义单源），与
+    frontmatter 强制面（`match_declaration_file`）**同一判据**。
+    """
+    out = []
+    for path in declaration_file_paths(task_dir, _declaration_globs(task_dir)):
+        fm, _body = split_frontmatter(_read_text(path))
+        if not isinstance(fm, dict):
+            continue
+        value = fm.get(field)
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    out.append((os.path.basename(path), item))
+    return out
+
+
+def _p4_prose_design_gap_count(task_dir):
+    """P4 产出（P4-implementation.md + P4-implementation/）正文中的 [DESIGN_GAP] 行数。"""
+    lines = []
+    p4_impl = os.path.join(task_dir, "P4-implementation.md")
+    if os.path.isfile(p4_impl):
+        lines.extend(_lines(_read_text(p4_impl)))
+    p4_dir = os.path.join(task_dir, "P4-implementation")
+    if os.path.isdir(p4_dir):
+        for root, _dirs, names in os.walk(p4_dir):
+            for name in names:
+                if name.endswith(".md"):
+                    lines.extend(_lines(_read_text(os.path.join(root, name))))
+    lines = [ln for ln in lines if "[DESIGN_GAP:" in ln]
+    count, _unused = count_design_gap("\n".join(lines), allow_blockquote=False)
+    return count
+
+
+def _read_debt_source_refs(debt_file):
+    """tech-debt.md → {DEBT id: source_ref}（供 followup basis 双向回指校验）。"""
+    if yaml is None or not os.path.isfile(debt_file):
+        return {}
+    try:
+        text = _read_text(debt_file)
+    except OSError:
+        return {}
+    out = {}
+    for block in re.findall(r"```yaml\n(.*?)\n```", text, re.S):
+        try:
+            data = yaml.safe_load(block)
+        except Exception:
+            continue
+        if isinstance(data, dict) and data.get("id"):
+            out[str(data["id"])] = data.get("source_ref")
+    return out
+
+
+def _gate_p7_structured(task_dir, p7_file):
+    """非 legacy 任务的 P7 成对声明判据（设计 §6，含 F2）。返回 gate 退出码。"""
+    p7_text = _read_text(p7_file)
+
+    # 计数为系统字段：正文 tripwire 标记 + findings 现算，**不读 frontmatter 汇总值**（F2）。
+    prose_blockers, prose_devcrit = count_p7_markers(p7_text) if not _reader_missing(
+        count_p7_markers
+    ) else (0, 0)
+    findings = _aggregate_list(task_dir, "findings")
+    open_serious = [
+        (name, f) for name, f in findings
+        if f.get("status") == "open"
+        and f.get("severity") in ("blocker", "deviation_critical")
+    ]
+    blockers = prose_blockers + sum(
+        1 for _, f in open_serious if f.get("severity") == "blocker"
+    )
+    devcrit = prose_devcrit + sum(
+        1 for _, f in open_serious if f.get("severity") == "deviation_critical"
+    )
+    if blockers > 0 or devcrit > 0:
+        sys.stderr.write(
+            f"GATE P7: BLOCKER={blockers}, DEVIATION-CRITICAL={devcrit}"
+            "（计数为系统字段，不被汇总值盖住）\n"
+        )
+        return 1
+
+    # resolved 的 findings 必须带 resolution 和 evidence（BDD-65）。
+    for name, f in findings:
+        if f.get("status") == "resolved" and (
+            not str(f.get("resolution") or "").strip()
+            or not str(f.get("evidence") or "").strip()
+        ):
+            sys.stderr.write(
+                f"GATE P7: {name} 的 finding {f.get('id')!r} 标 resolved 但缺 "
+                "resolution / evidence（BDD-65）\n"
+            )
+            return 1
+
+    # DESIGN_GAP 配对：结构化 id 集合相等 + 散文覆盖（设计 §2.2 跨阶段）。
+    dg_items = _aggregate_list(task_dir, "design_gaps")
+    dg_ids = {str(f.get("id")) for _name, f in dg_items if f.get("id")}
+    reviews = _aggregate_list(task_dir, "design_gap_reviews")
+    rev_gaps = [str(r.get("gap")) for _name, r in reviews]
+    for name, r in reviews:
+        if not r.get("checked_against") or not str(r.get("basis") or "").strip():
+            sys.stderr.write(
+                f"GATE P7: {name} 的 design_gap_review {r.get('gap')!r} 缺 "
+                "checked_against / basis（设计 §6）\n"
+            )
+            return 1
+        # MINOR-4：取值域枚举校验（设计 §6 定义）——越界 → ERROR（不再静默接受）。
+        verdict_val = str(r.get("verdict") or "").strip()
+        if verdict_val not in ("accepted", "rejected", "followup"):
+            sys.stderr.write(
+                f"GATE P7: {name} 的 design_gap_review {r.get('gap')!r} verdict="
+                f"{verdict_val!r} 越界（须 accepted|rejected|followup，设计 §6）\n"
+            )
+            return 1
+        basis_val = str(r.get("basis") or "").strip()
+        if not (
+            basis_val in ("in_bdd", "out_of_scope")
+            or re.match(r"^followup:DEBT0*[0-9]+$", basis_val)
+        ):
+            sys.stderr.write(
+                f"GATE P7: {name} 的 design_gap_review {r.get('gap')!r} basis="
+                f"{basis_val!r} 越界（须 in_bdd|out_of_scope|followup:DEBT<n>，设计 §6）\n"
+            )
+            return 1
+    p4_prose = _p4_prose_design_gap_count(task_dir)
+    if p4_prose > len(rev_gaps):
+        sys.stderr.write(
+            f"GATE P7: P4 有 {p4_prose} 条散文 [DESIGN_GAP]，design_gap_reviews 只覆盖 "
+            f"{len(rev_gaps)} 条——architect 遗漏转抄（设计 §2.2 跨阶段）\n"
+        )
+        return 1
+    if dg_ids != set(rev_gaps):
+        dangling = dg_ids - set(rev_gaps)
+        extra = set(rev_gaps) - dg_ids
+        sys.stderr.write(
+            "GATE P7: design_gaps 与 design_gap_reviews 的 id 集合不相等（BDD-64）"
+            f"——悬空={sorted(dangling)}, 多余={sorted(extra)}\n"
+        )
+        return 1
+
+    # basis: followup:DEBT<n> 双向回指（BDD-66）。
+    task_id = _load_state_yaml(task_dir).get("task_id", "")
+    debt_file = os.path.join(
+        os.path.dirname(os.path.dirname(task_dir)), "debt", "tech-debt.md"
+    )
+    debt_refs = _read_debt_source_refs(debt_file)
+    for _name, r in reviews:
+        basis = str(r.get("basis") or "")
+        m = re.match(r"^followup:DEBT0*([0-9]+)$", basis)
+        if not m:
+            continue
+        want = int(m.group(1))
+        matched = [
+            (did, sref) for did, sref in debt_refs.items()
+            if int(re.sub(r"\D", "", did) or 0) == want
+        ]
+        if not matched:
+            sys.stderr.write(
+                f"GATE P7: basis={basis} 指向的 DEBT 条目不存在（BDD-66）\n"
+            )
+            return 1
+        dg_id = str(r.get("gap") or "")
+        _did, sref = matched[0]
+        if not (
+            isinstance(sref, str)
+            and sref.startswith(str(task_id) + ":")
+            and dg_id
+            and dg_id in sref
+        ):
+            sys.stderr.write(
+                f"GATE P7: basis={basis} 的 DEBT {_did} 未回指 {task_id}:{dg_id}"
+                "（source_ref 双向绑定缺失，BDD-66）\n"
+            )
+            return 1
+
+    # scope_plus 须被 scope_resolved 覆盖（悬空 id → ERROR，BDD-64）。
+    sp_ids = {str(f.get("id")) for _n, f in _aggregate_list(task_dir, "scope_plus") if f.get("id")}
+    sr_ids = {str(f.get("id")) for _n, f in _aggregate_list(task_dir, "scope_resolved") if f.get("id")}
+    if not sp_ids.issubset(sr_ids):
+        sys.stderr.write(
+            f"GATE P7: scope_plus 悬空 id 未被 scope_resolved 覆盖：{sorted(sp_ids - sr_ids)}\n"
+        )
+        return 1
+
+    # code_map 与 code_map_reviewed 集合相等。
+    cm = {str(f.get("file")) for _n, f in _aggregate_list(task_dir, "code_map") if f.get("file")}
+    cmr = {str(f.get("file")) for _n, f in _aggregate_list(task_dir, "code_map_reviewed") if f.get("file")}
+    if cm != cmr:
+        sys.stderr.write(
+            f"GATE P7: code_map 与 code_map_reviewed 集合不相等——悬空={sorted(cm - cmr)}, 多余={sorted(cmr - cm)}\n"
+        )
+        return 1
+
+    # need_confirm：存在 open 条目 → 不通过。
+    for name, nc in _aggregate_list(task_dir, "need_confirm"):
+        if nc.get("status") == "open":
+            sys.stderr.write(
+                f"GATE P7: {name} 的 need_confirm {nc.get('id')!r} 仍为 open（未解决）\n"
+            )
+            return 1
+
+    sys.stderr.write("GATE P7: 成对声明聚合判据通过\n")
+    return 0
+
+
 def gate_p7(task_dir):
     # v0.6：显式 if/elif/else；T001 v2.0 流 B（BDD-19/20，P2-design.md §3.2.2）：
     # frontmatter 声明 blocker_count/deviation_critical_count/design_gap_count/
     # design_gap_reviewed_count（新格式）→ 门禁基于结构化计数判定；缺失（旧格式）回退正文 grep。
     p7_file = os.path.join(task_dir, "P7-consistency.md")
+
+    # TAG0050 批 E（设计 §6）：非 legacy 任务走成对声明聚合判据。
+    if task_level(task_dir) is not None:
+        return _gate_p7_structured(task_dir, p7_file)
 
     blocker_fm = _md_field_get("blocker_count", p7_file)
     devcrit_fm = _md_field_get("deviation_critical_count", p7_file)
@@ -1537,8 +2187,41 @@ def gate_p8(task_dir):
         sys.stderr.write("GATE P8: P8-release.md 缺 debt_check 字段（须确认债务清单并留痕，可为 none）\n")
         return 1
     # BDD-15（TAG0042 批 4）：P8 语义为**交付收尾**——delivery 声明缺失 → 拦截（非 0）。
-    # 只查留痕存在（合法取值集合设计未定，见 P4-implementation-batch4.md [DESIGN_GAP]），
-    # 内容任意放行；未声明则说明交付收尾未完成。
+    # TAG0050 批 F（BDD-72 / F12）：非 legacy 任务改为**结构化** `delivery: {method, ref, reason}`
+    # （method 非空；method=none 须 reason；否则 ref 至少 1 项），不再子串判定。
+    if task_level(task_dir) is not None:
+        _fm8, _b8 = split_frontmatter(p8_text)
+        delivery = _fm8.get("delivery") if isinstance(_fm8, dict) else None
+        # GAP-5 闭合（2026-10-08）：交付声明规格改读快照 `delivery`（single source）。
+        _dspec = _delivery_spec(task_dir)
+        if not isinstance(delivery, dict):
+            sys.stderr.write(
+                "GATE P8: 缺结构化 delivery 字段（须 `delivery: {method, ref, reason}`；"
+                "P8 为交付收尾）\n"
+            )
+            return 1
+        for _field in _dspec.get("required", ["method"]):
+            if not str(delivery.get(_field) or "").strip():
+                sys.stderr.write(
+                    f"GATE P8: delivery 缺必填字段 {_field}（快照 delivery.required）\n"
+                )
+                return 1
+        _method = str(delivery.get("method")).strip()
+        if _method == "none":
+            if _dspec.get("none_requires_reason", True) and not str(
+                delivery.get("reason") or ""
+            ).strip():
+                sys.stderr.write("GATE P8: delivery.method=none 但缺 reason\n")
+                return 1
+        elif _dspec.get("non_none_requires_ref", True):
+            _ref = delivery.get("ref")
+            if not isinstance(_ref, list) or len(_ref) < 1:
+                sys.stderr.write(
+                    "GATE P8: delivery.method≠none 但 ref 为空（须至少 1 项交付物引用）\n"
+                )
+                return 1
+    # legacy 任务保留子串判定（§8 兼容）。⚠️ 该字面行是 OBL-P8-02 的负向控制变异锚点
+    # （test_tag0050_obligations.py::test_bdd_42），**不得改缩进或措辞**。
     if "delivery:" not in p8_text:
         sys.stderr.write(
             "GATE P8: P8-release.md 缺 delivery 字段（P8 为交付收尾，须声明交付方式）\n"

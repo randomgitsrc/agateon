@@ -84,9 +84,15 @@ status: draft
 created: 2026-01-01
 agent: verifier
 # ── v2.0 机器汇总 ──
-pass: 28                          # int ≥0
-fail: 0                           # int ≥0
+pass: 28                          # int ≥0（系统字段：由 results 现算）
+fail: 0                           # int ≥0（系统字段：由 results 现算）
 ui_affected: false                # bool（与 P2 声明一致）
+prod_touched: false               # bool，必填（非 legacy 任务）
+# ── TAG0050 批 D 结构化验收结果（非 legacy 任务**必填**；缺 → ERROR）──
+results:
+  - {bdd: '1', verdict: PASS, evidence: [unit.log]}
+  - {bdd: '2', verdict: PASS, evidence: [screenshots/a.png], manual_review: review.md}
+# bdd 集合须等于 P1 的 #### BDD-N: 集合；全 PASS；evidence 相对 P6-evidence/ 或 run:<k>
 ---
 ```
 

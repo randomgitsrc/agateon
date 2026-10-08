@@ -42,13 +42,27 @@ def _declaration_files(task_dir=None):
     return _FALLBACK_DECLARATION_FILES
 
 
+def _is_declaration_file(file_path, task_dir):
+    """file_path 是否命中快照 `declaration_files`（glob 模式，按相对任务目录路径 + basename）。
+
+    GAP-8 闭合（2026-10-08）：`declaration_files` 由纯文件名扩展为 glob 模式
+    （`*-review.md` / `P4-implementation-*.md` / `P4-implementation/**/*.md`）。
+    cso F-2（2026-10-09）：匹配语义统一到 `agate_common.match_declaration_file`
+    （glob 语义单源，与聚合面同判据）——原 `fnmatch` 对 `P4-implementation/**/*.md`
+    的直接子文件不命中。
+    """
+    return agate_common.match_declaration_file(file_path, task_dir, _declaration_files(task_dir))
+
+
 def _task_is_non_legacy(file_path):
     """文件所在任务目录是否非 legacy（账本有创建/迁入事件）。
 
     文件不在任务目录下（如测试用裸 tmp 目录）→ False，走旧兼容路径。
+    cso F-2：任务根经 `agate_common.task_dir_for_file` 向上定位（子目录声明文件如
+    `P4-implementation/x.md` 亦能定位到含账本的任务根，不再退化为 legacy 跳过）。
     """
     try:
-        task_dir = os.path.dirname(os.path.abspath(file_path))
+        task_dir = agate_common.task_dir_for_file(file_path)
         return agate_common.task_level(task_dir, __file__) is not None
     except Exception:
         return False
@@ -104,8 +118,8 @@ def main():
     # 既有 pre_commit_hook 夹具已随新契约补 frontmatter（契约驱动的夹具演进）。
     if not errors:
         basename = os.path.basename(file_path)
-        task_dir = os.path.dirname(os.path.abspath(file_path))
-        if basename in _declaration_files(task_dir) and _task_is_non_legacy(file_path):
+        task_dir = agate_common.task_dir_for_file(file_path)
+        if _is_declaration_file(file_path, task_dir) and _task_is_non_legacy(file_path):
             try:
                 with open(file_path, encoding="utf-8") as fh:
                     text = fh.read().replace("\r\n", "\n")

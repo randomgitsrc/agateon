@@ -417,3 +417,95 @@ FFF.                                                                     [100%]
 - `git status --porcelain` → 仅 3 改动 + 1 新增测试文件，无账本污染（测试全在 tmp_path）。
 - [PROD_NOT_TOUCHED]
 
+
+## G3（D+E+F 合批）implementer 开工（2026-10-08）
+- HEAD=b746d07d，分支 feat/TAG0050-task-data-contract。
+- 已读：implementer.md、dispatch-context-G3、P0-brief、设计 §3.1/§5/§6/§7/§8/§10、P1 §4、P2 §1/§3、P3-test-cases。
+- 定位：三个"目标测试文件"实际在 unit（declarations/proxy_judgment/cross_batch），非 dispatch 所写 integration；evidence 在 integration。
+- 目标红灯现状（5 文件 25 节点，7 failed / 18 passed）：BDD-59/60/63/66/69/71/76 红；其余 18 已绿（多数因 `!=0` 由无关失败满足，弱判别力）。
+- 待读：check-gate.py gate_p1/p2/p6/p7/p8 + :964/:1450、agate_common、md-field-set/get、debt-check、pruning、judge-verdict、agate-run、extract-context、check-p6-evidence、level-1.yaml、markers.yaml。
+- 环境隔离：[PROD_NOT_TOUCHED]
+
+## G3（D+E+F 合批）实现完成（2026-10-08）
+- HEAD=b746d07d；产出 P4-implementation-G3.md。
+- **G3-0（E2）**：实测命令写入路径 gate 失败 0 次（rc=0），散文路径 gate 失败 ≥1 次（check-gate P7 rc=1）；
+  token 增量仅一条 <80 字符命令，未登记为代价。见 P4-implementation-G3.md §0。
+- **批 D**：`resolve_evidence_ref`（相对路径 / `run:<k>`，区分事件缺失与 sha256 不匹配）；`agate-run --task`
+  + 任务内 `runs/<k>.log` + `cmd_run` 三字段；`gate_p6` 非 legacy 结构化 D1/D2/D3/D4/D6/D8/D10；
+  `check-judge-verdict` 读 `criteria`；`agate-extract-context` P7/P8 按字段现算 + 单参形式；
+  2h 段非 legacy 跳过 `check-p6-format`；gitignore 取反 + 父目录排除提示。
+- **批 E**：`gate_p7` 跨文件聚合（含 design_gaps↔reviews 集合、悬空 id、resolved 缺证据、findings 计数为系统字段）；
+  `basis: followup:DEBT<n>` 双向回指；`agate-debt-check` 增 `source_ref`；markers.yaml 补 5 标记；
+  md-field-set 自动编号 `<相对路径去 .md>:<前缀><n>`；scope-resolved/retrospective 读聚合。
+- **批 F**：`reviewed_bdds`；P2 `ui_design` na 无 reason；骨架标题级判定（RM-AG0085）；P8 `delivery` 结构化（F12）；
+  `check-pruning` `pruned` 闭合（RM-AG0087）；T2 绊线。
+- 8 条 [DESIGN_GAP]（见 P4-implementation-G3.md §4）。
+- 自查（自查≠gate）：目标 5 文件 25 passed；全量 2840 passed/2 skipped/**1 failed**（唯一 = 既有环境漂移
+  `test_setup_agate_dir.py::test_bdd_43`：本机 opencode `debug agent`→`debug agents`，与
+  P3-test-cases §1 登记的「非本任务失败」一致）；consistency 0 ERROR/410 WARNING；platform rc=0；
+  count-tests 2843；ruff clean。
+- 修复的回归：`test_bdd_42_negative_control_mutation`（恢复 OBL-P8-02 变异锚点字面行）；
+  `test_hook_evidence_warning_low_variance_not_blocked`（非 legacy 无 results 回退既有判定）。
+- [PROD_NOT_TOUCHED] 仅本 checkout + pytest tmp_path + /tmp/opencode 演示；无账本污染。
+
+---
+
+## G3-fix（SELF-GATE 整改 · 第 2 轮，2026-10-08）
+
+- 依据：`docs/reviews/agate-alignment-review-2026-10-08-TAG0050-G3.md`「闭合后…清单」+ 主 Agent 三项裁定。
+- **GAP-1**：`gate_p6` 非 legacy 改由契约单源（`requirement_active(...,"results","P6")`），缺 `results` 即
+  ERROR；快照 `requires.results` 翻真。负向证据：T086 夹具改 structured results 前 gate P6 红。
+- **GAP-2**：`reviewed_bdds` 必填且 = P1 BDD 集合；`conftest.init_task` + `_write_p1_review` 夹具补字段；
+  负向证据：改前 `test_bdd_71` 因 P1 无 `#### BDD-` 命中 reviewed_bdds 集合差，T2 被掩盖 → 已将 T2 前移。
+- **GAP-4**：`phase_universe` 改 `[P1..P8]`；`check-pruning` **恒检**闭合；`pruned` 条目必填 `phase/reason/risk`。
+  夹具：`_P1_REQ`/it9/it9b/it10 的 P1 去掉 P0、补 pruned（负向证据：改前 5 条 hook 用例因 "多=['P0']" 转红）。
+- **GAP-5**：快照注册 `ui_design.shape_dimensions`/`delivery`/`pruned`；`_gate_p2_ui_design_section` 补「必填
+  维度存在」判据（layout→布局/交互/视觉）；`gate_p8` delivery 规格改读快照。新增 `test_gap5_*`（红→绿）。
+- **GAP-6**：D5（内容重复 WARNING）/D7（evidence JSON vs results）/D9（`_p6_reuse_blocked`）+ D3 pre-commit
+  「已跟踪或已暂存」（`AGATE_PRECOMMIT_GATE` 标记）。新增 `test_gap6_d5/d7/d9`。
+- **GAP-7**：`check-p6-provenance.py` 按 `task_level` 跳过审计 1/3/4/5/6（正文解析）+ 审计 6，与 D7 成对。
+  新增 `test_gap7_provenance_body_audit_skipped_for_non_legacy`。
+- **GAP-8**：`declaration_files` 扩展为 glob（含 `*-review.md`/`P4-implementation-*.md`/`P4-implementation/**/*.md`）；
+  删 `declaration_globs`；`check-frontmatter`/`pre-commit-gate`/`agate-md-field-set` 改 glob 匹配。新增 `test_gap8_*` 两条。
+- **A1**：UPGRADING/CHANGELOG 去掉过度承诺、D1–D10 只列实际落地项。
+- **A2**：README 登记 `agate-extract-context` 单参形式 + 4 脚本行为变化。
+- **A3**：task-files.md / phase-cards{P1,P2,P6,P7,P8} / verifier+consistency-reviewer+requirements-review 角色卡 /
+  WORKFLOW「Pre-commit 检查总览」反向传播新结构化字段与跳过行为。
+- **A4**：test_bdd_56（A/B/C）、57/58（改走 gate_p6 D3/D6）、59（真构造 sha256 不一致）、60（断言计数==现算值）、
+  62/64/65（判别性断言）。
+- **A5**：`gate_p2` UI `na` 检查加 `task_level` 门；**R6 复跑** → legacy 39 任务 / 差异 0 / 未匹配 0 / exit 0。
+- E2 裁定 `[HUMAN_CONFIRMED: 2026-10-08]` 记入 P4-implementation-G3.md §0。
+- 自查（自查≠gate）：目标 6 文件 **94 passed**；全量 **2840 passed/2 skipped/1 failed**（唯一 = 既有环境漂移
+  `test_bdd_43`）；consistency 0 ERROR/410 WARNING；platform rc=0；count-tests **2850**；R6 exit 0。
+- [PROD_NOT_TOUCHED] 仅本 checkout + pytest tmp_path + `/tmp/opencode`（R6 在 `cp -r` 副本、跑毕删除）；无账本污染。
+
+---
+
+## G3-fix2（C8 整改 · 第 2 轮，2026-10-09）
+
+- 输入：`P4-review-G3.md`（BLOCKER-1 + MINOR-2/3/4）、`P4-review-cso-G3.md`（F-1..F-6）、主 Agent 裁定。
+- 复现 BLOCKER-1：非 legacy 缺 `criteria` → `criteria_total 缺失或非整数`；补系统字段后仍
+  `非 legacy 任务须在 frontmatter 声明 criteria`（`read_judge_verdict` 丢弃 `criteria`）。
+- 计划：BLOCKER-1（透传 criteria + 校验后移 + 正/负用例 + 文档一致）；MINOR-2（D8 读 vision 三态）；
+  MINOR-3（D7 双向/形态/多 JSON 合并）；MINOR-4（gate_p7 取值域枚举）；F-1（run: sha256 fail-closed）；
+  F-2（declaration_files 匹配语义单源）；F-3（run: 空日志）/F-4（P7 计数登记系统字段）/F-5/F-6（声明）。
+
+### G3-fix2 完成记录（2026-10-09）
+
+- **BLOCKER-1 修复**：`read_judge_verdict` 透传 `criteria`；`check-judge-verdict.py` 三系统字段强校验
+  后移至非 legacy 现算之后。正/负用例各 1（正向改前为红）。文档承诺修好即成立。
+- **MINOR-2**：D8 读 `read_vision_tri_state`（GAP→manual_review / 否则→vision）；截图结构化判定。
+- **MINOR-3**：D7 扩为双向 + 证据形态 + 多 JSON 合并（4 用例）。
+- **MINOR-4**：`gate_p7` design_gap_reviews 的 `verdict`/`basis` 取值域枚举（2 用例）。
+- **cso F-1**：`run:<k>` 的 cmd_run 事件缺 k/log/sha256 → fail-closed（1 用例）。
+- **cso F-2**：`declaration_files` 匹配语义单源（`agate_common.match_declaration_file`/
+  `declaration_file_paths`/`task_dir_for_file`），6 消费方统一 glob 语义（2 用例）。
+- **cso F-3**：核实改前未被 D3/D6 覆盖 → 已修（run: 空日志 → ERROR，1 用例）。
+- **cso F-4**：P7 `blocker_count`/`deviation_critical_count` 登记为系统字段（LEVELS 重登记 sha256，1 用例）。
+- **cso F-5/F-6**：显式声明边界（见 P4-implementation-G3.md §9.7）。
+- **[DESIGN_GAP]×1**：P7 计数 derive 取 severity 口径（算子无法表达 open∧severity；门禁不读该字段）。
+- 自查：目标 5 文件 **107 passed**；全量 **2863 passed/2 skipped/1 failed**（唯一 = 既有环境漂移
+  `test_bdd_43`）；consistency **0 ERROR/410 WARNING**；platform rc=0；count-tests **2866**（+16）；
+  ruff 全绿；**R6** 于仓外副本（`/tmp/opencode/r6copy`，提交使树干净后运行）→ legacy 39 / 差异 0 /
+  未匹配 0 / exit 0，跑毕删除副本。
+- [PROD_NOT_TOUCHED] 仅本 checkout + pytest tmp_path + `/tmp/opencode`；`git status` 无账本污染。

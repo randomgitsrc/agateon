@@ -97,6 +97,9 @@ domains: [backend, frontend]  # list，必填
 # need_confirm_resolved: []   # list[str]：已解决的 NEED_CONFIRM 项描述（逐条匹配正文）
 # suggest_resolved: []        # list[str]：已采纳的 SUGGEST 项描述
 # scope_resolved: []          # list[str]：已解决的 SCOPE+ 项描述
+# ── TAG0050 批 E/F 结构化字段（非 legacy 任务）──
+# scope_plus: [{id: SP1, text: "增补项"}]   # list；P7 聚合，须被 scope_resolved 覆盖
+# pruned: [{phase: P3, reason: "low 风险可裁", risk: low}]  # 跳过阶段；phases ∪ pruned == phase_universe（恒检）
 ---
 ```
 

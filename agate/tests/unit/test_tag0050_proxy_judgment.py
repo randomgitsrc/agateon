@@ -61,6 +61,24 @@ def test_bdd_69_skeleton_prose_not_treated_as_heading(
     )
 
 
+def test_gap5_ui_design_missing_required_dimension_errors(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """GAP-5：ui_design 缺 `shape` 决定的必填维度 → ERROR（快照 ui_design.shape_dimensions）。"""
+    d = h.init_task_via_conftest(tmp_path)
+    add_p2_review(d)
+    (d / "P2-design.md").write_text(
+        "---\nagent: test\ncandidate_count: 2\npackages: [a]\ndomains: [backend]\n"
+        'ui_affected: true\ngate_commands: {P5: "pytest"}\n'
+        "ui_design:\n  shape: layout\n  dimensions:\n    视觉: {status: covered}\n"
+        "---\n\n### 候选方案 A：x\n### 候选方案 B：y\n## 权衡\nA 简单 B 稳健\n",
+        encoding="utf-8",
+    )
+    r = run_cli(python_exe, str(agate_scripts / "check-gate.py"), "P2", str(d))
+    assert r.returncode == 1, f"GAP-5：layout 缺 布局/交互 必填维度须 ERROR，实际 rc={r.returncode}"
+    assert "必填维度" in r.output, r.output
+
+
 def test_bdd_70_phase_set_not_closed_errors(tmp_path, agate_scripts, python_exe, run_cli):
     """BDD-70：阶段集合不闭合判 ERROR（RM-AG0087）。"""
     d = h.init_task_via_conftest(tmp_path)

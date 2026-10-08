@@ -1,0 +1,34 @@
+# 留痕 — TAG0050 G3 聚焦复评（protocol-alignment-review）
+
+- 读 dispatch-context（G3-rereview）+ 角色定义 + SELF-GATE.md + 上一轮报告 G3.md + 整改指引 G3-fix.md
+- 读 P4-implementation-G3.md（宣称 8 GAP 全闭合 + A1-A5 闭合）+ P4-progress.md 尾段
+- git status：HEAD=b746d07d，44 tracked 改动未提交；conftest/test 夹具已改
+- 读 level-1.yaml diff：requires.results true；phase_universe=[P1..P8]；新增 ui_design/delivery/pruned；declaration_files 扩 glob；declaration_fields 节
+- LEVELS.yaml sha256 重登记：实测 LF 归一 sha256(level-1.yaml)=3b2af190… == 登记值 ✓
+- 读 check-pruning.py diff：`_phase_universe`/`_pruned_required_fields` + 非 legacy 恒检闭合（declared|pruned != universe → ERROR，不再仅声明时）
+- 读 check-gate.py：gate_p6 `requirement_active(...,"results","P6") is True`；缺 results → return 1；_gate_p6_structured D1-D10（D5 WARNING/D7 ERROR/D9 ERROR）；_is_tracked_or_staged + AGATE_PRECOMMIT_GATE
+- 读 gate_p1：T2 绊线（前置）+ reviewed_bdds 缺失即 ERROR + 集合不等 ERROR（均 task_level 门）
+- 读 gate_p2：ui_design na 需 reason + shape_dimensions 必填维度（task_level 门）
+- 读 check-frontmatter/_is_declaration_file glob + pre-commit-gate/_is_declaration_path glob
+- 读 check-p6-provenance diff：审计 1/3/4/5/6 非 legacy 跳过（task_level）
+- 读 agate_common：resolve_evidence_ref（run:<k> sha256）；requirement_active level_at_phase
+- 仓外副本 /tmp/opencode/g3rr（cp -r agate agate-workspace）：target 6 文件 = 91 passed / 3 failed（3 failed=test_bdd_74/75/76 缺根文档 r6-allowlist/CHANGELOG/consistency，环境噪声）
+- 独立验证 ①：非 legacy 缺 results → check-gate P6 rc=1「须在 P6-acceptance.md 声明结构化 results」
+- 独立验证 ①b：results bdd 集合 != P1 → rc=1「D1」
+- 独立验证 ②：reviewed_bdds 缺失 → rc=1；②b mismatch → rc=1
+- 独立验证 ③a：phases=[P1..P8] 完整 → check-pruning rc=0；③b 缺 P4 且未声明 pruned → rc=1「phases ∪ pruned.phase != 阶段全集：缺=['P4']」（恒检生效）
+- 独立验证 ③c：pruned 覆盖 P4 → 闭合错误消失（余下为 P4 不可裁剪等无关错误）；③d pruned 缺 reason → rc=1「pruned 条目缺必填字段：['reason']」
+- 独立验证 ⑤a：*-review.md 缺 frontmatter → rc=1；⑤b P4-implementation-*.md → rc=1；⑤c 非声明文件 notes.txt → rc=0（无过度命中）
+- 变异实验（scratch）：D5/D7/D9 各自禁用 → 对应 test_gap6_d5/d7/d9 转红（判别力 ✓）
+- 变异实验 round2（禁用后跑 5 目标文件）：missing-results 守卫 / closure 恒检 / reviewed_bdds 缺失守卫 —— 三者禁用后目标集仍 3 failed/88 passed（= 基线噪声），**无测试转红** ⇒ 三个负向分支无测试守护
+- grep tests：`声明结构化`/`phase_universe`/`_is_tracked_or_staged`/`AGATE_PRECOMMIT_GATE`/`pruned 条目缺必填` 在 tests 中 0 命中；reviewed_bdds 仅 test_bdd_68（mismatch）
+- 夹具核：_P1_REQ phases 去 P0；it9/it9b 补 pruned；_write_p1_review+conftest 补 reviewed_bdds；T086 改 structured results；bdd_62 清 P4 干扰；bdd_64/65 加判别断言 —— 均契约驱动，未见削弱
+- 全量一致性：check-protocol-consistency.py → 0 ERROR / 412 WARNING（rc=0）
+- count-tests.sh → 2850
+- 语料：agate-workspace/tasks 有账本 22 个，非 legacy（task_created/adopted）= 0 ⇒ 新契约分支不触发生效存量任务
+- 新增分支门控逐一核：gate_p6 requirement_active；gate_p1/p2/p7/p8 task_level；check-pruning task_level；check-frontmatter _task_is_non_legacy；provenance non_legacy —— legacy §8 结构不变
+- 残留：A3 反向传播未覆盖 architect.md/analyst.md/其余 review-roles，未登记 DEBT（dispatch 允许 DEBT 替代）
+- 残留：`_declaration_globs()` 函数名保留旧键名（读的是 declaration_files）——命名 cosmetic
+- 读 UPGRADING/CHANGELOG/WORKFLOW/README 传播：A1 去过度承诺；A2 登记单参 + 4 脚本行为变化；WORKFLOW pre-commit 总览更新
+- 全程只读：真实仓 git status 与开始时一致（44 tracked + 未跟踪派发/进度文件），未污染账本
+- [PROD_NOT_TOUCHED]

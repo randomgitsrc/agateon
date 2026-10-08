@@ -2,90 +2,92 @@
 phase: P4
 task_id: TAG0050
 type: review
-parent: P4-implementation-G2.md
+parent: P4-implementation-G3.md
 trace_id: TAG0050-P4-20261008
 agent: leader
 status: approved
 ---
-
-# P4 实现评审（专家组汇总）— TAG0050 合批 G2（B + C）
+# P4 实现评审（专家组汇总）— TAG0050 合批 G3（D + E + F）
 
 > 角色：`leader`（专家组组长；**只汇总，不发表新意见**）。
-> 对象：G2（批次 B 写入工具与契约单源 + 批次 C 生产接触安全门）**未提交**改动，HEAD `54a814fc`，
+> 对象：G3（批次 D 验收结论与证据 + 批次 E 成对声明 + 批次 F 代理判定）**未提交**改动，HEAD `b746d07d`，
 > 分支 `feat/TAG0050-task-data-contract`，协议 v0.79.0。
-> 依据：`P4-dispatch-context-leader-G2.md`；输入 = 两评审角色（`review`、`cso`）的首轮 + 第 2 轮整改（fix2）复审文件。
+> 依据：`P4-dispatch-context-leader-G3.md`；输入 = 两评审角色（`review`、`cso`）的首轮 + 第 2 轮整改（fix2）复审文件。
 > 汇总规则：不发表新意见，只汇总；任何未解决 BLOCKER → rejected；分歧 → 交人工；全票无 BLOCKER → approved。
 > `[PROD_NOT_TOUCHED]`（组长仅读输入并汇总，未接触生产环境）。
 
 ## 0. 汇总结论
 
-**`status: approved`** —— 首轮 `review` 与 `cso` **双双 `rejected`**；经 **fix2 整改**后，两方**复审均 `approved`**，
-首轮阻断项 **B1/H1（review）与 F-1/F-2/F-3（cso）全部独立验证闭合**，**无未解决 BLOCKER**。
+**`status: approved`** —— 首轮 `review` **`rejected`**（**BLOCKER-1** + MINOR-2/3/4）、`cso` **`approved`**
+（F-1/F-2 MEDIUM + F-3..F-6 LOW，非阻断）；经 **fix2 整改**后，两方**复审均 `approved`**：
+首轮阻断项 **BLOCKER-1** 独立验证闭合，**MINOR-2/3/4** 闭合且新用例具改前红判别力，
+cso **F-1/F-2 闭合**、**F-3 已修 / F-4 已登记 / F-5/F-6 已声明**，**无未解决 BLOCKER、无新阻断**。
 
 | 汇总指标 | 值 |
 |---|---|
-| 首轮 verdict | `review` = rejected（B1 BLOCKER + H1 HIGH + M1/M2 MEDIUM + L1–L6 LOW）／`cso` = rejected（F-1 HIGH **BLOCKER** + F-2/F-3 MEDIUM + F-4/F-5/F-6 LOW） |
-| 复审 verdict | `review` = **approved**（B1/H1 独立验证闭合；M1/M2/L1–L6 全 ALIGNED）／`cso` = **approved**（F-1/F-2/F-3 全闭合；无新安全阻断） |
+| 首轮 verdict | `review` = rejected（BLOCKER-1 BLOCKER + MINOR-2/3/4）／`cso` = approved（F-1/F-2 MEDIUM + F-3–F-6 LOW，最高 MEDIUM，非阻断） |
+| 复审 verdict | `review` = **approved**（BLOCKER-1 独立复现闭合；MINOR-2/3/4 全 ALIGNED 且改前红）／`cso` = **approved**（F-1/F-2 闭合；F-3 已修、F-4 已登记、F-5/F-6 已声明；无新阻断） |
 | 未解决 BLOCKER | **0** |
-| 残余非阻断项 | cso 复审新观察 2 LOW（F-1 降级 fail-open、F-3 扫描派生次进程）+ F-4/F-5/F-6 仍成立（已声明/非安全）+ review 复审 1 项 xdist flake 观察 |
+| 残余非阻断项 | cso 复审新增 2 LOW（F-2′ 子目录 shadow 绕过、F-2″ basename 口径差）+ F-5/F-6 声明边界仍成立；review 复审 2 项非阻断观察（D7 形态判据较严、consistency WARNING 412 vs 410） |
 | 是否阻塞发布 | **否** |
 
-> 判定：两角色首轮的阻断项**同源**（review B1 ≡ cso F-1：BDD-46 `derive` 现算读取未实现），
-> 均由 fix2 落地并经**两方独立复现**（含负向控制）确认；H1 亦经「照抄修复命令 → 重新提交转绿」独立验证。
+> 判定：首轮唯一阻断项 **BLOCKER-1**（非 legacy 任务 P6.5 `criteria` 读取链路断裂 → P6→P7 死锁）
+> 由 fix2 落地并经 **review 独立复现**（正向 exit 0 / 负向 exit 1 / 判别力反证转红）确认；
+> cso 首轮两项 MEDIUM 为防御纵深缺口（最高 MEDIUM，首轮即判非阻断），fix2 后经 **cso 独立验证**闭合。
 
 ## 1. 各角色评审汇总表
 
 | 角色 | 首轮 verdict | 首轮关键 finding | 复审 verdict | 闭合方式 |
 |---|---|---|---|---|
-| `review` | **rejected** | B1（**BLOCKER**）BDD-46 derive 现算未实现、验收用例空转；H1（HIGH）BDD-52 修复命令在非 P6 主产出上不可执行（连带 BDD-49 未真验证）；M1/M2（MEDIUM）；L1–L6（LOW） | **approved** | B1/H1 **独立验证闭合**；M1/M2/L1–L6 全 **ALIGNED**（实现或显式登记/声明） |
-| `cso` | **rejected** | F-1（HIGH，**BLOCKER**）同 B1（伪造 P6 汇总被信任）；F-2（MEDIUM）系统字段拒写非契约语义；F-3（MEDIUM）CARD 块排除可伪造绕过；F-4/F-5/F-6（LOW） | **approved** | F-1/F-2/F-3 全 **CLOSED**；F-4/F-5/F-6 仍成立（已声明/非安全）；**无新安全阻断** |
+| `review` | **rejected** | BLOCKER-1（**BLOCKER**）P6.5 `criteria` 读取链路断裂（`read_judge_verdict` 不透传 → 非 legacy 恒 exit 1）；MINOR-2（D8 弱化）、MINOR-3（D7 弱化）、MINOR-4（`gate_p7` 取值域未校验） | **approved** | BLOCKER-1 **独立复现闭合**；MINOR-2/3/4 全 **ALIGNED**（新用例具改前红判别力） |
+| `cso` | **approved** | F-1（MEDIUM）`run:<k>` sha256 在 `cmd_run` 事件缺 `sha256` 时 fail-open；F-2（MEDIUM）`declaration_files` glob 两消费方语义分叉（子目录文件逃逸 frontmatter 强制）；F-3–F-6（LOW） | **approved** | F-1/F-2 全 **CLOSED**；F-3 已修、F-4 已登记、F-5/F-6 已声明；**无新安全阻断** |
 
 ## 2. 首轮阻断项闭合明细（经首轮 → fix2 → 复审）
 
 | # | 来源 | 首轮问题 | 复审判定 | 闭合方式（复审所录证据） |
 |---|---|---|---|---|
-| **B1** | review（BLOCKER）；= cso F-1 | BDD-46「`agate-md-field-get` 读 `writer: system` 字段按 `derive` 现算」未实现（`agate_schema.derive()` 零生产消费方），验收用例对半空转 | **ALIGNED（闭合）** | `agate-md-field-get.py` 新增 `_system_field_spec()` + 现算分支：非 legacy 且快照可用时调 `agate_schema.derive(spec["derive"], fm)`，忽略文件值。两复审独立复现：伪造 `pass: 999`+FAIL → get=2/fail=1；下游 `check-gate.py P6` 报 FAIL=1 rc=1（伪造不再通过）；负向控制（禁用 derive）→ 回退伪造值 999。`test_bdd_46` 重写为「文件写 `pass: 999` + results 含 FAIL → 断言现算值」取得判别力 |
-| **H1** | review（HIGH） | BDD-52 修复命令 `set prod_touched …` 在非 P6 主产出上 `非法 key` 不可执行（连带 BDD-49 未真验证） | **ALIGNED（闭合）** | `prod_touched` 纳入声明文件合法 key（快照 `files` 定义）；修复命令与中文注解**分行**输出。两复审独立复现：非 P6 主产出缺字段 → hook 报错 → **照抄执行** rc=0 写入 → 重新提交 **rc=0 转绿**；`test_bdd_49` 改为真「提交报错→照抄执行→转绿」用例 |
-| **F-2** | cso（MEDIUM） | 系统字段拒写非契约 `writer: system` 语义（靠证据字段表偶发耦合） | **CLOSED** | `_cmd_set` 在可写性判定**之前**加契约驱动判定：凡快照登记 `writer == "system"` 一律拒写并指明 `derive` 来源。独立验证注入**未来**系统字段（不在证据字段表内）亦被拒；`set prod_touched true`/`set agent x` 未被误伤 |
-| **F-3** | cso（MEDIUM） | T4 的 `AGATE_CARD` 块排除是纯文本判定，可伪造 CARD 起止注释对绕过 | **CLOSED** | 收紧为「真实注入块」：`_card_block_verified()` 要求文件名匹配 `-dispatch-context-*.md` **且**块内容 sha256 == 当前阶段卡片期望值（与 2p 同源）；未闭合 START fail-safe 参与扫描。独立验证：伪造块/非 dispatch-context 文件/未闭合块内标记**仍拦**（rc=1）；真实卡片仍被排除（hash 逐字节 MATCH） |
+| **BLOCKER-1** | review（BLOCKER） | `agate_common.read_judge_verdict()` 返回值不含 `criteria` ⇒ `check-judge-verdict.py` 的 `verdict.get("criteria")` 恒 `None` ⇒ 非 legacy 任务 P6.5 恒 exit 1（且更早因系统字段缺失先报错）⇒ **P6→P7 转移死锁**；该路径无任何测试守护，前序 SELF-GATE A1「ALIGNED」因此不成立 | **ALIGNED（闭合）** | `read_judge_verdict()` 透传 `criteria`（`agate_common.py:601-608`）；`check-judge-verdict.py` 把 `criteria_total`/`criteria_passed`/`verdict_evidence` 强校验**移到 `_non_legacy` 判定与现算之后**（legacy 保留旧口径）。review 独立复现（仓外副本手工构造任务）：声明 `criteria` 且 `status: passed` → **exit 0**；缺 `criteria` → **exit 1**；**判别力反证**（删除 `criteria` 透传 → 转红）。文档承诺（`UPGRADING.md`/`CHANGELOG.md` 对 P6.5 `criteria` 现算）与修复后实现**一致** |
 
-> 同源确认：review B1 与 cso F-1 为**同一缺陷**，由 fix2 一处落地闭环，两方**各自独立复现**。
+> 无其他首轮 BLOCKER；首轮 `cso` 最高为 MEDIUM（非阻断），其 F-1/F-2 闭合见 §3。
 
 ## 3. 首轮 MEDIUM/LOW 处理明细（复审裁定）
 
 | # | 来源 | 首轮问题 | 复审裁定 | 方式 |
 |---|---|---|---|---|
-| M1 | review | BDD-45 `agate-config` set/unset/explain 往返用例未真往返 | **ALIGNED** | 用例改真往返（init→set→get/show/explain 可见→unset 后消失、raw 无残留；无声明文件时 set 不创建） |
-| M2 | review | BDD-51 `traps.T1.downgrade` 是惰性数据（T1/T2/T3 未接线） | **ALIGNED（显式登记）** | `P4-implementation-G2.md:164` 以 `[DESIGN_GAP]` 显式登记 T1/T2/T3 接线为后续批待办（符合 dispatch「接线或显式登记」二选一裁定） |
-| L1 | review | `check-frontmatter._declaration_files` 用 `current_level`，与 `pre-commit-gate` 的 `task_level` 口径不一致 | **ALIGNED** | 改用 `task_level`（回退 `current_level`），两处同口径（diff 实测一致） |
-| L2 | review | `_primary_output_for`/`_declaration_files` 的 `task_level` 与 `requirement_active` 的 `level_at_phase` 口径不一致 | **ALIGNED（显式声明）** | 结构面（任务级最新快照）vs 时间面（`level_at_phase`）刻意不统一，代码注释 + `P4-implementation-G2.md:159` 声明 |
-| L3 | review | 安全门扫描面 = 任务目录内全部暂存文件（偏宽 fail-safe） | **ALIGNED（显式声明）** | 保留偏宽并在 `P4-implementation-G2.md:160` 声明偏差 |
-| L4 | review | `pre-commit-gate.py` 保留字面 `[PROD_TOUCHED]` 正则（DESIGN_GAP-5） | **ALIGNED（已裁定）** | 声明于 `P4-implementation-G2.md:161` |
-| L5 | review | 类型错误文案由 Python 名改 JSON 名，无测试守护 | **ALIGNED** | 守护用例 `test_l5_frontmatter_type_error_json_type_names` 断言「应为 integer」，实测通过 |
-| L6 | review | `_local_iter_errors`/`_local_max_depth` 为不完全第二份递归遍历 | **ALIGNED（已裁定）** | 声明于 `P4-implementation-G2.md:162`（门控 + 白名单守护） |
+| MINOR-2 | review | D8 截图「须带 vision，无视觉能力才退 manual_review」退化为「二选一即可」，且以 `"screenshots/" in refs` 子串识别 UI 条目 | **ALIGNED** | 读 `read_vision_tri_state`：能力=GAP → 须 `manual_review`，否则须 `vision`；截图判定改结构化（目录段精确比较）。改前红用例 2 条（GAP 分支 + 结构化判定） |
+| MINOR-3 | review | D7 仅单向启发式（evidence FAIL vs results PASS），未覆盖反向/字段形态/多 JSON 合并 | **ALIGNED** | 补全四类判据（正向 + 反向 + 形态 + 多 JSON 合并冲突），**面不窄于被取代的 `agate-evidence-consistency.py`**；改前红用例 2 条（形态非列表 / 非映射元素） |
+| MINOR-4 | review | `gate_p7` 的 `design_gap_reviews.verdict` / `basis` 取值域未校验 | **ALIGNED** | 加枚举校验（`verdict ∈ {accepted,rejected,followup}`；`basis ∈ {in_bdd,out_of_scope} ∪ followup:DEBT<n>`），越界 → ERROR；仅非 legacy 分支，legacy 不变；改前红用例 2 条 |
+| F-1 | cso（MEDIUM） | `run:<k>` 的 sha256 校验在事件缺 `sha256` 字段时**静默放行**（fail-open） | **CLOSED** | 收紧为 fail-closed：`k`/`log`/`sha256` 任一缺失/空/非字符串 → 报「事件不完整」，与「sha256 不匹配」**文案可区分**。cso 独立验证：`check-gate.py P6` 各分支 rc=1/1/2，测试 passed；未误伤合法路径（`cmd_run` 唯一生产者 `agate-run.py --task` 恒写三字段） |
+| F-2 | cso（MEDIUM） | `declaration_files` glob 被 `glob`（聚合）与 `fnmatch`（frontmatter 强制）以不同语义消费，`P4-implementation/**/*.md` 直接子文件逃逸 frontmatter 强制；`check-frontmatter` 的 `task_dir=dirname(file)` 使子目录文件恒 legacy | **CLOSED** | 统一匹配语义到单源 `agate_common.match_declaration_file` / `declaration_file_paths`；`check-frontmatter`/`pre-commit-gate` 均走单源并经 `task_dir_for_file` 向上定位任务根。关键不变式：**命中面 ⊇ 枚举面**，无「未匹配即免检」逃逸。cso 独立验证：子目录缺 frontmatter → rc=1；6/6 消费方单源、无残留 `declaration_globs` |
+| F-3 | cso（LOW） | `run:<k>` 引用缺「非空文件」判据 | **ALIGNED（已修）** | 补 `getsize==0` 判据（`agate_common.py:1742-1748`）；空日志 + 正确 sha → 报「日志为空文件」；测试 passed |
+| F-4 | cso（LOW） | `blocker_count` 未登记为系统字段（与「系统字段现算」声明不符） | **ALIGNED（已登记）** | 快照登记 P7 计数为 `writer: system` + `derive`（`level-1.yaml:104-106`）；`agate-md-field-get blocker_count` 返回现算值；测试 passed |
+| F-5 | cso（LOW） | 跨文件聚合信任面（不限制哪类声明出自哪类文件；无签名） | **ALIGNED（已声明）** | 显式声明边界（`P4-implementation-G3.md §9.7`，与设计 §6 同口径）；非新门禁绕过 |
+| F-6 | cso（LOW） | 非 legacy `SCOPE+` 只认结构化声明 | **ALIGNED（已声明）** | 显式声明边界（§9.7；由批 B T1 绊线作后盾）；非 G3 新增 |
 
-## 4. 残余非阻断项（复审所录，**均非本批引入或非安全绕过**）
+## 4. 残余非阻断项（复审所录，**均非本批引入阻断或威胁模型内绕过**）
 
 | 来源 | 级别 | 内容 | 复审倾向 |
 |---|---|---|---|
-| cso 复审 §四.1 | LOW（新观察） | F-1 的**降级路径静默 fail-open**——`agate_common`/`agate_schema` 不可导入（安装破损）时 `_system_field_spec` 返回 None，`_get` 回退文件值且**不告警** | 仅安装破损时出现，与既有降级哲学（F-5/L6）一致；建议后续降级时补一行 WARNING（可选） |
-| cso 复审 §五 | LOW（新观察） | F-3 的 `_expected_card_hash()` **每次扫描派生一次** `agate-next-card.py` 子进程 | 有界（按暂存任务数）、失败即 `None`→不排除（fail-safe，更严），非 DoS 放大 |
-| cso 复审 F-4/F-5/F-6 | LOW | F-4 单源降级字面仍为 dash_only（安装破损下 BDD-54 形态 fail-open，已声明 DESIGN_GAP-5/L4）；F-5 `_local_*` 降级副本仍保留（L6 已声明，L1 口径已统一）；F-6 `agate-config` 非原子写 / `os.getcwd()`（非安全项） | 均**仍成立**、已声明或非安全，不阻断 |
-| review 复审 §5 | 非阻断观察 | 首轮全量并行跑（未加 `--reruns`）曾出现一次 `test_pre_commit_hook.py::test_it8_phase_p2_missing_design_blocked` 失败，**未能复现**（单跑过、文件内 62 passed、CI 口径 `--reruns 1` 回到恰为登记的 8 个预期红灯） | 判为 xdist 跨文件并行隔离的既有 flake（CI 以 `--reruns 1` 兜底），**非 G2 fix2 引入** |
-| 两复审一致 | 非阻断 | 登记预期红灯 8 条（BDD-43/59/60/63/66/69/71/76，属 D/E/F 批） | 与 `P4-implementation-G2.md §6` 一致，非 G2 引入 |
+| cso 复审 §四.1 | LOW（新观察） | **F-2′** `agate_common.task_dir_for_file` 返回首个含 `.state.yaml`/账本的祖先——在 `P4-implementation/` 内**故意放置** `.state.yaml` 可 shadow 任务根 → frontmatter 免检 | **净改进**（整改前所有子目录声明文件均免检）、需故意伪造异常产物（设计 §1 明示「不防故意伪造」，威胁模型外）；建议 `task_dir_for_file` 只认 tasks 根直接子目录或含合法 `task_id`+账本 |
+| cso 复审 §四.2 | LOW（新观察） | **F-2″** `match_declaration_file` 对不含 `/` 的通配加 basename 兜底，命中面比枚举面宽 | 方向为 **fail-closed（更严）**，不产生逃逸（命中面 ⊇ 枚举面）；仅口径差，如需严格同判据可去掉 basename 兜底 |
+| cso 复审 §三 | LOW | F-5/F-6 声明边界仍成立 | 已显式声明（§9.7），与实现一致，不阻断 |
+| review 复审 §新引入问题核查 | 非阻断观察 | **D7 形态判据较严**：证据目录内含顶层 `results`/`bdd_results` 键但值非列表的合法 JSON 会硬失败 | 「面不窄于被取代者」的**有意加宽**（旧脚本静默跳过正是被修的弱点），已记入 `UPGRADING`；留作观察 |
+| review 复审 §附 | 非阻断观察 | consistency WARNING 数 412（实现者记 410），差 2 条来自本次**未跟踪**的评审/派发文件 | 非 ERROR，非缺陷 |
+| review 复审 §新引入问题核查 | 非阻断 | 目标 5 文件副本跑测 **107 passed**（3 条 `cross_batch` 失败系副本未含仓库根 `docs/`/`CHANGELOG.md` 的环境假象） | 环境假象，非缺陷 |
+| 两复审一致 | 非阻断 | `check-protocol-consistency.py` **exit 0 / 0 ERROR**；`count-tests.sh` **2866**（与 P3 登记 +16 一致）；快照 `level-1.yaml` LF 归一 sha256 登记一致 | 一致通过 |
 
 ## 5. 门槛判定
 
-- **`status: approved`** —— 汇总规则满足：全票无未解决 BLOCKER；两角色复审均 approved；首轮 B1/H1/F-1/F-2/F-3 全闭合。
-- **分歧**：无（两角色对同源缺陷 B1≡F-1 及各自整改项判定一致闭合）。
-- **残余项处理建议**（转交主 Agent，组长不裁决）：cso 复审两项新 LOW 观察可选随本批补 WARNING/缓存优化，或登记 DEBT 留痕后放行。
+- **`status: approved`** —— 汇总规则满足：全票无未解决 BLOCKER；两角色复审均 approved；首轮 BLOCKER-1 与 MINOR-2/3/4、cso F-1/F-2/F-3/F-4 全闭合（F-5/F-6 已声明）。
+- **分歧**：无（两角色对各自整改项判定一致闭合；cso 首轮即 approved，无与 review 相左的阻断判定）。
+- **残余项处理建议**（转交主 Agent，组长不裁决）：cso 复审 2 项新 LOW 观察（F-2′/F-2″）可选随批收紧或登记 DEBT 留痕后放行；review 复审 D7 形态观察已记入 `UPGRADING`，无需动作。
 
 ## 6. 被汇总文件清单（只读，未编辑）
 
-- 首轮：`P4-review-G2.md`（review，rejected）、`P4-review-cso-G2.md`（cso，rejected）
-- 复审：`P4-review-rereview-G2.md`（review，approved）、`P4-review-cso-rereview-G2.md`（cso，approved）
-- 整改指引：`P4-dispatch-context-implementer-G2-fix2.md`
-- 历史：`P4-review.md`（原 G1 汇总，已被本汇总文件覆盖）
+- 首轮：`P4-review-G3.md`（review，rejected）、`P4-review-cso-G3.md`（cso，approved）
+- 复审：`P4-review-rereview-G3.md`（review，approved）、`P4-review-cso-rereview-G3.md`（cso，approved）
+- 整改指引：`P4-dispatch-context-implementer-G3-fix2.md`
+- 历史：`P4-review.md`（原 G2 汇总，已被本汇总文件覆盖）
 
 ## 7. 环境隔离
 

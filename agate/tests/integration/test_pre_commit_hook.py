@@ -433,7 +433,8 @@ def _in_order(text, *parts):
 _P1_REQ = (
     "---\nagent: test\nprod_touched: false\n---\n"
     "risk_level: medium\n"
-    "phases: [P0, P1, P2, P3, P4, P5, P6, P7, P8]\n"
+    # GAP-4 裁定后 phase_universe = [P1..P8]（排除 P0/P6.5）——phases 不再含 P0。
+    "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n"
     "- Given test precondition\n"
 )
 
@@ -864,8 +865,12 @@ def test_it9_pruning_skip_low_passes(git_repo, agate_root, agate_scripts, python
     task_dir.mkdir(parents=True, exist_ok=True)
     _write_state_yaml(task_dir, "TXX0001", "P2")
     (task_dir / "P1-requirements.md").write_text(
-        "---\nagent: test\n---\nrisk_level: low\n"
-        "phases: [P0, P1, P2, P4, P5, P6, P7, P8]\n跳过风险: 低\n",
+        # GAP-4：phase_universe=[P1..P8]——跳过 P3 用结构化 pruned 声明（`phases ∪ pruned` 闭合）。
+        "---\nagent: test\nrisk_level: low\n"
+        "phases: [P1, P2, P4, P5, P6, P7, P8]\n"
+        "packages: [pkg-a]\ndomains: [backend]\n"
+        "pruned:\n  - {phase: P3, reason: 低风险可裁剪, risk: low}\n"
+        "---\n跳过风险: 低\n",
         encoding="utf-8",
     )
     (task_dir / "P2-design.md").write_text(
@@ -908,8 +913,12 @@ def test_it9b_pruning_skip_medium_blocked(
     task_dir.mkdir(parents=True, exist_ok=True)
     _write_state_yaml(task_dir, "TXX0001", "P2")
     (task_dir / "P1-requirements.md").write_text(
-        "---\nagent: test\n---\nrisk_level: medium\n"
-        "phases: [P0, P1, P2, P4, P5, P6, P7, P8]\n跳过风险: 低\n",
+        # GAP-4：phase_universe=[P1..P8]——跳过 P3 用结构化 pruned 声明（`phases ∪ pruned` 闭合）。
+        "---\nagent: test\nrisk_level: medium\n"
+        "phases: [P1, P2, P4, P5, P6, P7, P8]\n"
+        "packages: [pkg-a]\ndomains: [backend]\n"
+        "pruned:\n  - {phase: P3, reason: medium 风险, risk: medium}\n"
+        "---\n跳过风险: 低\n",
         encoding="utf-8",
     )
     (task_dir / "P2-design.md").write_text(
@@ -951,8 +960,11 @@ def _write_root_state_yaml(repo, task_id, phase):
 
 
 def _write_p1_review(task_dir, bdd_note="- BDD-1: PASS + 覆盖维度：数据✓"):
+    # GAP-2 闭合：非 legacy 任务 P1-review 须声明 reviewed_bdds = P1 的 BDD 标题集合。
+    # `_P1_REQ` 无 `#### BDD-N:` 标题（仅 - Given ...）⇒ 集合为空 ⇒ reviewed_bdds: []。
     (task_dir / "P1-review.md").write_text(
-        "---\nphase: P1\ntask_id: TXX0001\nstatus: approved\nagent: requirements-review\n---\n"
+        "---\nphase: P1\ntask_id: TXX0001\nstatus: approved\nagent: requirements-review\n"
+        "reviewed_bdds: []\n---\n"
         "## BDD 评审\n"
         + bdd_note
         + "\n",
@@ -1237,13 +1249,26 @@ def test_hook_evidence_warning_low_variance_not_blocked(
 
     task_dir = repo / "agate-workspace" / "tasks" / "T086"
     task_dir.mkdir(parents=True, exist_ok=True)
+    # GAP-1 闭合：非 legacy 任务 P6 须结构化 `results`（bdd 集合 = P1、全 PASS、证据指向
+    # 存在的文件）——本用例据此写结构化 results（含 D8 的 vision）。
     _write_state_yaml(task_dir, "TXX0086", "P6")
-    (task_dir / "P6-acceptance.md").write_text(
-        "---\nagent: test\nprod_touched: false\n---\n- PASS BDD-1 (screenshots/test.png)\n",
+    (task_dir / "P1-requirements.md").write_text(
+        "---\nagent: test\nrisk_level: medium\n"
+        "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n"
+        "packages: [pkg-a]\ndomains: [backend]\n---\n\n"
+        "[NO_NEED_CONFIRM]\n\n#### BDD-1: test\n- Given a\n- When b\n- Then c\n",
         encoding="utf-8",
     )
     (task_dir / "P2-design.md").write_text(
         "---\nagent: test\n---\nui_affected: true\n", encoding="utf-8"
+    )
+    (task_dir / "P6-acceptance.md").write_text(
+        "---\nagent: test\nprod_touched: false\n"
+        "results:\n"
+        "  - {bdd: '1', verdict: PASS, evidence: [screenshots/test.png], "
+        "vision: vision.yaml}\n"
+        "---\n\n- PASS BDD-1: ok (screenshots/test.png)\n",
+        encoding="utf-8",
     )
     screenshots = task_dir / "P6-evidence" / "screenshots"
     screenshots.mkdir(parents=True, exist_ok=True)
@@ -1264,7 +1289,7 @@ def test_hook_evidence_warning_low_variance_not_blocked(
     )
     git_repo.stage("agate-workspace/tasks/T086/")
     result = _git_commit(run_cli, agate_root, repo, "-m", "T086 evidence warning test")
-    assert result.returncode == 0
+    assert result.returncode == 0, result.output
     assert "WARNING" in result.output
 
 
@@ -1578,7 +1603,8 @@ def test_it10_routing_2j1_thin_missing_element_blocks(
     _write_state_yaml(task_dir, "TXX0001", "P2")
     (task_dir / "P1-requirements.md").write_text(
         "---\nagent: test\nceremony: thin\nrisk_level: low\n"
-        "phases: [P0, P1, P2, P3, P4, P5, P6, P7, P8]\n"
+        # GAP-4：phase_universe=[P1..P8]（排除 P0）——phases 不再含 P0。
+        "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n"
         "packages: [pkg-a]\ndomains: [backend]\n---\n"
         "### 主流程\n#### BDD-1: test\n",
         encoding="utf-8",

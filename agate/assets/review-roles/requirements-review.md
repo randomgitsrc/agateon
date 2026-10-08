@@ -96,6 +96,10 @@ review 结论必须引用具体产物锚点，而非裸 "approved" 或 "BLOCKER=
 
 ## 门槛产出
 
+> **TAG0050 批 F（非 legacy 任务）**：P1-review.md frontmatter 须声明 `reviewed_bdds`
+> （= P1 的 `#### BDD-N:` 集合，逐条相等；**缺省即 ERROR**）。这是 gate_p1 的机械判据，
+> 不是可选注释。
+
 产出文件 Header 必须含 `status` 字段，映射规则：
 - 通过 → `status: approved`
 - 打回 → `status: rejected`

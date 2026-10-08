@@ -354,13 +354,14 @@ P5 gate 要求「测试环境隔离正常（无 [PROD_TOUCHED]）」，是流程
 | 1.1 | `pre-commit-gate.py`「账本与新目录」步骤 | 任意提交（每次提交都跑，不依赖 `.state.yaml` 是否暂存）| 账本级 | 新目录须有创建事件（规则 1）/ 新任务等级 = 当前等级（规则 2，本地仅新任务）/ 账本只追加（规则 3）/ 含创建/迁入事件的账本不可删（规则 4）/ 账本事件规则（规则 5）/ 每个有暂存文件的任务目录做 `[PROD_TOUCHED]` 扫描 + 非 legacy 任务按被暂存产出所属阶段重跑该阶段 gate（规则 7）；违反任一 → 中止 commit（TAG0050 批 A1，设计 §2.3）|
 | 1.2 | — | 全局，任意阶段 | 全局级 | `[PROD_TOUCHED]` 标记三步检测（正向声明→中止 / 声明格式不合规→中止 / 缺失声明→静默通过）|
 | 1.6 | `check-changelog.py` | P8 phase 且 gate 通过后 | 文件级 | `[Unreleased]` 含本次 task_id（P1.6；P2.54：仅 P8 检查，P1-P7 不触发）|
-| 1.7 | `check-p6-evidence.py` | 阶段 ∈ {P6, P7} | 阶段级 | P6-evidence/ 非空 + BDD 行数 ≥ 1 + md5 逐字节去重（阻断）+ 像素方差/average hash 检测（WARNING）|
-| 2.1 | `check-p6-provenance.py` | gate 通过后 | 阶段级 | 六道客观审计（证据-结论对应 + dispatch-context 内容约束 + BDD 总数对照 + UI vision YAML 审计 [R1b] + EXIT_CODE 一致性 [审计5] + evidence JSON 与 PASS/FAIL 声明一致性 [审计6/P2.57]）+ agent 字段协作规范；exit 1 硬拦截，exit 2 WARNING（P2.1/P2.10 v2 降级方案）|
+| 1.7 | `check-p6-evidence.py` | 阶段 ∈ {P6, P7} | 阶段级 | P6-evidence/ 非空 + BDD 行数 ≥ 1 + md5 逐字节去重（阻断）+ 像素方差/average hash 检测（WARNING）。**非 legacy 任务仍运行**（截图客观检查不随契约等级变化）|
+| 2.1 | `check-p6-provenance.py` | gate 通过后 | 阶段级 | 六道客观审计（证据-结论对应 + dispatch-context 内容约束 + BDD 总数对照 + UI vision YAML 审计 [R1b] + EXIT_CODE 一致性 [审计5] + evidence JSON 与 PASS/FAIL 声明一致性 [审计6/P2.57]）+ agent 字段协作规范；exit 1 硬拦截，exit 2 WARNING（P2.1/P2.10 v2 降级方案）。**TAG0050 批 D/GAP-7：非 legacy 任务跳过正文解析（审计 1/3/4/5/6），由 `check-gate.py P6` 的结构化 `results` 判据 D1–D10 取代**（D7 取代审计 6）；审计 2/7 与 agent 字段规范仍运行 |
 | 2.3 | `check-state-transition.py` | gate 通过后 | 阶段级 | 状态转移合法性 + 重试上限（P2.3-P2.5）+ 门槛失败事件 ↔ retries 对应性校验（RM-AG0042：单步回退未同步写 retries 阻断；评审被拒重派/子代理空返回重派未写 retries 高优 WARNING）|
-| 2.7 | `check-pruning.py` | gate 通过后 | 阶段级 | 裁剪条件与实际执行一致性 + override 校验（P2.7-P2.9）|
+| 2.7 | `check-pruning.py` | gate 通过后 | 阶段级 | 裁剪条件与实际执行一致性 + override 校验（P2.7-P2.9）。**非 legacy 任务**（TAG0050 批 F）：读 frontmatter `phases`/`pruned`，**恒检** `phases ∪ pruned == phase_universe`（`[P1..P8]`）且不相交 |
 | 2.7.1 | `check-routing.py` | gate 通过后 | 阶段级 | ceremony 路由校验（TAG0019）：声明 ceremony 与算分 tier 一致性（单向 fail-closed）+ thin 四要素 checklist（coupling_checklist 流式 / 跳过风险 / P5/P6 保留）缺一拦截；不声明 = standard 不拦截（BDD-7/8/9）|
-| 2.11 | `check-scope-resolved.py` | gate 通过后 | 阶段级 | `[SCOPE+]` 必须有 `[SCOPE_RESOLVED:...]` 标记（P2.11）|
-| 2.12 | `check-retrospective.py` | gate 任何结果 | 阶段级 | 异常模式提醒（重试超限/SCOPE+/override）→ 写复盘；另检测到 DEBT/roadmap 已登记本任务（机制缺口信号，TAG0015）→ 追加提醒；均不阻塞 commit（P2.12）|
+| 2.11 | `check-scope-resolved.py` | gate 通过后 | 阶段级 | `[SCOPE+]` 必须有 `[SCOPE_RESOLVED:...]` 标记（P2.11）。**非 legacy 任务**（TAG0050 批 E）：改读快照 `declaration_files` 跨文件聚合的 `scope_plus`/`scope_resolved` |
+| 2.12 | `check-retrospective.py` | gate 任何结果 | 阶段级 | 异常模式提醒（重试超限/SCOPE+/override）→ 写复盘；另检测到 DEBT/roadmap 已登记本任务（机制缺口信号，TAG0015）→ 追加提醒；均不阻塞 commit（P2.12）。**非 legacy 任务**读快照 `declaration_files` 聚合的 `scope_plus` |
+| 2h | `check-p6-format.py` | 阶段 = P6 且**非 legacy** | 阶段级 | P6 正文格式自动归一化（`--fix`）。**TAG0050 批 D：非 legacy 任务跳过**（P6 走结构化 `results` 判据，不依赖正文格式）；legacy 任务保留 |
 
 **关键设计原则**：
 

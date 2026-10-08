@@ -52,6 +52,7 @@ try:
         read_vision_tri_state,
         resolve_evidence,
         strip_fenced_blocks,
+        task_level,
     )
 
     # 别名单独 import（ruff isort 按别名排序，与上块不合并不违规）
@@ -63,6 +64,7 @@ except ImportError:
     extract_evidence_refs = None
     strip_fenced_blocks = None
     is_new_task_for_evidence_ref = None
+    task_level = None
     _split_frontmatter = None
     _fm_field_value = None
 
@@ -415,6 +417,17 @@ def main():
     p6_file = os.path.join(task_dir, "P6-acceptance.md")
     evidence_dir = os.path.join(task_dir, "P6-evidence")
 
+    # TAG0050 GAP-7 闭合（2026-10-08）：非 legacy 任务**跳过正文解析**——审计 1（证据-结论）、
+    # 3（BDD 总数）、4（UI vision）、5（日志 EXIT_CODE）、6（evidence JSON）由 P6 结构化判据
+    # D1–D10（gate_p6）取代（设计 §5.1「不再运行 agate-evidence-consistency.py、provenance
+    # 中的正文解析」；D7 取代审计 6）。审计 2（dispatch-context）与审计 7（复用）不属正文解析，保留。
+    non_legacy = False
+    if task_level is not None:
+        try:
+            non_legacy = task_level(task_dir, __file__) is not None
+        except Exception:
+            non_legacy = False
+
     p6_exists = os.path.isfile(p6_file)
     if not p6_exists:
         # 六道审计全部以 P6-acceptance.md / P6-evidence/ 为对象；对象缺席时此前**静默 exit 0**，
@@ -437,7 +450,8 @@ def main():
 
     # --- 审计 1：证据-结论对应 ---
     # 只在 P6-acceptance.md 存在时运行（C1 修复：不阻塞非 P6 阶段的 commit）
-    if p6_exists:
+    # GAP-7：非 legacy 任务跳过（正文解析由 gate_p6 结构化判据取代）。
+    if p6_exists and not non_legacy:
         # 1a: PASS 行里的证据引用路径必须存在
         # I3 修复：取行末最后一个括号组（证据引用在行末），避免前置括号干扰
         # R1b 兼容：先剥离 (vision: ...) 引用，避免把它当证据文件路径
@@ -589,7 +603,8 @@ def main():
     # `grep -cE '^\s*- (PASS|FAIL) BDD-[0-9]'`；新格式（frontmatter 声明 pass+fail）
     # 优先用该结构化汇总为总数，无 frontmatter 汇总（旧格式）→ 回退从严正文 grep。
     # FIND-6：新格式下 frontmatter 汇总与正文从严行数不一致 → WARNING（exit 仍 0）。
-    if p6_exists and os.path.isfile(p1_file):
+    # GAP-7：非 legacy 任务跳过（D1 在 gate_p6 校 bdd 集合相等）。
+    if p6_exists and os.path.isfile(p1_file) and not non_legacy:
         p1_text = ""
         try:
             with open(p1_file, encoding="utf-8", errors="replace") as f:
@@ -634,7 +649,8 @@ def main():
     #   * P1 显式 available/supplementable 或**无声明**（默认 available 语义，兼容回归
     #     anchor：无声明任务 P6 行为与基线完全一致）→ 保留既有强制：
     #     (vision: ...) 引用 + YAML 存在 + summary.blocker_count == 0
-    if p6_exists and os.path.isfile(p1_file):
+    # GAP-7：非 legacy 任务跳过（D8 在 gate_p6 校 vision/manual_review）。
+    if p6_exists and os.path.isfile(p1_file) and not non_legacy:
         p2_file = os.path.join(task_dir, "P2-design.md")
         ui_affected = ""
         if os.path.isfile(p2_file):
@@ -698,7 +714,8 @@ def main():
                         sys.exit(1)
 
     # --- 审计 5：日志 EXIT_CODE 与 PASS/FAIL 声明一致性（依赖 M1.3a 约定）---
-    if p6_exists:
+    # GAP-7：非 legacy 任务跳过（D6 在 gate_p6 校 PASS 条目日志 EXIT_CODE=0）。
+    if p6_exists and not non_legacy:
         for log_file in _find_log_files(os.path.join(task_dir, "P6-evidence")):
             try:
                 with open(log_file, encoding="utf-8", errors="replace") as f:
@@ -744,7 +761,8 @@ def main():
                 warning_found = 1
 
     # 审计 6: evidence JSON 与 P6 PASS/FAIL 声明一致性（P2.57）
-    if os.path.isdir(evidence_dir):
+    # GAP-7：非 legacy 任务跳过（D7 在 gate_p6 取代审计 6）。
+    if os.path.isdir(evidence_dir) and not non_legacy:
         inconsistency, rc = _run_script(
             "agate-evidence-consistency.py", [],
             {"EVIDENCE_DIR": evidence_dir, "P6_FILE": os.path.join(task_dir, "P6-acceptance.md")},

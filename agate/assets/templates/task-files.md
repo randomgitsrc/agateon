@@ -155,6 +155,10 @@ domains: [backend, cli]           # list，必填
 # need_confirm_resolved: []       # list[str]：已解决的 NEED_CONFIRM 项描述（逐条匹配正文）
 # suggest_resolved: []            # list[str]：已采纳的 SUGGEST 项描述
 # scope_resolved: []              # list[str]：已解决的 SCOPE+ 项描述
+# ── TAG0050 批 E/F 结构化字段（非 legacy 任务）──
+# scope_plus: [{id: SP1, text: "增补项"}]      # list；跨文件聚合，须被 scope_resolved 覆盖
+# review 侧（P1-review.md）：reviewed_bdds: ['1', '2']   # 必填，= P1 的 #### BDD-N: 集合
+# pruned: [{phase: P3, reason: "low 风险可裁", risk: low}]  # 跳过阶段；phases ∪ pruned == phase_universe
 ---
 ```
 `risk_level`/`phases`/`packages`/`domains` 必填；其余为可选字段，仅在适用时写。
@@ -247,6 +251,13 @@ packages: [pkg-a]                 # list，必填
 domains: [backend, cli]           # list，必填
 ui_affected: false                # bool，必填
 # ui_design_section: true          # bool，可选（presence 语义：ui_affected: true 时声明已含 UI 设计节）
+# ── TAG0050 批 F 结构化 UI 维度（非 legacy 任务，ui_affected: true 时）──
+# ui_design:
+#   shape: layout                  # layout/render_component/temporal_effects（必填维度由快照 shape_dimensions 定）
+#   dimensions:
+#     布局: {status: covered, ref: "P2 §UI 设计"}
+#     交互: {status: na, reason: "本任务无交互"}    # status: na 必须带 reason
+#     视觉: {status: covered}
 # ── v2.0 派发编排字段（可选，TAG0014）──
 # dispatch_plan: {mode: static-batch, parallel_limit: 3, batches: [{id: pkg-a, complexity: medium}, {id: pkg-b, complexity: low}]}
 # 可选字段：多子任务编排方案（单行 flow YAML），契约以 P2 卡「dispatch_plan 机器字段」/ architect.md「批次设计」为准
@@ -365,9 +376,15 @@ status: draft
 created: 2026-01-01
 agent: verifier
 # ── v2.0 机器汇总 ──
-pass: 28                          # int ≥0
-fail: 0                           # int ≥0
+pass: 28                          # int ≥0（系统字段：由 results 现算）
+fail: 0                           # int ≥0（系统字段：由 results 现算）
 ui_affected: false                # bool（与 P2 声明一致）
+prod_touched: false               # bool，必填（非 legacy 任务；触达生产须 true 且进入 PAUSED）
+# ── TAG0050 批 D 结构化验收结果（非 legacy 任务**必填**；缺则 ERROR）──
+results:
+  - {bdd: '1', verdict: PASS, evidence: [log/unit.log]}
+  - {bdd: '2', verdict: PASS, evidence: [screenshots/a.png], vision: vision/a.yaml}
+# evidence 引用相对 P6-evidence/（可用 ../ 上溯）或 run:<k>；被 .gitignore 忽略 → ERROR
 ---
 ```
 逐条结果仍留正文，但**行格式从严**（BDD-17/18）：行首必须 `- PASS BDD-NN: ...` 或
@@ -438,6 +455,13 @@ design_gap_count: 0               # int ≥0（BDD-20）
 design_gap_reviewed_count: 0      # int ≥0（BDD-20）
 code_map_new_files_count: 0        # int ≥0（可选，仅骨架/CODE-MAP 机制已采用时填）
 code_map_reviewed_count: 0         # int ≥0（可选，语义对应 design_gap_reviewed_count）
+# ── TAG0050 批 E 成对声明（非 legacy 任务；跨 P4/P2-review 等文件聚合后逐条核对）──
+# design_gap_reviews:
+#   - {gap: DG1, verdict: accepted, checked_against: [P2 §3], basis: in_bdd}
+# code_map_reviewed:
+#   - {file: agate/scripts/x.py}
+# findings:
+#   - {id: F1, severity: note, text: "...", status: resolved, resolution: "...", evidence: "..."}
 ---
 ```
 正文 `[BLOCKER]` / `[DEVIATION-CRITICAL]` / `[DESIGN_GAP]` / `[DESIGN_GAP_REVIEWED]` 散文标记

@@ -27,6 +27,12 @@ agent: consistency-reviewer
 ## 输出
 - {AGATE_WORKSPACE}/tasks/{Txxx}/P7-consistency.md — 一致性审查结论
 
+> **TAG0050 批 E（非 legacy 任务）成对声明**：P7 的 frontmatter 须声明
+> `design_gap_reviews: [{gap, verdict, checked_against: [ref…], basis}]`（`gap` 集合 = 跨文件
+> 聚合的 `design_gaps` id 集合）、`code_map_reviewed`、`findings: [{id, severity, text, status,
+> resolution?, evidence?}]`。计数（BLOCKER / DEVIATION-CRITICAL）是系统字段，由正文 tripwire +
+> open 的 findings 现算，**不读手写汇总值**（盖不住）。`basis=followup:DEBT<n>` 须双向回指。
+
 ## 实质锚点要求（N3）
 
 review 类 subagent 不能靠代码改动校验兜底。结论必须附带实质锚点：

@@ -1,0 +1,27 @@
+[start] 2026-10-08T22:32:19+08:00 开始 G3 审查
+- 读 dispatch-context-G3（范围：A1-A8 + 8 条 DESIGN_GAP 逐条裁定；只读纪律）
+- 读 protocol-alignment-review.md + SELF-GATE.md（触发面/闭环规则/只读纪律）
+- git status：21 改动 + 4 未跟踪（P4-dispatch-context ×2、P4-implementation-G3、progress），HEAD=b746d07d
+- 读 P4-implementation-G3.md §0（E2 结论）、§1-§3（D/E/F 交付物）、§4（8 条 DESIGN_GAP）、§5-§7
+- 读设计 §3.1/§5/§6/§7/§8、§2.5；P2 §1.1/§1.2/§3/§11；P1 §4（BDD-56..77）
+- 读 diff：check-gate.py / agate_common.py / check-pruning.py / check-scope-resolved.py / check-retrospective.py / check-judge-verdict.py / pre-commit-gate.py / agate-extract-context.py / agate-md-field-set.py / agate-run.py / agate-debt-check.py / markers.yaml / markers.schema.json / README / UPGRADING / CHANGELOG / gitignore-fragment / tech-debt-template / level-1.yaml / LEVELS.yaml
+- 读 level-1.yaml 全文：phase_universe 已有（line 35）；results 字段 schema 已有（line 52）；requires.results: false（line 20，未随批 D 翻真）；declaration_fields/declaration_globs 新增；无 ui_design/delivery/pruned 键
+- LEVELS.yaml sha256 实测 = 663abfea...（与 level-1.yaml LF 归一 sha256 一致）→ 快照登记正确
+- 只读核验：TAG0050 自身为 legacy（账本无 task_created，首行 gate_run）→ 本批新契约分支不作用于本任务
+- 测试文件实际在 unit（declarations/proxy_judgment/cross_batch/fitness），非 dispatch 所写 integration（implementer 已更正）；evidence 在 integration
+- 读 P3 测试：evidence/declarations/proxy_judgment 多为 rc!=0 弱断言（BDD-57/58 调 check-p6-evidence 而非新 gate_p6 D3/D6；BDD-59 仅断言函数存在；BDD-60 仅断言 rc==0）
+- 仓外副本实验（/tmp/opencode/g3scratch vs g3base，agate+agate-workspace 复制，无 site）：仅施加 GAP-1/2/4 的'按设计接线'补丁
+- 实验：unit 全量 diff base(92 fails)→scratch(93 fails)，closure-attributable 仅 test_tag0050_proxy_judgment.py::test_bdd_71（GAP-2）
+- 实验：integration diff base(13)→scratch(19)，closure-attributable 6 条；逐一回退隔离：GAP-1→test_hook_evidence_warning_low_variance_not_blocked；GAP-4→test_bdd_3_space_dir_gate_runs/test_bdd_4_no_space_single_task_regression/test_it10_routing_2j1_thin_missing_element_blocks/test_it6_task_level_state_p1_output_commits/test_it9_pruning_skip_low_passes；GAP-2→integration 无
+- 实验：g3base 目标 5 文件 22 passed/3 failed（3 failed 为缺根文档的环境噪声，非本批）；count-tests 实测 2843（与 implementer 一致）
+- GAP-1 核：check-gate.py gate_p6 有 'and _p6_results_items(p6_file) is not None' 回退门；_gate_p6_structured 自身对缺 results 报 ERROR → 与设计 §5.1 冲突
+- GAP-2 核：gate_p1 'if rv is not None:' → 未声明即跳过；设计 §7 要求 reviewed_bdds 必须等于 P1 BDD 集合
+- GAP-4 核：check-pruning 'if isinstance(pruned, list) and pruned:' → 未声明 pruned 即跳过闭合；设计 §7/RM-AG0087 要求恒检
+- GAP-5 核：ui_design/delivery/pruned 判据硬编码在 gate；快照仅 phase_universe（无 ui_design/delivery/pruned）；设计 §7'必填维度由 shape 决定（在快照中定义）'
+- GAP-6 核：gate_p6 无 D5(同内容 WARNING)/D7(证据 JSON 一致)/D9(审计7读 results)；D3 仅 _is_ignored，无'pre-commit 中已跟踪或已暂存'
+- GAP-7 核：check-p6-provenance.py:748 仍无条件调用 agate-evidence-consistency.py（审计6）；provenance 正文解析未按非 legacy 跳过
+- GAP-8 核：declaration_files 仍 6 个主产出；新增 declaration_globs（缺 P1-review/P3/P4-review）；设计 §6 要求 declaration_files 覆盖 *-review.md/P4-implementation-*.md
+- 次要：gate_p2 UI na 检查未 gate task_level（legacy 也生效，潜在 §8 风险；语料无 ui_design: 命中 → 当前不可观测）
+- 次要：E2 结论与 P2 §11 字面判据方向不一致（implementer 明示重释）→ NEEDS_HUMAN_REVIEW
+- 次要：无新增 level-2 快照（改 level-1 + 重登记 sha256）——A1 注释预声明 B-F 键随 level-1 冻结，先例一致
+- 完成：写 docs/reviews/agate-alignment-review-2026-10-08-TAG0050-G3.md（A1-A8 + 8 条 DESIGN_GAP 裁定 + 闭合清单）
