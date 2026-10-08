@@ -9,12 +9,14 @@ mechanism_issues:
   - "维护性 god_file_threshold 遇「设计强制改动」无机械豁免，只能走 known-violations.md 登记"
   - "dispatch-context 卡片占位符无机械校验（漏写占位符无 gate 拦截）"
   - "check-platform-assumptions.py 未覆盖「subprocess text=True 却无 encoding=」类平台假设（扫描 0 命中）"
+  - "agate-ci-verify.py::_resolve_protocol 选协议根的输入面未含回放基准 base——push-to-main 时 merge-base = HEAD 自己，用新协议回放历史提交致误报 FAIL"
 execution_issues:
   - "主 Agent 两次在 dispatch-context 散文里写入会触发扫描的字面量，自造误报"
   - "G3 整改子任务返回中间状态（全量测试仍在后台跑）而主 Agent 未即时核对"
   - "主 Agent 一度以「会话边界」为由准备停止推进（协议无「会话边界」概念）"
   - "写 TAG0050 批 A4 测试时未按平台无关硬约束为 subprocess.run(text=True) 指定 encoding，Windows CI 抓出"
   - "G1/K1 的账本最终检查未收窄为真实任务账本路径（误判测试夹具），PR CI 的 gate-backstop 抓出"
+  - "A2 的 _resolve_protocol 未覆盖 push-to-main 场景（PR run 因 merge-base 恰好=旧 main 未暴露），合并后 main 的 CI 抓出"
 feedback_ready: true
 ---
 
@@ -117,6 +119,14 @@ feedback_ready: true
   说明：跨平台解码假设无静态判据，只能靠 Windows CI 运行时暴露（本任务实证：本机 Linux UTF-8
   与扫描器双双静默，缺陷延迟到 PR #408 的 `pytest(windows-latest)` 才抓出）。
 
+- 问题：**`agate-ci-verify.py::_resolve_protocol` 选协议根的输入面未含回放基准 `base`**——主流程
+  已算出 `base`（PR = merge-base；push = `before`）却未传入；`_resolve_protocol` 自行用
+  `merge-base HEAD origin/<默认分支>`。push 到 main 时 HEAD 就是 origin/main ⇒ merge-base =
+  **HEAD 自己** ⇒ 用刚合并的新协议回放历史提交（卡片 hash 按旧协议注入 ⇒ hash mismatch）。
+  归因层面: 机制缺口
+  说明：选协议根的函数**输入面缺一个既有参数**（`base`）——函数无法区分「PR 分支尖」与
+  「已合并的 main」，同一段代码在两个事件口径下语义不同，属输入面设计缺口。
+
 ### 执行错误
 
 - 问题：写 TAG0050 批 A4 测试时，`subprocess.run(..., text=True)` **未按平台无关硬约束指定 `encoding=`**
@@ -151,6 +161,13 @@ feedback_ready: true
   `_is_task_ledger_path`，与 `_TASKS_PREFIX` 同口径 + 回归用例）。**该缺陷由 TAG0050 自己交付的 CI 兜底
   抓出，是 A2 机制有效的实证**（本地 hook 抓不到、CI 兜底抓到）。
 
+- 问题：**A2 的 `_resolve_protocol` 未覆盖 push-to-main 场景**——PR run 时 merge-base 恰好=旧 main，
+  协议选择「碰巧正确」，掩盖了输入面缺口；合并后 main 的 push run 才暴露（`gh run 37851356052`：
+  gate-backstop 7 提交 FAIL + `test_bdd_23/24` FAIL）。
+  归因层面: 执行错误
+  说明：A2 实现只按 PR 口径验证协议选择，未构造「分支尖 == origin/main」的用例（A2 的 13 个 BDD
+  无 push-to-main 协议根用例）；已修并补直接回归用例（负向控制：旧逻辑转红）。
+
 ## 四、改进措施
 
 > 措施落到具体文件/字段/gate。
@@ -171,6 +188,10 @@ feedback_ready: true
 - `agate/scripts/agate-inject-card.py` 或 gate：dispatch-context **卡片占位符存在性**的机械校验。
 - `agate/scripts/check-platform-assumptions.py`：新增「`subprocess` 用 `text=True`（或 `universal_newlines=True`）
   却未显式指定 `encoding=`」的规则并接入 CI 阻断（跨平台解码假设静态化）。
+- `agate/scripts/agate-ci-verify.py::_resolve_protocol`：**选协议根的输入面必须含回放基准 `base`**；
+  协议仓库中取 `merge-base(base, HEAD)` 处的 `agate/`，push-to-main 时即 `before`；解析失败回退
+  当前 HEAD 协议并**在 note 写明回退原因**（不得静默）。测试夹具须对**当前**协议良构（非 legacy、
+  账本首行 `task_created`），不依赖 checkout 协议版本。
 
 ## 技术债登记核对清单
 
@@ -198,7 +219,7 @@ feedback_ready: true
 | dispatch-context.md | 是 | ✅ | — | 各批派发前落盘 |
 | pre-commit hook（gate / 状态转移 / 裁剪） | 是 | ✅ | — | 各 commit 经 hook |
 | CI backstop | 是 | ✅ | — | 逐提交回放（A2 交付） |
-| **技术债登记** | 是 | ✅ | 本次机制缺口逐条登记：**DEBT0051 / DEBT0052 / DEBT0053 / DEBT0054 / DEBT0055 / DEBT0056 / DEBT0057 / DEBT0058**（8 条，`source: retrospective`） | 复盘发现机制缺口，逐条登记 |
+| **技术债登记** | 是 | ✅ | 本次机制缺口逐条登记：**DEBT0051 / DEBT0052 / DEBT0053 / DEBT0054 / DEBT0055 / DEBT0056 / DEBT0057 / DEBT0058 / DEBT0059**（9 条，`source: retrospective`） | 复盘发现机制缺口，逐条登记 |
 
 ## agate 反馈
 
@@ -217,3 +238,7 @@ feedback_ready: true
 7. **dispatch-context 卡片占位符**：加机械存在性校验（与 `agate-inject-card.py` 早退缺陷一并修）。
 8. **`check-platform-assumptions.py`**：新增「`subprocess` 用 `text=True` 却无 `encoding=`」规则——
    跨平台解码假设应有静态判据（本任务实证：本机 Linux UTF-8 + 扫描器双双静默，仅 Windows CI 抓出）。
+9. **`agate-ci-verify.py`**：选协议根的函数必须把**回放基准 `base`** 作为输入（不能用
+   `merge-base HEAD origin/<默认分支>`）——push 到受保护分支时 HEAD 就是 origin/main，
+   merge-base = HEAD 自己 ⇒ 会用合并后的新协议回放历史提交致误报 FAIL（本任务实证：PR run
+   碰巧正确、合并后 main CI 必红）。回退分支须在 note 写明原因（不得静默）。

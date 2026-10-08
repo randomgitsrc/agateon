@@ -1,0 +1,17 @@
+# 留痕 TAG0050 P8-ci-fix3 协议对齐审查
+- 读 dispatch-context / protocol-alignment-review.md / SELF-GATE.md 完毕
+- 范围=agate-ci-verify.py 协议根推导改 base + README + 测试夹具 + 新回归用例 + DEBT0059 + retrospective
+- git status: 分支 fix/TAG0050-ci-replay-protocol-root, 未提交 diff 7 文件
+- 建仓外副本 /tmp/opencode/tag0050-fix3-review（cp -a），确认原仓 git status 未变（未触碰被评审文件）
+- 副本 unit/test_agate_ci_verify.py: 8 passed
+- 副本 integration/test_tag0050_ci_replay.py: 18 passed
+- 变异测试（旧逻辑 rev=_merge_base(repo)）：test_push_to_main_protocol_root_uses_base_not_head FAIL（取到 # NEW protocol）→ 改前红确认；还原后 PASS
+- 注意：cp -a 带入 __pycache__ 致 traceback 显示原仓路径；清缓存后 traceback=副本路径，结论不变
+- 副本全量 pytest: 1 failed(环境漂移 test_setup_agate_dir BDD-43 opencode debug agent→agents) / 2865 passed / 3 skipped（=2869）
+- consistency: 0 ERROR / 412 WARNING（去掉本次 review 产物后 410，与实现者声称一致）
+- check-debt RC=0；count-tests=2869；ruff All checks passed；check-platform-assumptions RC=0
+- E2E 真脚本 push-to-main(HEAD==origin/main, --push --base 720c97d3): NEW note='回放基准 720c97d3 的 agate/' rc=0；OLD(HEAD committed) 7 FAIL rc=1 → 改前红/改后绿端到端确认
+- DEBT0051..0059 齐；retrospective frontmatter/正文 9/9、6/6 一致
+- 反向传播：仅 UPGRADING.md:304-305 'merge-base 处' 措辞（与 design-tag0050:186 push口径 merge-base=merge-base(before,HEAD) 同术语，非陈旧）；platform-notes.md:344 描述无参本地口径（range），仍准确；README 已同步
+- 小瑕：_resolve_protocol docstring 称 worktree 失败亦回退，但仓库本体分支 worktree 失败返回 None→FAIL（仅 AGATE_ROOT 分支回退）；_fallback_note 在 AGATE_ROOT 分支说'回退当前 HEAD'（实为 AGATE_ROOT）
+- 最终：原仓 git status 未变（只读纪律遵守）；副本已还原为修复版

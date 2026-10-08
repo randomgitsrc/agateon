@@ -22,17 +22,33 @@ def _ci_verify(run_cli, python_exe, agate_scripts, agate_root, repo, *args):
     )
 
 
-def _task_commit_repo(git_repo, task_id="TAG0001", phase="P5"):
-    """建一个含一个任务目录提交的仓库，返回 (repo, base_sha)。"""
+def _task_commit_repo(git_repo, task_id="TAG0001", phase="P5", legacy=False):
+    """建一个含一个任务目录提交的仓库，返回 (repo, base_sha)。
+
+    默认任务须是**当前协议下的良构非 legacy 任务**（账本首行 `task_created`、等级 = 当前等级、
+    `.state.yaml` 不写系统字段 `status`）——夹具仓库的 `base` 不在协议仓库（AGATE_ROOT 所在
+    checkout），`_resolve_protocol` 会回退当前 HEAD 的 `agate/`，故夹具必须对**当前**协议良构，
+    不得依赖 checkout 的协议版本（否则 push-to-main 回放误报 FAIL）。
+
+    `legacy=True`：构造 legacy 任务（无创建事件账本、`.state.yaml` 写 `status`）——仅供
+    需要 legacy 语义的用例（如 §8-12 legacy PROD_TOUCHED 单独计数）使用。
+    """
     repo = h.make_git_repo(None, git_repo)
     base = git_repo.git("rev-parse", "HEAD").stdout.strip()
     (repo / ".agate-version").write_text("agate: v0.79.0\n", encoding="utf-8")
     task = repo / "agate-workspace" / "tasks" / task_id
     task.mkdir(parents=True)
-    (task / ".state.yaml").write_text(
-        f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
-        encoding="utf-8",
-    )
+    if legacy:
+        (task / ".state.yaml").write_text(
+            f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
+            encoding="utf-8",
+        )
+    else:
+        (task / ".state.yaml").write_text(
+            f"task_id: {task_id}\nphase: {phase}\nretries: {{}}\n",
+            encoding="utf-8",
+        )
+        h.write_ledger(task, [{"event": "task_created", "task_id": task_id, "contract_level": 1}])
     git_repo.commit("task commit")
     return repo, base
 
@@ -346,7 +362,7 @@ def test_bdd_26b_legacy_prod_touched_error_separately_counted(
     run_cli, python_exe, agate_scripts, agate_root, git_repo
 ):
     """F5 / 设计 §8 第 12 项：legacy 任务新增 PROD_TOUCHED ERROR 单独计数并列 SHA。"""
-    repo, base = _task_commit_repo(git_repo)
+    repo, base = _task_commit_repo(git_repo, legacy=True)
     task = repo / "agate-workspace" / "tasks" / "TAG0001"
     (task / "P4-progress.md").write_text("[PROD_TOUCHED] 接触生产\n", encoding="utf-8")
     # 同时暂存 .state.yaml（空白变更）——确保回放协议（merge-base 处）也做 PROD_TOUCHED 扫描

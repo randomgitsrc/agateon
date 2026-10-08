@@ -105,7 +105,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 | 退出码语义 |
 |------|------|-----------|
-| `agate-ci-verify.py` (TAG0042 批5；TAG0050 批 A2 改造) | **逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），防 `--no-verify` 绕过 hook（修复 F15）。`--base <sha>`（PR 口径，取 merge-base）/ `--push --base <sha>`（push 口径；`before` 全零时回退 `merge-base HEAD origin/<默认分支>`）；只回放改动任务目录的提交，无则 `SKIP:` + 原因；协议版本：仓库含协议本体（agateon-like）或 `AGATE_ROOT` 提供协议 → merge-base 处的 `agate/`；`.agate-version` 仅用于**单调不降**检查（降级判 FAIL），**不用于选协议根**（分支①「按 `.agate-version` 定位版本目录」未实现，见 P4-implementation-G1 的 DESIGN_GAP）；`AGATE_REPLAY=1` 回放模式；含账本最终状态检查 + legacy 新增 PROD_TOUCHED ERROR 单独统计。每个「跳过」面显式 `SKIP:` + 原因 | 0=通过/跳过, 1=判定失败 |
+| `agate-ci-verify.py` (TAG0042 批5；TAG0050 批 A2 改造) | **逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），防 `--no-verify` 绕过 hook（修复 F15）。`--base <sha>`（PR 口径，取 merge-base）/ `--push --base <sha>`（push 口径；`before` 全零时回退 `merge-base HEAD origin/<默认分支>`）；只回放改动任务目录的提交，无则 `SKIP:` + 原因；协议版本：仓库含协议本体（agateon-like）或 `AGATE_ROOT` 提供协议 → **回放基准 `base`** 处（协议仓库中 `merge-base(base, HEAD)`）的 `agate/`（push-to-main 时 = `before`；`base` 不在协议仓库则回退当前 HEAD 协议并在 note 写明原因）；`.agate-version` 仅用于**单调不降**检查（降级判 FAIL），**不用于选协议根**（分支①「按 `.agate-version` 定位版本目录」未实现，见 P4-implementation-G1 的 DESIGN_GAP）；`AGATE_REPLAY=1` 回放模式；含账本最终状态检查 + legacy 新增 PROD_TOUCHED ERROR 单独统计。每个「跳过」面显式 `SKIP:` + 原因 | 0=通过/跳过, 1=判定失败 |
 
 ### 诊断
 

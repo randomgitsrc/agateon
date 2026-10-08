@@ -18,7 +18,10 @@
 # 平台无关：tmp_path / git_repo fixtures；run_cli(python_exe, ...)（不裸 python3）；
 #   显式 encoding="utf-8"；不写仓库内已提交文件（全在 tmp_path / git_repo 内）。
 
+import importlib.util
 import re
+import shutil
+from pathlib import Path
 
 # 被测 CLI（批 5 新增；当前不存在 ⇒ 红灯 = 模块未实现）
 _CI_VERIFY_SCRIPT = "agate-ci-verify.py"
@@ -209,3 +212,94 @@ def test_bdd_16_ci_verify_protocol_refs_synced(agate_root):
         "BDD-16（CHECK10-scriptref）：退役 ci-gate-backstop.py 后下列协议文件仍引用它，"
         f"须同步更新引用：{offenders}"
     )
+
+
+# ── 回归：push-to-main 时协议根须取回放基准 base，而非 HEAD 新协议 ────────────
+#
+# 合并后 main CI 真缺陷（TAG0050 P8-ci-fix3）：`_resolve_protocol` 曾用
+# `merge-base HEAD origin/<默认分支>` 选协议根——push 到 main 时 HEAD 就是
+# origin/main，merge-base = HEAD 自己 ⇒ 用刚合并的新协议回放历史提交 ⇒ 卡片
+# hash 按旧协议注入、回放误报 FAIL。修法：协议根改由主流程算好的**回放基准 base**
+# 推导（协议仓库中 `merge-base(base, HEAD)` 处的 agate/）。
+
+
+def _load_ci_verify_module(agate_scripts):
+    """以文件路径加载 `agate-ci-verify.py` 模块（文件名含 `-`，不能普通 import）。"""
+    path = agate_scripts / _CI_VERIFY_SCRIPT
+    spec = importlib.util.spec_from_file_location("agate_ci_verify_under_test", str(path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_push_to_main_protocol_root_uses_base_not_head(git_repo, agate_scripts):
+    """push-to-main：`_resolve_protocol` 须取 `base` 处的协议，而非 HEAD 的新协议。
+
+    Given 一个**仓库本体含协议**的仓库：base 提交处协议为旧版，HEAD 提交处协议为新版；
+          且 `origin/main` 指向 HEAD（模拟 push 到 main：`merge-base(HEAD, origin/main)` = HEAD）
+    When 以 `base` 为回放基准解析协议根（无 AGATE_ROOT，走「仓库本体」分支）
+    Then 协议根取 `base` 处的**旧**协议，note 写明回放基准 `base`——而非 HEAD 的新协议。
+
+    判别力：改动前用 `merge-base HEAD origin/main` = HEAD ⇒ 会返回 HEAD 的新协议 ⇒ 断言转红。
+    """
+    repo = git_repo.path
+    proto = repo / "agate" / "scripts"
+    proto.mkdir(parents=True)
+    gate = proto / "pre-commit-gate.py"
+    gate.write_text("# OLD protocol\n", encoding="utf-8")
+    git_repo.commit("old protocol")
+    base = git_repo.git("rev-parse", "HEAD").stdout.strip()
+
+    gate.write_text("# NEW protocol\n", encoding="utf-8")
+    git_repo.commit("new protocol")
+    head = git_repo.git("rev-parse", "HEAD").stdout.strip()
+    # 模拟 push 到 main：origin/main == HEAD ⇒ merge-base(HEAD, origin/main) == HEAD
+    git_repo.git("update-ref", "refs/remotes/origin/main", head)
+    git_repo.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+
+    mod = _load_ci_verify_module(agate_scripts)
+    root, cleanup, note = mod._resolve_protocol(str(repo), "", base)
+    try:
+        assert root is not None, "push-to-main：须解析出协议根（仓库本体分支）"
+        content = Path(root, "scripts", "pre-commit-gate.py").read_text(encoding="utf-8")
+        assert content == "# OLD protocol\n", (
+            "push-to-main：协议根须取 base 处协议（旧），而非 HEAD 新协议——"
+            f"实际取到 {content!r}"
+        )
+        assert base[:8] in note, (
+            f"push-to-main：note 须写明回放基准 base（{base[:8]}）；实际 {note!r}"
+        )
+    finally:
+        if cleanup:
+            proto_repo, wt = cleanup
+            mod._git(["worktree", "remove", "--force", wt], proto_repo)
+            shutil.rmtree(wt, ignore_errors=True)
+
+
+def test_resolve_protocol_falls_back_when_base_absent(agate_scripts, git_repo):
+    """回归：`base` 不在协议仓库（测试夹具合成仓库）时**回退当前 HEAD 的协议**且 note 不静默。
+
+    与上一条互补：真实 CI 的 `base` 在协议仓库内（须取 base 处协议）；测试夹具的 `base`
+    是另一个仓库的 SHA（不在协议仓库）⇒ 回退当前 HEAD 的协议，并在 note 写明回退原因。
+    """
+    repo = git_repo.path
+    proto = repo / "agate" / "scripts"
+    proto.mkdir(parents=True)
+    (proto / "pre-commit-gate.py").write_text("# CURRENT protocol\n", encoding="utf-8")
+    git_repo.commit("current protocol")
+    head = git_repo.git("rev-parse", "HEAD").stdout.strip()
+
+    mod = _load_ci_verify_module(agate_scripts)
+    bogus = "f" * 40  # 不在本仓库的 SHA（合成夹具场景）
+    root, cleanup, note = mod._resolve_protocol(str(repo), "", bogus)
+    try:
+        assert root is not None, "base 缺失时须回退当前 HEAD 的协议根（非 None）"
+        content = Path(root, "scripts", "pre-commit-gate.py").read_text(encoding="utf-8")
+        assert content == "# CURRENT protocol\n", "回退须用当前 HEAD 的协议"
+        assert bogus[:8] in note, f"回退须在 note 写明原因（含基准 {bogus[:8]}）；实际 {note!r}"
+    finally:
+        if cleanup:
+            proto_repo, wt = cleanup
+            mod._git(["worktree", "remove", "--force", wt], proto_repo)
+            shutil.rmtree(wt, ignore_errors=True)
+    assert head, "sanity：HEAD 可解析"
