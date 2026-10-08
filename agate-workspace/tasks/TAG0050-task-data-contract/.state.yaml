@@ -1,6 +1,6 @@
 task_id: TAG0050
-phase: READY
-status: active
+phase: DONE
+status: completed
 p5_pass_commit: 3b0bd755
 retries:
   P1:
