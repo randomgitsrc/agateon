@@ -25,6 +25,7 @@ import sys
 import yaml
 
 import agate_common
+import agate_schema
 
 CONFIG_FILE = "agate.config.yaml"
 
@@ -53,12 +54,15 @@ _INIT_TEMPLATE = (
 
 def _usage():
     sys.stderr.write(
-        "用法: agate-config.py <init|validate|get <field>|list|show>\n"
-        "  init      生成初始声明文件（幂等，已存在不覆盖）\n"
-        "  validate  按 schema 校验声明（0=合法，非 0=非法/缺失）\n"
-        "  get <f>   输出单一字段客观值（点分路径，如 project.language）\n"
-        "  list      列出声明的全部字段路径\n"
-        "  show      展示完整声明\n"
+        "用法: agate-config.py <init|validate|get <field>|set <field> <value>|unset <field>|explain <field>|list|show>\n"
+        "  init           生成初始声明文件（幂等，已存在不覆盖）\n"
+        "  validate       按 schema 校验声明（0=合法，非 0=非法/缺失）\n"
+        "  get <f>        输出单一字段客观值（点分路径，如 project.language）\n"
+        "  set <f> <v>    写入点分路径字段（可加 --append），写入前经 schema 复验\n"
+        "  unset <f>      移除点分路径字段（幂等）\n"
+        "  explain <f>    解释字段类型/消费方/当前值 + 修复命令\n"
+        "  list           列出声明的全部字段路径\n"
+        "  show           展示完整声明\n"
     )
 
 
@@ -102,44 +106,24 @@ def _load_schema():
 
 
 def _validate_node(node, schema, path, errors):
-    """draft-07 子集递归校验（object / array / integer / string / boolean + enum）。"""
-    schema_type = schema.get("type")
-    if schema_type == "object":
-        if not isinstance(node, dict):
-            errors.append(f"{path or '<root>'}: 期望映射(object)，实际 {type(node).__name__}")
-            return
-        for req in schema.get("required", []):
-            if req not in node:
-                errors.append(f"{path + '.' if path else ''}{req}: 缺失必填字段")
-        properties = schema.get("properties", {})
-        for key, value in node.items():
-            child = (path + "." + key) if path else key
-            if key in properties:
-                _validate_node(value, properties[key], child, errors)
-            elif schema.get("additionalProperties") is False:
-                errors.append(f"{child}: 未知字段（不在 schema 允许的字段内）")
-    elif schema_type == "array":
-        if not isinstance(node, list):
-            errors.append(f"{path}: 期望列表(array)，实际 {type(node).__name__}")
-            return
-        item_schema = schema.get("items")
-        if item_schema:
-            for index, item in enumerate(node):
-                _validate_node(item, item_schema, f"{path}[{index}]", errors)
-    elif schema_type == "integer":
-        if isinstance(node, bool) or not isinstance(node, int):
-            errors.append(f"{path}: 期望整数，实际 {node!r}")
-            return
-    elif schema_type == "string":
-        if not isinstance(node, str):
-            errors.append(f"{path}: 期望字符串，实际 {node!r}")
-            return
-    elif schema_type == "boolean":
-        if not isinstance(node, bool):
-            errors.append(f"{path}: 期望布尔值，实际 {node!r}")
-            return
-    if "enum" in schema and node not in schema["enum"]:
-        errors.append(f"{path}: {node!r} 不在允许枚举 {schema['enum']!r}")
+    """draft-07 子集递归校验——单源 = agate_schema（TAG0050 批 B，BDD-50）。
+
+    本处不再自带递归实现，只把 `agate_schema.iter_errors()` 的结构化错误映射为
+    既有人类可读消息。
+    """
+    for p, code, detail in agate_schema.iter_errors(node, schema, path):
+        if code == "type":
+            errors.append(f"{p or '<root>'}: 期望 {detail['expected']}，实际 {detail['actual']}")
+        elif code == "enum":
+            errors.append(f"{p}: {detail['value']!r} 不在允许枚举 {detail['allowed']!r}")
+        elif code == "required":
+            errors.append(f"{path + '.' if path else ''}{detail['field']}: 缺失必填字段")
+        elif code == "unknown":
+            errors.append(f"{path + '.' if path else ''}{detail['field']}: 未知字段（不在 schema 允许的字段内）")
+        elif code == "minItems":
+            errors.append(f"{p}: 数组长度 {detail['length']} < minItems {detail['min']}")
+        elif code == "pattern":
+            errors.append(f"{p}: {detail['value']!r} 不匹配 pattern {detail['pattern']}")
 
 
 def _cmd_init(project_root):
@@ -204,6 +188,146 @@ def _cmd_show(project_root):
     return 0
 
 
+def _config_path(project_root):
+    return os.path.join(project_root, CONFIG_FILE)
+
+
+def _load_raw_config(project_root):
+    """读原始声明（dict, existed）；缺失/不可解析时从初始模板起步（未创建）。"""
+    path = _config_path(project_root)
+    if os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                return data, True
+        except Exception:
+            pass
+    return yaml.safe_load(_INIT_TEMPLATE), False
+
+
+def _coerce_scalar(text):
+    if text == "true":
+        return True
+    if text == "false":
+        return False
+    try:
+        return int(text)
+    except ValueError:
+        return text
+
+
+def _write_config(project_root, cfg):
+    with open(_config_path(project_root), "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
+
+
+def _set_dotted(cfg, field, value, append):
+    parts = field.split(".")
+    node = cfg
+    for part in parts[:-1]:
+        child = node.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            node[part] = child
+        node = child
+    leaf = parts[-1]
+    if append:
+        cur = node.get(leaf)
+        if not isinstance(cur, list):
+            cur = [] if cur is None else [cur]
+        cur.append(value)
+        node[leaf] = cur
+    else:
+        node[leaf] = value
+
+
+def _unset_dotted(cfg, field):
+    parts = field.split(".")
+    node = cfg
+    for part in parts[:-1]:
+        if not isinstance(node, dict) or part not in node:
+            return
+        node = node[part]
+    if isinstance(node, dict):
+        node.pop(parts[-1], None)
+
+
+def _cmd_set(project_root, field, value, append=False):
+    """写入点分路径字段（TAG0050 批 B，修复 F14 的 set 部分）；写入前经 agate_schema 复验。
+
+    ⚠️ 仅就地更新**已存在**的声明文件；文件缺失时**不创建**（创建是 `init` 的职责）——
+    避免在无关 cwd（如协议源仓库根）意外物化一份项目声明，并保持迁移期「无声明的
+    存量项目行为不变」。
+    """
+    cfg, existed = _load_raw_config(project_root)
+    _set_dotted(cfg, field, _coerce_scalar(value), append)
+    try:
+        schema, _ = _load_schema()
+    except Exception as exc:
+        sys.stderr.write(f"schema 不可用: {exc}\n")
+        return 1
+    errors = []
+    _validate_node(cfg, schema, "", errors)
+    if errors:
+        sys.stderr.write("写入被拒绝（违反 schema）:\n")
+        for err in errors:
+            sys.stderr.write("  - " + err + "\n")
+        return 1
+    if not existed:
+        print(f"校验通过（无声明文件，未创建）：{field} = {value!r}；创建请运行 agate-config.py init")
+        return 0
+    _write_config(project_root, cfg)
+    print(f"已写入 {field} = {value!r}")
+    return 0
+
+
+def _cmd_unset(project_root, field):
+    """移除点分路径字段（幂等：字段不存在也算成功）。"""
+    cfg, existed = _load_raw_config(project_root)
+    _unset_dotted(cfg, field)
+    if existed:
+        _write_config(project_root, cfg)
+    print(f"已移除 {field}")
+    return 0
+
+
+def _cmd_explain(project_root, field):
+    """解释一个点分路径字段：类型/枚举/消费方/当前值 + 可照抄的修复命令。"""
+    print(f"字段: {field}")
+    try:
+        schema, _ = _load_schema()
+        node = schema
+        for part in field.split("."):
+            props = node.get("properties", {}) if isinstance(node, dict) else {}
+            node = props.get(part)
+            if node is None:
+                break
+        if isinstance(node, dict):
+            if "type" in node:
+                print(f"类型: {node['type']}")
+            if "enum" in node:
+                print("允许值: " + ", ".join(str(x) for x in node["enum"]))
+            if "description" in node:
+                print(f"说明: {node['description']}")
+            if "consumed_by" in node:
+                print(f"消费方: {node['consumed_by']}")
+    except Exception:
+        pass
+    cfg = agate_common.read_project_config(project_root)
+    if cfg.get("present"):
+        value, found = _get_field(_public_config(cfg), field)
+        if found:
+            shown = yaml.safe_dump(value, allow_unicode=True, sort_keys=False).strip()
+            print(f"当前值: {shown}")
+        else:
+            print("当前值: （未设置）")
+    else:
+        print("当前值: （声明文件缺失）")
+    print(f"修复命令: agate-config.py set {field} <值>")
+    return 0
+
+
 def main(argv):
     if not argv:
         _usage()
@@ -222,6 +346,21 @@ def main(argv):
             sys.stderr.write("用法: agate-config.py get <field>\n")
             return 2
         return _cmd_get(project_root, argv[1])
+    if cmd == "set":
+        if len(argv) < 3:
+            sys.stderr.write("用法: agate-config.py set <点分路径> <value> [--append]\n")
+            return 2
+        return _cmd_set(project_root, argv[1], argv[2], append="--append" in argv[3:])
+    if cmd == "unset":
+        if len(argv) != 2:
+            sys.stderr.write("用法: agate-config.py unset <点分路径>\n")
+            return 2
+        return _cmd_unset(project_root, argv[1])
+    if cmd == "explain":
+        if len(argv) != 2:
+            sys.stderr.write("用法: agate-config.py explain <点分路径>\n")
+            return 2
+        return _cmd_explain(project_root, argv[1])
     if cmd == "list":
         return _cmd_list(project_root)
     if cmd == "show":

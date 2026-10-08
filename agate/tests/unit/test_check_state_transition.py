@@ -722,6 +722,56 @@ def test_bdd_3_empty_return_redispatch_keyword_with_retries_no_warning(
     assert "WARNING" not in result.output
 
 
+def test_bdd_3_card_block_keyword_excluded(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """RM-AG0101 方向①：dispatch-context 内嵌 AGATE_CARD 块中的"重派"不触发 WARNING。"""
+    repo = git_repo.path
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    _write_task_state(task, "P2")
+    git_repo.commit("init")
+
+    (task / "P4-dispatch-context-implementer.md").write_text(
+        "<!-- AGATE_CARD_START -->\n## 卡片\n常见错误：子代理空返回需重派\n"
+        "<!-- AGATE_CARD_END -->\n",
+        encoding="utf-8",
+    )
+    _write_task_state(task, "P3", "retries: {}")
+    git_repo.stage("agate-workspace/tasks/T001/")
+
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 0
+    assert "WARNING" not in result.output, "RM-AG0101：卡片块内的重派词不应触发 BDD-3 WARNING"
+
+
+def test_bdd_3_real_progress_signal_still_warns_with_card_present(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """RM-AG0101 方向②：剔除卡片块后，P*-progress.md 的真实"重派"仍触发 WARNING。"""
+    repo = git_repo.path
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    _write_task_state(task, "P2")
+    git_repo.commit("init")
+
+    (task / "P2-progress.md").write_text("子代理空返回，已重派\n", encoding="utf-8")
+    (task / "P4-dispatch-context-implementer.md").write_text(
+        "<!-- AGATE_CARD_START -->\n常见错误：需重派\n<!-- AGATE_CARD_END -->\n",
+        encoding="utf-8",
+    )
+    _write_task_state(task, "P3", "retries: {}")
+    git_repo.stage("agate-workspace/tasks/T001/")
+
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 0
+    assert "WARNING" in result.output, "RM-AG0101：真实 progress 的重派词仍须触发 WARNING"
+
+
 def test_bdd_4_no_event_empty_retries_exit_0_no_warning(
     git_repo, agate_scripts, python_exe, run_cli
 ):

@@ -29,10 +29,18 @@ schema_version: 1
 # m / total 用整数交叉相乘比对（current_m * baseline_total >= baseline_m * current_total），
 # 避免浮点舍入。m_ratio 仅供人读。
 baseline:
-  m: 60
-  total: 123
-  m_ratio: 0.4878
-  note: "TAG0042 批6 首次登记基线（从协议本体重新盘点口径；M60/C33/R30）"
+  m: 56
+  total: 119
+  m_ratio: 0.4706
+  note: "TAG0050 批 A4 重设后的有效基线（M56/C33/R30；4 条 CI/手工义务归 scope: protocol-repo，不计入 M 占比）"
+  # 一次性显式重设（设计 §2.9；TAG0050 批 A4）：首次机械核验后，F13 的 4 条 M
+  # （OBL-P2-12/X-10/X-17/X-19）不在必经路径上，改归 scope: protocol-repo（单独统计、
+  # 不计入 M 占比），M 占比随之下降——以本字段**显式重设**，避免被误读为质量倒退；
+  # 之后恢复「只增不减」（check-obligations.py 以 reset.to 为有效基线）。CHANGELOG 留痕归 P8。
+  reset:
+    reason: "TAG0050 批 A4：义务 enforced_at 机械核验落地；F13 的 4 条 M 归 scope: protocol-repo（不在必经路径，单独统计、不计入 M 占比）"
+    from: "60/123"
+    to: "56/119"
 
 obligations:
   # ── P0 任务简报（主 Agent 亲自写）────────────────────────────────────
@@ -79,6 +87,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P1.gates"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P1-01]
     evidence: ""
   - id: OBL-P1-02
     phase: P1
@@ -86,6 +96,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P1.task_fields"
     disposition: M
     script: "agate/scripts/check-frontmatter.py + agate/scripts/check-pruning.py"
+    enforced_at: {file: agate/scripts/check-frontmatter.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P1-02]
     evidence: ""
   - id: OBL-P1-03
     phase: P1
@@ -107,6 +119,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P1.gates"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P1-05]
     evidence: ""
   - id: OBL-P1-06
     phase: P1
@@ -114,6 +128,7 @@ obligations:
     anchor: "agate/rules/review-mapping.md#映射规则"
     disposition: R
     script: ""
+    review_output: P1-review.md
     evidence: ""
   - id: OBL-P1-07
     phase: P1
@@ -142,6 +157,8 @@ obligations:
     anchor: "agate/phase-cards/P1-requirements.md#常见错误"
     disposition: M
     script: "agate/scripts/check-gate.py::_gate_p1_vision_capability"
+    enforced_at: {file: agate/scripts/check-gate.py, function: _gate_p1_vision_capability}
+    test: agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p1_10_vision_capability_missing_blocks
     evidence: ""
   - id: OBL-P1-11
     phase: P1
@@ -149,6 +166,8 @@ obligations:
     anchor: "agate/phase-cards/P1-requirements.md#ceremony fail-closed 声明 checklist"
     disposition: M
     script: "agate/scripts/check-routing.py"
+    enforced_at: {file: agate/scripts/check-routing.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P1-11]
     evidence: ""
   - id: OBL-P1-12
     phase: P1
@@ -156,6 +175,8 @@ obligations:
     anchor: "agate/phase-cards/P1-requirements.md#产出规格"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P1-12]
     evidence: ""
   - id: OBL-P1-13
     phase: P1
@@ -179,6 +200,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P2.gates"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P2-01]
     evidence: ""
   - id: OBL-P2-02
     phase: P2
@@ -186,6 +209,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P2.gates"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P2-02]
     evidence: ""
   - id: OBL-P2-03
     phase: P2
@@ -200,6 +225,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P2.outputs"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P2-04]
     evidence: ""
   - id: OBL-P2-05
     phase: P2
@@ -221,6 +248,8 @@ obligations:
     anchor: "agate/phase-cards/P2-design.md#产出规格"
     disposition: M
     script: "agate/scripts/check-gate.py::_gate_p2_ui_design_section"
+    enforced_at: {file: agate/scripts/check-gate.py, function: _gate_p2_ui_design_section}
+    test: agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p2_07_ui_design_section_missing_blocks
     evidence: ""
   - id: OBL-P2-08
     phase: P2
@@ -228,6 +257,8 @@ obligations:
     anchor: "agate/phase-cards/P2-design.md#产出规格"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P2-08]
     evidence: ""
   - id: OBL-P2-09
     phase: P2
@@ -242,6 +273,8 @@ obligations:
     anchor: "agate/phase-cards/P2-design.md#dispatch_plan 机器字段"
     disposition: M
     script: "agate/scripts/check-gate.py::_gate_p2_dispatch_plan"
+    enforced_at: {file: agate/scripts/check-gate.py, function: _gate_p2_dispatch_plan}
+    test: agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p2_10_dispatch_plan_invalid_mode_blocks
     evidence: ""
   - id: OBL-P2-11
     phase: P2
@@ -256,6 +289,9 @@ obligations:
     anchor: "agate/phase-cards/P2-design.md#P3_xxx 禁止声明"
     disposition: M
     script: "agate/scripts/check-tdd-red.py"
+    enforced_at: {file: agate/scripts/check-tdd-red.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P2-12]
+    scope: protocol-repo
     evidence: "旧解析器 startswith('P3') 静默收集辅助键致 TDD 误执行"
   - id: OBL-P2-13
     phase: P2
@@ -263,6 +299,7 @@ obligations:
     anchor: "agate/rules/review-mapping.md#映射规则"
     disposition: R
     script: ""
+    review_output: P2-review.md
     evidence: ""
   - id: OBL-P2-14
     phase: P2
@@ -270,6 +307,7 @@ obligations:
     anchor: "agate/rules/review-mapping.md#映射规则"
     disposition: R
     script: ""
+    review_output: P2-review.md
     evidence: ""
   - id: OBL-P2-15
     phase: P2
@@ -277,6 +315,7 @@ obligations:
     anchor: "agate/rules/review-mapping.md#映射规则"
     disposition: R
     script: ""
+    review_output: P2-review.md
     evidence: ""
   - id: OBL-P2-16
     phase: P2
@@ -314,6 +353,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P3.outputs"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P3-03]
     evidence: ""
   - id: OBL-P3-04
     phase: P3
@@ -351,6 +392,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P4.gates"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P4-01]
     evidence: ""
   - id: OBL-P4-02
     phase: P4
@@ -365,6 +408,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P4.outputs"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P4-03]
     evidence: ""
   - id: OBL-P4-04
     phase: P4
@@ -386,6 +431,8 @@ obligations:
     anchor: "agate/phase-cards/P4-implementation.md#评审 checklist（RM-AG0046）"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P4-06]
     evidence: ""
   - id: OBL-P4-07
     phase: P4
@@ -393,6 +440,7 @@ obligations:
     anchor: "agate/rules/review-mapping.md#映射规则"
     disposition: R
     script: ""
+    review_output: P4-review.md
     evidence: ""
   - id: OBL-P4-08
     phase: P4
@@ -400,6 +448,8 @@ obligations:
     anchor: "agate/phase-cards/P4-implementation.md#如果是首次进入本阶段"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P4-08]
     evidence: "peekview T085：预写 vs 不预写冲突致 8 次 --no-verify"
 
   # ── P5 技术验证 ────────────────────────────────────────────────────
@@ -416,6 +466,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P5.outputs"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P5-02]
     evidence: ""
   - id: OBL-P5-03
     phase: P5
@@ -430,6 +482,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/pre-commit-gate.py"
+    enforced_at: {file: agate/scripts/pre-commit-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P5-04]
     evidence: ""
   - id: OBL-P5-05
     phase: P5
@@ -474,6 +528,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P6.gates"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-01]
     evidence: ""
   - id: OBL-P6-02
     phase: P6
@@ -481,6 +537,8 @@ obligations:
     anchor: "agate/phase-cards/P6-acceptance.md#产出规格"
     disposition: M
     script: "agate/scripts/check-p6-provenance.py"
+    enforced_at: {file: agate/scripts/check-p6-provenance.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-02]
     evidence: "T046：15 个 1 行 txt 文件凑 provenance 数量"
   - id: OBL-P6-03
     phase: P6
@@ -488,6 +546,8 @@ obligations:
     anchor: "agate/phase-cards/P6-acceptance.md#P6-evidence/"
     disposition: M
     script: "agate/scripts/check-p6-evidence.py"
+    enforced_at: {file: agate/scripts/check-p6-evidence.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-03]
     evidence: "T046：1 行文本文件充数"
   - id: OBL-P6-04
     phase: P6
@@ -495,6 +555,8 @@ obligations:
     anchor: "agate/phase-cards/P6-acceptance.md#P6-evidence/"
     disposition: M
     script: "agate/scripts/check-p6-evidence.py"
+    enforced_at: {file: agate/scripts/check-p6-evidence.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-04]
     evidence: ""
   - id: OBL-P6-05
     phase: P6
@@ -502,6 +564,8 @@ obligations:
     anchor: "agate/phase-cards/P6-acceptance.md#vision-helper 结论绑定"
     disposition: M
     script: "agate/scripts/check-p6-provenance.py + agate/scripts/check-p6-evidence.py"
+    enforced_at: {file: agate/scripts/check-p6-provenance.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-05]
     evidence: ""
   - id: OBL-P6-06
     phase: P6
@@ -523,6 +587,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P6.gates"
     disposition: M
     script: "agate/scripts/check-p6-format.py"
+    enforced_at: {file: agate/scripts/check-p6-format.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-08]
     evidence: ""
   - id: OBL-P6-09
     phase: P6
@@ -530,6 +596,8 @@ obligations:
     anchor: "agate/phase-cards/P6-acceptance.md#P6-acceptance.md（refactor 任务：回归验收口径）"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-09]
     evidence: ""
   - id: OBL-P6-10
     phase: P6
@@ -537,6 +605,8 @@ obligations:
     anchor: "agate/phase-cards/P6-acceptance.md#P6-acceptance.md（引用 P5 证据、不重跑：BDD-12/13）"
     disposition: M
     script: "agate/scripts/check-p6-provenance.py"
+    enforced_at: {file: agate/scripts/check-p6-provenance.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-10]
     evidence: ""
   - id: OBL-P6-11
     phase: P6.5
@@ -544,6 +614,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P6.5.gates"
     disposition: M
     script: "agate/scripts/check-judge-verdict.py"
+    enforced_at: {file: agate/scripts/check-judge-verdict.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-11]
     evidence: ""
   - id: OBL-P6-12
     phase: P6.5
@@ -558,6 +630,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P6.5.gates"
     disposition: M
     script: "agate/scripts/check-events.py"
+    enforced_at: {file: agate/scripts/check-events.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P6-13]
     evidence: ""
   - id: OBL-P6-14
     phase: P6
@@ -574,6 +648,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P7.gates"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P7-01]
     evidence: ""
   - id: OBL-P7-02
     phase: P7
@@ -581,6 +657,8 @@ obligations:
     anchor: "agate/phase-cards/P7-consistency.md#gate 规则"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P7-02]
     evidence: ""
   - id: OBL-P7-03
     phase: P7
@@ -588,6 +666,8 @@ obligations:
     anchor: "agate/dispatch-protocol.md#SCOPE+ 处理追踪（P2.11）"
     disposition: M
     script: "agate/scripts/check-scope-resolved.py"
+    enforced_at: {file: agate/scripts/check-scope-resolved.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P7-03]
     evidence: ""
   - id: OBL-P7-04
     phase: P7
@@ -602,6 +682,8 @@ obligations:
     anchor: "agate/phase-cards/P7-consistency.md#gate 规则"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P7-05]
     evidence: ""
   - id: OBL-P7-06
     phase: P7
@@ -625,6 +707,8 @@ obligations:
     anchor: "agate/rules/phases.yaml#P8.outputs"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: gate_p8}
+    test: agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p8_01_bump_type_missing_blocks
     evidence: ""
   - id: OBL-P8-02
     phase: P8
@@ -632,6 +716,8 @@ obligations:
     anchor: "agate/phase-cards/P8-release.md#产出规格"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: gate_p8}
+    test: agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p8_02_delivery_missing_blocks
     evidence: ""
   - id: OBL-P8-03
     phase: P8
@@ -639,6 +725,8 @@ obligations:
     anchor: "agate/phase-cards/P8-release.md#产出规格"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: gate_p8}
+    test: agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p8_03_debt_check_missing_blocks
     evidence: ""
   - id: OBL-P8-04
     phase: P8
@@ -646,6 +734,8 @@ obligations:
     anchor: "agate/phase-cards/P8-release.md#gate 规则"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P8-04]
     evidence: ""
   - id: OBL-P8-05
     phase: P8
@@ -653,6 +743,8 @@ obligations:
     anchor: "agate/phase-cards/P8-release.md#gate 规则"
     disposition: M
     script: "agate/scripts/check-changelog.py"
+    enforced_at: {file: agate/scripts/check-changelog.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P8-05]
     evidence: ""
   - id: OBL-P8-06
     phase: P8
@@ -660,6 +752,8 @@ obligations:
     anchor: "agate/phase-cards/P8-release.md#gate 规则"
     disposition: M
     script: "agate/scripts/check-gate.py"
+    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P8-06]
     evidence: ""
   - id: OBL-P8-07
     phase: P8
@@ -716,6 +810,8 @@ obligations:
     anchor: "agate/phase-cards/P8-release.md#如果是首次进入本阶段"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P8-14]
     evidence: "38 个 READY/DONE 任务中仅 16 个曾以 phase:P8 提交"
 
   # ── 横切：pre-commit / 状态机 / 派发纪律 ────────────────────────────
@@ -725,6 +821,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-state-yaml.py"
+    enforced_at: {file: agate/scripts/check-state-yaml.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-01]
     evidence: ""
   - id: OBL-X-02
     phase: X
@@ -732,6 +830,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/pre-commit-gate.py"
+    enforced_at: {file: agate/scripts/pre-commit-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-02]
     evidence: "X1：READY/DONE 跳过 PROD_TOUCHED 扫描致安全门失效（批0 已修）"
   - id: OBL-X-03
     phase: X
@@ -739,6 +839,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-p6-evidence.py"
+    enforced_at: {file: agate/scripts/check-p6-evidence.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-03]
     evidence: ""
   - id: OBL-X-04
     phase: X
@@ -746,6 +848,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-p6-provenance.py"
+    enforced_at: {file: agate/scripts/check-p6-provenance.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-04]
     evidence: ""
   - id: OBL-X-05
     phase: X
@@ -753,6 +857,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-05]
     evidence: ""
   - id: OBL-X-06
     phase: X
@@ -760,6 +866,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-pruning.py"
+    enforced_at: {file: agate/scripts/check-pruning.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-06]
     evidence: ""
   - id: OBL-X-07
     phase: X
@@ -767,6 +875,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-routing.py"
+    enforced_at: {file: agate/scripts/check-routing.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-07]
     evidence: ""
   - id: OBL-X-08
     phase: X
@@ -774,6 +884,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-scope-resolved.py"
+    enforced_at: {file: agate/scripts/check-scope-resolved.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-08]
     evidence: ""
   - id: OBL-X-09
     phase: X
@@ -781,6 +893,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-retrospective.py"
+    enforced_at: {file: agate/scripts/check-retrospective.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-09]
     evidence: ""
   - id: OBL-X-10
     phase: X
@@ -788,6 +902,9 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/agate-ci-verify.py"
+    enforced_at: {file: agate/scripts/agate-ci-verify.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-10]
+    scope: protocol-repo
     evidence: "X3：ci-gate-backstop 永远 SKIP 却显示绿（假绿，批0 已修）"
   - id: OBL-X-11
     phase: X
@@ -795,6 +912,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/pre-push-gate.py"
+    enforced_at: {file: agate/scripts/pre-push-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-11]
     evidence: ""
   - id: OBL-X-12
     phase: X
@@ -802,6 +921,8 @@ obligations:
     anchor: "agate/scripts/README.md#阶段卡片 CLI（Phase Card 渐进披露）"
     disposition: M
     script: "agate/scripts/pre-commit-gate.py"
+    enforced_at: {file: agate/scripts/pre-commit-gate.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-12]
     evidence: ""
   - id: OBL-X-13
     phase: X
@@ -809,6 +930,8 @@ obligations:
     anchor: "agate/state-machine.md#状态机定义"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-13]
     evidence: "peekview T085：8 次 --no-verify 由预写冲突所致"
   - id: OBL-X-14
     phase: X
@@ -816,6 +939,8 @@ obligations:
     anchor: "agate/state-machine.md#重试上限"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-14]
     evidence: ""
   - id: OBL-X-15
     phase: X
@@ -823,6 +948,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#P1-P8 阶段总览"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-15]
     evidence: ""
   - id: OBL-X-16
     phase: X
@@ -830,6 +957,8 @@ obligations:
     anchor: "agate/state-machine.md#回退机制（诊断→跳转→PAUSED→批准→重跑）"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-16]
     evidence: ""
   - id: OBL-X-17
     phase: X
@@ -837,6 +966,9 @@ obligations:
     anchor: "agate/rules/state-transitions.md#回退规则"
     disposition: M
     script: "agate/scripts/check-debt.py --retreat-coverage"
+    enforced_at: {file: agate/scripts/check-debt.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-17]
+    scope: protocol-repo
     evidence: "TAG0001 强制"
   - id: OBL-X-18
     phase: X
@@ -844,6 +976,8 @@ obligations:
     anchor: "agate/WORKFLOW.md#Pre-commit 检查总览"
     disposition: M
     script: "agate/scripts/check-state-transition.py"
+    enforced_at: {file: agate/scripts/check-state-transition.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-18]
     evidence: ""
   - id: OBL-X-19
     phase: X
@@ -851,6 +985,9 @@ obligations:
     anchor: "agate/WORKFLOW.md#测试/调试环境隔离原则（项目级责任）"
     disposition: M
     script: "agate/scripts/check-platform-assumptions.py"
+    enforced_at: {file: agate/scripts/check-platform-assumptions.py, function: main}
+    test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-19]
+    scope: protocol-repo
     evidence: "DEBT0048：平台假设到 P4 全量 pytest 才被抓出"
   - id: OBL-X-20
     phase: X

@@ -19,6 +19,9 @@ schema 校验规则（P2-design.md §2.2）：
     priority=high|medium|low；source=retreat|review|retrospective
   - 类型：task_id 允许 null 或 str；evidence/closure_criteria 须为 list；created_at 及
     上述 str 字段须为 str
+  - source_ref（TAG0050 批 E，可选）：`basis: followup:DEBT<n>` 的**双向回指**锚——
+    格式 `<task_id>:<DG id>`（如 `TAG0050:P4-implementation:DG1`），回指该 DEBT 由哪个
+    任务的设计缺口析出。gate_p7 校验 followup 的 DEBT 条目存在且 source_ref 回指本任务的 DG id。
   - closed 准入（BDD-8）：status==closed → task_id 非空 + evidence 序列化文本同时包含
     task_id 与 P5/P6 标记
   - id 唯一性：同文件内重复 id → 拦截
@@ -38,6 +41,8 @@ except ImportError:
 
 BLOCK_RE = re.compile(r"```yaml\n(.*?)\n```", re.S)
 HEX_RE = re.compile(r"[0-9a-f]{7,40}")
+# TAG0050 批 E：source_ref 双向回指格式 `<task_id>:<DG id>`（如 TAG0050:P4-implementation:DG1）。
+SOURCE_REF_RE = re.compile(r"^[A-Z]+[0-9]+:.+$")
 
 REQUIRED = (
     "id", "category", "title", "status", "priority", "evidence",
@@ -138,6 +143,16 @@ def check_entry(basename, eid, data, errors):
     task_id = data.get("task_id")
     if task_id is not None and not isinstance(task_id, str):
         errors.append(f"{basename}:{eid}: 类型错误（task_id 应为 str 或 null，实际 {type(task_id).__name__}）")
+
+    # TAG0050 批 E（BDD-66）：source_ref（可选）双向回指锚——格式 `<task_id>:<DG id>`。
+    source_ref = data.get("source_ref")
+    if source_ref is not None and (
+        not isinstance(source_ref, str) or not SOURCE_REF_RE.match(source_ref)
+    ):
+        errors.append(
+            f"{basename}:{eid}: source_ref 格式错误"
+            f"（应为 `<task_id>:<DG id>`，实际 {source_ref!r}）"
+        )
 
     if data.get("status") == "closed":
         if not task_id:

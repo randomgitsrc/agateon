@@ -74,11 +74,24 @@ import os
 import re
 import sys
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
 try:
     import yaml
 except ImportError:
     sys.stderr.write("agate-md-field-get: 需要 pyyaml\n")
     sys.exit(1)
+
+# TAG0050 批 B（设计 §3.3）：writer: system 字段按快照 derive 现算。单源库与等级/契约
+# 解析来自 agate_common（与 md-field-set / gate 同源）；仅在非 legacy 且快照可用时生效。
+try:
+    import agate_common
+    import agate_schema
+except ImportError:  # 安装破损降级：单源库不可用时不做现算（回退文件值，保持旧行为）
+    agate_common = None
+    agate_schema = None
 
 
 # bool 字段：_format_value 归一化为恰好 "true"/"false"（小写，FIND-4 落地）。
@@ -130,6 +143,8 @@ INT_FIELDS = frozenset({"candidate_count"})
 # （P7-consistency.md CODE_MAP 配对计数）移入——解 check-gate.py L1098-1107 DESIGN_GAP
 # 遗留（此前因 KNOWN_OPS 未注册无法经 _md_field_get 读取，改走本地 _frontmatter_field）。
 # 与 P7 其他计数同语义：frontmatter 无该字段 → 空字符串（机制未采用 → 调用方跳过配对校验）。
+# TAG0050 批 B（设计 §3.3）：`pass`/`fail` 在快照 files 节登记为 `writer: system` + `derive`；
+# 对**非 legacy** 任务，本工具读取这两个键时按 derive 现算（忽略文件值，见 `_system_field_spec`）。
 NO_FALLBACK_INT_FIELDS = frozenset({
     "pass", "fail",
     "blocker_count", "deviation_count", "deviation_critical_count",
@@ -237,8 +252,50 @@ def _regex_fallback(text, op):
     return ""
 
 
+def _system_field_spec(op):
+    """op 是否为本文件快照契约中的 `writer: system` 字段 → 返回其 spec（否则 None）。
+
+    TAG0050 批 B（设计 §3.3）：仅**非 legacy** 任务（账本有创建/迁入事件）且快照可用时
+    返回 spec；legacy / 快照不可用 → None（调用方回退文件值，保持旧行为）。
+    """
+    if agate_common is None or agate_schema is None:
+        return None
+    file_path = os.environ.get("FILE", "")
+    if not file_path:
+        return None
+    basename = os.path.basename(file_path)
+    try:
+        task_dir = os.path.dirname(os.path.abspath(file_path))
+        level = agate_common.task_level(task_dir, __file__)
+        if level is None:
+            return None  # legacy：不现算（设计 §3.3 只承诺非 legacy 任务）
+        contract = agate_common.load_contract(level, __file__)
+        files = contract.get("files") if isinstance(contract, dict) else None
+        spec = files.get(basename) if isinstance(files, dict) else None
+        fields = spec.get("fields") if isinstance(spec, dict) else None
+        field = fields.get(op) if isinstance(fields, dict) else None
+        if isinstance(field, dict) and field.get("writer") == "system":
+            return field
+    except Exception:
+        return None
+    return None
+
+
 def _get(text, op):
     fm = _read_frontmatter(text)
+    # TAG0050 批 B（设计 §3.3）：writer: system 字段（如 P6 pass/fail）按契约 `derive`
+    # 现算，**忽略文件里的值**；消费方（check-gate / check-p6-provenance / agate-feedback）
+    # 不改代码即生效。仅当字段存在于 frontmatter 且快照可用时现算——字段缺失保持
+    # 既有「无声明 → 空串 → 调用方回退」语义，避免把「未写」误判为「现算 0」。
+    if isinstance(fm, dict) and op in fm:
+        spec = _system_field_spec(op)
+        if spec is not None and spec.get("derive"):
+            try:
+                return str(agate_schema.derive(spec["derive"], fm))
+            except Exception as e:  # 非法 derive 表达式等 → 降级用文件值并 WARNING
+                sys.stderr.write(
+                    f"agate-md-field-get: WARNING: {op} 的 derive 现算失败（{e}），降级用文件值\n"
+                )
     # 字段级 presence 检测：frontmatter 是 dict 且 key 存在且值非 null → 取 frontmatter
     if isinstance(fm, dict) and op in fm and fm[op] is not None:
         return _format_value(fm[op], op)

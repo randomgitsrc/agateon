@@ -65,6 +65,9 @@ def _setup_failing_gate_repo(git_repo):
     `.state.yaml`（agate 任务状态的实际存放位置），使替换实现无论按哪种约定定位都能命中。
     """
     repo = git_repo.path
+    # 固定协议版本：使回放能真正跑到 gate 判定（未写 `.agate-version` 的使用者项目会先被判 FAIL，
+    # 那是 BDD-31 的口径；本用例要验的是"回放 gate 失败 → FAIL"，故须先钉版本）。
+    (repo / ".agate-version").write_text("agate: v0.79.0\n", encoding="utf-8")
     task = repo / "agate-workspace" / "tasks" / "T001"
     task.mkdir(parents=True)
     state = "task_id: T001\nphase: P1\nstatus: active\nretries: {}\n"
@@ -103,18 +106,20 @@ def test_bdd_16_ci_verify_script_exists(agate_scripts):
 
 
 def test_bdd_16_ci_verify_reruns_gate_and_reports_failure(
-    git_repo, agate_scripts, python_exe, run_cli
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
 ):
     """BDD-16（无假绿）：gate 判定失败时，ci-verify 必须**如实失败**（非 0 + FAIL）。
 
     Given 一个 gate 判定会失败的项目（phase=P1，缺 P1-review.md）
-    When 运行 `agate-ci-verify`
-    Then rc≠0 且输出含 FAIL（证明它**实际重跑了** gate，而非永远 SKIP 显示绿）。
-
-    现行为：agate-ci-verify.py 不存在 ⇒ rc≠0 且无 FAIL 语义（模块未实现）⇒ 红灯。
+    When 以 `--base <前序提交>` 逐提交回放（TAG0050 A2 口径）
+    Then rc≠0 且输出含 FAIL（证明它**实际回放了** gate，而非永远 SKIP 显示绿）。
     """
     repo, _task = _setup_failing_gate_repo(git_repo)
-    result = _run_ci_verify(agate_scripts, python_exe, run_cli, cwd=repo)
+    base = git_repo.git("rev-parse", "HEAD~1").stdout.strip()
+    result = _run_ci_verify(
+        agate_scripts, python_exe, run_cli, "--base", base, cwd=repo,
+        env={"AGATE_ROOT": str(agate_root)},
+    )
     assert result.returncode != 0, (
         "BDD-16（无假绿）：gate 判定失败时 ci-verify 须 rc≠0；"
         f"当前 rc={result.returncode}（假绿）\n{result.output[:400]}"
@@ -147,21 +152,20 @@ def test_bdd_16_ci_verify_skip_declared_with_reason(
 
 
 def test_bdd_16_ci_verify_source_reruns_gate(agate_scripts):
-    """BDD-16（实际重跑）：ci-verify 源码确实调用 gate 判定器（check-gate.py）。
+    """BDD-16（实际回放）：ci-verify 源码确实回放本地 hook（pre-commit-gate.py）。
 
     Given agate-ci-verify.py
     When 检查其判定路径
-    Then 它引用 `check-gate.py`（= 实际重跑 gate 判定），而非无条件恒绿。
-
-    现行为：脚本不存在 ⇒ 红灯（模块未实现）。
+    Then 它引用 `pre-commit-gate.py`（= 实际逐提交回放本地 hook，TAG0050 A2），
+         而非无条件恒绿。
     """
     script = agate_scripts / _CI_VERIFY_SCRIPT
     assert script.is_file(), (
         f"BDD-16：{_CI_VERIFY_SCRIPT} 不存在（批 5 未实现）——重跑 gate 路径无从检查"
     )
     src = script.read_text(encoding="utf-8")
-    assert re.search(r"check-gate\.py", src), (
-        "BDD-16：ci-verify 须实际重跑 gate 判定（引用 check-gate.py），"
+    assert re.search(r"pre-commit-gate\.py", src), (
+        "BDD-16：ci-verify 须实际回放本地 hook（引用 pre-commit-gate.py），"
         "而非「永远 SKIP 却显示绿」"
     )
 

@@ -47,12 +47,20 @@ if SCRIPT_DIR not in sys.path:
 try:
     from agate_common import (
         append_event,
+        check_ledger_events,
+        current_level,
+        load_contract,
+        match_declaration_file,
+        read_ledger_events,
         read_staged_state_phase,
         read_state_phase,
         read_state_task_id,
+        requirement_active,
         resolve_agate_root,
         resolve_workspace,
         run_git,
+        split_frontmatter,
+        task_level,
         write_gate_result,
     )
 except Exception as exc:
@@ -63,6 +71,12 @@ except Exception as exc:
         f"GATE ERROR: 无法加载 agate_common.py（公共库缺失，需 Python 3 + pyyaml）: {exc}\n"
     )
     sys.exit(1)
+
+# 标记单源库（TAG0050 批 C）：缺失时降级到字面正则（安装破损下的 fail-safe，不静默放行）。
+try:
+    import agate_markers as _agate_markers
+except Exception:
+    _agate_markers = None
 
 # 各阶段产出文件（2p dispatch-context 缺失强制检查用，sh case 等价）
 _PHASE_OUTPUT = {
@@ -87,6 +101,10 @@ _P_NUM_RE = re.compile(r"P[0-8]")
 # 不改变 _P_OUTPUT_RE/_P_NUM_RE/_phase_num 本身的匹配范围（BDD-7 回归要求）。
 _P_OUTPUT_ANY_RE = re.compile(r"(?:^|/)[Pp][^/]*-.*\.md$")
 _STATE_YAML_SUFFIX = ".state.yaml"
+
+# TAG0050 批 A2（设计 §2.4）：回放模式。CI 逐提交回放时设 AGATE_REPLAY=1——
+# 跳过所有会改动文件的修正步骤（只校验），且**不写** .gate-result.json / .gate-history.jsonl。
+_AGATE_REPLAY = os.environ.get("AGATE_REPLAY") == "1"
 
 
 # ---------- 通用工具 ----------
@@ -154,11 +172,16 @@ def _run_script_capture(script, args, merge=False, suppress_stderr=False, input_
     return proc.returncode, (proc.stdout or "")
 
 
-def _judge_enabled(task_dir):
-    """读 .state.yaml 的 judge.enabled（TAG0020 P6.5 注入条件，BDD-2 历史兼容）。
+def _judge_enabled(task_dir, phase=None):
+    """judge 是否启用（TAG0020 P6.5 注入条件）。
 
+    非 legacy 任务（TAG0050 A1）：由**契约**决定（快照 requires.judge），不读
+    judge.enabled；legacy 任务照旧读 .state.yaml 的 judge.enabled。
     缺失/无 judge 块/解析失败 → False（历史任务全链跳过 P6.5，不要求 judge 产物）。
     """
+    req = requirement_active(task_dir, "judge", phase or "P6")
+    if req is not None:
+        return bool(req)
     state_file = os.path.join(task_dir, ".state.yaml")
     if not os.path.isfile(state_file):
         return False
@@ -206,6 +229,467 @@ def _is_processed_dir(processed_dirs, candidate):
     return candidate in processed_dirs
 
 
+# ---------- 账本与新目录（TAG0050 批 A1，设计 §2.3）----------
+#
+# 本步骤位于任何**追加写入之前**（2g.0 的 PAUSED 留痕 / 2h.1b 的 gate_run 之前），
+# 且**每次提交都运行**，不依赖 .state.yaml 是否被暂存。覆盖规则：
+#   ① 新目录必须有创建事件（改名而来的目录除外）；
+#   ③ 账本只追加（HEAD 字节须是暂存字节的前缀）；
+#   ④ 含创建/迁入事件的账本不可删除；
+#   ⑤ 账本事件规则（check_ledger_events）；
+#   ⑦ 每个有暂存文件的任务目录都做 PROD_TOUCHED 扫描；非 legacy 任务按被暂存产出
+#      所属阶段重跑 gate。
+
+LEDGER_FILENAME = "gate-events.jsonl"
+# TAG0050 批 C（P2 §3.1 第 1 点，修复 F4 口径分叉）：安全门正则**取自标记单源**
+# `agate_markers.pattern("PROD_TOUCHED")`（注册表 lead_variant 已改为 default），
+# 不再自带字面副本。仅在单源库不可用（安装破损）时降级到字面正则（fail-safe）。
+if _agate_markers is not None:
+    _PROD_TOUCHED_RE = _agate_markers.pattern("PROD_TOUCHED")
+else:
+    _PROD_TOUCHED_RE = re.compile(r"^\s*-?\s*\[PROD_TOUCHED\]")
+# 否定写法专门指引（P2 §3.1 第 4 点：靠指引而非改正则——否定写法继续阻断）。
+_PROD_TOUCHED_GUIDANCE = (
+    "      疑似否定写法：未触达生产请在主产出写 prod_touched: false，并删除正文中的标记\n"
+)
+
+# F-3 整改（cso）：dispatch-context 文件名形态（真实注入卡片的唯一合法载体）。
+_DC_FILE_RE = re.compile(r"-dispatch-context-[^/]+\.md$")
+
+
+def _expected_card_hash(phase):
+    """当前阶段卡片（`agate-next-card.py` 输出）的期望 sha256；不可用 → None。
+
+    与 2p 的卡片 hash 校验同源（同一 CLI + 同一归一化：CR 去除、尾换行去除）。
+    """
+    if not os.path.isfile(os.path.join(SCRIPT_DIR, "agate-next-card.py")):
+        return None
+    rc, out = _run_script_capture("agate-next-card.py", [phase], suppress_stderr=True)
+    if rc != 0 or not out:
+        return None
+    return hashlib.sha256(out.replace("\r", "").rstrip("\n").encode("utf-8")).hexdigest()
+
+
+def _card_block_verified(file_rel, block_lines, expected_hash):
+    """CARD 块是否为**真实注入**的卡片块：文件名为 dispatch-context 且块内容 sha256 匹配。"""
+    if not expected_hash or not _DC_FILE_RE.search(file_rel or ""):
+        return False
+    embedded = "\n".join(line.replace("\r", "") for line in block_lines)
+    return hashlib.sha256(embedded.encode("utf-8")).hexdigest() == expected_hash
+
+
+def _added_lines_excluding_real_cards(diff_raw, phase):
+    """从 diff 新增行中剔除**真实注入**的 AGATE_CARD 块，返回其余新增行。
+
+    F-3 整改（cso）：排除条件由「纯文本 START/END 区间」收紧为「真实注入的卡片块」——
+    仅当文件名为 `*-dispatch-context-*.md` 且块内容 sha256 等于当前阶段卡片期望值时排除；
+    **伪造 CARD 块 / 非 dispatch-context 文件里的块不排除**（块内行照常参与扫描）。
+    未闭合的 START 视为普通行参与扫描（fail-safe，不静默放行）。
+    """
+    expected = _expected_card_hash(phase)
+    current_file = ""
+    in_card = False
+    block = []
+    added = []
+    for raw_line in (diff_raw or "").splitlines():
+        if raw_line.startswith("+++ b/"):
+            current_file = raw_line[6:]
+            in_card, block = False, []
+            continue
+        if not (len(raw_line) >= 2 and raw_line[0] == "+" and raw_line[1] != "+"):
+            continue
+        line = raw_line[1:]
+        if in_card:
+            if "<!-- AGATE_CARD_END -->" in line:
+                in_card = False
+                if _card_block_verified(current_file, block, expected):
+                    block = []
+                    continue
+                added.extend(block)   # 非真实卡片块：块内行参与扫描
+                block = []
+            else:
+                block.append(line)
+            continue
+        if "<!-- AGATE_CARD_START -->" in line:
+            in_card = True
+            block = []
+            continue
+        added.append(line)
+    if in_card:
+        added.extend(block)           # 未闭合 START：fail-safe 参与扫描
+    return added
+
+
+def _diff_name_status(repo_root):
+    """`git diff --cached -M --name-status` → (entries, rename_dests)。
+
+    entries 元素：改名 `("R", old, new)`；其余 `(status, path)`。
+    rename_dests：改名目标路径集合（判断"新目录是否由改名而来"）。
+    """
+    entries = []
+    rename_dests = set()
+    rc, out = run_git(["diff", "--cached", "-M", "--name-status"], cwd=repo_root)
+    if rc != 0:
+        return entries, rename_dests
+    for raw in out.splitlines():
+        parts = raw.rstrip("\r").split("\t")
+        if not parts or not parts[0]:
+            continue
+        status = parts[0]
+        if status.startswith("R") and len(parts) >= 3:
+            entries.append(("R", parts[1], parts[2]))
+            rename_dests.add(parts[2])
+        elif len(parts) >= 2:
+            entries.append((status, parts[1]))
+    return entries, rename_dests
+
+
+def _head_has_path(repo_root, rel_path):
+    """HEAD 树中是否存在该路径（前缀）下的已跟踪文件。"""
+    rc, out = run_git(["ls-tree", "-r", "--name-only", "HEAD", "--", rel_path], cwd=repo_root)
+    return rc == 0 and bool(out.strip())
+
+
+def _dir_moved_away(repo_root, task_rel):
+    """暂存后该任务目录在索引中是否已不存在（整个目录被改名带走）。
+
+    `git ls-files` 读暂存区（索引）：`git mv <dir> <newdir>` 后源目录下的条目
+    全部消失（返回空）⇒ 目录级改名；单文件改名/移走时源目录仍有 `.state.yaml`
+    等条目 ⇒ 返回非空。该判据不依赖 git 的 rename 相似度检测，比 `R` 三元组稳健。
+    """
+    rc, out = run_git(["ls-files", "--", task_rel], cwd=repo_root)
+    return rc == 0 and not out.strip()
+
+
+def _is_task_dir_rename(repo_root, old_task_rel, dst_ledger_path):
+    """账本改名是否属「整个任务目录被改名」（规则 1 的目录改名语义）。
+
+    仅当改名目标仍是**某任务目录下的账本路径**、且**源任务目录在暂存后的索引中
+    已不存在**（整个目录被 `git mv` 带走）时才豁免——此时账本随目录到新路径、
+    仍属同一任务。否则（改名到同目录 `.bak`、移入别的任务目录、改名到子目录等）
+    视同把账本移走 ⇒ 按删除判 ERROR（防止降回 legacy）。
+    """
+    if not dst_ledger_path.endswith("/" + LEDGER_FILENAME):
+        return False
+    return _dir_moved_away(repo_root, old_task_rel)
+
+
+def _git_show(repo_root, spec):
+    """`git show <spec>` 文本；失败返回 None。"""
+    rc, out = run_git(["show", spec], cwd=repo_root)
+    return out if rc == 0 else None
+
+
+def _normalize_newlines(text):
+    return (text or "").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _parse_ledger_text(text):
+    import json as _json
+    out = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            ev = _json.loads(line)
+        except Exception:
+            continue
+        if isinstance(ev, dict):
+            out.append(ev)
+    return out
+
+
+def _ledger_has_origin(text):
+    return any(ev.get("event") in ("task_created", "task_adopted")
+               for ev in _parse_ledger_text(text))
+
+
+def _task_dirs_with_staged(repo_root, tasks_dir, staged_all):
+    """{task_rel: [staged paths]}：tasks 下含 .state.yaml 的直接子目录（有暂存文件）。"""
+    tasks_rel = os.path.relpath(tasks_dir, repo_root).replace(os.sep, "/")
+    prefix = tasks_rel + "/"
+    grouped = {}
+    for f in staged_all:
+        if not f.startswith(prefix):
+            continue
+        rest = f[len(prefix):]
+        if "/" not in rest:
+            continue
+        name = rest.split("/", 1)[0]
+        grouped.setdefault(prefix + name, []).append(f)
+    out = {}
+    for task_rel in grouped:
+        task_dir = os.path.join(repo_root, task_rel)
+        if (os.path.isfile(os.path.join(task_dir, ".state.yaml"))
+                or _head_has_path(repo_root, task_rel + "/.state.yaml")):
+            out[task_rel] = grouped[task_rel]
+    return out
+
+
+def _check_ledgers_and_new_dirs(repo_root, tasks_dir, staged_all):
+    """设计 §2.3 规则 1/3/4/5：新目录创建事件、账本只追加/不可删、事件规则。"""
+    entries, rename_dests = _diff_name_status(repo_root)
+    task_staged = _task_dirs_with_staged(repo_root, tasks_dir, staged_all)
+    # 规则 4：含创建/迁入事件的账本被删除、截空或移走 → ERROR（防止降回 legacy）。
+    # 覆盖 D（删除）与 R（改名）：`git mv gate-events.jsonl <非账本名>`（同目录 `.bak`）
+    # 或移入**别的任务目录**同样使源任务失去账本 ⇒ 按删除判 ERROR。仅当**整个任务目录**
+    # 被改名（账本随目录到新路径、仍属同一任务）才豁免——即规则 1 的目录改名语义
+    # （见 `_is_task_dir_rename`）。
+    for entry in entries:
+        if entry[0] == "R":
+            src_path, dst_path = entry[1], entry[2]
+        elif entry[0] == "D":
+            src_path, dst_path = entry[1], None
+        else:
+            continue
+        if not src_path.endswith("/" + LEDGER_FILENAME):
+            continue
+        task_rel = src_path[: -len("/" + LEDGER_FILENAME)]
+        if task_rel not in task_staged and not _head_has_path(repo_root, task_rel + "/.state.yaml"):
+            continue
+        if dst_path is not None and _is_task_dir_rename(repo_root, task_rel, dst_path):
+            continue
+        if _ledger_has_origin(_git_show(repo_root, "HEAD:" + src_path)):
+            sys.stderr.write(
+                f"GATE: 含创建/迁入事件的账本被删除/移走（{src_path}）——"
+                "不得删除/截空/移走（防止降回 legacy）；迁移请用 agate-task-init.py\n")
+            sys.exit(1)
+    if not task_staged:
+        return
+    for task_rel in sorted(task_staged):
+        task_dir = os.path.join(repo_root, task_rel)
+        ledger_rel = task_rel + "/" + LEDGER_FILENAME
+        # 规则 1：新目录必须有创建事件（账本由改名而来则沿用原任务）。
+        # 例外：控制态（PAUSED/READY/DONE）不加叠加阻断——PAUSED 表示任务已被人工接管
+        # （同 2g 段语义），且新建任务本应在 P0 登记；新建即在控制态的合成场景不适用本规则。
+        phase = read_state_phase(os.path.join(task_dir, ".state.yaml"))
+        if (phase not in ("PAUSED", "READY", "DONE")
+                and not _head_has_path(repo_root, task_rel) and ledger_rel not in rename_dests):
+            events = read_ledger_events(task_dir)
+            if not (events and events[0].get("event") == "task_created"):
+                task_id = os.path.basename(task_rel).split("-", 1)[0]
+                sys.stderr.write(
+                    f"GATE: 新增任务目录 {task_rel} 的账本第 1 行不是 task_created（无创建事件）\n")
+                sys.stderr.write(
+                    f"      修复：agate-task-init.py {task_id} … 或 agate-task-init.py --existing {task_rel}\n")
+                sys.exit(1)
+            # 规则 2：新任务的等级必须是当前等级（设计 §2.3 规则 2——**只在本地、仅新任务**判；
+            # 不在 check_ledger_events / CI 路径判，避免协议升级后追溯存量非 legacy 任务）。
+            lvl = events[0].get("contract_level")
+            cur = current_level()
+            if cur is not None and lvl != cur:
+                task_id = os.path.basename(task_rel).split("-", 1)[0]
+                sys.stderr.write(
+                    f"GATE: 新增任务目录 {task_rel} 的等级 {lvl!r} ≠ 当前等级 {cur}"
+                    "（新任务必须登记当前等级，设计 §2.3 规则 2）\n")
+                sys.stderr.write(
+                    f"      修复：agate-task-init.py {task_id} … 或 agate-task-init.py --existing {task_rel}\n")
+                sys.exit(1)
+        # 规则 3：账本只追加（HEAD 字节须是暂存字节的前缀）
+        if ledger_rel in task_staged[task_rel]:
+            head_text = _git_show(repo_root, "HEAD:" + ledger_rel)
+            idx_text = _git_show(repo_root, ":" + ledger_rel)
+            if (head_text is not None and idx_text is not None
+                    and not _normalize_newlines(idx_text).startswith(_normalize_newlines(head_text))):
+                sys.stderr.write(
+                    f"GATE: 账本 {ledger_rel} 非只追加（HEAD 内容不是暂存内容的前缀）——禁止改写历史行\n")
+                sys.exit(1)
+            # 规则 5：事件规则
+            errors = check_ledger_events(task_dir)
+            if errors:
+                sys.stderr.write(f"GATE: 账本事件规则违反（{ledger_rel}）：\n")
+                for msg in errors:
+                    sys.stderr.write(f"  - {msg}\n")
+                sys.exit(1)
+
+
+def _head_phase(repo_root, task_rel):
+    """读 HEAD 版 `.state.yaml` 的 phase（失败回退工作区版）。"""
+    text = _git_show(repo_root, "HEAD:" + task_rel + "/.state.yaml")
+    if text is not None:
+        try:
+            import yaml
+            data = yaml.safe_load(text)
+            if isinstance(data, dict) and isinstance(data.get("phase"), str):
+                return data["phase"]
+        except Exception:
+            pass
+    return read_state_phase(os.path.join(repo_root, task_rel, ".state.yaml"))
+
+
+def _phase_order(phase):
+    """P0..P8 → 0..8；控制态/未知 → None。"""
+    m = re.match(r"^P([0-8])$", phase or "")
+    return int(m.group(1)) if m else None
+
+
+def _staged_output_phases(repo_root, task_rel):
+    """task_rel 下暂存的阶段产出（`P[0-8]-*.md`）所属阶段集合（升序）。"""
+    prefix = task_rel + "/"
+    phases = set()
+    for f in _staged_name_only():
+        if not f.startswith(prefix) or not _P_OUTPUT_RE.search(f):
+            continue
+        p = _phase_num(f)
+        if p:
+            phases.add(p)
+    return sorted(phases)
+
+
+def _rerun_gates_for_staged_outputs(repo_root, task_rel, task_dir):
+    """设计 §2.3 规则 7 后半：非 legacy 任务暂存了阶段产出、却没改 phase 时，
+    按**被暂存产出所属的阶段**重跑该阶段的 gate（该阶段须不晚于 HEAD 的 phase；
+    HEAD 为 READY/DONE 时同样执行）。任一重跑 exit 1 → 中止 commit。
+
+    legacy 任务不重跑（走旧逻辑）；PAUSED 任务已被人工接管，不叠加阻断。
+    """
+    if task_level(task_dir) is None:
+        return
+    head_phase = _head_phase(repo_root, task_rel)
+    if head_phase == "PAUSED":
+        return
+    control = head_phase in ("READY", "DONE")
+    head_order = _phase_order(head_phase)
+    for out_phase in _staged_output_phases(repo_root, task_rel):
+        out_order = _phase_order(out_phase)
+        if out_order is None:
+            continue
+        if not control and (head_order is None or out_order > head_order):
+            continue  # 产出阶段晚于 HEAD：属"提前产出"，由 2f WARNING 处理，不重跑
+        rc = _run_script_rc("check-gate.py", [out_phase, task_dir])
+        if rc == 1:
+            sys.stderr.write(
+                f"GATE: 非 legacy 任务暂存了 {out_phase} 产出但未改 phase（{task_rel}）——"
+                f"按被暂存产出所属阶段重跑 {out_phase} gate 未通过（设计 §2.3 规则 7）\n")
+            sys.exit(1)
+
+
+# 声明文件（设计 §3.6 / 快照 declaration_files；R2 单源）。仅快照不可用时降级到历史四类。
+_FALLBACK_DECLARATION_FILES = (
+    "P1-requirements.md", "P2-design.md", "P6-acceptance.md", "P7-consistency.md",
+)
+
+
+def _declaration_files(task_dir):
+    """声明文件集合：快照 `declaration_files`（按任务等级，回退协议当前等级）；
+    快照不可用 → 历史四类文件（安装破损降级）。
+
+    L2 口径说明：本函数与 `_primary_output_for` 取**任务级（最新）快照**——它们回答的是
+    「结构面：哪些文件/字段存在」（随任务最新等级走）；而 `_check_prod_touched_primary`
+    的门控 `requirement_active(..., phase)` 用 **level_at_phase**——它回答的是「时间面：
+    该要求在本阶段是否已生效」（随阶段走）。两者语义不同，**刻意不统一**（设计 §2.5）。
+    """
+    lvl = task_level(task_dir)
+    if lvl is None:
+        lvl = current_level(__file__)
+    try:
+        contract = load_contract(lvl, __file__) if lvl else {}
+    except Exception:
+        contract = {}
+    decl = contract.get("declaration_files") if isinstance(contract, dict) else None
+    if isinstance(decl, (list, tuple)) and decl:
+        return tuple(str(x) for x in decl)
+    return _FALLBACK_DECLARATION_FILES
+
+
+def _is_declaration_path(file_path, task_dir):
+    """file_path 是否命中快照 `declaration_files`（glob 模式；GAP-8 闭合）。
+
+    cso F-2：与 `check-frontmatter._is_declaration_file` 同口径，统一到
+    `agate_common.match_declaration_file`（glob 语义单源，含 `**` 递归/零层）。
+    """
+    return match_declaration_file(file_path, task_dir, _declaration_files(task_dir))
+
+
+def _primary_output_for(task_dir, phase):
+    """当前阶段的主产出相对路径（快照 primary_outputs；不可用 → None）。"""
+    lvl = task_level(task_dir)
+    if lvl is None:
+        return None
+    try:
+        contract = load_contract(lvl, __file__)
+    except Exception:
+        contract = {}
+    outputs = contract.get("primary_outputs") if isinstance(contract, dict) else None
+    if not isinstance(outputs, dict):
+        return None
+    return outputs.get(phase)
+
+
+def _check_prod_touched_primary(task_dir, phase):
+    """TAG0050 批 C（设计 §4）：非 legacy 任务主产出 frontmatter 的 `prod_touched`。
+
+    - 缺字段 → ERROR（附修复命令）
+    - 值为 true 且当前不在 PAUSED → 中止提交
+    返回 None（不适用/通过）；命中则 sys.exit(1)。
+    """
+    if requirement_active(task_dir, "prod_touched", phase) is not True:
+        return
+    primary = _primary_output_for(task_dir, phase)
+    if not primary:
+        return
+    out_file = os.path.join(task_dir, primary)
+    if not os.path.isfile(out_file):
+        return
+    try:
+        with open(out_file, encoding="utf-8", errors="replace") as fh:
+            fm, _body = split_frontmatter(fh.read().replace("\r\n", "\n"))
+    except Exception:
+        fm = None
+    fm = fm if isinstance(fm, dict) else {}
+    # TAG0050 批 C（设计 §4 / BDD-52）：主产出缺 `prod_touched` → ERROR + 修复命令。
+    # （「主产出」按快照 `primary_outputs` 判定；非 legacy 任务必填。）
+    if "prod_touched" not in fm:
+        sys.stderr.write(
+            f"GATE: 主产出 {primary} 缺 prod_touched 字段（非 legacy 任务必填，设计 §4）\n"
+            f"      修复命令: FILE={out_file} agate-md-field-set.py set prod_touched false\n"
+            f"      （若未触达生产；若已触达请保持 true 并进入 PAUSED）\n"
+        )
+        sys.exit(1)
+    if fm.get("prod_touched") is True and phase != "PAUSED":
+        sys.stderr.write(
+            f"GATE: 主产出 {primary} 声明 prod_touched: true 且当前不在 PAUSED（{phase}），commit 中止\n"
+            f"      修复命令: FILE={out_file} agate-md-field-set.py set prod_touched false\n"
+            f"      （若未触达生产；若已触达请进入 PAUSED 而非改写字段）\n"
+        )
+        sys.exit(1)
+
+
+def _scan_prod_touched_and_rerun(repo_root, tasks_dir, staged_all, state_files_rel):
+    """设计 §2.3 规则 7 的 PROD_TOUCHED 全局面：每个有暂存文件的任务目录都做
+    PROD_TOUCHED 扫描（不论是否暂存 .state.yaml），安全门不再依赖"是否改了 phase"。
+
+    并实现规则 7 后半（`_rerun_gates_for_staged_outputs`）：非 legacy 任务按被暂存产出
+    所属阶段重跑 gate。两半都不依赖 `.state.yaml` 是否被暂存。
+    """
+    task_staged = _task_dirs_with_staged(repo_root, tasks_dir, staged_all)
+    for task_rel in sorted(task_staged):
+        state_rel = task_rel + "/.state.yaml"
+        # 有暂存**且工作区仍存在**的 .state.yaml：PROD_TOUCHED 由主循环 2g.0 处理。
+        # `.state.yaml` 以**删除**方式暂存时（`git rm`）工作区文件不存在、主循环
+        # `os.path.isfile` 为假而跳过 ⇒ 这里**不得**一并跳过，否则该任务目录完全不被
+        # PROD_TOUCHED 扫描（评审 F-3：两条路径互相让路的安全门洞）。
+        if state_rel in state_files_rel and os.path.isfile(os.path.join(repo_root, state_rel)):
+            continue
+        task_dir = os.path.join(repo_root, task_rel)
+        state_file = os.path.join(task_dir, ".state.yaml")
+        phase = read_state_phase(state_file)
+        _check_prod_touched_primary(task_dir, phase)
+        _rerun_gates_for_staged_outputs(repo_root, task_rel, task_dir)
+        _rc, diff_raw = run_git(["diff", "--cached", "-M", "--", task_rel], cwd=repo_root)
+        added = _added_lines_excluding_real_cards(diff_raw, phase)
+        if any(_PROD_TOUCHED_RE.match(ln) for ln in added):
+            task_id = read_state_task_id(state_file)
+            if phase == "PAUSED":
+                append_event(task_dir, {"event": "prod_touched_in_paused", "task_id": task_id})
+            else:
+                sys.stderr.write(
+                    f"GATE: [PROD_TOUCHED] 检测到生产环境接触（{task_id}），commit 中止\n")
+                sys.stderr.write(_PROD_TOUCHED_GUIDANCE)
+                sys.exit(1)
+
+
 # ---------- 主流程 ----------
 
 
@@ -219,6 +703,10 @@ def main():
     # AGATE_ROOT = 协议本体路径（env 优先 → 脚本真实路径上溯 → 复制模式 .agate-root 恢复）
     resolve_agate_root(os.path.abspath(__file__))
 
+    # TAG0050 G3（GAP-6 / D3）：标记本进程为 pre-commit 上下文，供 check-gate.py 的
+    # P6 结构化判据 D3 启用「证据须已跟踪或已暂存」附加检查（直接调 check-gate 时不做）。
+    os.environ["AGATE_PRECOMMIT_GATE"] = "1"
+
     # 工作区路径单点解析（TAG0003 v2.0）：.agate.env > env AGATE_TASKS_DIR > 默认
     # agate-workspace/。resolve_workspace 等价 agate-workspace-resolve.sh 的 source 语义。
     _workspace, tasks_dir = resolve_workspace(repo_root)
@@ -228,6 +716,11 @@ def main():
     state_files = [
         os.path.join(repo_root, f) for f in staged_all if f.endswith(_STATE_YAML_SUFFIX)
     ]
+
+    # 1.1 账本与新目录（TAG0050 批 A1，设计 §2.3）——位于任何追加写入之前，每次提交都跑。
+    state_files_rel = [f for f in staged_all if f.endswith(_STATE_YAML_SUFFIX)]
+    _check_ledgers_and_new_dirs(repo_root, tasks_dir, staged_all)
+    _scan_prod_touched_and_rerun(repo_root, tasks_dir, staged_all, state_files_rel)
 
     # 2. 对每个暂存的 .state.yaml：格式校验 + 状态转移 + gate
     for state_file in state_files:
@@ -331,31 +824,48 @@ def main():
         _prod_touched_hit = False
         if any(f.startswith(prefix) for f in _staged_name_only()):
             _rc_diff, diff_raw = run_git(["diff", "--cached", "--", task_rel])
-            diff_added = []
-            in_card = False
-            for raw_line in (diff_raw or "").splitlines():
-                if not (len(raw_line) >= 2 and raw_line[0] == "+" and raw_line[1] != "+"):
-                    continue
-                line = raw_line[1:]
-                if not in_card and "<!-- AGATE_CARD_START -->" in line:
-                    in_card = True
-                    continue
-                if in_card:
-                    if "<!-- AGATE_CARD_END -->" in line:
-                        in_card = False
-                    continue
-                diff_added.append(line)
-            if any(re.match(r"^\s*-?\s*\[PROD_TOUCHED\]", ln) for ln in diff_added):
+            diff_added = _added_lines_excluding_real_cards(diff_raw, phase)
+            if any(_PROD_TOUCHED_RE.match(ln) for ln in diff_added):
                 _prod_touched_hit = True
                 if phase != "PAUSED":
                     sys.stderr.write(
                         f"GATE: [PROD_TOUCHED] 检测到生产环境接触（{task_id}），commit 中止\n")
+                    sys.stderr.write(_PROD_TOUCHED_GUIDANCE)
                     sys.exit(1)
             if (phase != "PAUSED"
                     and any(re.match(r"^\s*-?\s*\[PROD_TOUCHED\]\s*$", ln) for ln in diff_added)):
                 sys.stderr.write(
                     f"GATE: 不合规的 PROD_TOUCHED 标记格式（{task_id}），须用行首 [PROD_TOUCHED] 或 [PROD_NOT_TOUCHED] 声明\n")
                 sys.exit(1)
+
+        # 2g.3 主产出 prod_touched 必填/中止（TAG0050 批 C，设计 §4）
+        _check_prod_touched_primary(task_dir, phase)
+
+        # 2h.1c 状态转移事件（TAG0050 A3，设计 §2.7）：**前移到 2g 的 continue 之前**，
+        # 使进入 PAUSED/READY/DONE 的转换也被记录（现状 2g 在 2h.1c 之前 continue ⇒
+        # 这些转换事件从不写入）。`.state.yaml` 仍是权威状态源，事件只记录不改写。
+        if phase_changed:
+            try:
+                append_event(task_dir, {
+                    "event": "state_transition",
+                    "phase": phase,
+                    "from": old_phase or "",
+                    "to": phase,
+                })
+            except Exception as exc:
+                sys.stderr.write(f"GATE WARNING: state_transition 事件写入失败（不阻断 commit）: {exc}\n")
+
+        # 2h.1d 一并暂存账本（TAG0042 BDD-12；TAG0050 A3 前移）：把本 hook 已追加的
+        # state_transition（进入 PAUSED/READY/DONE 的转换在此后的 2g `continue` 之前写入）
+        # `git add`，随本次提交入库。**失败可见**（TAG0050 A3 派生事项②）：检查返回码，
+        # 失败给 WARNING。⚠️ 普通阶段下 gate_run（2h.1b）在本步之后才追加，故另有 2h.1e
+        # 再次 add 覆盖它（否则 gate_run 不进本次 commit，评审 A1-2）。
+        if os.path.isfile(os.path.join(task_dir, "gate-events.jsonl")):
+            _rc_add, _ = run_git(["add", os.path.join(task_dir, "gate-events.jsonl")])
+            if _rc_add != 0:
+                sys.stderr.write(
+                    f"GATE WARNING: 账本 {os.path.join(task_dir, 'gate-events.jsonl')} "
+                    f"git add 失败（rc={_rc_add}）——本事件可能未随本次提交入库\n")
 
         # 2g. 跳过非 gate 阶段
         if phase in ("PAUSED", "READY", "DONE"):
@@ -367,7 +877,7 @@ def main():
                     f"GATE WARNING: PAUSED 提交扫描到 [PROD_TOUCHED]（{task_id}）——"
                     "本阶段只扫描不阻断（任务已被人工接管）；已记入账本\n")
                 try:
-                    append_event(task_dir, "prod_touched_in_paused", {"task_id": task_id})
+                    append_event(task_dir, {"event": "prod_touched_in_paused", "task_id": task_id})
                 except Exception:
                     sys.stderr.write("GATE WARNING: 账本留痕失败（不阻断）\n")
             continue
@@ -377,12 +887,25 @@ def main():
         # 2g.2 frontmatter schema 校验（P2-design.md §3.1.3，BDD-8 挂载点）
         # 与 2a 同机制：扫描本任务暂存的 P1/P2/P6/P7 产出文件，逐个跑 check-frontmatter
         if os.path.isfile(os.path.join(SCRIPT_DIR, "check-frontmatter.py")):
-            for fm_name in ("P1-requirements.md", "P2-design.md", "P6-acceptance.md", "P7-consistency.md"):
-                if (task_rel + "/" + fm_name) in _staged_name_only() and _run_script_rc("check-frontmatter.py", [os.path.join(task_dir, fm_name)]) != 0:
+            # GAP-8 闭合（2026-10-08）：`declaration_files` 为 glob 模式——遍历该任务下**已暂存**
+            # 且命中声明模式的产出文件逐个校验（不再按字面文件名拼接）。
+            for _staged_name in _staged_name_only():
+                if not _staged_name.startswith(task_rel + "/"):
+                    continue
+                _abs = os.path.join(repo_root, _staged_name)
+                if not os.path.isfile(_abs):
+                    continue
+                if not _is_declaration_path(_abs, task_dir):
+                    continue
+                if _run_script_rc("check-frontmatter.py", [_abs]) != 0:
                     sys.exit(1)
 
-        # 2h. P6 格式自动归一化（①）——verifier 产出后、gate 前
-        if phase == "P6" and os.path.isfile(os.path.join(task_dir, "P6-acceptance.md")):
+        # 2h. P6 格式自动归一化（①）——verifier 产出后、gate 前。
+        # TAG0050 批 D（设计 §5.1）：**非 legacy 任务跳过** check-p6-format（包括 2h 段）——
+        # P6 走结构化 results 判据 D1–D10，不再依赖正文格式归一化。
+        # 回放模式（AGATE_REPLAY=1）跳过会改文件的修正步骤，只校验（设计 §2.4）。
+        if (not _AGATE_REPLAY and phase == "P6" and task_level(task_dir) is None
+                and os.path.isfile(os.path.join(task_dir, "P6-acceptance.md"))):
             _run_script_rc("check-p6-format.py", ["--fix", os.path.join(task_dir, "P6-acceptance.md")])
             run_git(["add", os.path.join(task_dir, "P6-acceptance.md")])
 
@@ -392,8 +915,10 @@ def main():
         gate_exit = _gc_rc
         gate_output = gate_output.rstrip("\n")
 
-        # 2h.1 写 gate 结果（供 CI backstop 检测 --no-verify 绕过）
-        write_gate_result(phase, task_id, gate_exit, gate_output)
+        # 2h.1 写 gate 结果（供 CI backstop 检测 --no-verify 绕过）。
+        # 回放模式不写 .gate-result.json / .gate-history.jsonl（设计 §2.4）。
+        if not _AGATE_REPLAY:
+            write_gate_result(phase, task_id, gate_exit, gate_output)
 
         # 2h.1b 事件账本写入（TAG0020 BDD-7：gate_run 事件，append-only 哈希链单点）
         # append_event 内部失败仅 WARNING；此处再兜一层异常，确保任何意外都不阻断 commit
@@ -408,25 +933,16 @@ def main():
         except Exception as exc:
             sys.stderr.write(f"GATE WARNING: gate_run 事件写入失败（不阻断 commit）: {exc}\n")
 
-        # 2h.1c 状态转移事件（TAG0020 BDD-7：phase 变更时记 state_transition；.state.yaml
-        # 仍为权威状态源，事件只记录不改写——双写语义，P2 §3.2 R1）
-        if phase_changed:
-            try:
-                append_event(task_dir, {
-                    "event": "state_transition",
-                    "phase": phase,
-                    "from": old_phase or "",
-                    "to": phase,
-                })
-            except Exception as exc:
-                sys.stderr.write(f"GATE WARNING: state_transition 事件写入失败（不阻断 commit）: {exc}\n")
-
-        # 2h.1d 一并暂存账本（TAG0042 BDD-12）：agate-run 追加的 cmd_run 事件（以及本 hook
-        # 追加的 gate_run / state_transition）写在 gate-events.jsonl（append-only 哈希链）。
-        # 用 `git add` 把它一并纳入本次 commit——**不直接写账本文件**，避免绕过 append_event
-        # 破坏 prev_hash 链（P2 R5）。
+        # 2h.1e 再次暂存账本：2h.1d 的 `git add` 在 gate_run 之前，普通阶段下 gate_run
+        # 于此后追加 ⇒ 需再 add 一次，确保 `gate_run` 随本次提交入库（TAG0042 BDD-12 /
+        # 设计 §8 第 6 项；评审 A1-2）。PAUSED/READY/DONE 在 2g 处 `continue`，不走本步，
+        # 其 state_transition 已由 2h.1d 覆盖。
         if os.path.isfile(os.path.join(task_dir, "gate-events.jsonl")):
-            run_git(["add", os.path.join(task_dir, "gate-events.jsonl")])
+            _rc_add2, _ = run_git(["add", os.path.join(task_dir, "gate-events.jsonl")])
+            if _rc_add2 != 0:
+                sys.stderr.write(
+                    f"GATE WARNING: 账本 {os.path.join(task_dir, 'gate-events.jsonl')} "
+                    f"git add 失败（rc={_rc_add2}）——gate_run 可能未随本次提交入库\n")
 
         # 2i. P6 客观行为审计（P2.1/P2.10）
         if gate_exit != 1 and _run_script_rc("check-p6-provenance.py", [task_dir]) == 1:
@@ -438,7 +954,7 @@ def main():
         # enforcement 与 commit 位置解耦（注入条件不依赖 phase 值）：verdict 落库的
         # 任何后续 commit（含 P7 commit）都会重验；历史任务（无 judge.enabled）天然跳过。
         if (gate_exit != 1
-                and _judge_enabled(task_dir)
+                and _judge_enabled(task_dir, phase)
                 and os.path.isfile(os.path.join(task_dir, "P6.5-judge-verdict.md"))
                 and (_run_script_rc("check-judge-verdict.py", [task_dir]) == 1
                      or _run_script_rc("check-events.py", [task_dir]) == 1)):

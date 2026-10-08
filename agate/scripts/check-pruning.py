@@ -24,6 +24,11 @@ except ImportError:
     run_git = None
 
 try:
+    import agate_common
+except ImportError:  # pragma: no cover - 安装破损降级
+    agate_common = None
+
+try:
     from agate_common import (
         body_field_value,
         fm_field_value,
@@ -133,6 +138,39 @@ def _reconcile_p1_fields(p1_text):
         pass
 
 
+def _phase_universe(task_dir):
+    """快照 `phase_universe`（阶段全集）→ set；不可用 → set()（跳过闭合检查）。"""
+    if agate_common is None:
+        return set()
+    try:
+        level = agate_common.task_level(task_dir, __file__)
+        if level is None:
+            level = agate_common.current_level(__file__)
+        contract = agate_common.load_contract(level, __file__) if level else {}
+    except Exception:
+        return set()
+    universe = contract.get("phase_universe") if isinstance(contract, dict) else None
+    if isinstance(universe, list):
+        return {str(x) for x in universe}
+    return set()
+
+
+def _pruned_required_fields(task_dir):
+    """快照 `pruned.required_fields`（`pruned` 条目必填字段）；不可用 → [phase]。"""
+    if agate_common is None:
+        return ["phase"]
+    try:
+        level = agate_common.task_level(task_dir, __file__)
+        if level is None:
+            level = agate_common.current_level(__file__)
+        contract = agate_common.load_contract(level, __file__) if level else {}
+    except Exception:
+        return ["phase"]
+    spec = contract.get("pruned") if isinstance(contract, dict) else None
+    fields = spec.get("required_fields") if isinstance(spec, dict) else None
+    return [str(x) for x in fields] if isinstance(fields, list) and fields else ["phase"]
+
+
 def main():
     if len(sys.argv) < 2:
         sys.stderr.write("用法: check-pruning.py TASK_DIR\n")
@@ -154,6 +192,39 @@ def main():
     _reconcile_p1_fields(p1_text)
 
     errors = []
+
+    # TAG0050 批 F（RM-AG0087，设计 §7）：非 legacy 任务**恒检**——
+    # `set(phases) ∪ set(pruned.phase)` 须等于快照 `phase_universe`，且两者不相交。
+    # GAP-4 闭合（2026-10-08）：不再只在"声明了 pruned"时检查（`pruned` 缺省按空集处理）。
+    if agate_common is not None and agate_common.task_level(task_dir, __file__) is not None:
+        fm_p1, _body_p1 = split_frontmatter(p1_text)
+        pruned = fm_p1.get("pruned") if isinstance(fm_p1, dict) else None
+        pruned_list = pruned if isinstance(pruned, list) else []
+        # pruned 条目必填字段（快照 pruned.required_fields：[phase, reason, risk]）。
+        for _idx, item in enumerate(pruned_list):
+            if not isinstance(item, dict):
+                errors.append("pruned 条目须为映射（含 phase/reason/risk）")
+                continue
+            _missing = [f for f in _pruned_required_fields(task_dir) if not item.get(f)]
+            if _missing:
+                errors.append(f"pruned 条目缺必填字段：{_missing}")
+        declared = set(phases)
+        pruned_phases = {
+            str(item.get("phase"))
+            for item in pruned_list
+            if isinstance(item, dict) and item.get("phase")
+        }
+        universe = _phase_universe(task_dir)
+        if declared & pruned_phases:
+            errors.append(
+                f"phases 与 pruned.phase 相交：{sorted(declared & pruned_phases)}"
+            )
+        if universe and (declared | pruned_phases) != universe:
+            errors.append(
+                "phases ∪ pruned.phase != 阶段全集："
+                f"缺={sorted(universe - (declared | pruned_phases))}, "
+                f"多={sorted((declared | pruned_phases) - universe)}"
+            )
 
     # 检查 1：risk_level 必须存在
     if not risk_level:

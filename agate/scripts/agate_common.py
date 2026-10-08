@@ -18,6 +18,8 @@ agate-state-get.py）。Python 3.8+（禁 match / str.removeprefix）。
 """
 
 import copy
+import fnmatch
+import glob
 import hashlib
 import json
 import os
@@ -569,10 +571,15 @@ def append_event(task_dir, event):
 def read_judge_verdict(task_dir):
     """解析 {task_dir}/P6.5-judge-verdict.md 的 frontmatter（--- 块）。
 
-    返回 dict {status, criteria_total, criteria_passed, verdict_evidence, partial}；
+    返回 dict {status, criteria, criteria_total, criteria_passed, verdict_evidence, partial}；
     文件缺失 / 无 frontmatter / 解析失败 → None（调用方按缺失处理，fail-closed）。
     partial 为可选降级标记字段：缺省 False（BDD-5 必需字段仅
     status/criteria_total/criteria_passed/verdict_evidence 四项）。
+
+    TAG0050 批 D（设计 §5.2，BLOCKER-1 修复）：**透传 `criteria`**（原实现丢弃该键，
+    使 `check-judge-verdict.py` 的 `verdict.get("criteria")` 恒 None → 非 legacy 死锁）。
+    `criteria` 为 agent 声明的结构化结论；`criteria_total`/`criteria_passed`/
+    `verdict_evidence` 是系统字段，由非 legacy 消费方按 `criteria` 现算。
     """
     path = os.path.join(task_dir, "P6.5-judge-verdict.md")
     if not os.path.isfile(path):
@@ -593,6 +600,7 @@ def read_judge_verdict(task_dir):
         return None
     return {
         "status": data.get("status"),
+        "criteria": data.get("criteria"),
         "criteria_total": data.get("criteria_total"),
         "criteria_passed": data.get("criteria_passed"),
         "verdict_evidence": data.get("verdict_evidence"),
@@ -1677,6 +1685,150 @@ def resolve_evidence(task_dir, ref):
     return full if os.path.isfile(full) else None
 
 
+# TAG0050 批 D（设计 §5.3）：任务内运行日志引用前缀 `run:<k>` → <task>/runs/<k>.log。
+RUN_REF_PREFIX = "run:"
+
+
+def resolve_evidence_ref(task_dir, ref, script_path=None):
+    """证据引用的**唯一解析入口**（设计 §5.3）。返回 `(abs_path, error)`：
+
+      - 成功 → `(path, None)`；
+      - 失败 → `(None, <错误描述>)`（调用方据此报 ERROR）。
+
+    接受两种形式：
+      1. **任务目录内的相对路径**：经 `resolve_evidence()` 解析（须存在且非空）；
+      2. **`run:<k>`**：指向 `<task>/runs/<k>.log`，并校验其 sha256 与账本中对应的
+         `cmd_run` 事件（`k` 字段）记录一致。**区分两种报错**：`cmd_run` 事件缺失
+         （fail-closed，无法核验）与 sha256 不匹配（内容被改写）。
+    """
+    if not ref:
+        return None, "空引用"
+    if ref.startswith(RUN_REF_PREFIX):
+        k = ref[len(RUN_REF_PREFIX):].strip()
+        if not k:
+            return None, "空 run 编号（run:）"
+        path = os.path.join(str(task_dir), "runs", f"{k}.log")
+        if not os.path.isfile(path):
+            return None, f"run:{k} 日志不存在（{path}）"
+        ev = None
+        for e in read_ledger_events(task_dir):
+            if e.get("event") == "cmd_run" and str(e.get("k")) == str(k):
+                ev = e
+                break
+        if ev is None:
+            return None, f"run:{k} 的 cmd_run 事件缺失（无法核验 sha256，fail-closed）"
+        # cso F-1（MEDIUM）：cmd_run 事件须带 k/log/sha256 三字段（设计 §5.3）；
+        # 任一缺失 = 事件不完整 → fail-closed（与「sha256 不匹配」区分文案）。
+        if (
+            ev.get("k") is None
+            or not str(ev.get("log") or "").strip()
+            or not isinstance(ev.get("sha256"), str)
+            or not ev.get("sha256")
+        ):
+            return None, (
+                f"run:{k} 的 cmd_run 事件不完整（缺 k/log/sha256 字段，无法核验，fail-closed）"
+            )
+        recorded = ev.get("sha256")
+        try:
+            with open(path, "rb") as fh:
+                actual = hashlib.sha256(fh.read()).hexdigest()
+        except OSError as exc:
+            return None, f"run:{k} 日志不可读（{exc}）"
+        if actual != recorded:
+            return None, (
+                f"run:{k} 的 sha256 与 cmd_run 事件不一致"
+                f"（事件 {recorded}，实际 {actual}）"
+            )
+        # cso F-3（LOW）：设计 §5.1 D3 要求解析到**非空文件**——run: 分支补空文件判据
+        # （相对路径分支已有；此前 run: 分支对 0 字节日志免检）。
+        try:
+            if os.path.getsize(path) == 0:
+                return None, f"run:{k} 日志为空文件（D3：证据须非空）"
+        except OSError as exc:
+            return None, f"run:{k} 日志不可读（{exc}）"
+        return path, None
+    path = resolve_evidence(task_dir, ref)
+    if path is None:
+        return None, f"引用无法解析为任务目录内的非空文件：{ref}"
+    try:
+        if os.path.getsize(path) == 0:
+            return None, f"引用的证据文件为空：{ref}"
+    except OSError:
+        return None, f"引用的证据文件不可读：{ref}"
+    return path, None
+
+
+# ── 声明文件匹配（cso F-2 单源；设计 §6 的 `declaration_files`）────────────────
+# 同一快照键被两类消费方读取：**枚举**（聚合，`check-gate`/`check-scope-resolved`/
+# `check-retrospective`）与**命中判定**（frontmatter 强制，`check-frontmatter`/
+# `pre-commit-gate`/`agate-md-field-set`）。原实现前者走 `glob.glob(recursive=True)`、
+# 后者走 `fnmatch`，对 `P4-implementation/**/*.md` 的**直接子文件**语义分叉
+# （glob 命中 / fnmatch 不命中）⇒ 子目录声明文件逃逸 frontmatter 强制（cso F-2）。
+# 现统一为 **glob 语义**（`**/` 匹配零层或多层目录），并集中于此单源。
+def declaration_file_paths(task_dir, patterns):
+    """枚举 `patterns` 在 `task_dir` 下命中的文件（glob 语义，去重、稳定排序）。
+
+    `patterns` 为快照 `declaration_files` 列表；非列表 → []。目录/坏模式跳过。
+    """
+    out = set()
+    for pattern in patterns or []:
+        if not isinstance(pattern, str) or not pattern:
+            continue
+        for path in glob.glob(os.path.join(str(task_dir), pattern), recursive=True):
+            if os.path.isfile(path):
+                out.add(os.path.realpath(path))
+    return sorted(out)
+
+
+def match_declaration_file(file_path, task_dir, patterns):
+    """`file_path` 是否命中快照 `declaration_files`（glob 语义，与枚举面**同一判据**）。
+
+    - 含通配符的 pattern：按 `declaration_file_paths` 的 glob 语义比对 realpath
+      （故 `P4-implementation/**/*.md` 命中直接子文件与更深层文件）；另按 basename
+      匹配（兼容子目录中的 `*-review.md`）。
+    - 无通配符的 pattern：相对任务目录路径或 basename 精确相等。
+    """
+    ap = os.path.realpath(os.path.abspath(str(file_path)))
+    base = os.path.basename(str(file_path))
+    try:
+        rel = os.path.relpath(ap, os.path.realpath(os.path.abspath(str(task_dir))))
+        rel = rel.replace(os.sep, "/")
+    except (ValueError, OSError):
+        rel = ""
+    matched = set(declaration_file_paths(task_dir, patterns))
+    for pattern in patterns or []:
+        if not isinstance(pattern, str) or not pattern:
+            continue
+        if any(ch in pattern for ch in "*?["):
+            if ap in matched:
+                return True
+            if "/" not in pattern and fnmatch.fnmatch(base, pattern):
+                return True
+        elif pattern in (rel, base):
+            return True
+    return False
+
+
+def task_dir_for_file(file_path):
+    """文件所属任务目录：自文件所在目录向上找含 `.state.yaml` / 账本的目录；
+    找不到则退回文件所在目录（裸文件/非任务场景）。cso F-2：子目录声明文件
+    （如 `P4-implementation/x.md`）须能定位到任务根，而非文件自身目录。
+    """
+    cur = os.path.dirname(os.path.abspath(file_path))
+    probe = cur
+    for _ in range(20):
+        if (
+            os.path.isfile(os.path.join(probe, ".state.yaml"))
+            or os.path.isfile(os.path.join(probe, LEDGER_NAME))
+        ):
+            return probe
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    return cur
+
+
 # ── 证据引用政策（最终裁决 §4；F2 修复：两脚本共用同一判据）────────────────
 # 判据：P1-requirements.md 的 `created` ≥ rules/dispatch.yaml 的
 #       evidence_ref_required_since ⇒ **新任务**（无引用 ⇒ exit 1，或 provenance 侧 exit 1）；
@@ -1705,11 +1857,15 @@ def read_p1_created(task_dir):
 
 
 def is_new_task_for_evidence_ref(task_dir, script_path=None):
-    """P1 created ≥ 截止 ⇒ True（新任务）；无法判定 ⇒ False（**fail-open**，有意）。
+    """evidence_ref 是否强制（新任务）——TAG0050 批 A1 起**由契约决定**（修复 F3c）。
 
-    照搬 check-gate.py 的 judge_required_since 先例（ISO 字典序比较）。
-    裁决 §4：created 缺失或非 ISO ⇒ 按存量任务处理——**有意为之**（不因缺元数据阻断历史任务）。
+    非 legacy 任务：`requirement_active(task_dir, "evidence_ref", "P6")`（快照 requires）；
+    legacy 任务（无创建事件）→ 回退旧逻辑：P1 created ≥ 截止 ⇒ True；无法判定 ⇒ False
+    （**fail-open**，有意；裁决 §4：不因缺元数据阻断历史任务）。
     """
+    active = requirement_active(task_dir, "evidence_ref", "P6", script_path)
+    if active is not None:
+        return bool(active)
     created = read_p1_created(task_dir)
     if not (isinstance(created, str) and _ISO_DATE_RE.match(created)):
         return False
@@ -1720,6 +1876,257 @@ def is_new_task_for_evidence_ref(task_dir, script_path=None):
     except Exception:
         return False
     return isinstance(cutoff, str) and created >= cutoff
+
+
+# ── 任务数据契约：等级 / 账本事件 / 要求项（TAG0050 批 A1，设计 §2.1–§2.6）─────
+# 契约按等级冻结（rules/task-data/LEVELS.yaml + level-N.yaml）；任务以账本首行
+# task_created 记录 contract_level，只升不降；无创建事件即 legacy，走旧逻辑。
+TASK_ID_RE = re.compile(r"^[A-Z]+[0-9]+$")
+TASK_DATA_DIRNAME = "task-data"
+LEDGER_NAME = "gate-events.jsonl"
+
+
+def project_root(start_dir=None):
+    """项目根解析：`git rev-parse --show-toplevel` 优先，失败回退 cwd（设计 §3.4）。"""
+    start = start_dir or os.getcwd()
+    try:
+        rc, out = run_git(["rev-parse", "--show-toplevel"], cwd=start)
+    except Exception:
+        rc, out = 1, ""
+    if rc == 0 and out.strip():
+        return os.path.realpath(out.strip())
+    return os.path.realpath(start)
+
+
+def _task_data_dir(script_path=None):
+    """`{rules}/task-data/` 目录（LEVELS.yaml 与 level-N.yaml 的所在）。"""
+    return os.path.join(resolve_rules_root(script_path or __file__), TASK_DATA_DIRNAME)
+
+
+def _load_levels(script_path=None):
+    """读 LEVELS.yaml → 已登记快照列表 [{level, file, sha256}]（缺失/非法 → []）。"""
+    data = read_rules_yaml(_task_data_dir(script_path), "LEVELS")
+    out = []
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict) and isinstance(item.get("level"), int):
+                out.append(item)
+    return out
+
+
+def registered_levels(script_path=None):
+    """已登记等级集合（升序）。"""
+    return sorted({item["level"] for item in _load_levels(script_path)})
+
+
+def current_level(script_path=None):
+    """当前等级 = LEVELS.yaml 的最大已登记等级；无登记 → None。"""
+    levels = registered_levels(script_path)
+    return max(levels) if levels else None
+
+
+def load_contract(level, script_path=None):
+    """按等级加载快照并沿 extends 链合并 → dict（缺失/非法 → {}）。"""
+    root = _task_data_dir(script_path)
+    chain = []
+    seen = set()
+    cur = level
+    while isinstance(cur, int) and cur not in seen:
+        seen.add(cur)
+        data = read_rules_yaml(root, f"level-{cur}")
+        if not isinstance(data, dict):
+            break
+        chain.append(data)
+        nxt = data.get("extends")
+        cur = nxt if isinstance(nxt, int) else None
+    if not chain:
+        return {}
+    merged = {}
+    for data in reversed(chain):        # 先基级（extends 目标），再本级覆盖
+        for key, value in data.items():
+            if key == "requires" and isinstance(value, dict) and isinstance(merged.get("requires"), dict):
+                combined = dict(merged["requires"])
+                combined.update(value)
+                merged["requires"] = combined
+            else:
+                merged[key] = value
+    return merged
+
+
+def read_ledger_events(task_dir):
+    """读 gate-events.jsonl → 事件 dict 列表（逐行 JSON，坏行/空行跳过）；文件缺失 → []。"""
+    path = os.path.join(task_dir, LEDGER_NAME)
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            raw_lines = fh.read().splitlines()
+    except OSError:
+        return []
+    events = []
+    for raw in raw_lines:
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(ev, dict):
+            events.append(ev)
+    return events
+
+
+def task_level(task_dir, script_path=None):
+    """任务等级 = 最后一条 `task_upgraded.to_level`，否则创建/迁入事件的等级；
+    账本无创建/迁入事件 → None（legacy，走旧逻辑）。设计 §2.2/§2.3。"""
+    level = None
+    for ev in read_ledger_events(task_dir):
+        etype = ev.get("event")
+        if etype in ("task_created", "task_adopted"):
+            if isinstance(ev.get("contract_level"), int):
+                level = ev["contract_level"]
+        elif etype == "task_upgraded" and isinstance(ev.get("to_level"), int):
+            level = ev["to_level"]
+    return level
+
+
+def _phase_index(phase):
+    """阶段序号：P0..P8 → 0.0..8.0；P6.5 → 6.5；控制态/未知 → None。"""
+    if not isinstance(phase, str):
+        return None
+    m = re.match(r"^P([0-9]+)(?:\.([0-9]+))?$", phase)
+    if not m:
+        return None
+    frac = int(m.group(2)) / 10.0 if m.group(2) else 0.0
+    return int(m.group(1)) + frac
+
+
+def level_at_phase(task_dir, phase, script_path=None):
+    """`level(Pk)` = at_phase ≤ Pk 的创建/迁入/升级事件中 contract_level/to_level 的最大值；
+    无此类事件 → None（该阶段产出按 legacy 处理）。task_created 的 at_phase 视为 P0。"""
+    pk = _phase_index(phase)
+    if pk is None:
+        return None
+    best = None
+    for ev in read_ledger_events(task_dir):
+        etype = ev.get("event")
+        if etype == "task_created":
+            at_phase = "P0"
+            lvl = ev.get("contract_level")
+        elif etype == "task_adopted":
+            at_phase = ev.get("at_phase")
+            lvl = ev.get("contract_level")
+        elif etype == "task_upgraded":
+            at_phase = ev.get("at_phase")
+            lvl = ev.get("to_level")
+        else:
+            continue
+        if not isinstance(lvl, int):
+            continue
+        ai = _phase_index(at_phase) if isinstance(at_phase, str) else None
+        if ai is None:
+            ai = 0.0                     # 缺 at_phase：保守视为最早，不晚于任何阶段
+        if ai <= pk and (best is None or lvl > best):
+            best = lvl
+    return best
+
+
+def requirement_active(task_dir, name, phase, script_path=None):
+    """要求项是否生效 = `snapshot(level(phase)).requires[name]`（设计 §2.5）。
+
+    `level(phase)` 为 None（legacy 任务 / 该阶段无事件）→ 返回 None，调用方走旧逻辑。
+    """
+    lvl = level_at_phase(task_dir, phase, script_path)
+    if lvl is None:
+        return None
+    contract = load_contract(lvl, script_path)
+    requires = contract.get("requires") if isinstance(contract, dict) else None
+    if not isinstance(requires, dict):
+        return None
+    return requires.get(name)
+
+
+def check_ledger_events(task_dir, script_path=None):
+    """账本事件规则校验（设计 §2.2）；返回错误字符串列表（空 = 通过）。
+
+    规则：`task_created` 仅第 1 行、最多 1 条、等级**已在 LEVELS 登记**；
+    `task_adopted` 不与 task_created 并存、最多 1 条；`task_upgraded` 出现在创建/迁入
+    之后、to_level 严格递增且已登记。无创建/迁入事件 → legacy，不报错。
+    （`task_adopted` 的"本次暂存中新增"条件由 pre-commit 侧判定，本函数不检查。）
+
+    ⚠️ **不校验「等级 = 当前等级」**（设计 §2.1 规则 3/§2.2 与 §2.3 规则 2 的分工）：
+    本函数经 `check-events.py` 进入 **CI/P6.5 路径**，若在此要求恒等，协议升级后
+    会**追溯**存量非 legacy 任务（与「不追溯在途任务」的立意冲突）。「新任务等级 =
+    当前等级」只在 pre-commit 的**新建目录分支**对新任务单独判（本地、仅新任务）。
+    """
+    events = read_ledger_events(task_dir)
+    if not events:
+        return []
+    registered = set(registered_levels(script_path))
+    current = current_level(script_path)
+    errors = []
+    created_seen = False
+    adopted_seen = False
+    base_level = None
+    has_origin = False
+    for idx, ev in enumerate(events):
+        lineno = idx + 1
+        etype = ev.get("event")
+        if etype == "task_created":
+            if created_seen:
+                errors.append(f"第 {lineno} 行出现第 2 条 task_created（最多 1 条）")
+            if idx != 0:
+                errors.append(f"task_created 不在账本第 1 行（实际第 {lineno} 行）")
+            created_seen = True
+            has_origin = True
+            lvl = ev.get("contract_level")
+            errors.extend(_level_registration_errors(lvl, registered, current, "task_created", lineno))
+            if isinstance(lvl, int):
+                base_level = lvl
+        elif etype == "task_adopted":
+            if created_seen:
+                errors.append(f"task_adopted 与 task_created 不能并存（第 {lineno} 行）")
+            if adopted_seen:
+                errors.append(f"第 {lineno} 行出现第 2 条 task_adopted（最多 1 条）")
+            adopted_seen = True
+            has_origin = True
+            lvl = ev.get("contract_level")
+            errors.extend(_level_registration_errors(lvl, registered, current, "task_adopted", lineno))
+            if isinstance(lvl, int):
+                base_level = lvl
+        elif etype == "task_upgraded":
+            to_lvl = ev.get("to_level")
+            from_lvl = ev.get("from_level")
+            if not has_origin:
+                errors.append(f"task_upgraded 出现在创建/迁入事件之前（第 {lineno} 行）")
+            errors.extend(_level_registration_errors(to_lvl, registered, current, "task_upgraded", lineno))
+            if isinstance(to_lvl, int):
+                if base_level is not None and to_lvl <= base_level:
+                    errors.append(
+                        f"task_upgraded 等级未严格递增（{base_level} → {to_lvl}，第 {lineno} 行）")
+                if isinstance(from_lvl, int) and to_lvl <= from_lvl:
+                    errors.append(
+                        f"task_upgraded 等级未严格递增（from {from_lvl} → to {to_lvl}，第 {lineno} 行）")
+                base_level = to_lvl
+    return errors
+
+
+def _level_registration_errors(lvl, registered, current, event, lineno):
+    """等级登记校验（供 check_ledger_events 复用）。
+
+    **只校验「已在 LEVELS 登记」**（设计 §2.2）；等级高于运行中协议最大等级时
+    fail-closed 并提示升级（设计 §2.1 规则 4）。**不再**要求 `lvl == current`——
+    后者会追溯存量非 legacy 任务（见 check_ledger_events 的说明）。
+    `current` 仅用于区分「未登记」与「协议版本低于任务等级」两种报错文案。
+    """
+    if not isinstance(lvl, int):
+        return [f"{event} 缺等级字段或非整数（第 {lineno} 行）"]
+    if lvl not in registered:
+        if current is not None and lvl > current:
+            return [f"{event} 的等级 {lvl} 未登记；协议版本低于任务等级，请升级（第 {lineno} 行）"]
+        return [f"{event} 的等级 {lvl} 未登记（第 {lineno} 行）"]
+    return []
 
 
 # 证据引用 token：**无空格/无括号/无逗号**的相对路径，扩展名**以字母开头**

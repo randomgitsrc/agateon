@@ -126,7 +126,10 @@ markers:
     #   改为 `none + trailing_text_ok`：生成 `[PROD_TOUCHED] 描述`，与文档/安全门一致。
     params: none
     paired_with: PROD_NOT_TOUCHED
-    lead_variant: dash_only
+    # TAG0050 批 C（P2 §3.1，修复 F4 口径分叉）：由 `dash_only` 改为 `default`——
+    #   安全门（pre-commit-gate.py）改用 `agate_markers.pattern("PROD_TOUCHED")` 取值，
+    #   注册表与安全门同源；粗体 / 引用块 / `*`/`+` 列表符形态一并拦住（BDD-54）。
+    lead_variant: default
     trailing_text_ok: true
     judged_by: [pre-commit-gate.py]           # 安全门：命中即中止 commit（sys.exit 1）
 
@@ -143,4 +146,46 @@ markers:
     #   第 347 行检查的是 `[PROD_TOUCHED]\s*$`（不是 PROD_NOT_TOUCHED），
     #   且**不可达**（同样形态在第 343 行已 sys.exit）。
     #   ⇒ **无任何代码消费 PROD_NOT_TOUCHED**（它是配对声明，由人/评审阅读）。
+    judged_by: []
+
+  # ── TAG0050 批 E（设计 §6）补登记的 5 个标记：**只作 T1 绊线**（正文出现正向声明形态即拦），
+  #    无机械配对、无独立消费方（judged_by 为空，mk_7a 允许）。登记本身让 T1 扫描面覆盖它们。
+  - name: BLOCKER
+    purpose: P7 一致性发现中的阻断项（结构化 findings.severity=blocker；T1 绊线）
+    phases: [P7]
+    params: none
+    lead_variant: default
+    trailing_text_ok: true
+    judged_by: []
+
+  - name: DEVIATION-CRITICAL
+    purpose: P7 一致性发现中的严重偏差（结构化 findings.severity=deviation_critical；T1 绊线）
+    phases: [P7]
+    params: none
+    lead_variant: default
+    trailing_text_ok: true
+    judged_by: []
+
+  - name: CODE_MAP_UPDATED
+    purpose: P4 新增文件已同步更新 CODE-MAP（结构化 code_map.status=updated；T1 绊线）
+    phases: [P4]
+    params: none
+    lead_variant: default
+    trailing_text_ok: true
+    judged_by: []
+
+  - name: CODE_MAP_EXEMPT
+    purpose: P4 新增文件无需更新 CODE-MAP（结构化 code_map.status=exempt；T1 绊线）
+    phases: [P4]
+    params: none
+    lead_variant: default
+    trailing_text_ok: true
+    judged_by: []
+
+  - name: SUGGEST
+    purpose: 可自行采纳的建议（结构化 need_confirm/suggest；T1 绊线）
+    phases: [P1, P2, P3, P4]
+    params: optional_text
+    lead_variant: default
+    trailing_text_ok: true
     judged_by: []

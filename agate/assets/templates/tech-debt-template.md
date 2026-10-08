@@ -30,6 +30,7 @@
 | `source` | 是 | `retreat` / `review` / `retrospective` | 债的来源 |
 | `created_at` | 是 | str | 登记日期 |
 | `task_id` | 否 | str 或 null | 立项任务（`closed` 必填） |
+| `source_ref` | 否 | str，格式 `<task_id>:<DG id>` | **双向回指**锚（TAG0050 批 E）：当该债由某任务的 P4 设计缺口（`basis: followup:DEBT<n>`）析出时，回指 `<task_id>:<DG id>`；`gate_p7` 校验该回指成立 |
 
 ## 三态语义
 

@@ -75,6 +75,13 @@ design_gap_count: 0                # int ≥0
 design_gap_reviewed_count: 0       # int ≥0
 code_map_new_files_count: 0        # int ≥0（可选，仅骨架/CODE-MAP 机制已采用时填）
 code_map_reviewed_count: 0         # int ≥0（可选，语义对应 design_gap_reviewed_count）
+# ── TAG0050 批 E 成对声明（非 legacy 任务；跨文件聚合后逐条核对）──
+# design_gap_reviews:
+#   - {gap: DG1, verdict: accepted, checked_against: [P2 §3], basis: in_bdd}
+# code_map_reviewed:
+#   - {file: agate/scripts/x.py}
+# findings:
+#   - {id: F1, severity: note, text: "...", status: resolved, resolution: "...", evidence: "..."}
 ---
 ```
 

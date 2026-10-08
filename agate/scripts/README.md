@@ -75,12 +75,14 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-gate.py`（续） | gate_p1 新增 `_gate_p1_vision_capability`（frontend 任务必须声明 vision 三态条目）+ `_gate_p1_ui_shape`（形态/维度声明合法性）；gate_p2 新增 `_gate_p2_ui_design_section`（ui_affected:true → UI 设计节 + 形态声明 + 按形态 checklist + P1-P2 形态一致性规范化值比对）| |
 | `check-gate.py`（再续） | gate_p2 新增 project_phase:bootstrap → P2-skeleton.md 存在性校验；gate_p4 新增 骨架/CODE-MAP 机制已采用时缺「新增文件核对表」WARNING；gate_p7 新增 CODE-MAP 两层 pairing 硬校验 | |
 | `check-state-transition.py` (P2.3-P2.5) | 状态转移合法性 + 重试上限 | 0=通过, 1=非法转移 |
-| `check-pruning.py` (P2.7-P2.9) | 裁剪条件 + override 校验 | 0=通过, 1=不一致 |
+| `check-pruning.py` (P2.7-P2.9) | 裁剪条件 + override 校验；**非 legacy 任务**（TAG0050 批 F，RM-AG0087）：读 frontmatter `phases`/`pruned`，**恒检** `set(phases) ∪ set(pruned.phase) == 快照 phase_universe`（`[P1..P8]`，排除 P0/P6.5）且不相交，`pruned` 条目须含 `phase`/`reason`/`risk` | 0=通过, 1=不一致, 2=无 P1 |
 | `check-routing.py` (2j.1/2.7.1) | ceremony 路由校验（TAG0019 D3，BDD-7/8/9/10）：声明 ceremony 与算分 tier 一致性（单向 fail-closed）+ thin 四要素 checklist（coupling_checklist 流式 / 跳过风险 / P5/P6 保留）+ 不声明回退 standard | 0=通过, 1=拦截（四要素缺一 / 声明薄于算分 / thin 且 git_ok:false），2=P1-requirements.md 缺失（任务目录破损，交人工）|
 | `agate-risk-score.py` | 客观信号算分（TAG0019 D1，BDD-1..5）：四信号分级（文件类型 / 敏感路径 / 改动规模 / 影响面）+ risk_score + tier（thin/standard/full）+ 逐信号证据行；信号来自 `git diff --cached` 客观事实（`agate_common.run_git` 通道，不可伪造）；提供可 import 的 `score_task(task_dir) -> dict` + CLI 薄壳（`agate-risk-score.py TASK_DIR`，输出 risk_score/tier/四信号/domain-markers/git_ok 行）| 0=成功, 1=参数缺失（CLI）|
-| `check-scope-resolved.py` (P2.11) | `[SCOPE+]` 标记追踪（形态取值自 `agate_markers`，不自带正则）| 0=通过, 1=未标记 |
-| `check-retrospective.py` (P2.12) | 异常模式提醒（不阻塞）；另检测到 DEBT/roadmap 已登记本任务（机制缺口信号，TAG0015）→ 追加提醒 | 0=总是通过 |
+| `check-scope-resolved.py` (P2.11) | `[SCOPE+]` 标记追踪（形态取值自 `agate_markers`，不自带正则）；**非 legacy 任务**（TAG0050 批 E）：改读快照 `declaration_files` 聚合出的 `scope_plus`/`scope_resolved` 集合 | 0=通过, 1=未标记 |
+| `check-retrospective.py` (P2.12) | 异常模式提醒（不阻塞）；另检测到 DEBT/roadmap 已登记本任务（机制缺口信号，TAG0015）→ 追加提醒；**非 legacy 任务**（TAG0050 批 E）：改读快照 `declaration_files` 聚合出的 `scope_plus` | 0=总是通过 |
+| `check-judge-verdict.py` (P6.5) | P6.5 judge 判定机械核对；**非 legacy 任务**（TAG0050 批 D）：第 4–6 条改读结构化 `criteria`（`criteria_total`/`criteria_passed`/`verdict_evidence` 现算）| 0=通过, 1=不通过 |
 | `agate_markers.py` | **正文标记形态单源库**（读取/判定侧）：取值自 `rules/markers.yaml`，提供 `pattern/find/is_declaration/render/describe`；被 `check-scope-resolved.py` / `check-retrospective.py` / `agate-mark.py` import | 0=成功, 1=用法错（`--list`/`--check FILE`/`<NAME> [params]`）|
+| `agate_schema.py` | **JSON Schema 子集校验 + derive/render 单源库**（TAG0050 批 B，BDD-50）：提供 `validate`/`iter_errors`（type/enum/required/properties/additionalProperties/items/minItems/pattern）、`max_depth`、`derive`（count/sum/union/any）、`render` 与 `AGATE:RENDER` 块生成/提取；被 `check-yaml-schema.py` / `agate-frontmatter-check.py` / `agate-config.py` / `agate-md-field-set.py` / `check-gate.py` import（`agate/scripts/*.py` 中不存在第二个递归 schema 校验实现）| 库模块（`--derive EXPR JSON` / `<instance-json> <schema-json>` 供调试；0=校验通过, 1=有错误, 2=用法）|
 | `agate-mark.py` | **正文标记生成器**（写入侧）：`--list` 列出全部标记 / `<NAME> [参数]` 生成合法写法 / `--check FILE` 校验文件内形态；带参缺参或未登记标记 → fail-closed | 0=成功, 1=用法/参数错误 |
 | `agate-feedback.py` | 跨项目反馈提取（AG0021，opt-in，AGATE_FEEDBACK=on）| 手动触发，非 gate/非 pre-commit |
 | `check-frontmatter.py` | 阶段文件 frontmatter 校验 | 0=通过, 1=校验失败 |
@@ -103,7 +105,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 | 退出码语义 |
 |------|------|-----------|
-| `agate-ci-verify.py` (TAG0042 批5) | push 后**实际重跑** gate 判定（`check-gate.py`），防 `--no-verify` 绕过 hook；无参数 + cwd 定位（兼容仓库根 / 任务级 `.state.yaml`）；每个「跳过」面显式 `SKIP:` + 原因（与 `PASS:` 可区分，不再假绿）| 0=通过/跳过, 1=判定失败 |
+| `agate-ci-verify.py` (TAG0042 批5；TAG0050 批 A2 改造) | **逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），防 `--no-verify` 绕过 hook（修复 F15）。`--base <sha>`（PR 口径，取 merge-base）/ `--push --base <sha>`（push 口径；`before` 全零时回退 `merge-base HEAD origin/<默认分支>`）；只回放改动任务目录的提交，无则 `SKIP:` + 原因；协议版本：仓库含协议本体（agateon-like）或 `AGATE_ROOT` 提供协议 → merge-base 处的 `agate/`；`.agate-version` 仅用于**单调不降**检查（降级判 FAIL），**不用于选协议根**（分支①「按 `.agate-version` 定位版本目录」未实现，见 P4-implementation-G1 的 DESIGN_GAP）；`AGATE_REPLAY=1` 回放模式；含账本最终状态检查 + legacy 新增 PROD_TOUCHED ERROR 单独统计。每个「跳过」面显式 `SKIP:` + 原因 | 0=通过/跳过, 1=判定失败 |
 
 ### 诊断
 
@@ -160,10 +162,12 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 |
 |------|------|
-| `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
-| `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；`--baseline` 落 `.out` 证据并逐字节比对（差异 → 非 0）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
+| `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `set <field> <value>` / `unset <field>` / `explain <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
+| `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] [--task <TASK_DIR>] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；**普通运行只返回命令自身退出码**（不做基线比对）；`--baseline` 落 `.out` 证据并逐字节比对（**不一致 → 打印逐行 diff** 并返回非 0）；`--task` 写任务内日志 `runs/<k>.log`（头部 cmd/cwd/git_head/时间，尾行 `EXIT_CODE: n`，须入库）并在 `cmd_run` 事件记 `k`/`log`/`sha256`（供 `run:<k>` 引用核验）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|
-| `agate-extract-context.py` | 提取任务上下文（BDD 计数 / implementation_dir / P5 失败参考）|
+| `agate-task-init.py` | 任务初始化入口（TAG0050 批 A1）：新建任务（`<TASK_ID> --slug --title [--priority] [--depends]`）创建目录 + `.state.yaml` + P0-brief 骨架，并在账本第 1 行写 `task_created`（记当前契约等级）；存量迁移 `--existing <dir>`（前置写入创建事件并重建哈希链）/ `--adopt <dir>`（写 `task_adopted`）/ `--upgrade <dir>`（写 `task_upgraded`，只升不降）| 0=成功, 1=用法/校验失败 |
+| `agate-state-set.py` | 任务状态写入工具（TAG0050 批 A3）：`phase <Pn\|PAUSED\|READY\|DONE>`（以 **HEAD 版本**为 old_state，用 `check-state-transition.py::check_transition` 同源校验，回退时同写 `retries[...]`，原子替换 + `git add`，**不写事件**）/ `meta.priority low` / `cancel --reason "…"` / `--list`；`status` 是系统字段（现算），不提供 setter | 0=成功, 1=非法转换/用法失败 |
+| `agate-extract-context.py` | 提取任务上下文（BDD 计数 / implementation_dir / P5 失败参考）。**两种 CLI 形式**（TAG0050 批 D，GAP-3）：① 两参 `<PHASE> <TASK_DIR>`（既有）；② **单参 `<TASK_DIR>`**——按 `.state.yaml` 的 `phase` 推断阶段（新增非破坏性形式）。非 legacy 任务的 P7/P8 计数经 `agate-md-field-get` **按字段现算**（不再正文 grep）|
 | `agate-archive-stale-outputs.py` | 回退时归档旧阶段产出（`.archived/{ts}-{phase}` + breadcrumb）|
 | `agate-capture-env-baseline.py` | P5 环境基线捕获（gate_commands 结果快照 + fail-list）|
 | `agate-retreat-to.py` | 跨阶段回退（状态 + 产出归档 + retreat commit + retries 追加）|

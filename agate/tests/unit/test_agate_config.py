@@ -7,7 +7,7 @@
 #   * BDD-4：`agate-config` 读/校验/查询子命令输出客观值（可被脚本消费），退出码 0=成功 / 非 0=失败。
 #   * BDD-7：`agate-setup` / `install-hook` 接入时自动 `init` 声明，且不覆盖既有声明（幂等）。
 #   * BDD-8：声明文件缺失时 gate_p0 行为与引入前一致（恒 return 2=通过码）+ 显眼 WARNING；
-#     UPGRADING.md 写明「到截止版本改 exit 1」及该截止版本号。
+#     UPGRADING.md 写明该硬切「未排期」+ `RM-AG0102`（TAG0050 起协议不预告实施版本号）。
 #
 # 现行为（改动前）：`agate/scripts/agate-config.py` **不存在**；`agate_common.read_project_config`
 #   **不存在**；`gate_p0` 无条件 return 2（无 validate 调用、不打印 WARNING）；setup/install-hook
@@ -402,17 +402,24 @@ def test_bdd_8_gate_p0_missing_declaration_emits_warning(task_dir, agate_scripts
 
 
 def test_bdd_8_upgrading_documents_cutoff_version(agate_root):
-    """BDD-8：UPGRADING.md 须写明「到截止版本改 exit 1」及该截止版本号（迁移兼容留痕）。
+    """BDD-8：UPGRADING.md 须记载声明文件迁移，且该硬切声明为「未排期」并指向 RM-AG0102。
 
-    现行为：UPGRADING.md 未记载声明文件迁移的截止版本 ⇒ 红灯。
+    TAG0050 起：协议不预告实施版本号（原 TAG0042 约定「须写明截止版本号」已由 RM-AG0102 承接）。
+    断言限定在**批 2（声明层）小节**内，避免被全文其它版本号 / 无关内容满足。
     """
     upgrading = (agate_root / "UPGRADING.md").read_text(encoding="utf-8")
     assert _CONFIG_FILE in upgrading, (
         f"BDD-8：UPGRADING.md 应记载 {_CONFIG_FILE} 的迁移说明（声明层缺省行为）"
     )
     assert re.search(r"exit\s*1", upgrading), (
-        "BDD-8：UPGRADING.md 应写明到截止版本改为 exit 1"
+        "BDD-8：UPGRADING.md 应写明该硬切将改为 exit 1"
     )
-    assert re.search(r"v?0\.\d+\.\d+|截止版本", upgrading), (
-        "BDD-8：UPGRADING.md 应写明该截止版本号"
+    start = upgrading.index("批 2（声明层")
+    end = upgrading.index("批 4（关卡层", start)
+    section = upgrading[start:end]
+    assert "未排期" in section, (
+        "BDD-8：批 2 小节应声明该硬切「未排期」（TAG0050 起协议不预告实施版本号）"
+    )
+    assert "RM-AG0102" in section, (
+        "BDD-8：批 2 小节应指向承接该欠账的 RM-AG0102"
     )

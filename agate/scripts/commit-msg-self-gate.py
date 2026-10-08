@@ -181,6 +181,10 @@ def main():
     sys.stderr.write("    self-gate-review: docs/reviews/agate-alignment-review-{date}.md\n")
     sys.stderr.write("  或如果本次改动确实不需要 self-gate（如纯 typo），在 commit message 加：\n")
     sys.stderr.write("    self-gate-skip: 理由\n")
+    # TAG0050 批 A2（设计 §2.4）：CI 逐提交回放时，缺 trailer 判 FAIL（本地仍为提示型不拦截）。
+    # 本地不拦截是鲁棒性取舍；可信锚点在 CI——回放必须能把"没留痕"报出来。
+    if os.environ.get("AGATE_REPLAY") == "1":
+        sys.exit(1)
 
 
 if __name__ == "__main__":

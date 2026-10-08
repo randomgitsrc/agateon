@@ -1,0 +1,13 @@
+- 读 dispatch-context（P4-dispatch-context-protocol-alignment-review-G1-rereview2.md）：只核 H1(A4-3)/H2(A4-5)/H3(N1)
+- 读角色定义 protocol-alignment-review.md + SELF-GATE.md：只读纪律/三态结论/DESIGN_GAP 优先核查
+- 读上一轮复评 agate-alignment-review-2026-10-08-TAG0050-G1-rereview.md：A4 仍 MISALIGNED(A4-3/A4-5)+N1
+- 读 P4-dispatch-context-implementer-G1-fix2.md：H1 真变异 / H2 断言终态 / H3 4 处文档同步
+- 读 agate/tests/unit/test_tag0050_obligations.py：BDD-42 改为 tmp_path 协议根副本 + 端到端跑 check-obligations.py；BDD-43 断言 WARNING/rc=0
+- 读 agate/scripts/check-obligations.py：_evaluate 对 R 缺 review_output → warnings（非 errors）→ main rc=0
+- 读 test_tag0050_obligations_enforcement.py：M 义务参数化节点读 obligations.yaml 文本断言 enforced_at
+- H3: grep 4 处 → platform-notes.md:342/344、P3-tdd.md:28、retrospective-template.md:144、state-machine.md:154 均已改『逐提交回放』
+- H2: 实跑 check-obligations.py → WARNING x25 + rc=0；BDD-43 用例 5 passed 含于 test_tag0050_obligations.py
+- H1: 实跑 test_tag0050_obligations.py → 5 passed；scratch 副本删 _check_enforced_at 调用 → BDD-42 FAIL(rc=0 断言) → 真变异可打红
+- 平台假设扫描：check-platform-assumptions.py 对新测试 0 命中 exit 0
+- consistency: 0 ERROR / 412 WARNING
+- 只读核验：git status --porcelain 前后一致（43 项），无 pycache/pytest_cache 新增

@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 10 items
+
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_45_seven_ops_and_config_roundtrip PASSED [ 10%]
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_46_system_field_reject_and_derive PASSED [ 20%]
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_47_missing_frontmatter_errors PASSED [ 30%]
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_47b_declaration_files_from_snapshot PASSED [ 40%]
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_48_render_block_tamper_errors PASSED [ 50%]
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_49_fix_command_executes PASSED [ 60%]
+agate/tests/unit/test_tag0050_write_tools.py::test_f2_system_writer_field_rejected_by_contract PASSED [ 70%]
+agate/tests/unit/test_tag0050_write_tools.py::test_l5_frontmatter_type_error_json_type_names PASSED [ 80%]
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_50_single_schema_implementation PASSED [ 90%]
+agate/tests/unit/test_tag0050_write_tools.py::test_bdd_51_e3_downgrade_or_zero_false_positive PASSED [100%]
+
+============================== 10 passed in 1.82s ==============================
+EXIT_CODE: 0

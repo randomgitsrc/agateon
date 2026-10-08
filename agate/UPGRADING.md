@@ -276,6 +276,182 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.80.0 — TAG0050 任务数据契约：结构化判定、可信写入与任务版本（**无破坏性变更**）
+
+> 判定依据从「正文正则 + 自报汇总 + 可改开关 + 作者自标的分类」改为「按**冻结契约快照**
+> （`rules/task-data/level-N.yaml`）登记的结构化字段 + **机械核验**」。10 批（A0/A1/A2/A3/A4/
+> B/C/D/E/F）交付；`[Unreleased]` 期以逐批「未发布」节累积，本节按版本归并。
+> **legacy 任务退出码与 ERROR 集合不变**（R6 双向差分 0 差异）。
+>
+> **本版不含 TAG0042 预告的 config 声明硬切**：v0.79.0 曾预告「截止版本 v0.80.0：`agate.config.yaml`
+> 缺失/非法自 v0.80.0 起 `exit 1`」，该硬切**未实施、未排期**（欠账见 `RM-AG0102`）。**协议不再
+> 预告实施版本号**——落地时在其**实际所在版本的 UPGRADING 节**公告。迁移期行为不变。
+
+**批 G1（A2 CI 逐提交回放 + A3 `agate-state-set` + A4 义务机械核验）**：
+
+> TAG0050「任务数据契约」分批交付；本批（G1）含 A2（`agate-ci-verify` 改为逐提交回放）与
+> A3（`agate-state-set` + 状态事实）。协议语义 / `.state.yaml` schema / 既有任务数据格式均未变。
+> 版本号与 CHANGELOG 条目在 P8 统一落（见任务 `P4-implementation-G1.md`）。
+
+**A2 — CI 接入（使用者项目）**：
+
+- **`agate-ci-verify` 改为逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），
+  捕获 `--no-verify` 绕过 hook 的提交；可信锚点移到 CI。原「重跑当前 phase gate」行为（恒 SKIP/假
+  PASS，F15）已删除。
+- **写 `.agate-version`**（项目根，内容 `agate: vX.Y.Z`）：回放**逐提交**读取它，且**单调不降**
+  （PR 把它降级 → FAIL）。未写且仓库不含协议本体 → FAIL（提示写 `.agate-version`）。
+  > ⚠️ 当前**未实现**「按逐提交 `.agate-version` 定位/安装对应版本目录」（分支①，依赖 CI 安装各
+  > 版本）——`.agate-version` 只用于**单调不降**检查；协议根取「仓库含协议本体」或 `AGATE_ROOT`
+  > 提供者所在仓库的 merge-base 处 `agate/`。见任务 `P4-implementation-G1.md` 的 DESIGN_GAP。
+- **CI 检出必须 `fetch-depth: 0`**（回放用 `merge-base` / `rev-list`，浅检出会恒 SKIP）。
+- **GitHub Actions 示例**（PR 与 push 两种口径）：
+
+  ```yaml
+  # .github/workflows/agate.yml
+  name: agate
+  on: [push, pull_request]
+  jobs:
+    gate-backstop:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0                      # ← 必须：回放依赖全历史
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.10'
+        - run: pip install pyyaml
+        - name: 安装协议本体（装到 ~/.agate/current）
+          run: bash <(curl -sSL https://raw.githubusercontent.com/<owner>/agateon/main/install.sh) --versions
+        - name: agate CI 回放
+          env:
+            AGATE_ROOT: ${{ github.workspace }}/.agate/current/agate  # 按实际安装路径调整
+            PR_BASE: ${{ github.event.pull_request.base.sha }}
+            BEFORE: ${{ github.event.before }}
+          run: |
+            args=""
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              args="--base $PR_BASE"
+            elif [ "${{ github.event_name }}" = "push" ]; then
+              args="--push --base $BEFORE"          # before 全零时脚本自动回退 merge-base
+            fi
+            python3 "$AGATE_ROOT/scripts/agate-ci-verify.py" $args
+  ```
+
+- **GitLab CI 等价写法**：`GIT_DEPTH: 0`（对应 `fetch-depth: 0`）；PR 口径用
+  `CI_MERGE_REQUEST_DIFF_BASE_SHA`，push 口径用 `CI_COMMIT_BEFORE_SHA`：
+
+  ```yaml
+  agate:
+    variables:
+      GIT_DEPTH: "0"
+    script:
+      - args=""; if [ -n "$CI_MERGE_REQUEST_DIFF_BASE_SHA" ]; then
+          args="--base $CI_MERGE_REQUEST_DIFF_BASE_SHA";
+        else
+          args="--push --base $CI_COMMIT_BEFORE_SHA";
+        fi
+      - python3 "$AGATE_ROOT/scripts/agate-ci-verify.py" $args
+  ```
+
+- **squash 合并的仓库**：分支上的原始提交不进 main，故 **push 事件只做「账本前缀与事件规则」
+  检查**（不逐提交回放）；逐提交回放由 **PR 事件**承担（在合并前对分支提交执行）。
+- **本仓 CI**：`gate-backstop` job 已加 `fetch-depth: 0` 并按事件传 `--base`/`--push --base`。
+
+**A3 — `agate-state-set`（phase/meta 的唯一写入口）**：
+
+- 新增 `agate-state-set.py`：`phase <Pn|PAUSED|READY|DONE>` / `meta <k> <v>` /
+  `cancel --reason <text>` / `--list`。以 HEAD 版本为基准做合法性判定（与提交期判定同源），
+  原子替换 `.state.yaml` 并 `git add`；**不写事件**（进入 PAUSED/READY/DONE 的
+  `state_transition` 由 pre-commit 统一写入并随本次提交入库）。
+- `agate-next` 推进时**不再追加** `state_transition`，只打印建议命令
+  `python3 <agate_root>/scripts/agate-state-set.py <dir> phase <Pn>`。
+- **新任务一律用 `agate-task-init` 创建，phase 一律用 `agate-state-set` 写入**。
+
+**批 G2（B 写入工具与契约单源 + C 生产接触）**：
+
+> TAG0050「任务数据契约」分批交付；本批（G2）含 B（`agate_schema.py` 单源 + `agate-md-field-set`
+> 7 操作 + `agate-config set/unset/explain` + 渲染块 + F10 缺 frontmatter ERROR）与
+> C（`prod_touched` 必填/中止 + T4 单一安全门）。**协议语义、`.state.yaml` schema、既有
+> 任务数据格式均未变**；下列新判据**只对非 legacy 任务**（账本首行 `task_created`/`task_adopted`）
+> 生效，**存量任务（legacy）不受影响、无需迁移**。版本号与 CHANGELOG 条目在 P8 统一落。
+
+**B — 写入工具与契约单源（非 legacy 任务）**：
+
+- **F10：声明文件缺 frontmatter → ERROR**。非 legacy 任务的**声明文件**（快照
+  `rules/task-data/level-1.yaml` 的 `declaration_files`）缺 `---` frontmatter 块即判 ERROR
+  （不回退正文正则）；该检查在 **pre-commit hook 路径同样生效**（G2 闭合 GAP-2）。
+- **渲染块防篡改**：`<!-- AGATE:RENDER key BEGIN -->…END -->` 块内容须与
+  `agate-md-field-set.py render` 生成的内容逐字节相等（CRLF 规范化为 LF 后比较）；
+  被手改 → ERROR 并给出 `FILE=<path> agate-md-field-set.py render` 修复命令。
+- **`agate-md-field-set.py` 7 操作**：`set` / `append` / `upsert` / `remove` / `--list` /
+  `explain` / `render`；**`agate-config.py` 新增** `set` / `unset` / `explain`。
+- **单一 schema 校验实现**：`check-yaml-schema.py` / `agate-frontmatter-check.py` /
+  `agate-config.py` 统一调用新库 `agate_schema.py`（安装破损时 `agate-frontmatter-check.py`
+  保留一处 fail-safe 降级副本）。
+
+**C — 生产接触安全门（非 legacy 任务）**：
+
+- **`prod_touched` 必填**：各阶段**主产出**（快照 `primary_outputs`）的 frontmatter 必须声明
+  `prod_touched: true|false`；**缺字段 → ERROR + 修复命令**（
+  `FILE=<path> agate-md-field-set.py set prod_touched false`）。
+- **`prod_touched: true` 且当前不在 PAUSED → 中止提交**；PAUSED 只扫描不阻断并写
+  `prod_touched_in_paused` 事件。
+- **T4 为唯一 PROD_TOUCHED 安全门**：正文扫描取自标记单源 `agate_markers.pattern("PROD_TOUCHED")`
+  （`markers.yaml` 的 `lead_variant: default`）；粗体 / 引用块写法仍拦，否定写法
+  `- [PROD_TOUCHED]: 无` 继续阻断并给专门指引。
+
+**批 D 前置 hotfix（`agate-run` 基线比对，I-2）**：
+
+> 修复 TAG0042 实施评审 I-2：`agate-run` 普通运行也会与 `.out` 证据比对，可能因**陈旧证据假失败**
+> （返回 1 而非命令自身退出码）；且 `--baseline` 不一致时声称「diff 已客观报出」却**不真的打印 diff**。
+> 协议语义 / `.state.yaml` schema / 既有任务数据格式均未变；版本号与 CHANGELOG 条目在 P8 统一落。
+
+- **普通运行只返回命令自身退出码**：不带 `--baseline` 时**不再**与 `.out` 证据比对（也**不写**证据）。
+- **基线比对只在 `--baseline` 时进行**：不一致 → 打印**逐行 unified diff**（`--- baseline` / `+++ current`）
+  再返回非 0；证据不存在 → 首次落盘（语义不变）。
+
+**批 D/E/F（结构化判定与成对声明）**：
+
+> TAG0050「任务数据契约」分批交付；本批含 **D**（P6 `results` 判据 D1–D10、P6.5 `criteria`、
+> `resolve_evidence_ref` + `agate-run --task` 任务内日志、证据入库）、**E**（P7 成对声明跨文件
+> 聚合、ID 带路径前缀、`basis: followup:DEBT<n>` 双向回指、补登记 5 个绊线标记）、
+> **F**（`reviewed_bdds`、P2 `ui_design`、骨架标题级判定、P8 `delivery` 结构化、`pruned` 闭合、T2 绊线）。
+> **协议语义对 legacy 任务不变**（§8 承诺：退出码与 ERROR 集合不变）；新契约只对**非 legacy 任务**
+> （账本有创建事件）生效。版本号与 CHANGELOG 条目在 P8 统一落。
+
+- **非 legacy 任务**（`agate-task-init` 创建），要求项由契约快照决定（`requires.results: true`）：
+  - **P6** 必须声明结构化 `results: [{bdd, verdict, evidence,…}]`（`pass`/`fail` 由 `results` 现算；
+    **缺 `results` 即 ERROR**，不回退正文）；`results` 的 `bdd` 集合须**等于** P1 的 `#### BDD-N:`
+    集合、不得重复、verdict 全 PASS；证据引用经 `resolve_evidence_ref` 解析（相对路径或 `run:<k>`，
+    后者要求 `cmd_run` 事件带 `k`/`log`/`sha256` 且日志非空——**缺字段即 fail-closed**），
+    被 `.gitignore` 忽略 → ERROR，**pre-commit 中还须已跟踪/已暂存**；PASS 条目日志尾行
+    `EXIT_CODE` 非 0 → ERROR；不同证据文件内容相同 → WARNING（可共享引用）；evidence JSON 与
+    `results` 结论不一致 → ERROR（判据 D1–D10 已全部落地，含 D5/D6/D7/D9；**D7 为双向一致 +
+    证据 JSON 形态校验 + 多 JSON 合并语义**）。截图条目须带 `vision`；P1 视觉能力三态=`GAP`
+    时改须 `manual_review`（D8；截图按路径目录段名结构化判定）。
+  - **P6.5** 读结构化 `criteria: [{bdd, verdict, evidence}]`（`criteria_total`/`criteria_passed`/
+    `verdict_evidence` 现算）。
+  - **P7** 跨文件聚合声明（`design_gaps`/`code_map`/`findings`/`scope_plus`/`scope_resolved`/
+    `need_confirm`/`suggest`）；声明聚合面 = 快照 `declaration_files`（glob：各阶段主产出 +
+    `*-review.md` + `P4-implementation-*.md` + `P4-implementation/**/*.md`；**聚合面与 frontmatter
+    强制面统一为同一 glob 语义**，`P4-implementation/**/*.md` 的直接子文件亦强制）；`design_gap_reviews`
+    的 `verdict` 取 `accepted`/`rejected`/`followup`、`basis` 取 `in_bdd`/`out_of_scope`/`followup:DEBT<n>`
+    （**越界 → ERROR**），`followup` 要求 DEBT 条目存在且其 `source_ref` 回指 `<task_id>:<DG id>`；
+    `blocker_count`/`deviation_critical_count` 为**系统字段**（按 `findings` 现算）。
+  - **P1** `reviewed_bdds` **必须声明且等于** P1 BDD 集合（缺省即 ERROR）；**P2** `ui_design`
+    须按 `shape` 声明快照定义的**必填维度**（`shape_dimensions`），`status: na` 须带 `reason`；
+    **P8** `delivery: {method, ref, reason}` 结构化；**`pruned`** 条目须含 `phase`/`reason`/`risk`，
+    且 `set(phases) ∪ set(pruned.phase)` **恒等于**快照 `phase_universe`（`[P1..P8]`，排除 P0/P6.5）
+    且不相交（恒检，非仅声明时）。
+  - **非 legacy 跳过**：`check-p6-format.py`（含 2h 段）与 `agate-evidence-consistency.py`、以及
+    `check-p6-provenance.py` 的**正文解析**（审计 1/3/4/5/6）——由 P6 结构化判据 D1–D10 取代。
+- **任务内运行日志**：`agate-run --task <TASK_DIR> <命令>` 写 `<任务目录>/runs/<k>.log`
+  （尾行 `EXIT_CODE: n`），`cmd_run` 事件记 `k`/`log`/`sha256`；该日志**须入库**（见
+  `assets/templates/gitignore-fragment.txt` 的取反规则）。
+- **legacy 任务**：以上结构化路径**不生效**，走原正文/子串判定（`delivery:` 子串、`- PASS BDD-N`
+  计数等），退出码与 ERROR 集合不变。
+
 ### v0.79.0 — TAG0042 批 1：统一 phase 语义（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。
@@ -302,7 +478,9 @@ git commit
   接入时自动生成初始声明（**幂等**，不覆盖既有声明）。
 - **迁移期行为与引入前一致**：**没有** `agate.config.yaml` 的存量项目，`gate_p0` 仍返回
   通过码（**exit 2**），只输出显眼 WARNING，**不** `exit 1`——存量项目不会因此静默变红。
-- **截止版本：v0.80.0** 起，声明文件缺失 / 非法将改为 **`exit 1`**（硬拦截）。请在此之前用
+- **硬切未排期**：声明文件缺失 / 非法改为 **`exit 1`**（硬拦截）这一变更**尚未实施、未排期**
+  （登记于 `RM-AG0102`，2026-10-09 由 TAG0050 P8 补记）。**本协议不预告实施版本号**——
+  该变更落地时，将在**其实际所在版本的 UPGRADING 节**公告。届时请用
   `agate-config init` 生成声明并填写自身形态（语言 / 包管理器 / 验证命令 / 发版方式）。
 
 **批 4（关卡层分级，TAG0042）— P8 交付收尾 + 发版逻辑迁移 `preset: semver-changelog-tag`（迁移期无破坏性变更）**：
@@ -321,8 +499,9 @@ git commit
   ```
   迁移期：**没有** `agate.config.yaml` 的存量项目，P8 gate **仍执行**既有发版检查
   （不静默失去保护），只输出指向该声明 / preset 迁移的显眼 WARNING。
-- **截止版本：v0.80.0**（与批 2 的声明文件硬切同版本）——请在此版本前用 `agate-config init`
-  生成声明并填写 `release.preset`；届时未声明的项目将失去协议内发版检查的等价保护
+- **硬切未排期**（与批 2 的声明文件硬切同一笔欠账，见 `RM-AG0102`）：请用 `agate-config init`
+  生成声明并填写 `release.preset`；该硬切**落地时将在其实际所在版本的 UPGRADING 节公告**
+  （**本协议不预告实施版本号**）。届时未声明的项目将失去协议内发版检查的等价保护
   （发版逻辑删除由后续批次执行，本批只提供等价物 + WARNING）。
 
 **批 3（执行层，TAG0042）— 项目验证命令统一执行 `agate-run`（无破坏性变更）**：

@@ -1,0 +1,17 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 6 items
+
+agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p8_01_bump_type_missing_blocks PASSED [ 16%]
+agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p8_02_delivery_missing_blocks PASSED [ 33%]
+agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p8_03_debt_check_missing_blocks PASSED [ 50%]
+agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p1_10_vision_capability_missing_blocks PASSED [ 66%]
+agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p2_07_ui_design_section_missing_blocks PASSED [ 83%]
+agate/tests/unit/test_tag0050_obligation_behavior.py::test_obl_p2_10_dispatch_plan_invalid_mode_blocks PASSED [100%]
+
+============================== 6 passed in 0.20s ===============================
+EXIT_CODE: 0

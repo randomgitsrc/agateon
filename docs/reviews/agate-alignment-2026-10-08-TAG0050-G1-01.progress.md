@@ -1,0 +1,22 @@
+- 2026年 10月 08日 星期四 04:56:19 CST 开始 TAG0050 G1 审查；HEAD b0a16c3a
+- 读了 dispatch-context（G1=A2+A3+A4，18 文件）；读了角色定义 protocol-alignment-review.md；读了 SELF-GATE.md
+- 读了 P4-implementation-G1.md（4 条 DESIGN_GAP：BDD-31 矛盾已修 / state-set 前向跨阶从严 / review_output WARNING 降级 / commit-msg 回放用当前协议）
+- 读了 P1-requirements.md BDD-23..44；P2-design §3 批次表；设计笔记 §2.4/§2.7/§2.9/§8
+- git status: 18 改动 + 4 新增（agate-state-set.py / test_tag0050_obligations_enforcement.py / P4-implementation-G1.md / 4 dispatch-context）
+- 读 agate-state-set.py（新增，302 行）；读 check-state-transition.py diff（抽 check_transition 纯函数）；读 agate-next.py diff（去 append_event）；读 agate-state-yaml-check.py diff（status 系统字段）；读 commit-msg-self-gate.py diff（AGATE_REPLAY→exit 1）
+- 读 pre-commit-gate.py diff：2h.1c/2h.1d 前移到 2g continue 之前；发现 git add(账本) 现在早于 2h.1b gate_run append ⇒ 疑似 gate_run 不再入库（待验证）
+- 读 agate-ci-verify.py 全文；读 check-obligations.py 全文；读 obligations.yaml diff
+- 实测：python3 agate/scripts/check-obligations.py → EXIT=1（4 条 scope: protocol-repo 仍被 enforced_at 可达性核验判 FAIL）；BDD-44 要求「转绿」⇒ 疑似 MISALIGNED
+- 读 test_tag0050_state_set.py（未改，P3 遗留）、test_tag0050_obligations.py（未改）、test_tag0050_obligations_enforcement.py（新增 60 参数化）
+- 读 P3-test-cases.md（BDD-40 先红锚「check-obligations 现 rc=0」；BDD-44 测试仅断言文本含 baseline/reset）
+- 实跑：unit obligations 65 passed；integration ci_replay+state_set 17 passed；modified unit 24 passed；consistency 0 ERROR / 411 WARNING（dispatch 称 410）
+- 读 test_tag0050_ci_replay.py（13 用例）；发现 test_bdd_30 用 _task_commit_repo（钉 .agate-version）；_resolve_protocol 只用 AGATE_ROOT/merge-base，未按 .agate-version 选协议
+- 读 .github/workflows/protocol-tests.yml：gate-backstop job 无 fetch-depth: 0，且未传 --base ⇒ A2 workflow 未同步（设计 §2.4 点6 要求 fetch-depth:0）
+- 待验证：gate_run 是否仍随提交入库（git add 前移）
+- 实证 gate_run 未入库：--basetemp 跑 test_pt_binary_2 后 `git show HEAD:.../gate-events.jsonl` 只有 task_created+state_transition，工作区多出 gate_run（未暂存）
+- RM-AG0101：grep -c AGATE_CARD check-state-transition.py = 0 ⇒ 卡片块排除未实现（设计 A3 批次表 + P2 §10 G4 明确要求）
+- workflow gate-backstop 无 fetch-depth:0（设计 §2.4 点6 / G1 dispatch line29）；UPGRADING.md 未改（line30）；CHANGELOG 未改
+- _resolve_protocol 不读 .agate-version 选协议（只用于单调性检查）；push 全零 before 未特判；replay 循环遍历全部 commits（非仅 task_commits）
+- check-obligations 恒红（exit 1）：4 条 scope: protocol-repo 仍被 enforced_at 核验 ⇒ BDD-44「转绿」未达成
+- 实跑：check_state_transition+pre_commit_hook 115 passed
+- consistency 0 ERROR / 411 WARNING（410 差异疑由本次 progress 文件引入，非 G1 缺陷）

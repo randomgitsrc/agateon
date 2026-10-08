@@ -1,0 +1,115 @@
+# r6-allowlist.yaml — R6 双向差分"允许差异"的机器可读规则（TAG0050 批 A1）
+#
+# 设计依据：design-tag0050-task-data-contract.md §8（存量兼容 12 项差异）+
+#           P2-design.md §3.2/§3.3（外部专家规格）。
+#
+# 判据：对每个 legacy 任务、每个相关 gate 比较 (退出码, ERROR 行集合)；差异必须匹配
+# 本文件的某一条规则，否则 r6-differential.sh exit 1。
+#
+# 字段：
+#   id         规则编号（D01..D12，与设计 §8 十二项一一对应）
+#   batch      该差异的归属批
+#   kind       差异类别：new_error / rc_change / ledger_event_added / ledger_bytes / new_warning
+#   gate       出现在哪个 gate（匹配 gate 名子串）
+#   task_scope 适用任务面：legacy / non-legacy / any / specific:<id>
+#   match      匹配式（对 ERROR 行或结构化信号）：
+#                patterns  子串列表（行内任一命中即算匹配）
+#                rc_from/rc_to  仅 rc_change：退出码变化（缺省 = 任意变化）
+#                event     仅 ledger_*：事件名
+#   basis      依据（设计 §8 项）
+version: 1
+
+# 脚本机械核验：本列表必须全部存在——删掉任一真实需要的规则即 exit 1（负向用例）。
+#
+# ⚠️ 可达性声明（G2）：A1 的 r6-differential.sh 只回放 **check-gate 面**（`check-gate:Pn`），
+#    故 `gate: pre-commit` 的规则（D01/D04/D06/D07/D12）与 `gate: ci-verify`（D08）、
+#    `gate: check-obligations`（D09）**不在 A1 的 R6 覆盖内**——`required_ids` 只校验规则
+#    存在于 YAML，不校验可达。设计 §8 第 12 项（新增 PROD_TOUCHED ERROR 单独统计）由
+#    批 A2 的 CI 逐提交回放承担（见设计 §8 与 P4-implementation.md 的 G2 声明）。
+required_ids: [D01, D02, D03, D04, D05, D06, D07, D08, D09, D10, D11, D12]
+
+rules:
+  - id: D01
+    batch: A0
+    kind: ledger_event_added
+    gate: pre-commit
+    task_scope: legacy
+    match: {event: prod_touched_in_paused}
+    basis: "设计 §8 第 1 项（F8 缺陷修复：PAUSED 留痕真实落盘）"
+  - id: D02
+    batch: F
+    kind: new_error
+    gate: "check-gate:P2"
+    task_scope: legacy
+    match: {patterns: ["骨架声明"]}
+    basis: "设计 §8 第 2 项（RM-AG0085：骨架改为标题级判定）"
+  - id: D03
+    batch: A1
+    kind: rc_change
+    gate: check-gate
+    task_scope: "specific:T090"
+    match: {patterns: ["任务 ID"], rc_from: 1, rc_to: 0}
+    basis: "设计 §8 第 3 项（ID 正则统一，T090 放宽）"
+  - id: D04
+    batch: A1
+    kind: new_error
+    gate: pre-commit
+    task_scope: non-legacy
+    match: {patterns: ["创建事件", "账本"]}
+    basis: "设计 §8 第 4 项（仅非 legacy 任务的新账本规则）"
+  - id: D05
+    batch: D
+    kind: new_warning
+    gate: "check-gate:P6"
+    task_scope: any
+    match: {patterns: ["ignore", "证据"]}
+    basis: "设计 §8 第 5 项（新增证据被 ignore 的 WARNING）"
+  - id: D06
+    batch: A1
+    kind: ledger_bytes
+    gate: pre-commit
+    task_scope: any
+    match: {event: gate_run}
+    basis: "设计 §8 第 6 项（gate_run 事件新增 3 字段）"
+  - id: D07
+    batch: A3
+    kind: ledger_bytes
+    gate: pre-commit
+    task_scope: any
+    match: {event: state_transition}
+    basis: "设计 §8 第 7 项（state_transition 写入点改动）"
+  - id: D08
+    batch: A2
+    kind: rc_change
+    gate: ci-verify
+    task_scope: any
+    match: {patterns: ["回放", "FAIL"]}
+    basis: "设计 §8 第 8 项（agate-ci-verify 改为逐提交回放）"
+  - id: D09
+    batch: A4
+    kind: rc_change
+    gate: check-obligations
+    task_scope: any
+    match: {patterns: ["义务", "baseline"]}
+    basis: "设计 §8 第 9 项（义务核验与基线重设）"
+  - id: D10
+    batch: A3
+    kind: new_error
+    gate: check-gate
+    task_scope: legacy
+    match: {patterns: ["READY", "DONE"]}
+    basis: "设计 §8 第 10 项（legacy 任务从 READY/DONE 回到 Pn → ERROR）"
+  - id: D11
+    batch: A0
+    kind: rc_change
+    gate: check-gate
+    task_scope: any
+    match: {patterns: ["不存在的任务目录"], rc_to: 1}
+    basis: "设计 §8 第 11 项（check-gate 对不存在目录返回 1）"
+  - id: D12
+    batch: A1+C
+    kind: new_error
+    gate: pre-commit
+    task_scope: legacy
+    match: {patterns: ["PROD_TOUCHED"]}
+    basis: "设计 §8 第 12 项（安全门；含 F4 否定写法误拦，R6 单独统计并逐条列出）"

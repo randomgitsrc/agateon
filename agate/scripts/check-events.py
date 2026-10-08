@@ -33,7 +33,7 @@ import sys
 
 # 与 append_event 同源取 GENESIS_HASH（P2 §3.2：首行 prev_hash 常量对齐 test_bdd_7）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from agate_common import GENESIS_HASH
+from agate_common import GENESIS_HASH, check_ledger_events
 
 LEDGER_NAME = "gate-events.jsonl"
 
@@ -137,6 +137,15 @@ def main():
     if judge_verdict_count > MAX_JUDGE_VERDICT_EVENTS:
         sys.stderr.write(
             f"GATE EVENTS: judge 复核轮次 {judge_verdict_count} > {MAX_JUDGE_VERDICT_EVENTS}（verdict_hash 去重后计）——judge 轮次预算超限，须人工接管\n")
+        sys.exit(1)
+
+    # 9. 契约等级事件规则（TAG0050 批 A1，设计 §2.2）：task_created / task_adopted /
+    #    task_upgraded 的等级与顺序规则。legacy 账本（无创建/迁入事件）不报错。
+    ledger_errors = check_ledger_events(task_dir)
+    if ledger_errors:
+        sys.stderr.write("GATE EVENTS: 契约等级事件规则违反：\n")
+        for msg in ledger_errors:
+            sys.stderr.write(f"  - {msg}\n")
         sys.exit(1)
 
     # 7. 未知 event 类型不拦截（向后兼容）

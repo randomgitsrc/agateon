@@ -1,0 +1,25 @@
+
+## [P3 test-designer] 2026-10-07
+- 已读 P3-dispatch-context-test-designer.md（强制派发指引）
+- 已读角色定义 test-designer.md
+- 已读 P0-brief.md（环境约束/风险）
+- 已读 P1-requirements.md（77 BDD，10 批）
+- 已读 P2-design.md（files_to_read / gate_commands / §3 BDD 逐批 / §3.1 F4 / §3.2-3.3 r6 / §10 G1-G7）
+- 已读 design-tag0050（§0 F1-F15 / §2 / §3 / §10 验收锚 / §11 消费方）
+- 已读 tag0050-p2-expert-answers.md（Q1-Q4 裁决）
+- 已读 agate/tests/README.md（测试框架/CI 口径）
+- 已读 conftest.py（既有 fixture；init_task 不存在）
+- 已读 check-tdd-red.py / check-platform-assumptions.py / pytest formatter（确认红灯口径：运行期失败为 B 类安全；禁 module-level import 缺失符号；断言消息不得含 Traceback/ImportError/SyntaxError/ModuleNotFoundError）
+- 实测现状：agate-task-init.py / agate-state-set.py / agate_schema.py 均缺失；agate_common 缺 task_level/requirement_active/check_ledger_events/TASK_ID_RE/load_contract/project_root
+- 实测 check-gate 不存在目录 rc：P7=0 P5=2 P0=2 P1/P6/P8=1（BDD-02 用 P7/P5/P0 保证红）
+- 实测 F8：PAUSED + PROD_TOUCHED → rc=0 且无账本事件（BDD-01 红）
+- 实测 agate-config 无 set/unset/explain（"未知子命令: set" rc=0）；obligations.yaml 无 enforced_at/test/review_output/scope
+- 已写 11 个测试文件 + helper（82 节点：77 BDD，BDD-02 参数化 P7/P5/P0；+3 fitness）
+- 自跑：82 failed（全红），A 类关键词 0 命中；ruff 全通过
+- 平台假设扫描 agate/tests/ → exit 0（0 命中）
+- check-tdd-red.py → exit 0（全量串行 >120s，超时路径 exit 0；如需断言失败型真红灯设 AGATE_TDD_TIMEOUT=600）
+- 全量 pytest -n auto：83 failed / 2668 passed / 2 skipped；82 为本任务红灯，1 条为既有环境漂移（test_setup_agate_dir.py::test_bdd_43 opencode debug agent→agents），非本任务引入
+- consistency --strict-errors-only → rc 0（0 ERROR / 441 WARNING）
+- P3-test-cases.md 已写（frontmatter 经 agate-md-field-set 填 8 字段；agent 因工具拒写（G7）手动补 test-designer）
+- 未改 agate/scripts/ 实现（git status 无 tracked 修改）
+- [PROD_NOT_TOUCHED] 未接触生产环境

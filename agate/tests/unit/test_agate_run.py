@@ -343,3 +343,127 @@ def test_bdd_11_run_reports_error_when_evidence_not_ignored(
     assert re.search(r"ignore|gitignore|未被覆盖|证据", result.output, re.IGNORECASE), (
         f"BDD-11：报错应指向 ignore 覆盖问题；实际 {result.output[:300]!r}"
     )
+
+
+# ── I-2 基线比对缺陷 hotfix（TAG0050 批 D 前置）─────────────────────────────
+#
+# 设计要求（design §5 前置条件，逐字）：
+#   普通运行**只返回命令自身的退出码**；基线比对只在 `--baseline` 时进行，
+#   并**实际打印 diff**。
+#
+# 改动前缺陷：
+#   * :189-190 的 `elif` 令普通运行也与 `.out` 证据比对 ⇒ 陈旧证据致假失败（返回 1）；
+#   * `--baseline` 报错时只写「diff 已客观报出」却**不真的打印 diff**。
+
+
+def test_hotfix_i2_plain_run_returns_command_exit_code_with_stale_evidence(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """I-2：普通运行（无 `--baseline`）只返回命令自身退出码——陈旧证据不得致假失败。
+
+    Given 已存在一份**陈旧且不同**的 `.out` 证据（内容 stale-evidence）
+    When 普通运行 `agate-run <echo fresh>`（不带 `--baseline`，命令 rc=0）
+    Then rc == 0（命令自身退出码），且证据文件**未被普通运行改写**。
+
+    改动前：:189-190 的 `elif` 会因 stale ≠ fresh 置 mismatch → rc=1 ⇒ 本用例红灯。
+    """
+    _write_config(tmp_path, ["echo fresh"])
+    evidence_dir = tmp_path / ".agate-evidence"
+    evidence_dir.mkdir()
+    stale_path = evidence_dir / "cmd-0.out"
+    stale_path.write_bytes(b"stale-evidence\n")
+    result = _run_agate_run(agate_scripts, python_exe, run_cli, "echo fresh", cwd=tmp_path)
+    assert result.returncode == 0, (
+        "I-2：普通运行不得因陈旧证据改判（应返回命令自身退出码 0）；"
+        f"rc={result.returncode}\n{result.output[:400]}"
+    )
+    assert stale_path.read_bytes() == b"stale-evidence\n", (
+        "I-2：普通运行不得改写证据文件（基线写盘只在 `--baseline` 时发生）"
+    )
+
+
+def test_hotfix_i2_plain_run_propagates_nonzero_with_stale_evidence(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """I-2：普通运行 + 陈旧证据 + 命令失败 → rc == 命令自身退出码（而非被 mismatch 改成 1）。
+
+    Given 陈旧证据存在且不同
+    When 普通运行 `agate-run <exit 7>`（命令 rc=7）
+    Then rc == 7（如实传播命令退出码；既不因 mismatch 变 1，也不吞成 0）。
+    """
+    _write_config(tmp_path, ["exit 7"])
+    evidence_dir = tmp_path / ".agate-evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "cmd-0.out").write_bytes(b"stale\n")
+    result = _run_agate_run(agate_scripts, python_exe, run_cli, "exit 7", cwd=tmp_path)
+    assert result.returncode == 7, (
+        f"I-2：普通运行须返回命令自身退出码（期望 7）；rc={result.returncode}\n{result.output[:400]}"
+    )
+
+
+def test_hotfix_i2_baseline_mismatch_prints_real_diff(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """I-2：`--baseline` 不一致时**实际打印 diff**（逐行 unified diff），而非仅「已客观报出」字样。
+
+    Given 已建立基线 `echo alpha`
+    When 命令输出改为 `echo beta` 后 `--baseline` 比对
+    Then rc=1 且输出含真实 diff（`---`/`+++` 及 `-alpha`/`+beta` 行；
+         「diff 已客观报出」这类字样**不满足**本断言）。
+    """
+    _write_config(tmp_path, ["echo alpha"])
+    base = _run_agate_run(agate_scripts, python_exe, run_cli, "--baseline", "echo alpha", cwd=tmp_path)
+    assert base.returncode == 0, (
+        f"I-2：前置——建立基线应成功；rc={base.returncode}\n{base.output[:400]}"
+    )
+    _write_config(tmp_path, ["echo beta"])
+    diff = _run_agate_run(agate_scripts, python_exe, run_cli, "--baseline", "echo beta", cwd=tmp_path)
+    assert diff.returncode == 1, (
+        f"I-2：`--baseline` 不一致须 rc=1；rc={diff.returncode}\n{diff.output[:400]}"
+    )
+    assert "---" in diff.output and "+++" in diff.output, (
+        f"I-2：须打印 unified diff 头（`---`/`+++`）；实际 {diff.output[-600:]!r}"
+    )
+    assert "-alpha" in diff.output, (
+        f"I-2：diff 须含基线侧内容（`-alpha`）；实际 {diff.output[-600:]!r}"
+    )
+    assert "+beta" in diff.output, (
+        f"I-2：diff 须含本次输出内容（`+beta`）；实际 {diff.output[-600:]!r}"
+    )
+
+
+def test_hotfix_i2_baseline_first_write_lands_evidence_and_returns_exit_code(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """I-2：`--baseline` 且证据不存在 → 首次落盘、rc == 命令自身退出码（语义不变）。
+
+    Given 证据文件尚不存在
+    When `--baseline <echo first-write>`（命令 rc=0）
+    Then 证据落盘且内容逐字节等于输出，rc == 0。
+
+    再以 rc=3 的命令验证：首次落盘时 rc 仍为命令自身退出码。
+    """
+    _write_config(tmp_path, ["echo first-write"])
+    evidence_path = tmp_path / ".agate-evidence" / "cmd-0.out"
+    assert not evidence_path.exists(), "I-2：前置——证据此时不应存在"
+    result = _run_agate_run(agate_scripts, python_exe, run_cli,
+                            "--baseline", "echo first-write", cwd=tmp_path)
+    assert result.returncode == 0, (
+        f"I-2：首次落盘应返回命令自身退出码 0；rc={result.returncode}\n{result.output[:400]}"
+    )
+    assert evidence_path.read_bytes() == b"first-write\n", (
+        "I-2：首次落盘内容须逐字节等于命令输出"
+    )
+
+    # 以另一个「证据不存在」的槽位验证：首次落盘时 rc 仍为命令自身退出码（此处 rc=3）。
+    evidence_path.unlink()
+    _write_config(tmp_path, ["exit 3"])
+    result_nz = _run_agate_run(agate_scripts, python_exe, run_cli,
+                               "--baseline", "exit 3", cwd=tmp_path)
+    assert result_nz.returncode == 3, (
+        f"I-2：首次落盘（命令 rc=3）须返回 3（不因落盘改写）；rc={result_nz.returncode}\n"
+        f"{result_nz.output[:400]}"
+    )
+    assert evidence_path.read_bytes() == b"", (
+        "I-2：首次落盘内容须逐字节等于命令输出（此处为空输出）"
+    )

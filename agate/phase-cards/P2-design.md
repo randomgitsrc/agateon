@@ -81,6 +81,13 @@ packages: [pkg-a]                 # list，必填
 domains: [backend, cli]           # list，必填
 ui_affected: false                # bool，必填
 ui_design_section: true           # bool，可选（presence 语义：ui_affected: true 时声明已含 UI 设计节）
+# ── TAG0050 批 F 结构化 UI 维度（非 legacy 任务，ui_affected: true 时）──
+# ui_design:
+#   shape: layout               # 必填维度由快照 shape_dimensions 决定（layout→布局/交互/视觉）
+#   dimensions:
+#     布局: {status: covered}
+#     交互: {status: na, reason: "本任务无交互"}   # status: na 必须带 reason
+#     视觉: {status: covered}
 ---
 ```
 

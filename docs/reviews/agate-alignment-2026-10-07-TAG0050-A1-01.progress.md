@@ -1,0 +1,17 @@
+- start A1 review 2026-10-07T13:20:26+08:00
+- read dispatch-context + role + SELF-GATE + design §2.1-2.3/2.5/2.6/§8 + P2 §1.1/§3.1-3.3/§10 + expert-answers Q3/Q4 + P4-implementation
+- git status: agate-next.py NOT modified; no requirement_active import; line 274 still reads judge.enabled -> P4-impl §2 row9 "已落地" false
+- pre-commit _scan_prod_touched_and_rerun: rule7 后半(非legacy按被暂存产出阶段重跑gate) 未启用 (docstring 明说)；DESIGN_GAP 登记在 P4-impl §5 (无 P7)
+- sha256 level-1.yaml LF-normalized == LEVELS registered (verified)
+- test_tag0050_a0_a1_ledger.py BDD-19 只直接跑 check-gate P6，未测 pre-commit 重跑 -> 弱测试
+- r6-differential.sh: _rule_matches 不消费 task_scope 字段（声明了却不用）
+- CHECK16 负向: 改已发布快照→ERROR(rc1); 新增未登记 level-2→ERROR(rc1); 删除登记快照→ERROR(rc1). 不误伤(基线0ERROR). ✓
+- 全量 pytest (含.git副本): 40 failed / 2710 passed / 3 skipped; 失败全为后续批红灯+1环境漂移; A1文件24 passed ✓
+- agate-next.py 无测试引用(_p6_judge_advance grep 0) -> 缺口无测试
+- BDD-19 只直接跑 check-gate P6，未测 pre-commit 规则7后半 -> 弱测试
+- check_ledger_events "==current" 追溯 bug 复现: 协议升到 level2 后 level1 存量任务 check-events ERROR (违反 §2.1规则3/§2.2)
+- WORKFLOW.md pre-commit 表(唯一权威) 未加 A1 新步骤; SELF-GATE.md "CHECK 1-15" 未更新为 1-16
+- R6: 可跑 exit0; 负向(删D12)exit1; 脏corpus自核验exit1; 但 agateon 语料仅 1 个 legacy 任务(36 READY/2 DONE/4 P0 被排除)
+- R6 _rule_matches 不消费 task_scope 字段
+- UPGRADING.md/CHANGELOG 未更新
+- conftest.init_task 写 task_created 等级1 ✓; 3个既有测试改动在 §8 例外内 ✓

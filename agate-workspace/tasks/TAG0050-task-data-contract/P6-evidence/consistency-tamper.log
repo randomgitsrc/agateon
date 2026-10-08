@@ -1,0 +1,29 @@
+================================================================
+  agate 协议结构一致性检查 (P3-1)
+================================================================
+  ⚠️  WARN  CHECK 1  YAML 代码块可解析
+  ⚠️  WARN  CHECK 2  仓库内文件引用存在
+  ✅ PASS  CHECK 3  协议文件无硬编码行号
+  ✅ PASS  CHECK 4  gate_commands 键集合一致
+  ✅ PASS  CHECK 6  LICENSE 与 gstack 归属
+  ✅ PASS  CHECK 7  version badge 与 CHANGELOG 已发布版本
+  ✅ PASS  CHECK 8  v0.6 关键词存在性
+  ✅ PASS  CHECK 9  协议-脚本结构对齐
+  ⚠️  WARN  CHECK 10 协议文档脚本名引用漂移
+  ✅ PASS  CHECK 11 UI/UX 机制条文跨文档一致
+  ✅ PASS  CHECK 12 权威数值/规则跨文件一致性
+  ✅ PASS  CHECK 13 CHANGELOG↔UPGRADING 章节对应
+  ✅ PASS  CHECK 14 md 叙述段落平台名扫描
+  ✅ PASS  CHECK 15 数据面平台名扫描
+  ❌ FAIL  CHECK 16 任务数据契约快照冻结
+----------------------------------------------------------------
+
+  ERROR (1):
+    ❌ 快照文件 level-1.yaml 已改动（sha256 a16a0f52dcd8d7d68f6b2f29711881b6eb434db7ac7fa8c70613d89114273a84 != 登记值 6ace03c98a074a623e33a4d7127e1f782b4d001df41fe6b0741350185183fc96）——冻结文件不得修改；新增/收紧要求请登记新一级快照 [agate/rules/task-data/level-1.yaml]
+
+  WARNING (410):
+    ⚠️  【冻结文件】410 条（CHECK1-yaml 2 条、CHECK10-scriptref 1 条、CHECK2-refs 407 条）
+        ↳ 来源为 tasks/、reviews/、CHANGELOG 等**按设计不改**的历史文件，其发现永不收敛；
+        ↳ 明细用 `--show-frozen-warnings` 展开（数据未丢弃）。
+
+

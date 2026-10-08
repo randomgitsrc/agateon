@@ -57,13 +57,58 @@ def _init_commit(run_cli, agate_root, git_repo, repo):
     return _git_commit(run_cli, agate_root, repo, "-q", "-m", "init")
 
 
-def _write_state_yaml(task_dir, task_id, phase):
-    """等价 bats `cat > task_dir/.state.yaml` heredoc（retries 空表）。"""
+def _seed_task_created(task_dir, task_id="T001", contract_level=1):
+    """TAG0050 A1（设计 §2.3 规则 1）：为新任务目录写 task_created 首行账本。
+
+    规则 1 要求新建任务目录的账本第 1 行为 task_created。既有"新建任务目录并提交"
+    用例（设计 §8 允许改用 init_task 的同类）经本 helper 满足该规则；已存在账本时不覆盖
+    （保持"只追加"）。
+    """
+    import hashlib
+    import json
+
+    ledger = task_dir / "gate-events.jsonl"
+    if ledger.exists():
+        return
+    genesis = hashlib.sha256(b"").hexdigest()
+    row = {
+        "event": "task_created",
+        "task_id": task_id,
+        "contract_level": contract_level,
+        "ts": "2026-10-07T00:00:00.000000Z",
+        "prev_hash": genesis,
+    }
+    line = json.dumps(row, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    ledger.write_text(line + "\n", encoding="utf-8")
+
+
+def _write_state_yaml(task_dir, task_id, phase, legacy=False):
+    """等价 bats `cat > task_dir/.state.yaml` heredoc（retries 空表）。
+
+    TAG0050 A1：默认同时写 task_created 首行账本（规则 1：新任务目录须有创建事件），并声明
+    `judge.enabled: true`——非 legacy 任务的 judge 由契约强制（快照 requires.judge），
+    否则 P1 gate 会因缺 judge 而失败（本 helper 的用例期望 P1 正常通过）。
+
+    `legacy=True`：只写 `.state.yaml`，**不写** task_created（保持 legacy 任务）——供
+    phase-span 类用例使用（它们验证的是阶段产出与 phase 的一致性 WARNING，与契约等级
+    无关；非 legacy 会触发规则 7 后半「按被暂存产出所属阶段重跑 gate」而改变判定，见
+    设计 §8 例外）。
+    """
     task_dir.mkdir(parents=True, exist_ok=True)
+    if legacy:
+        (task_dir / ".state.yaml").write_text(
+            f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
+            encoding="utf-8",
+        )
+        return
+    # TAG0050 A3（设计 §2.7）：非 legacy 任务的 `status` 是系统字段（由 phase + cancelled
+    # 现算）——文件中**不写**，写了即 ERROR。故非 legacy 分支不写 `status`（legacy 分支保留）。
     (task_dir / ".state.yaml").write_text(
-        f"task_id: {task_id}\nphase: {phase}\nstatus: active\nretries: {{}}\n",
+        f"task_id: {task_id}\nphase: {phase}\n"
+        "judge:\n  enabled: true\nretries: {}\n",
         encoding="utf-8",
     )
+    _seed_task_created(task_dir, task_id)
 
 
 def _write_min_valid_dispatch_context(
@@ -386,9 +431,10 @@ def _in_order(text, *parts):
 
 
 _P1_REQ = (
-    "---\nagent: test\n---\n"
+    "---\nagent: test\nprod_touched: false\n---\n"
     "risk_level: medium\n"
-    "phases: [P0, P1, P2, P3, P4, P5, P6, P7, P8]\n"
+    # GAP-4 裁定后 phase_universe = [P1..P8]（排除 P0/P6.5）——phases 不再含 P0。
+    "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n"
     "- Given test precondition\n"
 )
 
@@ -406,7 +452,7 @@ def test_phase_span_1_late_p1_p2_outputs_no_warning(
 
     task_dir = repo / "agate-workspace" / "tasks" / "T001"
     task_dir.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(task_dir, "T001", "P3")
+    _write_state_yaml(task_dir, "T001", "P3", legacy=True)
     (task_dir / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     _write_min_valid_dispatch_context(
         run_cli, python_exe, agate_scripts, agate_root, task_dir, "P3", "test-designer"
@@ -439,12 +485,12 @@ def test_phase_span_2_existing_p1_restaged_warns(
 
     task_dir = repo / "agate-workspace" / "tasks" / "T001"
     task_dir.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(task_dir, "T001", "P1")
+    _write_state_yaml(task_dir, "T001", "P1", legacy=True)
     _write_p1_requirements(task_dir)
     git_repo.stage("agate-workspace/tasks/T001/")
     _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T001 P1 setup")
 
-    _write_state_yaml(task_dir, "T001", "P3")
+    _write_state_yaml(task_dir, "T001", "P3", legacy=True)
     (task_dir / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
     git_repo.stage("agate-workspace/tasks/T001/P3-test-cases.md")
@@ -489,7 +535,7 @@ def test_phase_span_4_multi_task_warn_selective(
     # T001: phase=P3, 历史产出晚提交（P1/P2/P3/P1-review 全新增）→ 不 WARNING
     t1 = repo / "agate-workspace" / "tasks" / "T001"
     t1.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(t1, "T001", "P3")
+    _write_state_yaml(t1, "T001", "P3", legacy=True)
     _write_p1_requirements(t1)
     (t1 / "P2-design.md").write_text(
         "---\nagent: test\nphase: P2\ntask_id: T001\ntype: design\n"
@@ -516,11 +562,11 @@ def test_phase_span_4_multi_task_warn_selective(
     # T002: phase=P3, 已存在 P1 产出被修改 → WARNING
     t2 = repo / "agate-workspace" / "tasks" / "T002"
     t2.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(t2, "T002", "P1")
+    _write_state_yaml(t2, "T002", "P1", legacy=True)
     _write_p1_requirements(t2)
     git_repo.stage("agate-workspace/tasks/T002/")
     _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T002 P1 setup")
-    _write_state_yaml(t2, "T002", "P3")
+    _write_state_yaml(t2, "T002", "P3", legacy=True)
     (t2 / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     git_repo.stage("agate-workspace/tasks/T002/.state.yaml")
     git_repo.stage("agate-workspace/tasks/T002/P3-test-cases.md")
@@ -531,7 +577,7 @@ def test_phase_span_4_multi_task_warn_selective(
     # T003: phase=P3, 新增 P4 产出（提前产出）→ WARNING
     t3 = repo / "agate-workspace" / "tasks" / "T003"
     t3.mkdir(parents=True, exist_ok=True)
-    _write_state_yaml(t3, "T003", "P3")
+    _write_state_yaml(t3, "T003", "P3", legacy=True)
     _write_p1_requirements(t3)
     (t3 / "P3-test-cases.md").write_text("## P3 test cases\n", encoding="utf-8")
     git_repo.stage("agate-workspace/tasks/T003/")
@@ -576,7 +622,8 @@ def test_p6_code_1_p6_evidence_dir_allowed(
     screenshots.mkdir(parents=True, exist_ok=True)
     (screenshots / "a.png").touch()
     (task_dir / "P6-acceptance.md").write_text(
-        "- PASS BDD-1: ok (screenshots/a.png)\n", encoding="utf-8"
+        "---\nagent: test\nprod_touched: false\n---\n- PASS BDD-1: ok (screenshots/a.png)\n",
+        encoding="utf-8",
     )
     _write_state_yaml(task_dir, "T001", "P6")
     _write_min_valid_dispatch_context(
@@ -600,7 +647,8 @@ def test_p6_code_1b_evidences_dir_allowed(
     evidences.mkdir(parents=True, exist_ok=True)
     (evidences / "desktop.png").touch()
     (task_dir / "P6-acceptance.md").write_text(
-        "- PASS BDD-1: ok (screenshots/a.png)\n", encoding="utf-8"
+        "---\nagent: test\nprod_touched: false\n---\n- PASS BDD-1: ok (screenshots/a.png)\n",
+        encoding="utf-8",
     )
     _write_state_yaml(task_dir, "T001", "P6")
     _write_min_valid_dispatch_context(
@@ -624,7 +672,8 @@ def test_p6_code_2_p6_source_blocked(
     screenshots.mkdir(parents=True, exist_ok=True)
     (screenshots / "a.png").touch()
     (task_dir / "P6-acceptance.md").write_text(
-        "- PASS BDD-1: ok (screenshots/a.png)\n", encoding="utf-8"
+        "---\nagent: test\nprod_touched: false\n---\n- PASS BDD-1: ok (screenshots/a.png)\n",
+        encoding="utf-8",
     )
     src = repo / "src"
     src.mkdir(parents=True, exist_ok=True)
@@ -703,7 +752,8 @@ def _retreat_setup(git_repo, agate_root, agate_scripts, python_exe, run_cli):
     screenshots = task_dir / "P6-evidence" / "screenshots"
     screenshots.mkdir(parents=True, exist_ok=True)
     (task_dir / "P6-acceptance.md").write_text(
-        "- PASS BDD-1: ok (screenshots/x.png)\n", encoding="utf-8"
+        "---\nagent: test\nprod_touched: false\n---\n- PASS BDD-1: ok (screenshots/x.png)\n",
+        encoding="utf-8",
     )
     (screenshots / "x.png").touch()
     _write_state_yaml(task_dir, "TXX0001", "P6")
@@ -815,14 +865,18 @@ def test_it9_pruning_skip_low_passes(git_repo, agate_root, agate_scripts, python
     task_dir.mkdir(parents=True, exist_ok=True)
     _write_state_yaml(task_dir, "TXX0001", "P2")
     (task_dir / "P1-requirements.md").write_text(
-        "---\nagent: test\n---\nrisk_level: low\n"
-        "phases: [P0, P1, P2, P4, P5, P6, P7, P8]\n跳过风险: 低\n",
+        # GAP-4：phase_universe=[P1..P8]——跳过 P3 用结构化 pruned 声明（`phases ∪ pruned` 闭合）。
+        "---\nagent: test\nrisk_level: low\n"
+        "phases: [P1, P2, P4, P5, P6, P7, P8]\n"
+        "packages: [pkg-a]\ndomains: [backend]\n"
+        "pruned:\n  - {phase: P3, reason: 低风险可裁剪, risk: low}\n"
+        "---\n跳过风险: 低\n",
         encoding="utf-8",
     )
     (task_dir / "P2-design.md").write_text(
         "---\nagent: test\nphase: P2\ntask_id: TXX0001\ntype: design\n"
         "parent: P1-requirements.md\ntrace_id: T001-P2-20260708\n"
-        "status: approved\ncreated: 2026-07-08\n---\n"
+        "status: approved\ncreated: 2026-07-08\nprod_touched: false\n---\n"
         "### 候选方案 A：方案一\n### 候选方案 B：方案二\n## 权衡\nA 简单 B 稳健\n"
         "candidate_count: 2\npackages: [pkg-a]\ndomains: [backend]\n"
         "ui_affected: false\ngate_commands: {}\n",
@@ -859,14 +913,18 @@ def test_it9b_pruning_skip_medium_blocked(
     task_dir.mkdir(parents=True, exist_ok=True)
     _write_state_yaml(task_dir, "TXX0001", "P2")
     (task_dir / "P1-requirements.md").write_text(
-        "---\nagent: test\n---\nrisk_level: medium\n"
-        "phases: [P0, P1, P2, P4, P5, P6, P7, P8]\n跳过风险: 低\n",
+        # GAP-4：phase_universe=[P1..P8]——跳过 P3 用结构化 pruned 声明（`phases ∪ pruned` 闭合）。
+        "---\nagent: test\nrisk_level: medium\n"
+        "phases: [P1, P2, P4, P5, P6, P7, P8]\n"
+        "packages: [pkg-a]\ndomains: [backend]\n"
+        "pruned:\n  - {phase: P3, reason: medium 风险, risk: medium}\n"
+        "---\n跳过风险: 低\n",
         encoding="utf-8",
     )
     (task_dir / "P2-design.md").write_text(
         "---\nagent: test\nphase: P2\ntask_id: TXX0001\ntype: design\n"
         "parent: P1-requirements.md\ntrace_id: T001-P2-20260708\n"
-        "status: approved\ncreated: 2026-07-08\n---\n"
+        "status: approved\ncreated: 2026-07-08\nprod_touched: false\n---\n"
         "### 候选方案 A：方案一\n### 候选方案 B：方案二\n## 权衡\nA 简单 B 稳健\n"
         "candidate_count: 2\npackages: [pkg-a]\ndomains: [backend]\n"
         "ui_affected: false\ngate_commands: {}\n",
@@ -902,8 +960,11 @@ def _write_root_state_yaml(repo, task_id, phase):
 
 
 def _write_p1_review(task_dir, bdd_note="- BDD-1: PASS + 覆盖维度：数据✓"):
+    # GAP-2 闭合：非 legacy 任务 P1-review 须声明 reviewed_bdds = P1 的 BDD 标题集合。
+    # `_P1_REQ` 无 `#### BDD-N:` 标题（仅 - Given ...）⇒ 集合为空 ⇒ reviewed_bdds: []。
     (task_dir / "P1-review.md").write_text(
-        "---\nphase: P1\ntask_id: TXX0001\nstatus: approved\nagent: requirements-review\n---\n"
+        "---\nphase: P1\ntask_id: TXX0001\nstatus: approved\nagent: requirements-review\n"
+        "reviewed_bdds: []\n---\n"
         "## BDD 评审\n"
         + bdd_note
         + "\n",
@@ -1124,7 +1185,7 @@ def test_it11_p2_code_file_warning(git_repo, agate_root, agate_scripts, run_cli,
 
     (repo / "hack.py").write_text("print('hello')\n", encoding="utf-8")
     (task_dir / ".state.yaml").write_text(
-        "task_id: TXX0001\nphase: P2\nstatus: active\n"
+        "task_id: TXX0001\nphase: P2\n"
         "retries:\n  P2:\n    - round: 1\n      failure_mode: test\n",
         encoding="utf-8",
     )
@@ -1150,6 +1211,7 @@ def test_gate_real_1_writes_gate_result_json(
     task_dir.mkdir(parents=True, exist_ok=True)
     _write_state_yaml(task_dir, "TXX0001", "P2")
     (task_dir / "P2-design.md").write_text(
+        "---\nprod_touched: false\n---\n"
         "# P2 design\n### 候选方案 A：方案一\n### 候选方案 B：方案二\n## 权衡\n"
         "A 更简单，B 更稳健。\ncandidate_count: 2\npackages: [pkg-a]\n"
         "domains: [backend]\nui_affected: false\ngate_commands: {}\n",
@@ -1187,13 +1249,26 @@ def test_hook_evidence_warning_low_variance_not_blocked(
 
     task_dir = repo / "agate-workspace" / "tasks" / "T086"
     task_dir.mkdir(parents=True, exist_ok=True)
+    # GAP-1 闭合：非 legacy 任务 P6 须结构化 `results`（bdd 集合 = P1、全 PASS、证据指向
+    # 存在的文件）——本用例据此写结构化 results（含 D8 的 vision）。
     _write_state_yaml(task_dir, "TXX0086", "P6")
-    (task_dir / "P6-acceptance.md").write_text(
-        "---\nagent: test\n---\n- PASS BDD-1 (screenshots/test.png)\n",
+    (task_dir / "P1-requirements.md").write_text(
+        "---\nagent: test\nrisk_level: medium\n"
+        "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n"
+        "packages: [pkg-a]\ndomains: [backend]\n---\n\n"
+        "[NO_NEED_CONFIRM]\n\n#### BDD-1: test\n- Given a\n- When b\n- Then c\n",
         encoding="utf-8",
     )
     (task_dir / "P2-design.md").write_text(
         "---\nagent: test\n---\nui_affected: true\n", encoding="utf-8"
+    )
+    (task_dir / "P6-acceptance.md").write_text(
+        "---\nagent: test\nprod_touched: false\n"
+        "results:\n"
+        "  - {bdd: '1', verdict: PASS, evidence: [screenshots/test.png], "
+        "vision: vision.yaml}\n"
+        "---\n\n- PASS BDD-1: ok (screenshots/test.png)\n",
+        encoding="utf-8",
     )
     screenshots = task_dir / "P6-evidence" / "screenshots"
     screenshots.mkdir(parents=True, exist_ok=True)
@@ -1214,7 +1289,7 @@ def test_hook_evidence_warning_low_variance_not_blocked(
     )
     git_repo.stage("agate-workspace/tasks/T086/")
     result = _git_commit(run_cli, agate_root, repo, "-m", "T086 evidence warning test")
-    assert result.returncode == 0
+    assert result.returncode == 0, result.output
     assert "WARNING" in result.output
 
 
@@ -1528,7 +1603,8 @@ def test_it10_routing_2j1_thin_missing_element_blocks(
     _write_state_yaml(task_dir, "TXX0001", "P2")
     (task_dir / "P1-requirements.md").write_text(
         "---\nagent: test\nceremony: thin\nrisk_level: low\n"
-        "phases: [P0, P1, P2, P3, P4, P5, P6, P7, P8]\n"
+        # GAP-4：phase_universe=[P1..P8]（排除 P0）——phases 不再含 P0。
+        "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n"
         "packages: [pkg-a]\ndomains: [backend]\n---\n"
         "### 主流程\n#### BDD-1: test\n",
         encoding="utf-8",
@@ -1536,7 +1612,7 @@ def test_it10_routing_2j1_thin_missing_element_blocks(
     (task_dir / "P2-design.md").write_text(
         "---\nagent: test\nphase: P2\ntask_id: TXX0001\ntype: design\n"
         "parent: P1-requirements.md\ntrace_id: T001-P2-20260708\n"
-        "status: approved\ncreated: 2026-07-08\n---\n"
+        "status: approved\ncreated: 2026-07-08\nprod_touched: false\n---\n"
         "### 候选方案 A：方案一\n### 候选方案 B：方案二\n## 权衡\nA 简单 B 稳健\n"
         "candidate_count: 2\npackages: [pkg-a]\ndomains: [backend]\n"
         "ui_affected: false\ngate_commands: {}\n",
@@ -1602,7 +1678,7 @@ def test_tag0035_bdd_6_pre_commit_nonstandard_phase_output_warns(
     # 触碰 .state.yaml（phase 文本本身不变，只追加一个无关字段）——让其在本次 commit
     # 中"被暂存"以进入 2f 检查范围，同时不触发 2c 状态转移检查（无 "+...phase:" 行）
     (task_dir / ".state.yaml").write_text(
-        "task_id: TXX0001\nphase: P3\nstatus: active\nretries: {}\nnote: touch\n",
+        "task_id: TXX0001\nphase: P3\nretries: {}\nnote: touch\n",
         encoding="utf-8",
     )
     git_repo.stage("agate-workspace/tasks/T001/p-alpha-notes.md")
@@ -1638,13 +1714,38 @@ def test_tag0035_bdd_7_pre_commit_standard_phase_output_no_extra_warning(
     git_repo.stage("agate-workspace/tasks/T001/")
     _git_commit(run_cli, agate_root, repo, "--no-verify", "-q", "-m", "T001 P3 setup")
 
-    (task_dir / "P3-test-cases.md").write_text("## cases\n", encoding="utf-8")
+    (task_dir / "P3-test-cases.md").write_text(
+        "---\nprod_touched: false\n---\n## cases\n", encoding="utf-8"
+    )
     git_repo.stage("agate-workspace/tasks/T001/P3-test-cases.md")
     result = _git_commit(run_cli, agate_root, repo, "-m", "T001 standard P3 output")
 
     assert result.returncode == 0
     assert "无法识别" not in result.output
     assert "一致性检查未覆盖" not in result.output
+
+
+def test_tag0050_r2_declaration_files_snapshot_effective(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """R2：hook 侧声明文件面 = 快照 `declaration_files`（含旧硬编码之外的 P8-release.md）。
+
+    P1 主产出带 `prod_touched`（2g.3 通过），另暂存一个缺 frontmatter 的 P8-release.md：
+    若 hook 仍用旧硬编码四文件元组，则不会检查它 → commit 成功；本用例锁定期望被拦。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_state_yaml(task_dir, "TXX0001", "P1")
+    _write_p1_requirements(task_dir)  # 含 frontmatter + prod_touched: false
+    (task_dir / "P8-release.md").write_text("无 frontmatter 块\n", encoding="utf-8")
+    git_repo.stage("agate-workspace/tasks/T001/")
+    result = _git_commit(run_cli, agate_root, repo, "-m", "R2 declaration files snapshot")
+    assert result.returncode != 0
+    assert "P8-release.md" in result.output and "frontmatter" in result.output
 
 
 # --- X1（TAG0042 批0）：PROD_TOUCHED 必须在**所有阶段**都扫描 -------------------

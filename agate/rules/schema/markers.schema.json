@@ -47,7 +47,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "pattern": "^[A-Z][A-Z0-9_+]*$"
+            "pattern": "^[A-Z][A-Z0-9_+-]*$"
           },
           "purpose": {
             "type": "string",

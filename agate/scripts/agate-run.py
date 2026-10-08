@@ -4,8 +4,10 @@
 职责（P1 BDD-9/10/11/12，P2-design §4.2）：
   * BDD-9  从 `agate.config.yaml` 的 `verify.commands` 取命令，经 bash 执行并**如实传播退出码**
            （POSIX 开 `pipefail`，避免 `cmd | tail` 吞掉左侧失败）；非 POSIX 平台显式退化 +
-           WARNING（绝不静默报绿，ADR-015 手段②）。
-  * BDD-10 `--baseline` 首次落盘 `.out` 证据；后续执行与之**逐字节比对**，差异客观报出（二值）。
+           WARNING（绝不静默报绿，ADR-015 手段②）。普通运行（无 `--baseline`）**只返回命令自身
+           退出码**，不与 `.out` 证据比对（I-2 hotfix：陈旧证据不得致假失败）。
+  * BDD-10 `--baseline` 首次落盘 `.out` 证据；后续执行与之**逐字节比对**，不一致时**实际打印
+           逐行 diff** 再返回非 0（I-2 hotfix）。
   * BDD-11 证据文件须被 `.gitignore` 覆盖（`git check-ignore` 判定），否则报错（不落盘）。
   * BDD-12 执行后经 `agate_common.append_event`（**唯一写路径**）追加 `cmd_run` 事件；目标
            账本目录由 `AGATE_TASK_DIR` env 指定（不直接写 gate-events.jsonl，避免破链）。
@@ -18,19 +20,30 @@
 Python 3.8+（禁 match / str.removeprefix）。
 """
 
+import difflib
+import hashlib
 import os
 import subprocess
 import sys
+import time
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.abspath(__file__)))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from agate_common import append_event, read_project_config  # noqa: E402
+from agate_common import (  # noqa: E402
+    append_event,
+    project_root,
+    read_ledger_events,
+    read_project_config,
+    run_git,
+)
 
 EVIDENCE_SUFFIX = ".out"
 BASELINE_FLAG = "--baseline"
+TASK_FLAG = "--task"
 DEFAULT_EVIDENCE_DIR = ".agate-evidence"
+RUNS_DIRNAME = "runs"
 
 
 def _usage_error(message):
@@ -114,6 +127,29 @@ def _read_bytes(path):
         return handle.read()
 
 
+def _baseline_diff(evidence_bytes, output):
+    """由证据（基线）字节与本次输出生成**逐行 unified diff** 文本（I-2：实际打印 diff）。
+
+    逐字节不同但逐行相同时（如尾行换行差异），unified diff 可能为空——此时给出字节级提示，
+    保证「已比对出差异」的结论始终伴随可读证据（不回落为只写一行抽象字样）。
+    """
+    baseline_text = evidence_bytes.decode("utf-8", errors="replace")
+    diff_lines = difflib.unified_diff(
+        baseline_text.splitlines(),
+        output.splitlines(),
+        fromfile="baseline",
+        tofile="current",
+        lineterm="",
+    )
+    rendered = "\n".join(diff_lines)
+    if rendered.strip():
+        return rendered
+    return (
+        f"（逐行内容相同但逐字节不一致：基线 {len(evidence_bytes)} 字节，"
+        f"本次 {len(output.encode('utf-8'))} 字节）"
+    )
+
+
 def _write_evidence(path, output):
     """证据落盘——**字节精确**（写盘字节 == `output.encode("utf-8")`，C8 C1 修复）。
 
@@ -129,31 +165,109 @@ def _write_evidence(path, output):
         handle.write(output.encode("utf-8"))
 
 
-def _record_cmd_run(cmd, exit_code):
-    """经 append_event（唯一写路径）追加 cmd_run 事件；未指定 AGATE_TASK_DIR → 跳过。"""
-    task_dir = os.environ.get("AGATE_TASK_DIR", "")
+def _record_cmd_run(cmd, exit_code, task_dir=None, k=None, log=None, sha256=None):
+    """经 append_event（唯一写路径）追加 cmd_run 事件；未指定任务目录 → 跳过。"""
+    task_dir = task_dir or os.environ.get("AGATE_TASK_DIR", "")
     if not task_dir:
         return
+    event = {
+        "event": "cmd_run",
+        "cmd": cmd,
+        "exit": exit_code,
+        "runner": "agate-run",
+    }
+    # TAG0050 批 D（设计 §5.3）：--task 时记录 run:<k> 引用所需的 k / log / sha256。
+    if k is not None:
+        event["k"] = k
+    if log is not None:
+        event["log"] = log
+    if sha256 is not None:
+        event["sha256"] = sha256
     try:
-        append_event(task_dir, {
-            "event": "cmd_run",
-            "cmd": cmd,
-            "exit": exit_code,
-            "runner": "agate-run",
-        })
+        append_event(task_dir, event)
     except Exception as exc:
         sys.stderr.write(f"agate-run WARNING: cmd_run 事件写入失败（不阻断）: {exc}\n")
+
+
+def _next_run_index(task_dir):
+    """下一个 run 编号 k（任务内自增；账本中 cmd_run.k 的最大值 + 1）。"""
+    max_k = 0
+    for ev in read_ledger_events(task_dir):
+        if ev.get("event") != "cmd_run":
+            continue
+        try:
+            max_k = max(max_k, int(ev.get("k", 0) or 0))
+        except (TypeError, ValueError):
+            continue
+    return max_k + 1
+
+
+def _git_head(task_dir):
+    rc, out = run_git(["rev-parse", "HEAD"], cwd=task_dir)
+    return out.strip() if rc == 0 else ""
+
+
+def _write_run_log(task_dir, k, cmd, exit_code, output):
+    """把本次运行写入 `<task>/runs/<k>.log`（头部 cmd/cwd/git_head/起止时间，尾行 EXIT_CODE）。
+
+    返回 (绝对路径, sha256)。日志是任务证据，**必须入库**（未被 ignore）。
+    """
+    runs_dir = os.path.join(task_dir, RUNS_DIRNAME)
+    os.makedirs(runs_dir, exist_ok=True)
+    log_path = os.path.join(runs_dir, f"{k}.log")
+    start = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    head = _git_head(task_dir)
+    body = (
+        f"# cmd: {cmd}\n"
+        f"# cwd: {os.getcwd()}\n"
+        f"# git_head: {head}\n"
+        f"# started: {start}\n"
+        f"{output}"
+        f"{'' if output.endswith(chr(10)) or output == '' else chr(10)}"
+        f"EXIT_CODE: {exit_code}\n"
+    )
+    data = body.encode("utf-8")
+    with open(log_path, "wb") as handle:
+        handle.write(data)
+    return log_path, hashlib.sha256(data).hexdigest()
+
+
+def _run_with_task(task_dir, command, exit_code, output):
+    """`--task`：写任务内 `runs/<k>.log` + cmd_run(k/log/sha256)，返回退出码。"""
+    repo_root = project_root(task_dir)
+    k = _next_run_index(task_dir)
+    log_path, digest = _write_run_log(task_dir, k, command, exit_code, output)
+    ignored = _is_ignored(repo_root, log_path)
+    if ignored is True:
+        sys.stderr.write(
+            "agate-run: 任务内日志被 .gitignore 覆盖（证据须入库）: "
+            f"{log_path}——请在 .gitignore 加取反规则 "
+            "`!agate-workspace/tasks/**/runs/**`\n"
+        )
+        return 1
+    log_rel = os.path.relpath(log_path, repo_root)
+    _record_cmd_run(command, exit_code, task_dir=task_dir, k=k, log=log_rel, sha256=digest)
+    sys.stderr.write(f"agate-run: 任务内日志 run:{k} → {log_rel}\n")
+    return exit_code
 
 
 def main(argv):
     args = list(argv)
     baseline = BASELINE_FLAG in args
     args = [a for a in args if a != BASELINE_FLAG]
+    # TAG0050 批 D（设计 §5.3）：`--task <TASK_DIR>` 走任务内日志 run:<k> 路径。
+    task_dir = ""
+    if TASK_FLAG in args:
+        idx = args.index(TASK_FLAG)
+        if idx + 1 >= len(args):
+            return _usage_error("用法: agate-run [--baseline] [--task <TASK_DIR>] <命令>")
+        task_dir = args[idx + 1]
+        del args[idx:idx + 2]
     if len(args) != 1:
-        return _usage_error("用法: agate-run [--baseline] <命令>")
+        return _usage_error("用法: agate-run [--baseline] [--task <TASK_DIR>] <命令>")
 
-    project_root = os.getcwd()
-    cfg = read_project_config(project_root)
+    project_root_dir = os.getcwd()
+    cfg = read_project_config(project_root_dir)
     command, index = _resolve_command(cfg, args[0])
     if command is None:
         sys.stderr.write(
@@ -166,10 +280,14 @@ def main(argv):
     sys.stdout.write(output)
     sys.stdout.flush()
 
-    evidence_path = _evidence_path(cfg, project_root, index)
+    if task_dir:
+        return _run_with_task(task_dir, command, exit_code, output)
+
+    evidence_path = _evidence_path(cfg, project_root_dir, index)
     baseline_mismatch = False
+    mismatch_diff = ""
     if baseline:
-        ignored = _is_ignored(project_root, evidence_path)
+        ignored = _is_ignored(project_root_dir, evidence_path)
         if ignored is False:
             sys.stderr.write(
                 "agate-run: 证据文件未被 .gitignore 覆盖（ignore 检查失败，会污染仓库）: "
@@ -186,14 +304,14 @@ def main(argv):
             _write_evidence(evidence_path, output)
         elif _read_bytes(evidence_path) != output.encode("utf-8"):
             baseline_mismatch = True
-    elif os.path.isfile(evidence_path) and _read_bytes(evidence_path) != output.encode("utf-8"):
-        baseline_mismatch = True
+            mismatch_diff = _baseline_diff(_read_bytes(evidence_path), output)
 
     if baseline_mismatch:
         sys.stderr.write(
-            "agate-run: baseline mismatch（证据与基线逐字节不一致，diff 已客观报出）: "
+            "agate-run: baseline mismatch（证据与基线逐字节不一致）: "
             f"{evidence_path}\n"
         )
+        sys.stderr.write(mismatch_diff + "\n")
         _record_cmd_run(command, exit_code)
         return 1
 

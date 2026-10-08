@@ -1,0 +1,28 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 17 items
+
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_23_pr_replay_passes PASSED [  5%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_24_push_replay_passes PASSED [ 11%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_25_no_verify_violation_fails_with_sha PASSED [ 17%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_26_ready_output_only_prod_touched_fails PASSED [ 23%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_27_missing_self_gate_trailer_fails PASSED [ 29%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_28_deleted_created_ledger_fails_mv_passes PASSED [ 35%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_29_handwritten_low_level_task_created_fails PASSED [ 41%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_30_branch_crossing_upgrade_no_false_report PASSED [ 47%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_30b_new_task_below_merge_base_level_fails PASSED [ 52%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_k1_evil_merge_deletes_ledger_fails PASSED [ 58%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_31_user_project_without_version_fails PASSED [ 64%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_32_pr_downgrade_version_fails PASSED [ 70%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_33_pr_mid_upgrade_version_no_false_report PASSED [ 76%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_34_no_task_dir_pr_skips_with_reason PASSED [ 82%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_35_replay_interface_records_timing PASSED [ 88%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_bdd_26b_legacy_prod_touched_error_separately_counted PASSED [ 94%]
+agate/tests/integration/test_tag0050_ci_replay.py::test_push_all_zero_before_does_not_fail PASSED [100%]
+
+============================= 17 passed in 14.05s ==============================
+EXIT_CODE: 0

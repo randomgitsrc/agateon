@@ -60,6 +60,7 @@ from agate_common import (
     resolve_evidence,
     split_frontmatter,
     strip_fenced_blocks,
+    task_level,
 )
 
 # BDD-5：verdict Header status 合法三值
@@ -512,6 +513,41 @@ def main():
     if status not in _VALID_STATUS:
         sys.stderr.write(f"GATE JUDGE-VERDICT: status 非法（{status!r}），须为 passed/rejected/needs-revision\n")
         sys.exit(1)
+
+    # TAG0050 批 D（设计 §5.2，BLOCKER-1 修复）：非 legacy 任务改读结构化 `criteria`
+    # （criteria_total / criteria_passed / verdict_evidence 为系统字段，由 criteria 现算）。
+    # ⚠️ 顺序：**先现算、后强校验**——原实现把三系统字段的强校验放在此处之前，非 legacy
+    # 因 agent 不写系统字段而先报「criteria_total 缺失或非整数」，即使声明了 criteria 也被
+    # 挡在现算之前（且 read_judge_verdict 曾丢弃 criteria）⇒ P6→P7 死锁。
+    criteria = verdict.get("criteria")
+    try:
+        _non_legacy = task_level(task_dir) is not None
+    except Exception:
+        _non_legacy = False
+    derived_concl_ids = None
+    if _non_legacy:
+        if not isinstance(criteria, list) or not criteria:
+            sys.stderr.write(
+                "GATE JUDGE-VERDICT: 非 legacy 任务须在 frontmatter 声明 criteria（设计 §5.2）\n"
+            )
+            sys.exit(1)
+        criteria_total = len(criteria)
+        criteria_passed = sum(
+            1 for c in criteria if isinstance(c, dict) and c.get("verdict") == "PASS"
+        )
+        derived_evidence = []
+        for c in criteria:
+            if isinstance(c, dict) and isinstance(c.get("evidence"), list):
+                derived_evidence.extend(str(x) for x in c["evidence"])
+        v_evidence = derived_evidence
+        derived_concl_ids = sorted({
+            int(re.sub(r"\D", "", str(c.get("bdd"))))
+            for c in criteria
+            if isinstance(c, dict) and str(c.get("bdd", "")).strip()
+        })
+
+    # 3b. Header 系统字段强校验（BDD-5）——**移至非 legacy 现算之后**：
+    #     非 legacy 时上一步已由 `criteria` 现算三值；legacy 保留旧口径（读文件值）。
     if not isinstance(criteria_total, int) or isinstance(criteria_total, bool):
         sys.stderr.write("GATE JUDGE-VERDICT: criteria_total 缺失或非整数\n")
         sys.exit(1)
@@ -532,8 +568,11 @@ def main():
         sys.stderr.write(
             f"GATE JUDGE-VERDICT: criteria_total({criteria_total}) != P1 BDD 标题数({len(p1_ids)})\n")
         sys.exit(1)
-    concl_ids = sorted({int(m) for m in re.findall(
-        r"^\s*-\s*(?:PASS|FAIL|NEEDS-REVISION)\s+BDD-([0-9]+)\s*:", verdict_text, re.M)})
+    if derived_concl_ids is not None:
+        concl_ids = derived_concl_ids
+    else:
+        concl_ids = sorted({int(m) for m in re.findall(
+            r"^\s*-\s*(?:PASS|FAIL|NEEDS-REVISION)\s+BDD-([0-9]+)\s*:", verdict_text, re.M)})
     if set(concl_ids) != p1_ids:
         sys.stderr.write(
             f"GATE JUDGE-VERDICT: 结论编号集({concl_ids}) != P1 BDD 全集({sorted(p1_ids)})——零挑验违约（含已 PASS 项须全部重验）\n")
@@ -561,10 +600,14 @@ def main():
     #    实测分叉点：judge 原判据把 `(v0.99.0)` 当路径（无"扩展名以字母开头"约束），
     #    而 PASS 行侧不认 ⇒ 同一概念两套口径。现判据来自 agate_common，不可能再分叉。
     concl_refs = []
-    for line in verdict_text.splitlines():
-        if not _CONCLUSION_RE.match(line):
-            continue
-        concl_refs.extend(extract_conclusion_refs(line))
+    if _non_legacy:
+        # criteria 的 evidence 即结论证据（系统字段）；引用对称天然成立。
+        concl_refs = [str(r) for r in v_evidence]
+    else:
+        for line in verdict_text.splitlines():
+            if not _CONCLUSION_RE.match(line):
+                continue
+            concl_refs.extend(extract_conclusion_refs(line))
     rc6, err6 = _check_evidence(task_dir, v_evidence, concl_refs)
     if rc6 != 0:
         sys.stderr.write("\n".join(err6) + "\n")

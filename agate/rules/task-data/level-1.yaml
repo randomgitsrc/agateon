@@ -1,0 +1,274 @@
+# level-1.yaml — 任务数据契约 第 1 级（TAG0050 批 A1；发布后冻结）
+#
+# 快照通过 extends 链合并后自成一体（本文件 extends: null）。冻结规则（设计 §2.1）：
+#   1. 快照文件冻结：LF 归一 sha256 必须等于 LEVELS.yaml 登记值；改已发布/新增未登记 → consistency ERROR。
+#   2. 代码语义冻结：本文件引用的名字（要求项键 / render 种类 / derive 算子 / 绊线 id /
+#      判据 id）一经发布即冻结，要改行为须起新名字并由新一级快照引用。
+#   3. 新增或收紧要求时登记新一级（level-2.yaml，extends: 1），避免在途任务被追溯。
+#
+# 说明：批 A1 仅消费 requires.judge / requires.evidence_ref；其余键为后续批次
+# （B/C/D/E/F）的契约数据，随本快照一并冻结登记。
+level: 1
+extends: null
+
+# 要求项：requirement_active(task, name, phase) == snapshot(level(phase)).requires[name]。
+# level(phase) 为 None（legacy）时，消费方走旧逻辑，不读本表。
+requires:
+  judge: true          # 批 A1：非 legacy 任务的 judge 复核强制（取代 judge.enabled / created 日期门槛）
+  evidence_ref: true   # 批 A1：P6 PASS 条目证据引用强制（取代 created ≥ 截止日）
+  prod_touched: true   # 批 C：主产出 prod_touched 字段必填
+  results: true        # 批 D：P6 results 结构化（GAP-1 闭合：非 legacy 强制，随契约单源）
+
+# 各阶段主产出（批 C 消费；设计 §4）
+primary_outputs:
+  P1: P1-requirements.md
+  P2: P2-design.md
+  P3: P3-test-cases.md
+  P4: P4-implementation.md
+  P5: P5-test-results/unit.md
+  P6: P6-acceptance.md
+  P6.5: P6.5-judge-verdict.md
+  P7: P7-consistency.md
+  P8: P8-release.md
+
+# 阶段全集（批 F 消费；设计 §7）。GAP-4 裁定（2026-10-08）：排除 P0（立项）与
+# P6.5（judge 步骤，非任务计划阶段）——与既有 `phases: [P1..P8]` 语义一致。
+phase_universe: [P1, P2, P3, P4, P5, P6, P7, P8]
+
+# UI 维度契约（批 F 消费；设计 §7）。必填维度由 `shape` 决定（在快照中定义）。
+# 判定：对每个 slot，`dimensions` 中至少有一个 slot 内的维度名被声明（须带 status）。
+# `shape` 经 `_canonical_shape` 归一（布局型→layout 等）。
+ui_design:
+  shape_dimensions:
+    layout:
+      - [布局]
+      - [交互]
+      - [视觉]
+    render_component:
+      - [渲染正确性, 动效时序]
+    temporal_effects:
+      - [动效时序]
+
+# P8 交付声明契约（批 F 消费；设计 §7 / F12）。gate 读本节判定结构化 `delivery`。
+delivery:
+  required: [method]
+  none_requires_reason: true
+  non_none_requires_ref: true
+
+# 裁剪声明契约（批 F 消费；设计 §7 / RM-AG0087）。gate 读本节判定 `pruned` 条目必填字段。
+pruned:
+  required_fields: [phase, reason, risk]
+
+# 任务 ID 模式（与 agate_common.TASK_ID_RE 同源；设计 §2.2）
+task_id_pattern: "^[A-Z]+[0-9]+$"
+
+# .state.yaml 契约（批 A3 消费；设计 §2.7）
+state:
+  status_is_system: true
+  fields:
+    phase: {writer: agent, required: true}
+    cancelled: {writer: agent, optional: true}
+    meta: {writer: agent, optional: true}
+
+# 逐文件字段契约（批 B 消费；设计 §3.1）。写入工具 / gate 同源读取本节。
+files:
+  P6-acceptance.md:
+    fields:
+      results:
+        writer: agent
+        required: true
+        key: bdd
+        render: results_table
+        schema:
+          type: array
+          items:
+            type: object
+            required: [bdd, verdict, evidence]
+            additionalProperties: false
+            properties:
+              bdd: {type: string, pattern: "^[0-9]+[a-z]?$"}
+              verdict: {enum: [PASS, FAIL]}
+              evidence: {type: array, minItems: 1, items: {type: string}}
+              vision: {type: string}
+              manual_review: {type: string}
+      pass: {writer: system, derive: "count(results, verdict == PASS)"}
+      fail: {writer: system, derive: "count(results, verdict == FAIL)"}
+      prod_touched: {writer: agent, required: true}
+      prod_touched_detail: {writer: agent, required_if: "prod_touched == true"}
+  P7-consistency.md:
+    fields:
+      # cso F-4（2026-10-09）：P7 计数登记为系统字段（设计 §3.3/§6「所有计数都是系统字段」）。
+      # derive 覆盖**结构化 findings**（按 severity 计）；权威门禁 `_gate_p7_structured` 另
+      # 现算 open findings + 正文绊线（F2：汇总值盖不住），本字段供 md-field-get 消费方
+      # （如 agate-extract-context）读取，不再信任 agent 手写的标量。
+      blocker_count: {writer: system, derive: "count(findings, severity == blocker)"}
+      deviation_critical_count:
+        {writer: system, derive: "count(findings, severity == deviation_critical)"}
+
+# 声明文件（批 B/C/E 消费；§3.6 / §6）：缺 frontmatter / 缺 prod_touched 判 ERROR 的作用面，
+# 同时是批 E 跨文件声明聚合面。GAP-8 闭合（2026-10-08）：按设计 §6 扩展为 glob 模式，覆盖
+# 各阶段主产出、`*-review.md`、`P4-implementation-*.md`、`P4-implementation/**/*.md`；
+# 删除设计外的 `declaration_globs` 键（单源回归设计）。
+declaration_files:
+  - P1-requirements.md
+  - P2-design.md
+  - P3-test-cases.md
+  - P4-implementation.md
+  - P5-test-results/unit.md
+  - P6-acceptance.md
+  - P6.5-judge-verdict.md
+  - P7-consistency.md
+  - P8-release.md
+  - "*-review.md"
+  - "P4-implementation-*.md"
+  - "P4-implementation/**/*.md"
+
+# 声明字段契约（批 E 消费；设计 §6）。声明可写在任意声明文件的 frontmatter 里，由 gate
+# 跨文件聚合；写入工具按 `id_prefix` 自动编号，ID 格式 `<相对路径去 .md>:<前缀><n>`。
+declaration_fields:
+  need_confirm:
+    key: id
+    id_prefix: NC
+    schema:
+      type: array
+      items:
+        type: object
+        required: [id, text]
+        additionalProperties: true
+        properties:
+          id: {type: string}
+          text: {type: string}
+          status: {type: string}
+          resolution: {type: string}
+  suggest:
+    key: id
+    id_prefix: SG
+    schema:
+      type: array
+      items:
+        type: object
+        required: [id, text]
+        additionalProperties: true
+        properties:
+          id: {type: string}
+          text: {type: string}
+  scope_plus:
+    key: id
+    id_prefix: SP
+    schema:
+      type: array
+      items:
+        type: object
+        required: [id, text]
+        additionalProperties: true
+        properties:
+          id: {type: string}
+          text: {type: string}
+  scope_resolved:
+    key: id
+    schema:
+      type: array
+      items:
+        type: object
+        required: [id]
+        additionalProperties: true
+        properties:
+          id: {type: string}
+          note: {type: string}
+  design_gaps:
+    key: id
+    id_prefix: DG
+    schema:
+      type: array
+      items:
+        type: object
+        required: [id, text]
+        additionalProperties: true
+        properties:
+          id: {type: string}
+          text: {type: string}
+  design_gap_reviews:
+    key: gap
+    schema:
+      type: array
+      items:
+        type: object
+        required: [gap, verdict, checked_against, basis]
+        additionalProperties: true
+        properties:
+          gap: {type: string}
+          verdict: {type: string}
+          checked_against: {type: array}
+          basis: {type: string}
+          note: {type: string}
+  code_map:
+    key: file
+    schema:
+      type: array
+      items:
+        type: object
+        required: [file, status]
+        additionalProperties: true
+        properties:
+          file: {type: string}
+          status: {type: string}
+          reason: {type: string}
+  code_map_reviewed:
+    key: file
+    schema:
+      type: array
+      items:
+        type: object
+        required: [file]
+        additionalProperties: true
+        properties:
+          file: {type: string}
+  findings:
+    key: id
+    id_prefix: F
+    schema:
+      type: array
+      items:
+        type: object
+        required: [id, severity, text, status]
+        additionalProperties: true
+        properties:
+          id: {type: string}
+          severity: {type: string}
+          text: {type: string}
+          status: {type: string}
+          resolution: {type: string}
+          evidence: {type: string}
+
+# 正文绊线（批 B 消费；设计 §3.6）。T1 的标记表**不含 PROD_TOUCHED**——它由 T4
+# 单独承担（唯一安全门，设计 §3.1 第 3 点；避免两条路径判同一件事）。
+traps:
+  T1:
+    kind: positive_declaration_in_prose
+    markers:
+      - SCOPE+
+      - SCOPE_RESOLVED
+      - DESIGN_GAP
+      - DESIGN_GAP_REVIEWED
+      - NEED_CONFIRM
+      - SUGGEST
+      - BLOCKER
+      - DEVIATION-CRITICAL
+      - CODE_MAP_UPDATED
+      - CODE_MAP_EXEMPT
+    default_action: error
+    e3_sampling_required_before_error: true
+    downgrade:
+      files: [P7-consistency.md, P8-release.md]
+      action: warning
+      requires_field_write: true
+  T2:
+    kind: bdd_heading_format
+    default_action: error
+  T3:
+    kind: strict_verdict_line_in_prose
+    default_action: error
+  T4:
+    kind: prod_touched_safety_gate
+    single_source: markers.yaml
+    default_action: abort

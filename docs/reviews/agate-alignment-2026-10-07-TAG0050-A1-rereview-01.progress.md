@@ -1,0 +1,16 @@
+- 开始复核 TAG0050 A1 rereview; HEAD=1d5aab2; 工作区含未提交 A1 改动
+- F3 复现: current_level=2 + 存量 level-1 非legacy → rc=0 放行 ✓；level=2 未登记? (2已登记→放行)；level=3 >current → fail-closed
+- 读 P4-dispatch-context-protocol-alignment-review-A1-rereview.md（F1-F7 对照）
+- 读 protocol-alignment-review.md 角色定义 + SELF-GATE.md
+- 读原审查 agate-alignment-review-2026-10-07-TAG0050-A1.md（A1/A2/A3/A4/A8 MISALIGNED）
+- git diff: agate-next.py 已加 requirement_active(F1)；pre-commit-gate.py 加 _rerun_gates_for_staged_outputs(F2)；agate_common._level_registration_errors 去掉 lvl==current(F3)；WORKFLOW.md/SELF-GATE.md/state-machine.md 已改(F4/F5)
+- F3 复现（仓外 /tmp/opencode/f3check）: current_level=2 + 存量 level-1 → check-events rc=0 放行；level=3 未登记 → rc=1 fail-closed
+- 全量 pytest（仓外副本 tag0050_rr）: 40 failed / 2712 passed / 3 skipped；失败文件与 A1 前一致（无新回归）
+- 测试实跑: test_tag0050_a0_a1_ledger.py 26 passed；test_pre_commit_hook.py 61 passed；migrate 9 passed；dispatch_context_warning+state_yaml_check 4 passed
+- consistency: 0 ERROR / 411 WARNING（含本次 rereview progress 文件）
+- ruff: All checks passed；check-platform-assumptions 新增行 0 命中
+- F2 复现（/tmp/opencode/f2scratch）: 非legacy+暂存P6产出+HEAD=P7 → 重跑P6 gate 拦截 rc=1；legacy → 仅 WARNING rc=0
+- F3 relocated 复现: 新目录 level=2≠current=1 → pre-commit 拦截 rc=1；level=1 → 放行 rc=0
+- R6（干净 clone corpus + A1 after）: 39 legacy 任务 0 差异 rc=0；脏 corpus rc=1；删 D12 rc=1
+- CHECK16 负向: 新增未登记 level-2 → ERROR rc=1；篡改 level-1 → ERROR rc=1
+- 真实仓库 git status 仍 34 行（仅新增本 progress 文件），未写仓

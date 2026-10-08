@@ -250,6 +250,9 @@ set 端权限做的是**防"无心"，不防"恶意"**：
 ### 7.2 三维权限
 
 1. **角色维度**：`status: approved` 只认 review/judge；`agent` 字段不可被 set 改写（防伪造身份）。
+   > ⚠️ **已被 TAG0050 取代（2026-10-08）**：`agent` 拒写已解除——TAG0050 批 G2 的七操作规格
+   > 要求 `set agent` 可写（引导型 CLI 权限非安全边界，依据 ADR-014；见
+   > `docs/design-notes/design-tag0050-task-data-contract.md` §3）。`status` 的角色白名单仍保留。
 2. **阶段维度**：P1 阶段不能 set P2 字段（防越界污染）。
 3. **文件维度**：P1-review.md 的 status 只能 set 进 review 文件，不能 set 进 requirements 文件。
 

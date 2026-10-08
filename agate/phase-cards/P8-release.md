@@ -68,7 +68,8 @@ P8-release.md 中的**临时资源清单**是 releaser→主 Agent 的交接文�
 P8-release.md 必须包含：
 - `bump_type: major / minor / patch`
 - `delivery` 字段——交付方式声明（P8 为**交付收尾**，须声明交付方式；缺失 → `check-gate.py P8` exit 1）。
-  合法取值集合设计未定（见 P4-implementation-batch4.md `[DESIGN_GAP]`），当前只查留痕存在、内容任意放行
+  **非 legacy 任务**（TAG0050 批 F / F12）为**结构化** `delivery: {method, ref, reason}`：`method`
+  非空；`method: none` 时 `reason` 必填；`method ≠ none` 时 `ref` 至少 1 项。legacy 任务保留子串判定
 - `debt_check: none / reviewed`——债务清单确认留痕（TAG0001 Phase 3）：`none` = 本次无关注项（合法选项，不视为失败）；`reviewed` = 已核对，建议正文附条目 id 清单。只查留痕存在，不查内容达标、不阻断发布
 - 版本号变更确认（version 文件已修改）
 - CHANGELOG [Unreleased] → 新版本号

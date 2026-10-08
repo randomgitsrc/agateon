@@ -1,0 +1,20 @@
+start rereview G2 2026-10-08T20:09:19+08:00
+- 读 dispatch-context G2-rereview + 角色定义 + SELF-GATE.md + 上一轮 G2 审查
+- HEAD=54a814fc；G2 改动未提交；status 30 项（含 R1-R7 整改面）
+- 仓外副本 /tmp/opencode/G2rerev/agateon（rsync 工作树 + .git，排除 site/node_modules/.opencode）
+- R1 独立验证（仓外 scratch git repo + 真 hook）：缺 prod_touched → rc=1，输出含『缺 prod_touched』+『agate-md-field-set.py set prod_touched』；true 非 PAUSED → rc=1 + 中止
+- R1 负向证据：副本内把 'if "prod_touched" not in fm:' 改 'if False and ...' → test_bdd_52 转红（断言『须报缺字段』失败，rc 仍 1 但来自 P4 gate）⇒ 用例具判别力
+- GAP-2 独立验证（仓外 scratch）：P8-release.md 缺 frontmatter → hook rc=1 + 『非 legacy 任务的声明文件缺 frontmatter 块』
+- GAP-2 负向：副本内把 F10 分支改 'if False and ...' → test_bdd_47 / test_bdd_47b / test_tag0050_r2_declaration_files_snapshot_effective 三用例转红
+- R2：check-frontmatter._declaration_files 与 pre-commit-gate._declaration_files 均读快照 declaration_files；AGATE_ROOT 指向副本时 current_level=1，declaration_files=[P1,P2,P6,P6.5,P7,P8]，primary_outputs.P4=P4-implementation.md，requires.prod_touched=True
+- grep AGATE_PRECOMMIT_GATE：仅剩注释，无跳过逻辑/setdefault
+- R3：test_bdd_48 断言 render 修复命令 + LF/CRLF 双侧 + windows_smoke（diff 确认）
+- R4：test_bdd_53 端到端 hook；BDD-50 守护改机械判据（_RECURSIVE_SCHEMA_DEF 正则 + 白名单 agate-frontmatter-check.py + 门控断言）
+- R5：README :164 命令集 → init/validate/get/set/unset/explain/list/show（diff 确认）
+- R6：UPGRADING 加『未发布 — TAG0050 批 G2』节；design-md-field-set.md §7.2 加注已被 TAG0050 取代（diff 确认）
+- R7：P4-implementation-G2 §4 删精确数字 + e3_sample.py 入库（跑通 rc=0，total_hits=483 浮动）；§6 consistency 改浮动口径；P4-progress 自陈修正
+- 夹具检查：test_pre_commit_hook.py diff 仅新增 frontmatter/prod_touched 内容 + 1 新用例，无任何断言放宽
+- 回归：副本全量 pytest unit+integration = 8 failed/2721 passed/3 skipped；同 8 用例在基线（stash agate/）亦全红 ⇒ 无新回归
+- consistency（真仓）= 0 ERROR / 411 WARNING（浮动）；count-tests=2835；platform=0；ruff clean
+- 新问题观察①：check-frontmatter._declaration_files 用 current_level，pre-commit-gate 用 task_level——当前仅 level 1 无差异，未来 level≥2 或在途任务可能口径分叉（LOW）
+- 新问题观察②：prod_touched 修复命令行尾附中文注『（若未触达生产）』，整行照抄不可执行（LOW，BDD-52 仅要求『附修复命令』）
