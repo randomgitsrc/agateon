@@ -626,3 +626,71 @@ CI_RC=0                    # ← 不再报该 FAIL，CI 场景通过
 - `python3 ~/.agate/current/agate/scripts/check-debt.py agate-workspace/debt/tech-debt.md` → RC=0。
 - `bash agate/tests/scripts/count-tests.sh` → `总计：2867`（未增删用例数）。
 - 状态标记：`[PROD_NOT_TOUCHED]`（仅编辑测试文件 + 债务/复盘登记，未接触生产）。
+
+## P8 CI 修复批 3：push-to-main 协议根选择真缺陷（合并后 main CI 红，2026-10-09）
+
+- 派发：`P8-dispatch-context-implementer-ci-fix3.md`（PR #408 已 merge、v0.80.0 tag/Release 已发布后 main CI 红）。
+- 缺陷（CI 实测 `gh run view 37851356052`）：`gate-backstop` FAIL（7 提交）+ `pytest(ubuntu/windows)`
+  FAIL（`test_bdd_23_pr_replay_passes` / `test_bdd_24_push_replay_passes`）。
+- 根因：`agate-ci-verify.py::_resolve_protocol` 用 `_merge_base(repo)`（= merge-base HEAD
+  origin/<默认分支>）选协议根；push 到 main 时 HEAD 就是 origin/main ⇒ merge-base = **HEAD 自己**
+  ⇒ 用刚合并的新协议回放历史提交（卡片 hash 按旧协议注入 ⇒ hash mismatch；测试夹具按旧协议非良构）。
+  主流程已算出 `base`（PR：`merge-base(args.base, head)`；push：`args.base`）却未传入。
+
+### 实现
+
+- `agate/scripts/agate-ci-verify.py`：`_resolve_protocol(repo, agate_root_env, base)` 增 `base` 入参；
+  协议根改由**回放基准**推导——协议仓库（`AGATE_ROOT` 所在仓库 / 仓库本体）中 `merge-base(base, HEAD)`
+  处的 `agate/`；`base` 不在协议仓库或 worktree 失败 → 回退当前 HEAD 的协议根，note 显式写明回退
+  （新增 `_fallback_note`，不得静默）。调用点传入主流程的 `base`。docstring 同步。
+- `agate/tests/integration/test_tag0050_ci_replay.py`：`_task_commit_repo` 改为**当前协议良构非 legacy
+  任务**（账本首行 `task_created` 等级 1、`.state.yaml` 去系统字段 `status`）；新增 `legacy=True`
+  供 §8-12 legacy 用例（BDD-26b）保留 legacy 语义。
+- `agate/tests/unit/test_agate_ci_verify.py`：新增 2 条直接回归用例——
+  `test_push_to_main_protocol_root_uses_base_not_head`（分支尖 == origin/main，断言协议根取 base 处旧协议）
+  + `test_resolve_protocol_falls_back_when_base_absent`（base 不在协议仓库 → 回退 + note 非静默）。
+- `agate/scripts/README.md`：`agate-ci-verify.py` 行的协议版本描述同步为「回放基准 `base` 处」。
+
+### 改前红 / 改后绿（仓外副本 `/tmp/opencode/tag0050-fix3-repro`，忠实复现 push-to-main）
+
+构造：`git clone` 本仓 → checkout `ef843019`（main）→ `git remote set-head origin main`
+（origin/main == HEAD，模拟 push 到 main）；`--push --base 720c97d3`（= push 的 `before`，旧 main）。
+
+改前（HEAD 的 v0.80.0 协议，`git checkout -- agate/scripts/agate-ci-verify.py` 还原）：
+```
+$ python3 agate/scripts/agate-ci-verify.py --push --base 720c97d33f7eff540c41963aa7049794c6a91a76
+回放: 23 个非合并提交（协议：merge-base ef843019 的 agate/）
+    GATE: P3-dispatch-context-test-designer.md 卡片内容与 CLI 输出不一致（hash mismatch）
+    GATE: P8-dispatch-context-implementer-fix.md 卡片内容与 CLI 输出不一致（hash mismatch）
+回放完成：23 个提交，失败 7 个，耗时 19.58s
+OLD_RC=1
+```
+改后（换入修复脚本）：
+```
+$ python3 agate/scripts/agate-ci-verify.py --push --base 720c97d3...
+回放: 23 个非合并提交（协议：回放基准 720c97d3 的 agate/）
+回放完成：23 个提交，失败 0 个，耗时 16.42s
+PASS: 逐提交回放全部通过
+NEW_RC=0
+```
+
+### 新增回归用例负向控制（旧逻辑转红）
+
+临时把 `_resolve_protocol` 的 `rev` 还原为 `_merge_base(proto_repo)` / `_merge_base(repo)`（保留 3 参签名）：
+```
+$ pytest ...::test_push_to_main_protocol_root_uses_base_not_head -q
+E   AssertionError: push-to-main：协议根须取 base 处协议（旧），而非 HEAD 新协议——实际取到 '# NEW protocol\n'
+1 failed
+$ 恢复 → diff 确认 RESTORED_OK
+```
+
+### 自查（自查 ≠ gate）
+
+- `timeout 900s python3 -m pytest agate/tests/integration/test_tag0050_ci_replay.py agate/tests/unit/test_agate_ci_verify.py -q` → **26 passed**。
+- `python3 agate/scripts/check-protocol-consistency.py` → **0 ERROR / 410 WARNING**（基线），RC=0。
+- `python3 agate/scripts/check-platform-assumptions.py` → RC=0（无命中）。
+- `bash agate/tests/scripts/count-tests.sh` → **2869**（上轮 2867 + 2 新增用例）。
+- `ruff check`（改动 3 文件）→ All checks passed。
+- 约束遵守：只改 `agate-ci-verify.py` + 其测试/夹具（+ 该脚本 README 描述同步）；未改 CI workflow；平台无关。
+- 登记：**DEBT0059**（`agate-workspace/debt/tech-debt.md`）+ `retrospective.md` 补机制缺口/执行错误各 1 条。
+- [PROD_NOT_TOUCHED] 仅本 checkout 改代码/测试 + `/tmp/opencode` 仓外副本 + pytest tmp_path；未接触生产环境。

@@ -15,9 +15,16 @@
 → `reset --soft C^1` → 依次跑 `pre-commit-gate.py` + `commit-msg-self-gate.py <msgfile>`；
 任一 rc ≠ 0 → FAIL + 输出提交 SHA + 原因。回放模式 `AGATE_REPLAY=1`。
 
-回放协议版本（设计 §2.4）：② 未固定但**仓库本身含协议本体**（agateon-like）→ merge-base
-处的 `agate/`；或 `AGATE_ROOT` 环境提供协议 → 其仓库 merge-base 处的 `agate/`；
+回放协议版本（设计 §2.4）：② 未固定但**仓库本身含协议本体**（agateon-like）→ **回放基准
+`base`** 处的 `agate/`（= 协议仓库中 `merge-base(base, HEAD)` 处的 `agate/`）；或
+`AGATE_ROOT` 环境提供协议 → 其仓库中同一 `merge-base(base, HEAD)` 处的 `agate/`；
 ③ 其他未固定版本的项目 → FAIL（提示写 `.agate-version`）。
+**为何用 `base` 而非 `merge-base HEAD origin/<默认分支>`**：push 到默认分支时 HEAD 就是
+`origin/<默认分支>`，`merge-base` = **HEAD 自己** ⇒ 会用刚合并的新协议回放历史提交
+（卡片 hash 按旧协议注入 ⇒ 误报 FAIL）。`base` 是主流程算好的回放基准（PR = merge-base；
+push = `before`），push-to-main 时 `merge-base(base, HEAD)` = `base`（旧协议）。
+`base` 不在协议仓库（如测试夹具的合成仓库）或 worktree 建立失败 → 回退当前 HEAD 的
+`agate/` 并在 note 中写明回退原因（不得静默）。
 ① 按逐提交 `.agate-version` 定位/安装对应版本目录**未实现**（依赖 CI 安装各版本，见
 `P4-implementation-G1.md` 的 DESIGN_GAP）——`.agate-version` 目前只用于「单调不降」检查
 （降级判 FAIL），**不用于选协议根**。
@@ -167,27 +174,41 @@ def _make_protocol_worktree(repo, rev):
     return wt
 
 
-def _resolve_protocol(repo, agate_root_env):
+def _fallback_note(base):
+    """协议根回退（`base` 不在协议仓库）时的 note——显式写明回退，不得静默。"""
+    ref = (base or "")[:8] or "缺省"
+    return f"当前协议根（回放基准 {ref} 不在协议仓库，回退当前 HEAD 的 agate/）"
+
+
+def _resolve_protocol(repo, agate_root_env, base):
     """回放协议根 → (protocol_root, cleanup, note)。
+
+    协议根由**回放基准 `base`** 推导：协议仓库中 `merge-base(base, HEAD)` 处的 `agate/`。
+    `base` 已是 HEAD 的祖先时等价于 `base` 本身（push-to-main：`base` = push 的 `before`，
+    即旧协议——这是本函数改用 `base` 而非 `merge-base HEAD origin/<默认分支>` 的原因）。
+    `base` 不在协议仓库（如测试夹具的合成仓库）或 worktree 建立失败 → 回退当前 HEAD 的
+    `agate/` 并在 note 中写明回退原因（不得静默）。
 
     `cleanup` 为 `(proto_repo, worktree_path)` 或 None——协议 worktree 建在
     `proto_repo`（AGATE_ROOT 所在仓库 / 仓库本体）中，故清理必须回到**同一个仓库**执行。
     """
-    # ② agateon-like：AGATE_ROOT 环境提供协议 → 用其仓库 merge-base 处的 agate/
+    # ② agateon-like：AGATE_ROOT 环境提供协议 → 用其仓库中 merge-base(base, HEAD) 处的 agate/
     if agate_root_env and os.path.isdir(os.path.join(agate_root_env, "scripts")):
         proto_repo = _agate_root_repo(agate_root_env)
-        mb = _merge_base(proto_repo)
-        if mb:
-            wt = _make_protocol_worktree(proto_repo, mb)
+        rev = _merge_base(proto_repo, base, "HEAD") if base else ""
+        if rev:
+            wt = _make_protocol_worktree(proto_repo, rev)
             if wt:
-                return os.path.join(wt, "agate"), (proto_repo, wt), f"merge-base {mb[:8]} 的 agate/"
-        return agate_root_env, None, "AGATE_ROOT 环境"
+                return os.path.join(wt, "agate"), (proto_repo, wt), f"回放基准 {rev[:8]} 的 agate/"
+        # base 无法在协议仓库解析（或 worktree 失败）→ 回退当前协议根（AGATE_ROOT 本身）
+        return agate_root_env, None, _fallback_note(base)
     if _repo_has_protocol_body(repo):
-        mb = _merge_base(repo)
-        if mb:
-            wt = _make_protocol_worktree(repo, mb)
-            if wt:
-                return os.path.join(wt, "agate"), (repo, wt), f"merge-base {mb[:8]} 的 agate/"
+        rev = (_merge_base(repo, base, "HEAD") if base else "") or "HEAD"
+        wt = _make_protocol_worktree(repo, rev)
+        if wt:
+            note = (f"回放基准 {rev[:8]} 的 agate/" if rev != "HEAD"
+                    else _fallback_note(base))
+            return os.path.join(wt, "agate"), (repo, wt), note
     return None, None, None
 
 
@@ -514,7 +535,7 @@ def main():
     if not any_ver and not _repo_has_protocol_body(repo):
         return _fail("未固定协议版本，无法可信回放；请写 .agate-version（agate: vX.Y.Z）")
 
-    protocol_root, cleanup, note = _resolve_protocol(repo, agate_root_env)
+    protocol_root, cleanup, note = _resolve_protocol(repo, agate_root_env, base)
     if not protocol_root:
         return _fail("未固定协议版本，无法可信回放；请写 .agate-version（agate: vX.Y.Z）")
 

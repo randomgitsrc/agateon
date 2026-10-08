@@ -2114,3 +2114,45 @@ source: retrospective
 created_at: 2026-10-09
 task_id: null   # 待立项；由 TAG0050 复盘登记
 ```
+
+## DEBT0059
+
+```yaml
+id: DEBT0059
+category: protocol
+title: "`_resolve_protocol` 选协议根未纳入回放基准 base——push-to-main 时 merge-base = HEAD 自己 ⇒ 用新协议回放历史提交致误报 FAIL"
+status: open
+priority: high
+evidence:
+  - ref: agate/scripts/agate-ci-verify.py
+    note: >-
+      TAG0050 批 A2 的 `_resolve_protocol` 用 `_merge_base(repo)`（= merge-base HEAD
+      origin/<默认分支>）选协议根；主流程已算出回放基准 `base`（PR = merge-base，
+      push = `before`）却未传入
+  - ref: .github/workflows/protocol-tests.yml
+    note: >-
+      push 到 main 时 `--push --base <before>`；HEAD == origin/main ⇒ merge-base = HEAD
+      自己 ⇒ 用刚合并的新协议回放历史提交（卡片 hash 按旧协议注入 ⇒ hash mismatch）
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P4-progress.md
+    note: >-
+      合并后 main 的 CI 实测（run 37851356052）：gate-backstop 7 提交 FAIL + pytest
+      test_bdd_23/24 FAIL；仓外副本复现 OLD rc=1（7 FAIL）→ NEW rc=0
+impact: >-
+  push 到受保护分支（合并即触发）时 CI 兜底恒误报 FAIL：回放用「合并后的新协议」判定
+  「按旧协议书写」的历史提交，卡片 hash / 夹具良构性均按新协议重判 ⇒ 合并后 main 必红，
+  且与真实缺陷无关（PR run 因 merge-base 恰好=旧 main 而未暴露）。CI 兜底的「可信锚点」
+  价值被这一输入面缺口抵消。
+recommendation: >-
+  `_resolve_protocol(repo, agate_root_env, base)` 增 `base` 入参，协议根改由**回放基准**
+  推导（协议仓库中 `merge-base(base, HEAD)` 处的 `agate/`；push-to-main 时 = `before`）；
+  `base` 不在协议仓库或 worktree 失败 → 回退当前 HEAD 的协议根并在 note 写明回退原因
+  （不得静默）。测试夹具须对**当前**协议良构（非 legacy、账本首行 task_created），
+  不依赖 checkout 协议版本。
+closure_criteria:
+  - "push-to-main 场景（分支尖 == origin/main）协议根取 base 处协议，有直接回归用例（负向控制：旧逻辑转红）"
+  - "base 不在协议仓库时回退当前 HEAD 协议且 note 非静默，有回归用例"
+  - "test_bdd_23/24 在任意 checkout HEAD（分支尖或 main）下稳定 PASS"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```
