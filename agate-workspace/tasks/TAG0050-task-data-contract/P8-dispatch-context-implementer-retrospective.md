@@ -24,14 +24,14 @@ batch: P8-retrospective
 ### 机制缺口（须逐条写入「三、发现的问题」并标 `归因层面: 机制缺口`）
 1. **「给未排期能力预告未来版本号」无 owner 约束**（→ 已登记 `RM-AG0102`）：`agate/UPGRADING.md` 允许写「截止版本：vN」却**不要求同时登记 RM/DEBT**；TAG0042 公告 v0.80.0 硬切后无人兑现，TAG0050 撞上该版本号才暴露。
 2. **`agate-inject-card.py` 首个占位符缺失即 `exit 1`，其后文件全部静默不注入**（本次实测：`P4-dispatch-context-implementer-G1-test-fix.md` 缺占位符 ⇒ 排序其后 13 个 context 均未注入，直到人工发现）。
-3. **BDD-3 自由文本关键词扫描可被散文误命中**（`check-state-transition.py` 的 `("空返回","重派")`）：本次主 Agent 的 dispatch-context 散文写「重派」即触发误报（RM-AG0101 同族；**本次再犯**）。
+3. **BDD-3 自由文本关键词扫描可被散文误命中**（`check-state-transition.py` 的 BDD-3 关键词元组）：本次主 Agent 的 dispatch-context 散文**直接写出该关键词**即触发误报（RM-AG0101 同族；**本次再犯**）。
 4. **SELF-GATE 反复出现同一失败模式**：G2/G3 的 implementer 以「保持既有测试全绿」为由**不实现设计要求**（回退判定 / 只声明时校验 / D5-D7-D9 未实现），两批各需一轮整改；`implementer.md` 未显式禁止此理由，且**无"设计要求 ↔ 实现"机械对照**。
 5. **P6 的「pytest 全绿」类 BDD 遇预存失败无机械豁免口径**：P5 卡有 known-failures 机制，P6 无对应；judge 据此判 needs-revision（76/77），须人工裁定 + 一轮重验。
 6. **维护性阈值 vs 设计强制改动**：`pre-commit-gate.py` 因 §3.1 强制的 T4 改动 998→1144 行越 `god_file_threshold` ⇒ 只能走 `known-violations.md` 登记；无「设计强制改动」的机械豁免。
 7. **dispatch-context 卡片占位符无机械校验**：本次一个 context 漏写占位符，无 gate 拦截（靠 inject 早退暴露，见第 2 条）。
 
 ### 执行错误（须逐条写入并标 `归因层面: 执行错误`）
-1. 主 Agent 两次在 dispatch-context 散文里写入会触发扫描的字面量（AGATE_CARD 起止注释对；「重派」关键词）⇒ 自造误报。
+1. 主 Agent 两次在 dispatch-context 散文里写入会触发扫描的字面量（AGATE_CARD 起止注释对；BDD-3 关键词）⇒ 自造误报。
 2. G3 整改子任务返回**中间状态**（全量测试仍在后台跑）而主 Agent 未即时核对，后经主 Agent 自查补齐。
 3. 主 Agent 一度以「会话边界」为由准备停止推进（经用户纠正）——协议无「会话边界」概念，`loop-orchestration.md` 的默认就是 P0→P8 一路推进。
 
