@@ -1,0 +1,31 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 20 items
+
+agate/tests/integration/test_tag0050_evidence.py::test_bdd_56_f1_abc_tampering_turns_red PASSED [  5%]
+agate/tests/integration/test_tag0050_evidence.py::test_bdd_57_ignored_evidence_errors PASSED [ 10%]
+agate/tests/integration/test_tag0050_evidence.py::test_bdd_58_pass_log_nonzero_exit_errors PASSED [ 15%]
+agate/tests/integration/test_tag0050_evidence.py::test_bdd_59_run_ref_sha256_mismatch_errors PASSED [ 20%]
+agate/tests/integration/test_tag0050_evidence.py::test_bdd_60_extract_context_counts_equal_computed PASSED [ 25%]
+agate/tests/integration/test_tag0050_evidence.py::test_gap6_d5_duplicate_content_warns_not_blocked PASSED [ 30%]
+agate/tests/integration/test_tag0050_evidence.py::test_gap6_d7_evidence_json_fail_vs_results_pass PASSED [ 35%]
+agate/tests/integration/test_tag0050_evidence.py::test_gap6_d9_reuse_blocked_from_results PASSED [ 40%]
+agate/tests/integration/test_tag0050_evidence.py::test_gap7_provenance_body_audit_skipped_for_non_legacy PASSED [ 45%]
+agate/tests/integration/test_tag0050_evidence.py::test_blocker1_non_legacy_criteria_pass_exit_0 PASSED [ 50%]
+agate/tests/integration/test_tag0050_evidence.py::test_blocker1_non_legacy_criteria_missing_exit_1 PASSED [ 55%]
+agate/tests/integration/test_tag0050_evidence.py::test_minor2_d8_screenshot_requires_vision_when_available PASSED [ 60%]
+agate/tests/integration/test_tag0050_evidence.py::test_minor2_d8_gap_requires_manual_review PASSED [ 65%]
+agate/tests/integration/test_tag0050_evidence.py::test_minor2_d8_screenshot_detection_is_structural PASSED [ 70%]
+agate/tests/integration/test_tag0050_evidence.py::test_minor3_d7_json_shape_non_list_errors PASSED [ 75%]
+agate/tests/integration/test_tag0050_evidence.py::test_minor3_d7_json_shape_non_dict_element_errors PASSED [ 80%]
+agate/tests/integration/test_tag0050_evidence.py::test_minor3_d7_multi_json_conflict_errors PASSED [ 85%]
+agate/tests/integration/test_tag0050_evidence.py::test_minor3_d7_reverse_results_fail_evidence_pass PASSED [ 90%]
+agate/tests/integration/test_tag0050_evidence.py::test_cso_f1_run_event_missing_sha256_fail_closed PASSED [ 95%]
+agate/tests/integration/test_tag0050_evidence.py::test_cso_f3_run_empty_log_errors PASSED [100%]
+
+============================== 20 passed in 1.56s ==============================
+EXIT_CODE: 0

@@ -1,0 +1,24 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 13 items
+
+agate/tests/unit/test_tag0050_declarations.py::test_bdd_61_f2_blocker_count_not_covering_prose PASSED [  7%]
+agate/tests/unit/test_tag0050_declarations.py::test_bdd_62_cross_file_declaration_aggregation PASSED [ 15%]
+agate/tests/unit/test_tag0050_declarations.py::test_bdd_63_parallel_ids_no_collision PASSED [ 23%]
+agate/tests/unit/test_tag0050_declarations.py::test_bdd_64_set_mismatch_or_dangling_errors PASSED [ 30%]
+agate/tests/unit/test_tag0050_declarations.py::test_bdd_65_resolved_missing_evidence_errors PASSED [ 38%]
+agate/tests/unit/test_tag0050_declarations.py::test_bdd_66_followup_debt_backref_required PASSED [ 46%]
+agate/tests/unit/test_tag0050_declarations.py::test_gap8_review_file_requires_frontmatter PASSED [ 53%]
+agate/tests/unit/test_tag0050_declarations.py::test_gap8_p4_implementation_glob_frontmatter PASSED [ 61%]
+agate/tests/unit/test_tag0050_declarations.py::test_minor4_verdict_enum_out_of_range_errors PASSED [ 69%]
+agate/tests/unit/test_tag0050_declarations.py::test_minor4_basis_enum_out_of_range_errors PASSED [ 76%]
+agate/tests/unit/test_tag0050_declarations.py::test_cso_f2_p4_implementation_subdir_requires_frontmatter PASSED [ 84%]
+agate/tests/unit/test_tag0050_declarations.py::test_cso_f2_nested_subdir_requires_frontmatter PASSED [ 92%]
+agate/tests/unit/test_tag0050_declarations.py::test_cso_f4_p7_blocker_count_is_system_field PASSED [100%]
+
+============================== 13 passed in 0.99s ==============================
+EXIT_CODE: 0

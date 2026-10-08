@@ -1,0 +1,21 @@
+# TAG0050 P6 post-test 环境残留检查（强制步骤）
+# 方式：验收测试/脚本跑完后比对真实仓库与副本的 git status --porcelain，确认无测试临时资源、无脚本写副作用残留。
+
+$ git status --porcelain   # agateon 真实仓库
+M  agate-workspace/tasks/TAG0050-task-data-contract/.state.yaml
+?? agate-workspace/tasks/TAG0050-task-data-contract/P6-acceptance.md
+?? agate-workspace/tasks/TAG0050-task-data-contract/P6-dispatch-context-verifier.md
+?? agate-workspace/tasks/TAG0050-task-data-contract/P6-evidence/
+
+# 说明：仅本 P6 自身产出——.state.yaml（主 Agent 更新）、P6-dispatch-context-verifier.md（主 Agent 写）、P6-evidence/（verifier 产出）。
+# 无 pytest tmp_path 残留（测试临时资源随 fixture 自动清理）、无 r6-differential/consistency 写副作用残留。
+
+$ git -C /tmp/opencode/tag0050-r6-p6 status --porcelain   # agateon 差分副本
+(空 = 干净)
+
+$ git -C /tmp/opencode/peekview-r6-p6 status --porcelain   # peekview 差分副本
+(空 = 干净)
+
+结论：无残留。
+
+EXIT_CODE: 0

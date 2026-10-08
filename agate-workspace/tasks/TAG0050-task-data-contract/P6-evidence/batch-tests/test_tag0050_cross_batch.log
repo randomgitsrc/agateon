@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 5 items
+
+agate/tests/unit/test_tag0050_cross_batch.py::test_bdd_73_each_batch_registers_snapshot PASSED [ 20%]
+agate/tests/unit/test_tag0050_cross_batch.py::test_bdd_74_legacy_diff_allowlist_twelve PASSED [ 40%]
+agate/tests/unit/test_tag0050_cross_batch.py::test_bdd_75_pytest_consistency_count PASSED [ 60%]
+agate/tests/unit/test_tag0050_cross_batch.py::test_bdd_76_baseline_reset_in_changelog PASSED [ 80%]
+agate/tests/unit/test_tag0050_cross_batch.py::test_bdd_77_new_scripts_do_not_break_existing_tests PASSED [100%]
+
+============================== 5 passed in 2.68s ===============================
+EXIT_CODE: 0

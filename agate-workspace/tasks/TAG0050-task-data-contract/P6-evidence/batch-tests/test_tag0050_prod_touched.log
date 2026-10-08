@@ -1,0 +1,17 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 6 items
+
+agate/tests/integration/test_tag0050_prod_touched.py::test_f3_forged_card_block_still_blocks PASSED [ 16%]
+agate/tests/integration/test_tag0050_prod_touched.py::test_bdd_49_fix_command_executes_and_turns_green PASSED [ 33%]
+agate/tests/integration/test_tag0050_prod_touched.py::test_bdd_52_missing_prod_touched_errors PASSED [ 50%]
+agate/tests/integration/test_tag0050_prod_touched.py::test_bdd_53_prod_touched_true_not_paused_aborts PASSED [ 66%]
+agate/tests/integration/test_tag0050_prod_touched.py::test_bdd_54_bold_marker_field_false_still_aborts PASSED [ 83%]
+agate/tests/integration/test_tag0050_prod_touched.py::test_bdd_55_negation_form_blocks_with_guidance PASSED [100%]
+
+============================== 6 passed in 1.30s ===============================
+EXIT_CODE: 0

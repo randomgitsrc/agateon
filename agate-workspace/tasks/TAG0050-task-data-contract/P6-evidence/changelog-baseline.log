@@ -1,0 +1,4 @@
+30:- **义务基线一次性重设**：批 A4 首轮机械核验（`enforced_at` / `test` / `review_output`）
+31:  使 M 占比下降，已以 `baseline.reset: {from: "60/123", to: "56/119"}` **显式重设**
+
+EXIT_CODE: 0

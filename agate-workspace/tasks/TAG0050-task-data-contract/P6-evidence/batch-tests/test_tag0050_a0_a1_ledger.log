@@ -1,0 +1,41 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 30 items
+
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_01_paused_prod_touched_persisted PASSED [  3%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_02_nonexistent_task_dir_returns_1[P7] PASSED [  6%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_02_nonexistent_task_dir_returns_1[P5] PASSED [ 10%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_02_nonexistent_task_dir_returns_1[P0] PASSED [ 13%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_03_downgrade_event_errors PASSED [ 16%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_04_second_task_created_errors PASSED [ 20%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_05_task_created_not_first_line_errors PASSED [ 23%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_06_unregistered_contract_level_errors PASSED [ 26%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_07_handwritten_low_level_new_task_errors PASSED [ 30%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_08_created_backfill_keeps_judge PASSED [ 33%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_09_judge_enabled_false_p65_still_blocks PASSED [ 36%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_10_created_backfill_keeps_evidence_ref_blocking PASSED [ 40%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_11_new_dir_without_created_event_errors PASSED [ 43%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_12_git_mv_legacy_stays_legacy PASSED [ 46%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_13_rewrite_or_delete_created_ledger_errors PASSED [ 50%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_14_legacy_done_to_p1_errors PASSED [ 53%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_15_published_snapshot_freeze PASSED [ 56%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_16_golden_fixtures_exist PASSED [ 60%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_17_task_level_above_protocol_fails_closed PASSED [ 63%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_18_legacy_output_only_prod_touched_scanned PASSED [ 66%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_19_non_legacy_staged_output_reruns_phase_gate PASSED [ 70%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_20_p7_adopted_p4_prose_gap_counted PASSED [ 73%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_21_consecutive_upgrades_per_phase_level PASSED [ 76%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_22_r6_differential_deliverable PASSED [ 80%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_f1_p6_judge_advance_uses_contract PASSED [ 83%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_f3_current_level_2_existing_level_1_passes PASSED [ 86%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_23_ledger_rename_within_task_dir_errors PASSED [ 90%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_24_ledger_moved_to_other_task_errors PASSED [ 93%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_25_task_dir_rename_with_created_event_passes PASSED [ 96%]
+agate/tests/integration/test_tag0050_a0_a1_ledger.py::test_bdd_26_git_rm_state_yaml_still_scans_prod_touched PASSED [100%]
+
+============================== 30 passed in 4.05s ==============================
+EXIT_CODE: 0

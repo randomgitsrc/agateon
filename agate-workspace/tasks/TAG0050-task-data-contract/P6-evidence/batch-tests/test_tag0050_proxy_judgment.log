@@ -1,0 +1,18 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /home/kity/oclab/agateon
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.3.0, rerunfailures-16.7, anyio-4.12.1, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 7 items
+
+agate/tests/unit/test_tag0050_proxy_judgment.py::test_bdd_67_ui_dimension_na_without_reason_errors PASSED [ 14%]
+agate/tests/unit/test_tag0050_proxy_judgment.py::test_bdd_68_reviewed_bdds_mismatch_errors PASSED [ 28%]
+agate/tests/unit/test_tag0050_proxy_judgment.py::test_bdd_69_skeleton_prose_not_treated_as_heading PASSED [ 42%]
+agate/tests/unit/test_tag0050_proxy_judgment.py::test_gap5_ui_design_missing_required_dimension_errors PASSED [ 57%]
+agate/tests/unit/test_tag0050_proxy_judgment.py::test_bdd_70_phase_set_not_closed_errors PASSED [ 71%]
+agate/tests/unit/test_tag0050_proxy_judgment.py::test_bdd_71_t2_catches_nonconforming_bdd_heading PASSED [ 85%]
+agate/tests/unit/test_tag0050_proxy_judgment.py::test_bdd_72_p8_delivery_structured PASSED [100%]
+
+============================== 7 passed in 1.22s ===============================
+EXIT_CODE: 0

@@ -1,0 +1,30 @@
+CHECK-OBLIGATIONS: WARNING OBL-P0-01: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P0-02: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P0-03: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P1-07: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P1-14: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P2-05: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P2-09: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P2-16: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P2-17: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P3-05: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P4-02: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P5-09: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P6-06: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P6-12: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P6-14: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P7-04: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P7-06: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-P8-13: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-X-20: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-X-21: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-X-23: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-X-24: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-X-25: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-X-27: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+CHECK-OBLIGATIONS: WARNING OBL-X-28: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C
+M 类占比: 56/119 = 0.4706（基线 56/119 = 0.4706）
+归宿分布: M=56 C=33 R=30（M=脚本执行 / C=命令生成 / R=强制评审）
+CHECK-OBLIGATIONS: OK（无「无归宿」项 + 无 ERROR + M 类占比不低于基线）
+
+EXIT_CODE: 0

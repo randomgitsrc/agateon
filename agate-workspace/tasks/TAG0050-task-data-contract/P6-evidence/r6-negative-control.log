@@ -1,0 +1,2 @@
+r6-differential: before=720c97d33f7eff540c41963aa7049794c6a91a76  after=/tmp/opencode/tag0050-r6-p6/agate  allow=/tmp/opencode/r6-allowlist-noD12.yaml
+r6-differential: allowlist 缺少必需规则 ['D12']（负向用例：删规则即变红）
