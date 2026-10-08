@@ -53,7 +53,7 @@ def _run_check_obligations(python_exe, script, root, cwd):
     """以 AGATE_ROOT=root 跑 check-obligations.py，返回 CompletedProcess。"""
     return subprocess.run(
         [python_exe, str(script)],
-        capture_output=True, text=True, cwd=str(cwd),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(cwd),
         env=dict(os.environ, AGATE_ROOT=str(root)),
     )
 
@@ -278,7 +278,7 @@ def test_bdd_43_r_without_review_output_errors(agate_root, agate_scripts, python
     # 端到端：真实 obligations.yaml 上同样 rc=0（缺 review_output 不阻断）
     proc = subprocess.run(
         [python_exe, str(agate_scripts / "check-obligations.py")],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
         env=dict(os.environ, AGATE_ROOT=str(agate_root)),
     )
     assert proc.returncode == 0, (

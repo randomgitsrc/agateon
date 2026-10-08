@@ -2081,3 +2081,36 @@ source: retrospective
 created_at: 2026-10-09
 task_id: null   # 待立项；由 TAG0050 复盘登记
 ```
+
+## DEBT0058
+
+```yaml
+id: DEBT0058
+category: protocol
+title: "check-platform-assumptions.py 未覆盖「subprocess text=True 却无 encoding=」类平台假设——Windows 非 UTF-8 解码失败无静态拦截"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/check-platform-assumptions.py
+    note: >-
+      R1–R5 只扫 PATH/裸 python3/单平台 symlink/临时目录字面量/裸外部工具；对
+      subprocess.run(..., text=True) 未指定 encoding= 的跨平台解码假设扫描 0 命中
+  - ref: agate/tests/unit/test_tag0050_obligations.py
+    note: >-
+      TAG0050 批 A4 红灯测试 _run_check_obligations（:54）与 BDD-43 端到端（:279）用
+      text=True 无 encoding；Windows cp1252 解码子进程非 ASCII 输出失败 ⇒ 缺陷由 PR #408
+      pytest(windows-latest) 抓出，非本地静态扫描
+impact: >-
+  测试里「text=True 无 encoding=」这类平台假设逃过静态扫描，只能在 Windows CI 运行时暴露；
+  本机（Linux，默认 UTF-8 locale）与扫描器双双静默，缺陷延迟到远端 CI 才被发现。
+recommendation: >-
+  为 check-platform-assumptions.py 新增一条规则：subprocess.run/check_output/Popen 等调用带
+  text=True（或 universal_newlines=True）却未显式指定 encoding= 即命中（提示补 encoding="utf-8"）；
+  可在 agate/tests/ 全树接入阻断。
+closure_criteria:
+  - "check-platform-assumptions.py 存在覆盖「text=True 无 encoding=」的规则并接入 CI 阻断"
+  - "规则对 TAG0050 修复前的 test_tag0050_obligations.py 能命中（负向控制）"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由 TAG0050 复盘登记
+```

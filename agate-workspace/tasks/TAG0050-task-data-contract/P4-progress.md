@@ -531,3 +531,98 @@ FFF.                                                                     [100%]
 - `bash agate/tests/scripts/count-tests.sh` → `总计：2866`（未增删用例数）。
 - `python3 agate/scripts/check-protocol-consistency.py` → `仅有 410 个 WARNING，无 ERROR`，RC=0。
 - 状态标记：`[PROD_NOT_TOUCHED]`（仅编辑两个测试文件，未接触生产）。
+
+---
+
+## CI gate-backstop 真缺陷修复（PR #408，2026-10-09）
+
+- 派发：`P8-dispatch-context-implementer-ci-fix.md`（CI gate-backstop FAIL 的真缺陷）。
+- 缺陷：`agate-ci-verify.py` 的 `_ci_ledger_checks`（K1）用 `path.endswith("gate-events.jsonl")`
+  识别账本 ⇒ **任何**以 `gate-events.jsonl` 结尾的路径都被当真实任务账本 ⇒ A1 新增的**黄金夹具**
+  `agate/tests/fixtures/task-data/level-1/fail/gate-events.jsonl`（故意非法）被误判 FAIL，CI 假红。
+- 本地未暴露：pre-commit 只扫暂存的任务目录，从不扫 `agate/tests/fixtures/**`。
+
+### 实现
+- `agate/scripts/agate-ci-verify.py`：新增 `_is_task_ledger_path(path)`（口径同 `_changed_task_dirs`
+  的 `_TASKS_PREFIX`——仅 `agate-workspace/tasks/<task>/gate-events.jsonl` 为任务账本）；
+  `_ci_ledger_checks` 的 `path.endswith(_LEDGER_NAME)` 改用它；docstring 同步。
+- 核查 `_ci_level_checks`：**无同类误判**——它已用 `path.startswith(_TASKS_PREFIX)` 收窄，
+  仅对 tasks 下新增任务目录按目录读取账本，夹具路径（`agate/tests/...`）天然排除，**无需改动**。
+- 回归用例：`test_tag0050_ci_replay.py::test_non_task_ledger_fixture_not_checked`
+  （非任务账本路径 + 故意非法内容 → 不得 FAIL 账本 / rc=0）。
+
+### 改前红（负向证据，命令 + 输出）
+
+回归用例（临时把 `_is_task_ledger_path(path)` 还原为 `path.endswith(_LEDGER_NAME)`）：
+```
+$ pytest ...::test_non_task_ledger_fixture_not_checked -q
+E   AssertionError: CI 真缺陷：非任务账本（测试夹具）不得被当真实账本判 FAIL
+E       FAIL 账本: agate/tests/fixtures/task-data/level-1/fail/gate-events.jsonl: task_upgraded 的等级 0 未登记（第 2 行）
+E       FAIL 账本: ... task_upgraded 等级未严格递增（1 → 0，第 2 行）
+E       FAIL 账本: ... task_upgraded 等级未严格递增（from 1 → to 0，第 2 行）
+E     CI-only 额外检查失败（3 账本 / 0 等级），回放范围 bb80a348..8c4c2b59 未改动任务目录
+1 failed in 0.13s          # ← 判别力成立；随后 RESTORED（diff 确认逐字节恢复）
+```
+
+仓外副本忠实复现 CI（`/tmp/opencode/tag0050-ci-repro`，`git remote set-head origin main` 以对齐 CI 的
+`origin/HEAD`；base = merge-base `720c97d3`）——**改前**：
+```
+$ python3 agate/scripts/agate-ci-verify.py --base 720c97d33f7eff540c41963aa7049794c6a91a76
+  FAIL 账本: agate/tests/fixtures/task-data/level-1/fail/gate-events.jsonl: task_created 的等级 1 未登记（第 1 行）
+  FAIL 账本: ... task_upgraded 的等级 0 未登记（第 2 行）
+  FAIL 账本: ... task_upgraded 等级未严格递增（1 → 0，第 2 行）
+  FAIL 账本: ... task_upgraded 等级未严格递增（from 1 → to 0，第 2 行）
+  FAIL 账本: agate/tests/fixtures/task-data/level-1/pass/gate-events.jsonl: task_created 的等级 1 未登记（第 1 行）
+回放完成：22 个提交，失败 0 个，耗时 18.49s
+CI_RC=1                    # ← 与 CI 日志一致：回放全 PASS，但夹具账本 FAIL 致 job 失败
+```
+
+### 改后绿（命令 + 输出）
+
+同一仓外副本（换入修复后脚本）——**改后**：
+```
+$ python3 agate/scripts/agate-ci-verify.py --base 720c97d3...
+回放完成：22 个提交，失败 0 个，耗时 18.32s
+PASS: 逐提交回放全部通过
+CI_RC=0                    # ← 不再报该 FAIL，CI 场景通过
+```
+
+### 自查（自查 ≠ gate）
+- `pytest agate/tests/unit/test_agate_ci_verify.py agate/tests/integration/test_tag0050_ci_replay.py -q`
+  → **24 passed**（含新增回归用例；既有 BDD-28/29/K1「真实任务账本被删/截空/改写 → FAIL」仍绿）。
+- `python3 agate/scripts/check-protocol-consistency.py` → **0 ERROR / 410 WARNING**（基线），RC=0。
+- `bash agate/tests/scripts/count-tests.sh` → **2867**（上轮 2866 + 1 新增用例）。
+- `ruff check agate-ci-verify.py test_tag0050_ci_replay.py` → All checks passed。
+- 约束遵守：**只改** `agate-ci-verify.py` + 其测试；未改夹具内容、未改 CI workflow；平台无关。
+- [PROD_NOT_TOUCHED] 仅本 checkout 改代码/测试 + `/tmp/opencode` 仓外副本 + pytest tmp_path；未接触生产环境。
+
+## P8 CI 修复批 2：Windows pytest 抓出的平台无关缺陷（`text=True` 无 `encoding=`）
+
+- 派发：`P8-dispatch-context-implementer-ci-fix2.md`（CI PR #408 `pytest(windows-latest)` FAILED）。
+- 输入已读：implementer.md、dispatch-context、P0-brief、`test_tag0050_obligations.py`、`check-platform-assumptions.py`、`conftest.py`。
+- 缺陷：`test_tag0050_obligations.py` 的 `_run_check_obligations`（`:54`）与 BDD-43 端到端（`:279`）
+  用 `subprocess.run(..., text=True)` 未指定 `encoding=` ⇒ Windows cp1252 解码子进程非 ASCII 输出失败
+  ⇒ `stdout=None` ⇒ `TypeError: argument of type 'NoneType' is not iterable`。
+- 改法：两处补 `encoding="utf-8", errors="replace"`（与同文件 `:208` 既有写法一致）。
+- 全仓扫描（AST，限定 TAG0050 触及的 `agate/tests/**` 23 文件）：`text=True`/`universal_newlines=True`
+  且同调用无 `encoding=` 的命中 **仅上述 2 处**（`TOTAL_HITS=2`）⇒ 无其它同类遗漏。
+
+### 改前红 / 改后绿证据（Windows 语义模拟：非 UTF-8 locale，隔离，不触碰真实仓库）
+- 环境模拟：`LC_ALL=C PYTHONCOERCECLOCALE=0 PYTHONUTF8=0` ⇒ `locale.getencoding()=ANSI_X3.4-1968`（模拟 cp1252 解码失败）。
+- 改前红：`git show HEAD:… > 文件`（还原未修版）后跑 `test_bdd_42a_checker_flags_missing_enforced_at`
+  → `1 failed`，`UnicodeDecodeError: 'ascii' codec can't decode byte 0xe4`（与 CI 的 charmap 解码失败同类）。
+- 改后绿：恢复修复版，同 locale 下跑全文件 → `6 passed`；正常 locale 下 → `6 passed`。
+- 已用 `/tmp/opencode/tag0050-ci-fix2/fixed.py` 备份修复版并在验证后还原（`git diff` 仅 2 行变更）。
+
+### 机制缺口登记（新增）
+- **DEBT0058**（`agate-workspace/debt/tech-debt.md`，`source: retrospective`）：
+  `check-platform-assumptions.py` 未覆盖「`subprocess` 用 `text=True` 却无 `encoding=`」类平台假设（扫描 0 命中）。
+- `retrospective.md` 补：机制缺口 1 条（扫描器覆盖缺口）+ 执行错误 1 条（写测试未按平台无关硬约束指定 encoding，
+  由本任务自身 Windows CI 抓出 = 机制有效实证）；改进措施与 agate 反馈各 +1；技术债清单行 7→8 条。
+
+### 自查结果（自查≠gate）
+- `timeout 600s python3 -m pytest agate/tests/unit/test_tag0050_obligations.py -q` → `6 passed`，RC=0。
+- `python3 agate/scripts/check-protocol-consistency.py` → `仅有 410 个 WARNING，无 ERROR`，RC=0。
+- `python3 ~/.agate/current/agate/scripts/check-debt.py agate-workspace/debt/tech-debt.md` → RC=0。
+- `bash agate/tests/scripts/count-tests.sh` → `总计：2867`（未增删用例数）。
+- 状态标记：`[PROD_NOT_TOUCHED]`（仅编辑测试文件 + 债务/复盘登记，未接触生产）。

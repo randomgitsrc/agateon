@@ -8,10 +8,13 @@ mechanism_issues:
   - "P6 的「pytest 全绿」类 BDD 遇预存失败无机械豁免口径（P5 有 known-failures，P6 无对应）"
   - "维护性 god_file_threshold 遇「设计强制改动」无机械豁免，只能走 known-violations.md 登记"
   - "dispatch-context 卡片占位符无机械校验（漏写占位符无 gate 拦截）"
+  - "check-platform-assumptions.py 未覆盖「subprocess text=True 却无 encoding=」类平台假设（扫描 0 命中）"
 execution_issues:
   - "主 Agent 两次在 dispatch-context 散文里写入会触发扫描的字面量，自造误报"
   - "G3 整改子任务返回中间状态（全量测试仍在后台跑）而主 Agent 未即时核对"
   - "主 Agent 一度以「会话边界」为由准备停止推进（协议无「会话边界」概念）"
+  - "写 TAG0050 批 A4 测试时未按平台无关硬约束为 subprocess.run(text=True) 指定 encoding，Windows CI 抓出"
+  - "G1/K1 的账本最终检查未收窄为真实任务账本路径（误判测试夹具），PR CI 的 gate-backstop 抓出"
 feedback_ready: true
 ---
 
@@ -108,7 +111,20 @@ feedback_ready: true
   归因层面: 机制缺口
   说明：漏写占位符与 inject 早退两缺陷叠加，使漏写长期不可见。
 
+- 问题：**`check-platform-assumptions.py` 未覆盖「`subprocess` 用 `text=True` 却无 `encoding=`」类平台假设**
+  ——R1–R5 只扫 PATH/裸 `python3`/单平台 symlink/临时目录/裸外部工具；本缺陷扫描 0 命中。
+  归因层面: 机制缺口
+  说明：跨平台解码假设无静态判据，只能靠 Windows CI 运行时暴露（本任务实证：本机 Linux UTF-8
+  与扫描器双双静默，缺陷延迟到 PR #408 的 `pytest(windows-latest)` 才抓出）。
+
 ### 执行错误
+
+- 问题：写 TAG0050 批 A4 测试时，`subprocess.run(..., text=True)` **未按平台无关硬约束指定 `encoding=`**
+  （`test_tag0050_obligations.py` 的 `:54` 与 `:279`）⇒ Windows cp1252 解码子进程非 ASCII 输出失败
+  ⇒ `stdout=None` ⇒ TypeError。
+  归因层面: 执行错误
+  说明：AGENTS.md「测试约定」已列平台无关硬约束，本次是写测试时未落实（**由本任务自身的
+  Windows CI 全量/冒烟抓出**，是平台无关机制的**有效实证**；修法为补 `encoding="utf-8", errors="replace"`）。
 
 - 问题：主 Agent 两次在 dispatch-context 散文里写入会触发扫描的字面量（`AGATE_CARD` 起止注释对；
   「重派」关键词）⇒ 自造误报。
@@ -124,6 +140,16 @@ feedback_ready: true
   `loop-orchestration.md` 的默认就是 P0→P8 一路推进。
   归因层面: 执行错误
   说明：协议默认是连续推进，本次属对协议默认的偏离。
+
+- 问题：**TAG0050 自身交付的 CI 兜底（A2 的 `agate-ci-verify.py`）在 PR CI 上抓出 K1 修复的真缺陷**
+  ——`_ci_ledger_checks` 用 `path.endswith("gate-events.jsonl")` 识别账本，把 A1 新增的**黄金夹具**
+  `agate/tests/fixtures/task-data/level-1/fail/gate-events.jsonl`（**故意非法**，供 fail 用例断言判 FAIL）
+  误判为真实任务账本并判 FAIL，致 `gate-backstop` job 假红（PR #408）。本地未暴露：pre-commit 只扫
+  **暂存的任务目录**，从不扫 `agate/tests/fixtures/**`；只有 CI 兜底（`base..HEAD` 全量枚举变化账本）才会撞上。
+  归因层面: 执行错误
+  说明：K1 实现时未区分「任务账本」与「任意以 `gate-events.jsonl` 结尾的路径」；已修（新增
+  `_is_task_ledger_path`，与 `_TASKS_PREFIX` 同口径 + 回归用例）。**该缺陷由 TAG0050 自己交付的 CI 兜底
+  抓出，是 A2 机制有效的实证**（本地 hook 抓不到、CI 兜底抓到）。
 
 ## 四、改进措施
 
@@ -143,6 +169,8 @@ feedback_ready: true
 - `agate/scripts/check-maintainability.py`：评估「设计强制改动越阈」的机械豁免/标注语义，或明确
   known-violations 登记即该场景既定出口。
 - `agate/scripts/agate-inject-card.py` 或 gate：dispatch-context **卡片占位符存在性**的机械校验。
+- `agate/scripts/check-platform-assumptions.py`：新增「`subprocess` 用 `text=True`（或 `universal_newlines=True`）
+  却未显式指定 `encoding=`」的规则并接入 CI 阻断（跨平台解码假设静态化）。
 
 ## 技术债登记核对清单
 
@@ -170,7 +198,7 @@ feedback_ready: true
 | dispatch-context.md | 是 | ✅ | — | 各批派发前落盘 |
 | pre-commit hook（gate / 状态转移 / 裁剪） | 是 | ✅ | — | 各 commit 经 hook |
 | CI backstop | 是 | ✅ | — | 逐提交回放（A2 交付） |
-| **技术债登记** | 是 | ✅ | 本次机制缺口逐条登记：**DEBT0051 / DEBT0052 / DEBT0053 / DEBT0054 / DEBT0055 / DEBT0056 / DEBT0057**（7 条，`source: retrospective`） | 复盘发现机制缺口，逐条登记 |
+| **技术债登记** | 是 | ✅ | 本次机制缺口逐条登记：**DEBT0051 / DEBT0052 / DEBT0053 / DEBT0054 / DEBT0055 / DEBT0056 / DEBT0057 / DEBT0058**（8 条，`source: retrospective`） | 复盘发现机制缺口，逐条登记 |
 
 ## agate 反馈
 
@@ -187,3 +215,5 @@ feedback_ready: true
 5. **P6 卡**：为「pytest 全绿」类 BDD 补与 P5 known-failures 一致的预存失败豁免口径，且 judge 可机械复核。
 6. **维护性判据**：为「设计强制改动越阈」提供机械豁免/标注语义，或明确 known-violations 为既定出口。
 7. **dispatch-context 卡片占位符**：加机械存在性校验（与 `agate-inject-card.py` 早退缺陷一并修）。
+8. **`check-platform-assumptions.py`**：新增「`subprocess` 用 `text=True` 却无 `encoding=`」规则——
+   跨平台解码假设应有静态判据（本任务实证：本机 Linux UTF-8 + 扫描器双双静默，仅 Windows CI 抓出）。

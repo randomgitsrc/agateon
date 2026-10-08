@@ -129,6 +129,42 @@ def test_bdd_29_handwritten_low_level_task_created_fails(
     assert "FAIL" in r.output, "BDD-29：手写低等级 task_created 须判 FAIL"
 
 
+def test_non_task_ledger_fixture_not_checked(
+    run_cli, python_exe, agate_scripts, agate_root, git_repo
+):
+    """CI gate-backstop 真缺陷（TAG0050 自身交付的 CI 兜底抓出）：非任务账本不得被误判 FAIL。
+
+    Given 一个**非任务账本**路径（`agate/tests/fixtures/.../gate-events.jsonl`）含故意非法内容
+          （等级回退），且该路径不在 `agate-workspace/tasks/<task>/` 下
+    When 以 `--base` 回放（`_ci_ledger_checks` 无条件枚举 base..HEAD 中变化过的账本）
+    Then **不得**报「FAIL 账本」——只有任务账本（tasks 下直接子目录里的 gate-events.jsonl）才计入；
+          该文件是供 fail 用例断言判 FAIL 的黄金夹具，误判会让 CI 假红。
+
+    对照（判别力）：同一非法内容若落在**任务账本**路径，`_ci_ledger_checks` 仍须判 FAIL
+    （既有 BDD-28/29/K1 用例锁定该行为）。
+    """
+    repo = h.make_git_repo(None, git_repo)
+    (repo / ".agate-version").write_text("agate: v0.79.0\n", encoding="utf-8")
+    git_repo.commit("pin version")
+    base = git_repo.git("rev-parse", "HEAD").stdout.strip()
+
+    # 非任务账本：路径不在 agate-workspace/tasks/<task>/ 下（模拟 level-1/fail 黄金夹具）
+    fixture = repo / "agate" / "tests" / "fixtures" / "task-data" / "level-1" / "fail"
+    fixture.mkdir(parents=True)
+    (fixture / "gate-events.jsonl").write_text(
+        '{"contract_level":1,"event":"task_created","task_id":"TAG9002"}\n'
+        '{"event":"task_upgraded","from_level":1,"to_level":0,"at_phase":"P4"}\n',
+        encoding="utf-8",
+    )
+    git_repo.commit("add non-task illegal fixture ledger")
+
+    r = _ci_verify(run_cli, python_exe, agate_scripts, agate_root, repo, "--base", base)
+    assert "FAIL 账本" not in r.output, (
+        f"CI 真缺陷：非任务账本（测试夹具）不得被当真实账本判 FAIL\n{r.output}"
+    )
+    assert r.returncode == 0, f"CI 真缺陷：非任务账本不应致 CI 失败\n{r.output}"
+
+
 def _levels_yaml(levels):
     return "".join(
         f'- level: {lv}\n  file: level-{lv}.yaml\n  sha256: "x"\n' for lv in levels

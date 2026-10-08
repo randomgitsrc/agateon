@@ -207,6 +207,20 @@ def _changed_task_dirs(repo, sha):
     return dirs
 
 
+def _is_task_ledger_path(path):
+    """路径是否为**任务账本**（`agate-workspace/tasks/<task>/gate-events.jsonl`）。
+
+    与 `_changed_task_dirs` 的 `_TASKS_PREFIX` 口径一致——只有 tasks 下的**直接子目录**里的
+    `gate-events.jsonl` 才是任务账本。排除测试夹具等非任务账本路径（如
+    `agate/tests/fixtures/.../gate-events.jsonl`，其内容可能故意非法，供 fail 用例断言判 FAIL），
+    否则故意非法的黄金夹具会被当真实账本误判 FAIL。
+    """
+    if not path.startswith(_TASKS_PREFIX) or not path.endswith(_LEDGER_NAME):
+        return False
+    parts = path[len(_TASKS_PREFIX):].split("/")
+    return len(parts) == 2 and parts[1] == _LEDGER_NAME
+
+
 def _replay_commit(repo, sha, protocol_root):
     """在临时 worktree 中回放单个提交的 pre-commit + commit-msg hook。
 
@@ -289,6 +303,9 @@ def _ci_ledger_checks(repo, base, head):
     """`<base>..HEAD` 中每个变化过的账本做**最终状态**检查（设计 §2.4 第 4 点）：
     含创建/迁入事件的账本被删除/截空/改写 → FAIL；事件规则（`check_ledger_events`）→ FAIL。
 
+    只检查**任务账本**（`_is_task_ledger_path`）——非任务账本路径（如测试夹具）不计入，否则
+    故意非法的黄金夹具会被当真实账本误判 FAIL。
+
     与逐提交回放**解耦**：枚举 `rev-list <base>..<head>` 的**全部**提交（**含合并提交**），
     故合并提交（evil merge）引入的账本变化同样被检查；不依赖调用方按 `--no-merges` 过滤后的
     提交列表。每个提交用 `diff --name-status --no-renames <parent> <c>` 枚举变化账本——
@@ -312,7 +329,7 @@ def _ci_ledger_checks(repo, base, head):
             if len(parts) < 2:
                 continue
             path = parts[-1].strip()
-            if not path.endswith(_LEDGER_NAME):
+            if not _is_task_ledger_path(path):
                 continue
             if (c, path) in seen:
                 continue

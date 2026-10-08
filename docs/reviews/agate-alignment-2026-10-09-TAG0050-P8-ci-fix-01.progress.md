@@ -1,0 +1,27 @@
+- [dispatch-context] 审查对象=PR#408 两处真缺陷修复（agate-ci-verify.py _is_task_ledger_path + test_tag0050_obligations.py encoding）；HEAD a6790b52
+- [diff] 6 文件改动：agate-ci-verify.py(+19/-1)、test_tag0050_ci_replay.py(+36)、test_tag0050_obligations.py(2行)、tech-debt.md(DEBT0058)、retrospective.md、P4-progress.md
+- [agate-ci-verify.py] _TASKS_PREFIX=agate-workspace/tasks/ _LEDGER_NAME=gate-events.jsonl; _is_task_ledger_path: startswith前缀 且 endswith ledger 且 len(parts)==2 且 parts[1]==ledger
+- [agate-ci-verify.py:332] _ci_ledger_checks 用 path=_is_task_ledger_path(path) 替换原 path.endswith(_LEDGER_NAME)
+- [agate-ci-verify.py:407] _ci_level_checks 已用 path.startswith(_TASKS_PREFIX) 收窄（无同类误判，未改）
+- [test] 新增 test_non_task_ledger_fixture_not_checked（:132）断言 'FAIL 账本' not in output 且 rc==0
+- [验证-改前红] 仓外全量副本 /tmp/opencode/tag0050-p8review-repo：修复版新用例 PASS；把 _is_task_ledger_path 还原为 endswith 后 → 1 failed，报 FAIL 账本 agate/tests/fixtures/.../fail/gate-events.jsonl（与 CI 缺陷一致）
+- [验证-既有FAIL仍绿] 修复版 BDD-28(删账本)/BDD-29(手写低等级)/K1(evil merge) + 新用例 → 4 passed
+- [验证-路径分类] 11 例路径表 BAD_COUNT=0（真任务账本 True；fixture/嵌套/无子目录/非账本 False）
+- [验证-改名] 探针：TAG0001→TAG0002 改名，--no-renames 输出被删源路径仍识别为任务账本并判 FAIL
+- [验证-evil merge] 探针 + K1 用例：合并提交删真实账本仍被拦
+- [A4-编码] test_tag0050_obligations.py 3 处 subprocess.run 全部含 encoding=utf-8（:56/:208/:281）；既有 :208 用 encoding 无 errors，新补的加 errors=replace（略强，非缺陷）
+- [A4-编码-范围] TAG0050 触及 .py 24 个（29 路径 - 5 非py）；AST 扫描 pre-fix(HEAD) TOTAL_HITS=2（:54/:279）→ post-fix TOTAL_HITS=0
+- [A4-编码-越界观察] 全 agate/ 273 py AST 扫描另有 13 处 text=True 无 encoding（agate_dispatch_route.py/check-protocol-consistency.py/test_release_workflow.py/test_platform_setup.py/test_agate_cmdstream_adapters.py）——TAG0050 未触及，属 DEBT0058 登记面
+- [A4-编码-复现] 副本 C locale（ANSI_X3.4-1968）模拟：post-fix test_bdd_42a PASS；pre-fix(HEAD) 1 failed UnicodeDecodeError 'ascii' byte 0xe4（同 cp1252 类）
+- [验证-端到端] 副本跑真脚本 base=720c97d3：修复版 22 提交 0 失败 RC=0（无 FAIL 账本）；还原 endswith 版 → fixture 3 条 FAIL 账本 + RC=1（与 CI 一致）
+- [A6/A3-登记] G1 复审 P4-review-rereview-G1.md §8 已把「账本路径过滤过宽」记为 [MEDIUM] 非阻断，首选修法=加 tasks 前缀+回归用例 → 本批按首选实现；无需另立 DEBT（已修）
+- [A8-计数] ci_verify+ci_replay=24 passed ✓；obligations=6 passed ✓；count-tests=2867 ✓；check-debt rc=0 ✓
+- [A8-偏差] P4-progress 两处称 consistency '410 WARNING'，实测 412（frozen warning 随引用增长）；'23 文件' 实为 24 py（29路径-5非py）——hit 数 2 一致，非实质
+- [A5-版本] README badge=v0.80.0；CHANGELOG [0.80.0] 已提交(9bfef64d) 但无 v0.80.0 tag（release PR 未合）；_ci_ledger_checks 系 v0.80.0 新增（v0.79.0 stable 无此函数）→ 修复属未发布特性内，无需单独 CHANGELOG
+- [A3-反向传播] 其他账本路径识别脚本(agate-doctor/check-ledger-pollution/pre-commit-gate/agate-state-set)均按 task_dir 拼接或已显式覆盖 fixtures，无同类过宽过滤
+- [A1-观察] 模块 docstring(:34) 仍写'全部变化过的账本'未加'任务'限定；函数 docstring(:210) 已精确——措辞小瑕
+- [A8-验证] ruff 0.16.4 check 三文件 → All checks passed ✓
+- [A4-全量] 首次后台跑因我在副本上并发变异脚本致新用例假红（非真缺陷）；已重跑。既有环境漂移 1 条=test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent（本机 opencode CLI 无 debug agent 子命令，rc=1，文件未被 TAG0050 触及）
+- [A3-观察] G1 §8 附带观察：_check_one_ledger_text 未透传回放协议根给 check_ledger_events（本机 ~/.agate 无 .agate-version 时解析到稳定版）——未在 tech-debt/retro 登记，属本次范围外的存量缺口
+- [A3/scope5-发现] retrospective frontmatter 不一致：mechanism_issues=8=body 8 ✓；execution_issues frontmatter=4 但 body 执行错误=5（新增的「CI 兜底抓出 K1 账本路径缺陷」仅入正文:143，未入 frontmatter:12-16）→ MISALIGNED
+- [A4/A6-全量-干净重跑] 副本 full pytest：1 failed, 2863 passed, 3 skipped in 302s；唯一 failed=test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent（本机 opencode CLI 无 debug agent 子命令，环境漂移，文件未触及）；新回归用例 PASS
