@@ -266,3 +266,112 @@ $ pytest \
 - `check-protocol-consistency.py` → **0 ERROR / 410 WARNING**（基线）。
 - `ruff check`（改动脚本/测试）→ All checks passed；`check-platform-assumptions.py` → rc=0。
 - [PROD_NOT_TOUCHED] 仅本 checkout + `/tmp/opencode` 副本 + pytest tmp_path；未接触生产环境。
+
+## G2（批次 B+C 合批）implementer 开工（2026-10-08）
+- HEAD=54a814fc，分支 feat/TAG0050-task-data-contract。
+- 三红灯文件现状（G2 前）：write_tools 6 red（BDD-45/47/48/49/50/51），prod_touched 2 red（BDD-54/55），fitness 1 red（schema_single_source）；BDD-46 已绿；**BDD-52/53 在 G2 前即绿但无判别力**（BDD-52 断言 rc≠0 实由 judge 要求触发、BDD-53 只断言快照文本）——**R1/R4 整改后重写为驱动真实强制点，方具判别力**（见下方 G2-fix 记录）。
+- 关键既有测试约束：test_marker_single_source mk_7b/mk_8 从 pre-commit-gate.py 源码抽取字面 `re.match(r"...\[PROD_TOUCHED\]...")` ⇒ 不能删净该字面（与 dispatch "删字面正则" 冲突，须标 DESIGN_GAP）。
+- agate-config BDD-3 要求源码不含 pytest/agateon/python3 token。
+- BDD-45 要求 `set agent writer` rc=0 ⇒ 须解除 agent 写禁（与旧 TAG0024 §7.2 冲突，标 DESIGN_GAP）。
+
+## G2 实现完成（2026-10-08）
+- 批次 B：新增 `agate_schema.py`（校验/derive/render 单源）；`agate-md-field-set.py` 7 操作 + 渲染块；
+  `agate-config.py` set/unset/explain；`check-frontmatter.py` F10；`check-gate.py` P6 渲染块防篡改；
+  `check-yaml-schema.py`/`agate-frontmatter-check.py` 委托单源（含安装破损降级）。
+- 批次 C：`markers.yaml PROD_TOUCHED=dash_only→default`；`pre-commit-gate.py` 安全门改调
+  `agate_markers.pattern()` + 否定指引 + `prod_touched:true` 中止；快照 T1 去掉 PROD_TOUCHED。
+- 快照 level-1.yaml 增 `files`/`declaration_files`/`traps`，重登记 LEVELS.yaml sha256。
+- 自查：3 测试文件 14 passed；consistency 0 ERROR/410 WARNING；count-tests 2833（与 G1 同）；
+  platform 0；ruff clean；全量 pytest 8 failed（全为既有预期红灯，与 54a814fc 比对确认无回归）。
+- E3 抽样：agateon / peekview 各抽 50（seed=20261008）；人工分类误报 > 0 ⇒ 落 T1 降级，不启用 T1 ERROR。
+  精确分类数字无仓内命令支撑，R7 整改时已删（抽样脚本+种子入库，见 P4-implementation-G2.md §4）。
+- 6 条 [DESIGN_GAP] 见 P4-implementation-G2.md §5（agent 可写、F10/prod_touched 未接 hook、E3 降级、
+  markers 字面副本保留、冻结快照同任务演进）。
+- peekview 仅只读计数；无生产接触。
+
+## G2 SELF-GATE 整改（R1–R7 + GAP-2）implementer（2026-10-08）
+- 依据 `docs/reviews/agate-alignment-review-2026-10-08-TAG0050-G2.md`（1 BLOCKER R1 + R2–R7）。
+- R1（BLOCKER）：`pre-commit-gate.py:_check_prod_touched_primary` 补「主产出缺 prod_touched → ERROR + 修复命令」；
+  重写 `test_bdd_52` 驱动真实强制点（真实 git repo + pre-commit-gate.py）；`test_pre_commit_hook.py` 夹具补 frontmatter/prod_touched。
+- R1 负向证据（改前红）：`python3 -m pytest agate/tests/integration/test_tag0050_prod_touched.py::test_bdd_52_missing_prod_touched_errors -q`
+  → **1 failed**；输出 `AssertionError: BDD-52：须报缺字段，实际 'GATE P4: P4-review.md 不存在…GATE: 非 legacy 任务暂存了 P4 产出但未改 phase…'`
+  （rc=1 来自 P4 gate，与 prod_touched 无关 ⇒ 证明旧断言无判别力）。
+- R2：`check-frontmatter.py::_declaration_files()` 改读快照 `declaration_files`（fallback 仅安装破损降级）；
+  `pre-commit-gate.py` 2g.2 改读同一快照键；新增 `test_bdd_47b` + `test_tag0050_r2_declaration_files_snapshot_effective` 锁定生效面。
+- GAP-2：删 `AGATE_PRECOMMIT_GATE=1` 跳过（`check-frontmatter.py`）与 setdefault（`pre-commit-gate.py`），F10 在 gate 侧生效；
+  随 R1 更新夹具（`test_pre_commit_hook.py` / `test_dispatch_context_warning.py`）。
+- R3：`test_bdd_48` 断言 render 修复命令文案 + 补 LF/CRLF 双侧用例 + `windows_smoke` 标记。
+- R4：`test_bdd_53` 补端到端中止用例；BDD-50 守护改机械判据（扫描 `iter_errors`/`max_depth` 族定义）+
+  白名单 `agate-frontmatter-check.py` 降级副本（须门控 `agate_schema is not None`）。
+- R5：`agate/scripts/README.md:164` 的 `agate-config.py` 命令集 → `init/validate/get/set/unset/explain/list/show`。
+- R6：`agate/UPGRADING.md` 加「未发布 — TAG0050 批 G2」节；`design-md-field-set.md` §7.2 加注「已被 TAG0050 取代（ADR-014）」。
+- R7：`P4-implementation-G2.md §4` 删无据精确数字、`e3_sample.py`（脚本+种子）入库并给仓内命令；§6 consistency 改浮动口径；
+  `P4-progress.md:272` 自陈修正为 R1 闭合后的真判别力陈述。
+- 自查（自查≠gate）：3 测试文件 14 passed；`test_pre_commit_hook + test_dispatch_context_warning` 62 passed；
+  全量 `pytest unit+integration -n auto` **8 failed / 2720 passed / 2 skipped**（与 `54a814fc` 基线一致，无回归）；
+  consistency **0 ERROR**；count-tests **2835**（2833+2）；platform 0；ruff clean。
+- [PROD_NOT_TOUCHED] 仅本 checkout + pytest tmp_path；E3 抽样脚本已入库（非 `/tmp`）。
+
+## G2 C8 整改（第 2 轮，B1/H1/F-2/F-3/M1/L1/L2/L5）implementer（2026-10-08）
+- 已读：implementer.md、dispatch-context（G2-fix2）、P0-brief、P4-review-G2.md、P4-review-cso-G2.md、
+  P4-implementation-G2.md、P4-progress.md、P1-requirements §4（BDD-45/46/49/52）、设计 §3.3/§4、
+  agate-md-field-get.py、agate-md-field-set.py、agate_schema.py、pre-commit-gate.py、check-frontmatter.py、
+  agate-config.py、agate-frontmatter-check.py、agate_common（level/contract 函数）、level-1.yaml、
+  test_tag0050_write_tools/prod_touched/fitness、helpers_tag0050、conftest、agate-next-card/card-inject。
+- 关键定位：md-field-get 无 derive 逻辑；md-field-set 的 prod_touched 仅 P6 契约可写；pre-commit-gate 的 CARD 块
+  排除是纯文本；check-frontmatter 用 current_level（L1）；_primary_output_for 用 task_level（L2）。
+- [PROD_NOT_TOUCHED] 仅本 checkout + pytest tmp_path；未接触生产环境。
+
+## G2 C8 整改（第 2 轮）完成（2026-10-08）
+
+改动文件：
+- `agate/scripts/agate-md-field-get.py`（B1：`_system_field_spec` + `_get` 现算；非 legacy + 快照可用）
+- `agate/scripts/agate-md-field-set.py`（F-2：契约驱动 `writer: system` 拒写；H1：`_declared_safety_keys` 主产出安全字段可写 + bool 强转；explain 跨文件来源）
+- `agate/scripts/pre-commit-gate.py`（F-3：`_expected_card_hash`/`_card_block_verified`/`_added_lines_excluding_real_cards`；L2 注释）
+- `agate/scripts/check-frontmatter.py`（L1：`_declaration_files(task_dir)` 按任务等级）
+- `agate/tests/unit/test_tag0050_write_tools.py`（BDD-46 判别化、BDD-45 真往返、BDD-49 轻量、F-2、L5）
+- `agate/tests/integration/test_tag0050_prod_touched.py`（BDD-49 真转绿、F-3 负向）
+- `agate-workspace/tasks/TAG0050-task-data-contract/P4-implementation-G2.md`（状态/DESIGN_GAP/可辩护项）
+
+### 改前红（负向控制，命令 + 输出）
+
+B1（禁用 derive 分支）：
+```
+$ sed -i 's/        if spec is not None and spec.get("derive"):/        if False and spec is not None .../' agate/scripts/agate-md-field-get.py
+$ pytest ...::test_bdd_46_system_field_reject_and_derive -q
+E   - 2  + 999      ⇒ FAILED（读取返回文件值 999，证明用例有判别力）
+$ 恢复 → diff 确认 RESTORED_OK
+```
+H1（去掉 `_declared_safety_keys`）：
+```
+$ pytest ...test_bdd_49_fix_command_executes_and_turns_green -q
+E   AssertionError: BDD-49：修复命令须可执行，实际 "ERROR: 非法 key 'prod_touched'，合法 key 清单: …"
+1 failed            ⇒ FAILED（证明旧可写面确实不可执行 prod_touched）
+$ 恢复 → RESTORED_OK
+```
+F-2（禁用 writer:system 判定）：
+```
+$ pytest ...::test_f2_system_writer_field_rejected_by_contract -q
+E   AssertionError: F-2：未来 writer: system 字段须被拒写，实际 'OK: results_total=5 已写入 P6-acceptance.md'
+1 failed            ⇒ FAILED（证明契约驱动判定生效）
+$ 恢复 → RESTORED_OK
+```
+F-3（把 `_card_block_verified` 置 True = 旧纯文本排除）：
+```
+$ pytest ...::test_f3_forged_card_block_still_blocks -q
+E   AssertionError: F-3：伪造 CARD 块内的标记须仍拦，实际 ''
+1 failed            ⇒ FAILED（旧行为下伪造块藏住标记、commit 通过）
+$ 恢复 → RESTORED_OK
+```
+
+### 自查（自查 ≠ gate）
+
+- `pytest test_tag0050_write_tools + test_tag0050_prod_touched + test_tag0050_fitness -q` → **19 passed**。
+- `pytest test_pre_commit_hook.py -q` → **62 passed**。
+- `pytest unit+integration -n auto` → **8 failed / 2726 passed / 2 skipped**（8 = 既有预期红灯 BDD-43/59/60/63/66/69/71/76，非回归）。
+- `pytest regression -n auto` → **81 passed**。
+- `check-protocol-consistency.py` → **0 ERROR / 410 WARNING**（基线）。
+- `count-tests.sh` → **2839**（G2 上轮 2835 +4 = 4 条新增用例）。
+- `check-platform-assumptions.py` → rc=0；`ruff check`（改动文件）→ All checks passed。
+- 可辩护项：L2（注释说明结构面/时间面）、L3（保留偏宽 fail-safe 并声明）、L4/L6（已裁定）；M2 登记为后续批待办（DESIGN_GAP）。
+- [PROD_NOT_TOUCHED] 仅本 checkout 改代码 + pytest tmp_path + `/tmp/opencode` 备份；未接触生产环境。

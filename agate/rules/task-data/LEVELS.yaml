@@ -6,4 +6,4 @@
 # 改动已发布快照、或新增快照未登记，一律判 ERROR（设计 §2.1 冻结规则 1）。
 - level: 1
   file: level-1.yaml
-  sha256: "f0b18bd39b41e98dd9437f1c49e494f3e254c81d8ea3039c484385a484fc9467"
+  sha256: "e96a06b2a7c7761318d7f6c78d20de8a573863c6c825c6fedf432144a81fcda4"

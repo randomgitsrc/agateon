@@ -7,10 +7,16 @@
 # 平台无关：tmp_path；不写字面系统临时目录。
 
 import hashlib
+import re
 
 import pytest
 
 _LEVELS = "rules/task-data/LEVELS.yaml"
+
+# BDD-50 机械判据：递归 schema 遍历函数定义（`iter_errors` / `max_depth` 族）。
+_RECURSIVE_SCHEMA_DEF = re.compile(r"^\s*def\s+_?(?:local_)?(iter_errors|max_depth)\s*\(", re.M)
+# 唯一允许的降级副本所在文件（安装破损 fail-safe）；须门控在单源库不可用时。
+_WHITELIST_SCHEMA_DUP = {"agate-frontmatter-check.py"}
 
 
 @pytest.mark.windows_smoke
@@ -36,9 +42,28 @@ def test_task_data_golden_fixture_regression(agate_root):
 
 
 def test_schema_single_source_only_agate_schema(agate_scripts):
-    """BDD-50：agate/scripts/*.py 中不存在第二个递归 schema 校验实现。"""
+    """BDD-50：agate/scripts/*.py 中不存在第二个递归 schema 校验实现。
+
+    机械判据：唯一允许的降级副本 = `agate-frontmatter-check.py` 的
+    `_local_iter_errors` / `_local_max_depth`，且必须门控在单源库不可用时
+    （安装破损 fail-safe，非并行实现）；其余文件出现递归 schema 遍历定义即失败。
+    """
     assert (agate_scripts / "agate_schema.py").is_file(), (
         "BDD-50：三处校验器须合并为单一 agate_schema.py"
+    )
+    offenders = []
+    for path in sorted(agate_scripts.glob("*.py")):
+        if path.name == "agate_schema.py":
+            continue
+        if _RECURSIVE_SCHEMA_DEF.search(path.read_text(encoding="utf-8")):
+            offenders.append(path.name)
+    unexpected = [n for n in offenders if n not in _WHITELIST_SCHEMA_DUP]
+    assert not unexpected, (
+        f"BDD-50：发现第二处递归 schema 校验实现（{unexpected}）——须统一调用 agate_schema.py"
+    )
+    fm_src = (agate_scripts / "agate-frontmatter-check.py").read_text(encoding="utf-8")
+    assert "agate_schema is not None" in fm_src, (
+        "BDD-50：降级副本须门控在 agate_schema 不可用时（fail-safe，非并行实现）"
     )
     for name in ("check-yaml-schema.py", "agate-frontmatter-check.py", "agate-config.py"):
         src = (agate_scripts / name).read_text(encoding="utf-8")

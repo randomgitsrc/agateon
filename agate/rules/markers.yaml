@@ -126,7 +126,10 @@ markers:
     #   改为 `none + trailing_text_ok`：生成 `[PROD_TOUCHED] 描述`，与文档/安全门一致。
     params: none
     paired_with: PROD_NOT_TOUCHED
-    lead_variant: dash_only
+    # TAG0050 批 C（P2 §3.1，修复 F4 口径分叉）：由 `dash_only` 改为 `default`——
+    #   安全门（pre-commit-gate.py）改用 `agate_markers.pattern("PROD_TOUCHED")` 取值，
+    #   注册表与安全门同源；粗体 / 引用块 / `*`/`+` 列表符形态一并拦住（BDD-54）。
+    lead_variant: default
     trailing_text_ok: true
     judged_by: [pre-commit-gate.py]           # 安全门：命中即中止 commit（sys.exit 1）
 

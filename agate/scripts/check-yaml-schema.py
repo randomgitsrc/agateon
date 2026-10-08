@@ -31,6 +31,7 @@ import sys
 try:
     import yaml
 
+    import agate_schema
     from agate_common import resolve_agate_root
 except ImportError:
     sys.stderr.write("check-yaml-schema.py: 需要 pyyaml 与 agate_common（agate 脚本公共库）。pip install pyyaml 或确认在 agate/scripts/ 下运行\n")
@@ -48,47 +49,13 @@ _RULES = (
 )
 
 
-def _type_ok(value, type_name):
-    """draft-07 type 判定（bool 是 int 子类，integer 须排除 bool——YAML true/false 陷阱）。"""
-    if type_name == "string":
-        return isinstance(value, str)
-    if type_name == "integer":
-        return isinstance(value, int) and not isinstance(value, bool)
-    if type_name == "boolean":
-        return isinstance(value, bool)
-    if type_name == "array":
-        return isinstance(value, list)
-    if type_name == "object":
-        return isinstance(value, dict)
-    return True
-
-
 def _validate_value(value, schema, path, errors):
-    """递归校验单个值 vs 子集 schema；错误追加到 errors（(path, msg) 列表）。"""
-    type_name = schema.get("type")
-    if type_name and not _type_ok(value, type_name):
-        errors.append((path, f"类型应为 {type_name}，实际 {type(value).__name__}"))
-        return
-    if "enum" in schema and value not in schema["enum"]:
-        errors.append((path, f"值 {value!r} 不在枚举 {schema['enum']}"))
-    if type_name == "object" and isinstance(value, dict):
-        for key in schema.get("required", []):
-            if key not in value:
-                errors.append((path, f"缺 required 字段 {key}"))
-        properties = schema.get("properties", {})
-        for key, item in value.items():
-            child = f"{path}.{key}" if path else key
-            if key in properties:
-                _validate_value(item, properties[key], child, errors)
-            elif schema.get("additionalProperties") is False:
-                errors.append((path, f"未知字段 {key}（additionalProperties=false）"))
-    elif type_name == "array" and isinstance(value, list):
-        if "minItems" in schema and len(value) < schema["minItems"]:
-            errors.append((path, f"数组长度 {len(value)} < minItems {schema['minItems']}"))
-        items = schema.get("items")
-        if items:
-            for idx, item in enumerate(value):
-                _validate_value(item, items, f"{path}[{idx}]", errors)
+    """递归校验单个值 vs 子集 schema；错误追加到 errors（(path, msg) 列表）。
+
+    TAG0050 批 B（BDD-50）：递归校验**单源**在 `agate_schema`——本处不再自带
+    第二个递归实现，只把结构化错误映射为既有消息格式。
+    """
+    errors.extend(agate_schema.validate(value, schema, path))
 
 
 def _schema_self_check(file_name, schema):

@@ -23,6 +23,15 @@ except ImportError:
     sys.stderr.write("agate-frontmatter-check: 需要 pyyaml\n")
     sys.exit(1)
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+try:
+    import agate_schema  # TAG0050 批 B：结构校验单源（BDD-50）
+except ImportError:  # 安装破损降级（薄壳 fake 根未随附 agate_schema 时仍可运行）
+    agate_schema = None
+
 
 # 按文件名分类的 schema 定义。migrated_keys 对应 P2-design.md §3.1.2
 # MIGRATED_KEYS_BY_SCHEMA 的按文件名子集（该常量在此校验器内消费，
@@ -117,17 +126,32 @@ SCHEMAS = {
 MAX_DEPTH = 3
 
 
-def _value_depth(v):
-    """标量深度 0；dict/list 深度 = 1 + 子项最大深度（空容器记 1）。"""
-    if isinstance(v, dict):
-        if not v:
-            return 1
-        return 1 + max(_value_depth(x) for x in v.values())
-    if isinstance(v, list):
-        if not v:
-            return 1
-        return 1 + max(_value_depth(x) for x in v)
-    return 0
+_PY_TYPE_TO_JSON = {
+    bool: "boolean",
+    int: "integer",
+    list: "array",
+    str: "string",
+}
+
+
+def _to_json_schema(schema):
+    """把本文件的历史 SCHEMAS 格式转换为 JSON Schema 子集（供 agate_schema 校验）。"""
+    properties = {}
+    for field, expected in (schema.get("types") or {}).items():
+        properties.setdefault(field, {})["type"] = _PY_TYPE_TO_JSON.get(
+            expected, "string"
+        )
+    for field, allowed in (schema.get("enums") or {}).items():
+        properties.setdefault(field, {})["enum"] = list(allowed)
+    for field in schema.get("required") or ():
+        properties.setdefault(field, {})
+    return {
+        "type": "object",
+        "required": list(schema.get("required") or ()),
+        "properties": properties,
+        # 历史 frontmatter schema 不拒绝未知字段（保持既有行为）
+        "additionalProperties": True,
+    }
 
 
 def _extract_frontmatter_block(text):
@@ -140,58 +164,94 @@ def _extract_frontmatter_block(text):
     return text[4:end]
 
 
+def _local_iter_errors(instance, schema, path=""):
+    """`agate_schema.iter_errors` 的降级副本（**仅在单源库不可用的安装破损下**使用）。
+
+    形态与前缀与单源库一致，供 `_check` 映射消息。
+    """
+    type_name = schema.get("type")
+    if type_name and not _local_type_ok(instance, type_name):
+        yield path, "type", {"expected": type_name, "actual": type(instance).__name__}
+        return
+    if "enum" in schema and instance not in schema["enum"]:
+        yield path, "enum", {"value": instance, "allowed": list(schema["enum"])}
+    if type_name == "object" and isinstance(instance, dict):
+        for key in schema.get("required", []) or []:
+            if key not in instance or instance.get(key) is None:
+                yield path, "required", {"field": key}
+
+
+def _local_type_ok(value, type_name):
+    if type_name == "string":
+        return isinstance(value, str)
+    if type_name == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if type_name == "boolean":
+        return isinstance(value, bool)
+    if type_name == "array":
+        return isinstance(value, list)
+    if type_name == "object":
+        return isinstance(value, dict)
+    return True
+
+
+def _local_max_depth(value):
+    if isinstance(value, dict):
+        return 1 + max((_local_max_depth(x) for x in value.values()), default=0)
+    if isinstance(value, list):
+        return 1 + max((_local_max_depth(x) for x in value), default=0)
+    return 0
+
+
+def _iter_errors(data, json_schema):
+    if agate_schema is not None:
+        return agate_schema.iter_errors(data, json_schema, "")
+    return _local_iter_errors(data, json_schema, "")
+
+
+def _max_depth(value):
+    if agate_schema is not None:
+        return agate_schema.max_depth(value)
+    return _local_max_depth(value)
+
+
 def _check(basename, schema, data):
+    """校验 frontmatter（TAG0050 批 B，BDD-50）：required/enum/type 经 `agate_schema`
+    单源校验，本处只把它映射为历史消息格式（保留「补 / 改用」等修复提示关键词）。
+
+    `min_values`（数值下限）不在 agate_schema 的 draft-07 子集内，保留本地实现；
+    嵌套深度复用 `agate_schema.max_depth`（消除第二处递归遍历）。
+    """
     errors = []
 
-    for field in schema["required"]:
-        if field not in data or data[field] is None:
+    json_schema = _to_json_schema(schema)
+    for path, code, detail in _iter_errors(data, json_schema):
+        field = path
+        if code == "required":
+            field = detail["field"]
             errors.append(
                 f"{basename}:{field}: 缺必填字段 {field} → 请在 frontmatter 补 {field}: <值>"
             )
-
-    for field, allowed in schema["enums"].items():
-        if field in data and data[field] is not None and data[field] not in allowed:
+        elif code == "enum":
             errors.append(
                 "{}:{}: 非法值 {!r}（合法值: {}），请改用其一".format(
-                    basename, field, data[field], ", ".join(allowed)
+                    basename, field, detail["value"], ", ".join(str(x) for x in detail["allowed"])
                 )
+            )
+        elif code == "type":
+            errors.append(
+                f"{basename}:{field}: 类型错误（应为 {detail['expected']}，实际 {detail['actual']}）"
             )
 
-    for field, expected_type in schema["types"].items():
-        if field not in data or data[field] is None:
-            continue
-        value = data[field]
-        if expected_type is bool:
-            if not isinstance(value, bool):
-                errors.append(
-                    f"{basename}:{field}: 类型错误（应为 bool，实际 {type(value).__name__}）"
-                )
-        elif expected_type is int:
-            if not isinstance(value, int) or isinstance(value, bool):
-                errors.append(
-                    f"{basename}:{field}: 类型错误（应为 int，实际 {type(value).__name__}）"
-                )
-            else:
-                min_v = schema["min_values"].get(field)
-                if min_v is not None and value < min_v:
-                    errors.append(
-                        f"{basename}:{field}: 值 {value} 小于最小值 {min_v}"
-                    )
-        elif expected_type is list:
-            if not isinstance(value, list):
-                errors.append(
-                    f"{basename}:{field}: 类型错误（应为 list，实际 {type(value).__name__}）"
-                )
-        elif expected_type is str and not isinstance(value, str):
-            errors.append(
-                f"{basename}:{field}: 类型错误（应为 str，实际 {type(value).__name__}）"
-            )
+    for field, min_v in (schema.get("min_values") or {}).items():
+        value = data.get(field)
+        if field in data and value is not None and isinstance(value, int) \
+                and not isinstance(value, bool) and value < min_v:
+            errors.append(f"{basename}:{field}: 值 {value} 小于最小值 {min_v}")
 
     for field, value in data.items():
-        if _value_depth(value) > MAX_DEPTH:
-            errors.append(
-                f"{basename}:{field}: 嵌套深度超过 {MAX_DEPTH} 层"
-            )
+        if _max_depth(value) > MAX_DEPTH:
+            errors.append(f"{basename}:{field}: 嵌套深度超过 {MAX_DEPTH} 层")
 
     return errors
 

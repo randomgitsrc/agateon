@@ -44,3 +44,71 @@ state:
     phase: {writer: agent, required: true}
     cancelled: {writer: agent, optional: true}
     meta: {writer: agent, optional: true}
+
+# 逐文件字段契约（批 B 消费；设计 §3.1）。写入工具 / gate 同源读取本节。
+files:
+  P6-acceptance.md:
+    fields:
+      results:
+        writer: agent
+        required: true
+        key: bdd
+        render: results_table
+        schema:
+          type: array
+          items:
+            type: object
+            required: [bdd, verdict, evidence]
+            additionalProperties: false
+            properties:
+              bdd: {type: string, pattern: "^[0-9]+[a-z]?$"}
+              verdict: {enum: [PASS, FAIL]}
+              evidence: {type: array, minItems: 1, items: {type: string}}
+              vision: {type: string}
+              manual_review: {type: string}
+      pass: {writer: system, derive: "count(results, verdict == PASS)"}
+      fail: {writer: system, derive: "count(results, verdict == FAIL)"}
+      prod_touched: {writer: agent, required: true}
+      prod_touched_detail: {writer: agent, required_if: "prod_touched == true"}
+
+# 声明文件（批 B/C 消费；§3.6）：缺 frontmatter / 缺 prod_touched 判 ERROR 的作用面。
+declaration_files:
+  - P1-requirements.md
+  - P2-design.md
+  - P6-acceptance.md
+  - P6.5-judge-verdict.md
+  - P7-consistency.md
+  - P8-release.md
+
+# 正文绊线（批 B 消费；设计 §3.6）。T1 的标记表**不含 PROD_TOUCHED**——它由 T4
+# 单独承担（唯一安全门，设计 §3.1 第 3 点；避免两条路径判同一件事）。
+traps:
+  T1:
+    kind: positive_declaration_in_prose
+    markers:
+      - SCOPE+
+      - SCOPE_RESOLVED
+      - DESIGN_GAP
+      - DESIGN_GAP_REVIEWED
+      - NEED_CONFIRM
+      - SUGGEST
+      - BLOCKER
+      - DEVIATION-CRITICAL
+      - CODE_MAP_UPDATED
+      - CODE_MAP_EXEMPT
+    default_action: error
+    e3_sampling_required_before_error: true
+    downgrade:
+      files: [P7-consistency.md, P8-release.md]
+      action: warning
+      requires_field_write: true
+  T2:
+    kind: bdd_heading_format
+    default_action: error
+  T3:
+    kind: strict_verdict_line_in_prose
+    default_action: error
+  T4:
+    kind: prod_touched_safety_gate
+    single_source: markers.yaml
+    default_action: abort

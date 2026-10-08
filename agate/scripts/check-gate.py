@@ -73,6 +73,7 @@ try:
         has_marker,
         is_legal_gate_key,
         known_phase_ids,
+        load_contract,
         parse_fail_list_block,
         parse_gate_commands_block,
         parse_ui_design_section,
@@ -83,6 +84,7 @@ try:
         requirement_active,
         resolve_rules_root,
         split_frontmatter,
+        task_level,
     )
 except ImportError:
 
@@ -177,6 +179,12 @@ except ImportError:
 
     def extract_embedded_yaml_blocks(text):
         return []
+
+    def load_contract(level, script_path=None):
+        return {}
+
+    def task_level(task_dir, script_path=None):
+        return None
 
 # RM-AG0046（TAG0026）：维护性反模式检测器 check-maintainability.py——gate_p4 三重门槛
 # 数据源。ImportError 降级 = WARNING 不阻断（检测未部署 ≠ 判定缺失，R2；
@@ -1180,10 +1188,70 @@ def gate_p5(task_dir):
     return 2
 
 
+try:
+    import agate_schema  # TAG0050 批 B：渲染块生成/比对单源（BDD-48）
+except ImportError:  # 安装破损降级（渲染块校验跳过，不误判）
+    agate_schema = None
+
+
+def _check_render_blocks(file_path):
+    """TAG0050 批 B（BDD-48）：文件含 `<!-- AGATE:RENDER key BEGIN -->` 块时，
+    块内容须与 `render(value)` 逐字节相等（两侧 CRLF 规范化为 LF），且每 key 恰好一次。
+
+    缺失 / 被手改 → ERROR 并给 `agate-md-field-set.py render` 修复命令。
+    """
+    if agate_schema is None or not os.path.isfile(file_path):
+        return 0
+    text = _read_text(file_path).replace("\r\n", "\n")
+    blocks = agate_schema.find_render_blocks(text)
+    if not blocks:
+        return 0
+    fm, _ = split_frontmatter(text)
+    fm = fm if isinstance(fm, dict) else {}
+    fields = {}
+    try:
+        lvl = task_level(os.path.dirname(file_path))
+        contract = load_contract(lvl, __file__) if lvl else {}
+        files = contract.get("files") if isinstance(contract, dict) else None
+        if isinstance(files, dict):
+            spec = files.get(os.path.basename(file_path))
+            if isinstance(spec, dict) and isinstance(spec.get("fields"), dict):
+                fields = spec["fields"]
+    except Exception:
+        fields = {}
+    seen = {}
+    for block in blocks:
+        key = block["key"]
+        seen[key] = seen.get(key, 0) + 1
+        fspec = fields.get(key)
+        kind = fspec.get("render") if isinstance(fspec, dict) else None
+        if not kind:
+            continue
+        expected = agate_schema.render(kind, fm.get(key))
+        if block["content"].strip("\n") != expected.strip("\n"):
+            sys.stderr.write(
+                f"GATE P6: 渲染块 {key} 被手改（与 render({kind}) 不一致）——"
+                f"修复命令: FILE={file_path} agate-md-field-set.py render\n"
+            )
+            return 1
+    for key, count in seen.items():
+        if count > 1:
+            sys.stderr.write(
+                f"GATE P6: 渲染块 {key} 出现 {count} 次（必须恰好一次）——"
+                f"修复命令: FILE={file_path} agate-md-field-set.py render\n"
+            )
+            return 1
+    return 0
+
+
 def gate_p6(task_dir):
     # T001 v2.0 流 B（BDD-16/18，P2-design.md §3.2.1）：frontmatter pass/fail 汇总判定，
     # 无汇总（旧格式）回退正文 grep 计数（只认行首 `- PASS|FAIL ... BDD-N`，消除 F11 误判）。
     p6_file = os.path.join(task_dir, "P6-acceptance.md")
+
+    # TAG0050 批 B（BDD-48）：渲染块防篡改（含 CRLF 归一化）。
+    if _check_render_blocks(p6_file) != 0:
+        return 1
 
     # ── v2.0 refactor 口径分流（TAG0002 Phase A，P2-design.md §3.3）──
     change_type = ""

@@ -81,6 +81,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-scope-resolved.py` (P2.11) | `[SCOPE+]` 标记追踪（形态取值自 `agate_markers`，不自带正则）| 0=通过, 1=未标记 |
 | `check-retrospective.py` (P2.12) | 异常模式提醒（不阻塞）；另检测到 DEBT/roadmap 已登记本任务（机制缺口信号，TAG0015）→ 追加提醒 | 0=总是通过 |
 | `agate_markers.py` | **正文标记形态单源库**（读取/判定侧）：取值自 `rules/markers.yaml`，提供 `pattern/find/is_declaration/render/describe`；被 `check-scope-resolved.py` / `check-retrospective.py` / `agate-mark.py` import | 0=成功, 1=用法错（`--list`/`--check FILE`/`<NAME> [params]`）|
+| `agate_schema.py` | **JSON Schema 子集校验 + derive/render 单源库**（TAG0050 批 B，BDD-50）：提供 `validate`/`iter_errors`（type/enum/required/properties/additionalProperties/items/minItems/pattern）、`max_depth`、`derive`（count/sum/union/any）、`render` 与 `AGATE:RENDER` 块生成/提取；被 `check-yaml-schema.py` / `agate-frontmatter-check.py` / `agate-config.py` / `agate-md-field-set.py` / `check-gate.py` import（`agate/scripts/*.py` 中不存在第二个递归 schema 校验实现）| 库模块（`--derive EXPR JSON` / `<instance-json> <schema-json>` 供调试；0=校验通过, 1=有错误, 2=用法）|
 | `agate-mark.py` | **正文标记生成器**（写入侧）：`--list` 列出全部标记 / `<NAME> [参数]` 生成合法写法 / `--check FILE` 校验文件内形态；带参缺参或未登记标记 → fail-closed | 0=成功, 1=用法/参数错误 |
 | `agate-feedback.py` | 跨项目反馈提取（AG0021，opt-in，AGATE_FEEDBACK=on）| 手动触发，非 gate/非 pre-commit |
 | `check-frontmatter.py` | 阶段文件 frontmatter 校验 | 0=通过, 1=校验失败 |
@@ -160,7 +161,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 |
 |------|------|
-| `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
+| `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `set <field> <value>` / `unset <field>` / `explain <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
 | `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；`--baseline` 落 `.out` 证据并逐字节比对（差异 → 非 0）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|
 | `agate-task-init.py` | 任务初始化入口（TAG0050 批 A1）：新建任务（`<TASK_ID> --slug --title [--priority] [--depends]`）创建目录 + `.state.yaml` + P0-brief 骨架，并在账本第 1 行写 `task_created`（记当前契约等级）；存量迁移 `--existing <dir>`（前置写入创建事件并重建哈希链）/ `--adopt <dir>`（写 `task_adopted`）/ `--upgrade <dir>`（写 `task_upgraded`，只升不降）| 0=成功, 1=用法/校验失败 |

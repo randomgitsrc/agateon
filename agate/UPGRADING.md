@@ -357,6 +357,39 @@ git commit
   `python3 <agate_root>/scripts/agate-state-set.py <dir> phase <Pn>`。
 - **新任务一律用 `agate-task-init` 创建，phase 一律用 `agate-state-set` 写入**。
 
+### 未发布 — TAG0050 批 G2：写入工具与契约单源（B）+ 生产接触（C）（**无破坏性变更**）
+
+> TAG0050「任务数据契约」分批交付；本批（G2）含 B（`agate_schema.py` 单源 + `agate-md-field-set`
+> 7 操作 + `agate-config set/unset/explain` + 渲染块 + F10 缺 frontmatter ERROR）与
+> C（`prod_touched` 必填/中止 + T4 单一安全门）。**协议语义、`.state.yaml` schema、既有
+> 任务数据格式均未变**；下列新判据**只对非 legacy 任务**（账本首行 `task_created`/`task_adopted`）
+> 生效，**存量任务（legacy）不受影响、无需迁移**。版本号与 CHANGELOG 条目在 P8 统一落。
+
+**B — 写入工具与契约单源（非 legacy 任务）**：
+
+- **F10：声明文件缺 frontmatter → ERROR**。非 legacy 任务的**声明文件**（快照
+  `rules/task-data/level-1.yaml` 的 `declaration_files`）缺 `---` frontmatter 块即判 ERROR
+  （不回退正文正则）；该检查在 **pre-commit hook 路径同样生效**（G2 闭合 GAP-2）。
+- **渲染块防篡改**：`<!-- AGATE:RENDER key BEGIN -->…END -->` 块内容须与
+  `agate-md-field-set.py render` 生成的内容逐字节相等（CRLF 规范化为 LF 后比较）；
+  被手改 → ERROR 并给出 `FILE=<path> agate-md-field-set.py render` 修复命令。
+- **`agate-md-field-set.py` 7 操作**：`set` / `append` / `upsert` / `remove` / `--list` /
+  `explain` / `render`；**`agate-config.py` 新增** `set` / `unset` / `explain`。
+- **单一 schema 校验实现**：`check-yaml-schema.py` / `agate-frontmatter-check.py` /
+  `agate-config.py` 统一调用新库 `agate_schema.py`（安装破损时 `agate-frontmatter-check.py`
+  保留一处 fail-safe 降级副本）。
+
+**C — 生产接触安全门（非 legacy 任务）**：
+
+- **`prod_touched` 必填**：各阶段**主产出**（快照 `primary_outputs`）的 frontmatter 必须声明
+  `prod_touched: true|false`；**缺字段 → ERROR + 修复命令**（
+  `FILE=<path> agate-md-field-set.py set prod_touched false`）。
+- **`prod_touched: true` 且当前不在 PAUSED → 中止提交**；PAUSED 只扫描不阻断并写
+  `prod_touched_in_paused` 事件。
+- **T4 为唯一 PROD_TOUCHED 安全门**：正文扫描取自标记单源 `agate_markers.pattern("PROD_TOUCHED")`
+  （`markers.yaml` 的 `lead_variant: default`）；粗体 / 引用块写法仍拦，否定写法
+  `- [PROD_TOUCHED]: 无` 继续阻断并给专门指引。
+
 ### v0.79.0 — TAG0042 批 1：统一 phase 语义（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。

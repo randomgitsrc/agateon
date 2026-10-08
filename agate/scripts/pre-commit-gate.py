@@ -49,6 +49,7 @@ try:
         append_event,
         check_ledger_events,
         current_level,
+        load_contract,
         read_ledger_events,
         read_staged_state_phase,
         read_state_phase,
@@ -57,6 +58,7 @@ try:
         resolve_agate_root,
         resolve_workspace,
         run_git,
+        split_frontmatter,
         task_level,
         write_gate_result,
     )
@@ -68,6 +70,12 @@ except Exception as exc:
         f"GATE ERROR: 无法加载 agate_common.py（公共库缺失，需 Python 3 + pyyaml）: {exc}\n"
     )
     sys.exit(1)
+
+# 标记单源库（TAG0050 批 C）：缺失时降级到字面正则（安装破损下的 fail-safe，不静默放行）。
+try:
+    import agate_markers as _agate_markers
+except Exception:
+    _agate_markers = None
 
 # 各阶段产出文件（2p dispatch-context 缺失强制检查用，sh case 等价）
 _PHASE_OUTPUT = {
@@ -232,7 +240,83 @@ def _is_processed_dir(processed_dirs, candidate):
 #      所属阶段重跑 gate。
 
 LEDGER_FILENAME = "gate-events.jsonl"
-_PROD_TOUCHED_RE = re.compile(r"^\s*-?\s*\[PROD_TOUCHED\]")
+# TAG0050 批 C（P2 §3.1 第 1 点，修复 F4 口径分叉）：安全门正则**取自标记单源**
+# `agate_markers.pattern("PROD_TOUCHED")`（注册表 lead_variant 已改为 default），
+# 不再自带字面副本。仅在单源库不可用（安装破损）时降级到字面正则（fail-safe）。
+if _agate_markers is not None:
+    _PROD_TOUCHED_RE = _agate_markers.pattern("PROD_TOUCHED")
+else:
+    _PROD_TOUCHED_RE = re.compile(r"^\s*-?\s*\[PROD_TOUCHED\]")
+# 否定写法专门指引（P2 §3.1 第 4 点：靠指引而非改正则——否定写法继续阻断）。
+_PROD_TOUCHED_GUIDANCE = (
+    "      疑似否定写法：未触达生产请在主产出写 prod_touched: false，并删除正文中的标记\n"
+)
+
+# F-3 整改（cso）：dispatch-context 文件名形态（真实注入卡片的唯一合法载体）。
+_DC_FILE_RE = re.compile(r"-dispatch-context-[^/]+\.md$")
+
+
+def _expected_card_hash(phase):
+    """当前阶段卡片（`agate-next-card.py` 输出）的期望 sha256；不可用 → None。
+
+    与 2p 的卡片 hash 校验同源（同一 CLI + 同一归一化：CR 去除、尾换行去除）。
+    """
+    if not os.path.isfile(os.path.join(SCRIPT_DIR, "agate-next-card.py")):
+        return None
+    rc, out = _run_script_capture("agate-next-card.py", [phase], suppress_stderr=True)
+    if rc != 0 or not out:
+        return None
+    return hashlib.sha256(out.replace("\r", "").rstrip("\n").encode("utf-8")).hexdigest()
+
+
+def _card_block_verified(file_rel, block_lines, expected_hash):
+    """CARD 块是否为**真实注入**的卡片块：文件名为 dispatch-context 且块内容 sha256 匹配。"""
+    if not expected_hash or not _DC_FILE_RE.search(file_rel or ""):
+        return False
+    embedded = "\n".join(line.replace("\r", "") for line in block_lines)
+    return hashlib.sha256(embedded.encode("utf-8")).hexdigest() == expected_hash
+
+
+def _added_lines_excluding_real_cards(diff_raw, phase):
+    """从 diff 新增行中剔除**真实注入**的 AGATE_CARD 块，返回其余新增行。
+
+    F-3 整改（cso）：排除条件由「纯文本 START/END 区间」收紧为「真实注入的卡片块」——
+    仅当文件名为 `*-dispatch-context-*.md` 且块内容 sha256 等于当前阶段卡片期望值时排除；
+    **伪造 CARD 块 / 非 dispatch-context 文件里的块不排除**（块内行照常参与扫描）。
+    未闭合的 START 视为普通行参与扫描（fail-safe，不静默放行）。
+    """
+    expected = _expected_card_hash(phase)
+    current_file = ""
+    in_card = False
+    block = []
+    added = []
+    for raw_line in (diff_raw or "").splitlines():
+        if raw_line.startswith("+++ b/"):
+            current_file = raw_line[6:]
+            in_card, block = False, []
+            continue
+        if not (len(raw_line) >= 2 and raw_line[0] == "+" and raw_line[1] != "+"):
+            continue
+        line = raw_line[1:]
+        if in_card:
+            if "<!-- AGATE_CARD_END -->" in line:
+                in_card = False
+                if _card_block_verified(current_file, block, expected):
+                    block = []
+                    continue
+                added.extend(block)   # 非真实卡片块：块内行参与扫描
+                block = []
+            else:
+                block.append(line)
+            continue
+        if "<!-- AGATE_CARD_START -->" in line:
+            in_card = True
+            block = []
+            continue
+        added.append(line)
+    if in_card:
+        added.extend(block)           # 未闭合 START：fail-safe 参与扫描
+    return added
 
 
 def _diff_name_status(repo_root):
@@ -480,6 +564,88 @@ def _rerun_gates_for_staged_outputs(repo_root, task_rel, task_dir):
             sys.exit(1)
 
 
+# 声明文件（设计 §3.6 / 快照 declaration_files；R2 单源）。仅快照不可用时降级到历史四类。
+_FALLBACK_DECLARATION_FILES = (
+    "P1-requirements.md", "P2-design.md", "P6-acceptance.md", "P7-consistency.md",
+)
+
+
+def _declaration_files(task_dir):
+    """声明文件集合：快照 `declaration_files`（按任务等级，回退协议当前等级）；
+    快照不可用 → 历史四类文件（安装破损降级）。
+
+    L2 口径说明：本函数与 `_primary_output_for` 取**任务级（最新）快照**——它们回答的是
+    「结构面：哪些文件/字段存在」（随任务最新等级走）；而 `_check_prod_touched_primary`
+    的门控 `requirement_active(..., phase)` 用 **level_at_phase**——它回答的是「时间面：
+    该要求在本阶段是否已生效」（随阶段走）。两者语义不同，**刻意不统一**（设计 §2.5）。
+    """
+    lvl = task_level(task_dir)
+    if lvl is None:
+        lvl = current_level(__file__)
+    try:
+        contract = load_contract(lvl, __file__) if lvl else {}
+    except Exception:
+        contract = {}
+    decl = contract.get("declaration_files") if isinstance(contract, dict) else None
+    if isinstance(decl, (list, tuple)) and decl:
+        return tuple(str(x) for x in decl)
+    return _FALLBACK_DECLARATION_FILES
+
+
+def _primary_output_for(task_dir, phase):
+    """当前阶段的主产出相对路径（快照 primary_outputs；不可用 → None）。"""
+    lvl = task_level(task_dir)
+    if lvl is None:
+        return None
+    try:
+        contract = load_contract(lvl, __file__)
+    except Exception:
+        contract = {}
+    outputs = contract.get("primary_outputs") if isinstance(contract, dict) else None
+    if not isinstance(outputs, dict):
+        return None
+    return outputs.get(phase)
+
+
+def _check_prod_touched_primary(task_dir, phase):
+    """TAG0050 批 C（设计 §4）：非 legacy 任务主产出 frontmatter 的 `prod_touched`。
+
+    - 缺字段 → ERROR（附修复命令）
+    - 值为 true 且当前不在 PAUSED → 中止提交
+    返回 None（不适用/通过）；命中则 sys.exit(1)。
+    """
+    if requirement_active(task_dir, "prod_touched", phase) is not True:
+        return
+    primary = _primary_output_for(task_dir, phase)
+    if not primary:
+        return
+    out_file = os.path.join(task_dir, primary)
+    if not os.path.isfile(out_file):
+        return
+    try:
+        with open(out_file, encoding="utf-8", errors="replace") as fh:
+            fm, _body = split_frontmatter(fh.read().replace("\r\n", "\n"))
+    except Exception:
+        fm = None
+    fm = fm if isinstance(fm, dict) else {}
+    # TAG0050 批 C（设计 §4 / BDD-52）：主产出缺 `prod_touched` → ERROR + 修复命令。
+    # （「主产出」按快照 `primary_outputs` 判定；非 legacy 任务必填。）
+    if "prod_touched" not in fm:
+        sys.stderr.write(
+            f"GATE: 主产出 {primary} 缺 prod_touched 字段（非 legacy 任务必填，设计 §4）\n"
+            f"      修复命令: FILE={out_file} agate-md-field-set.py set prod_touched false\n"
+            f"      （若未触达生产；若已触达请保持 true 并进入 PAUSED）\n"
+        )
+        sys.exit(1)
+    if fm.get("prod_touched") is True and phase != "PAUSED":
+        sys.stderr.write(
+            f"GATE: 主产出 {primary} 声明 prod_touched: true 且当前不在 PAUSED（{phase}），commit 中止\n"
+            f"      修复命令: FILE={out_file} agate-md-field-set.py set prod_touched false\n"
+            f"      （若未触达生产；若已触达请进入 PAUSED 而非改写字段）\n"
+        )
+        sys.exit(1)
+
+
 def _scan_prod_touched_and_rerun(repo_root, tasks_dir, staged_all, state_files_rel):
     """设计 §2.3 规则 7 的 PROD_TOUCHED 全局面：每个有暂存文件的任务目录都做
     PROD_TOUCHED 扫描（不论是否暂存 .state.yaml），安全门不再依赖"是否改了 phase"。
@@ -497,31 +663,20 @@ def _scan_prod_touched_and_rerun(repo_root, tasks_dir, staged_all, state_files_r
         if state_rel in state_files_rel and os.path.isfile(os.path.join(repo_root, state_rel)):
             continue
         task_dir = os.path.join(repo_root, task_rel)
+        state_file = os.path.join(task_dir, ".state.yaml")
+        phase = read_state_phase(state_file)
+        _check_prod_touched_primary(task_dir, phase)
         _rerun_gates_for_staged_outputs(repo_root, task_rel, task_dir)
         _rc, diff_raw = run_git(["diff", "--cached", "-M", "--", task_rel], cwd=repo_root)
-        added = []
-        in_card = False
-        for raw_line in (diff_raw or "").splitlines():
-            if not (len(raw_line) >= 2 and raw_line[0] == "+" and raw_line[1] != "+"):
-                continue
-            line = raw_line[1:]
-            if not in_card and "<!-- AGATE_CARD_START -->" in line:
-                in_card = True
-                continue
-            if in_card:
-                if "<!-- AGATE_CARD_END -->" in line:
-                    in_card = False
-                continue
-            added.append(line)
+        added = _added_lines_excluding_real_cards(diff_raw, phase)
         if any(_PROD_TOUCHED_RE.match(ln) for ln in added):
-            state_file = os.path.join(task_dir, ".state.yaml")
-            phase = read_state_phase(state_file)
             task_id = read_state_task_id(state_file)
             if phase == "PAUSED":
                 append_event(task_dir, {"event": "prod_touched_in_paused", "task_id": task_id})
             else:
                 sys.stderr.write(
                     f"GATE: [PROD_TOUCHED] 检测到生产环境接触（{task_id}），commit 中止\n")
+                sys.stderr.write(_PROD_TOUCHED_GUIDANCE)
                 sys.exit(1)
 
 
@@ -655,31 +810,22 @@ def main():
         _prod_touched_hit = False
         if any(f.startswith(prefix) for f in _staged_name_only()):
             _rc_diff, diff_raw = run_git(["diff", "--cached", "--", task_rel])
-            diff_added = []
-            in_card = False
-            for raw_line in (diff_raw or "").splitlines():
-                if not (len(raw_line) >= 2 and raw_line[0] == "+" and raw_line[1] != "+"):
-                    continue
-                line = raw_line[1:]
-                if not in_card and "<!-- AGATE_CARD_START -->" in line:
-                    in_card = True
-                    continue
-                if in_card:
-                    if "<!-- AGATE_CARD_END -->" in line:
-                        in_card = False
-                    continue
-                diff_added.append(line)
-            if any(re.match(r"^\s*-?\s*\[PROD_TOUCHED\]", ln) for ln in diff_added):
+            diff_added = _added_lines_excluding_real_cards(diff_raw, phase)
+            if any(_PROD_TOUCHED_RE.match(ln) for ln in diff_added):
                 _prod_touched_hit = True
                 if phase != "PAUSED":
                     sys.stderr.write(
                         f"GATE: [PROD_TOUCHED] 检测到生产环境接触（{task_id}），commit 中止\n")
+                    sys.stderr.write(_PROD_TOUCHED_GUIDANCE)
                     sys.exit(1)
             if (phase != "PAUSED"
                     and any(re.match(r"^\s*-?\s*\[PROD_TOUCHED\]\s*$", ln) for ln in diff_added)):
                 sys.stderr.write(
                     f"GATE: 不合规的 PROD_TOUCHED 标记格式（{task_id}），须用行首 [PROD_TOUCHED] 或 [PROD_NOT_TOUCHED] 声明\n")
                 sys.exit(1)
+
+        # 2g.3 主产出 prod_touched 必填/中止（TAG0050 批 C，设计 §4）
+        _check_prod_touched_primary(task_dir, phase)
 
         # 2h.1c 状态转移事件（TAG0050 A3，设计 §2.7）：**前移到 2g 的 continue 之前**，
         # 使进入 PAUSED/READY/DONE 的转换也被记录（现状 2g 在 2h.1c 之前 continue ⇒
@@ -727,7 +873,7 @@ def main():
         # 2g.2 frontmatter schema 校验（P2-design.md §3.1.3，BDD-8 挂载点）
         # 与 2a 同机制：扫描本任务暂存的 P1/P2/P6/P7 产出文件，逐个跑 check-frontmatter
         if os.path.isfile(os.path.join(SCRIPT_DIR, "check-frontmatter.py")):
-            for fm_name in ("P1-requirements.md", "P2-design.md", "P6-acceptance.md", "P7-consistency.md"):
+            for fm_name in _declaration_files(task_dir):
                 if (task_rel + "/" + fm_name) in _staged_name_only() and _run_script_rc("check-frontmatter.py", [os.path.join(task_dir, fm_name)]) != 0:
                     sys.exit(1)
 

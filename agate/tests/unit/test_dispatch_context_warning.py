@@ -51,7 +51,9 @@ def test_b3_warning_staged_missing_dispatch_context_warns(
 
     task_dir = repo / "agate-workspace" / "tasks" / "TAG0001"
     task_dir.mkdir(parents=True)
-    (task_dir / "P2-design.md").write_text("content\n", encoding="utf-8")
+    (task_dir / "P2-design.md").write_text(
+        "---\nagent: test\nprod_touched: false\n---\ncontent\n", encoding="utf-8"
+    )
     (task_dir / ".state.yaml").write_text(
         "task_id: TAG0001\nphase: P2\nretries: {}\n", encoding="utf-8"
     )

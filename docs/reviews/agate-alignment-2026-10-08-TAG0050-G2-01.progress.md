@@ -1,0 +1,20 @@
+- [start] G2 SELF-GATE protocol-alignment review; HEAD=54a814fc; G2 changes uncommitted (13 modified + 1 new)
+- 读 protocol-alignment-review.md + SELF-GATE.md + P4-dispatch-context-G2 + P4-implementation-G2 + P4-progress
+- diff: 13 modified + agate_schema.py(new); markers.yaml PROD_TOUCHED dash_only->default; LEVELS.yaml sha 更新
+- [验证] sha256(level-1.yaml)=e96a06b2... 与 LEVELS.yaml 登记值一致
+- [验证] pytest 3 文件 = 14 passed（与 P4-implementation-G2 §6 一致）；marker_single_source 另 36 passed
+- [验证] consistency = 0 ERROR / 412 WARNING（实现声称 410；差异 2 为新增未跟踪任务文件，均 frozen）
+- [验证] count-tests=2833; platform rc=0; ruff clean (脚本面)
+- [验证] check-gate.py 无 prod_touched/primary_outputs/declaration_files/traps 任何引用（grep rc=1）
+- [验证] BDD-52 测试：check-gate P1 init_task -> rc=1 原因是『契约要求 judge』（手造 /tmp/opencode 副本实测），与 prod_touched 无关
+- [验证] pre-commit-gate 主产出 prod_touched 缺失 + P4-review approved -> rc=0（缺字段不报 ERROR，DESIGN_GAP-3 实证）
+- [验证] pre-commit-gate prod_touched: true -> rc=1 中止（BDD-53 行为已实现，但测试只断言快照文本）
+- [验证] check-frontmatter.py 直接调用缺 frontmatter -> rc=1；AGATE_PRECOMMIT_GATE=1 -> rc=0（F10 在 hook 路径被跳过）
+- [发现] level-1.yaml declaration_files 无任何消费方；check-frontmatter.py 读的是 files（仅 P6-acceptance）∪ 硬编码 4 文件 -> F10 实际面 {P1,P2,P6,P7}，缺 P6.5/P8
+- [发现] pre-commit-gate.py:809 硬编码 (P1,P2,P6,P7) 元组，未用快照 declaration_files
+- [发现] agate/scripts/README.md:164 agate-config.py 行仍写 init/validate/get/list/show（缺 set/unset/explain）
+- [发现] design-md-field-set.md §7.2「agent 不可被 set 改写」未标注被 TAG0050 取代（DESIGN_GAP-1）
+- [发现] DESIGN_GAP-5: mk_7b/mk_8 从 pre-commit-gate.py:755 源码抽取字面正则，删则红（成立）
+- [发现] BDD-48 测试无 CRLF 断言、不断言修复命令、无 windows_smoke 标记（design §3.5 要求 windows_smoke）
+- [发现] agate-frontmatter-check.py 保留 _local_iter_errors 递归副本（安装破损降级）——字面上第二实现
+- [发现] UPGRADING.md 有 G1 未发布节，无 G2 节（F10/prod_touched 行为变更）
