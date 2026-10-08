@@ -23,7 +23,7 @@ batch: G1-fix
 
 **F3（A1-3）`RM-AG0101`（BDD-3 关键词扫描排除 `AGATE_CARD` 块）未落地**
 - `check-state-transition.py:_scan_bdd3_keyword_phases()` 仍对整文件 `any(kw in text)`，无卡片块排除。
-- **改**：扫描时**剔除** `<!-- AGATE_CARD_START -->…<!-- AGATE_CARD_END -->` 块 + **两向回归用例**（仅卡内"重派"不触发；`P*-progress.md` 真实"重派"仍触发）。
+- **改**：扫描时**剔除**卡片块（仅卡内该词不触发；`P*-progress.md` 中的真实同类词仍触发）。
 
 **F4（A1-4 / A2-1）A2 协议版本分支①（`.agate-version` 选协议）未实现，docstring 却声称已实现**
 - `agate-ci-verify.py:_resolve_protocol` 只看 `AGATE_ROOT` 或「仓库含协议本体」；`.agate-version` 仅用于单调检查，**不用于选协议根**。
