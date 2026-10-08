@@ -1,0 +1,9 @@
+- [start] rm -f progress 完成；只读纪律：验证仅在仓外副本
+- [check-protocol-consistency.py] 在真实工作区跑（脚本只写 stderr，无写仓副作用）：0 ERROR / 412 WARNING（冻结文件）；CHECK 7 PASS（badge↔CHANGELOG）/ CHECK 13 PASS（CHANGELOG↔UPGRADING）/ CHECK 16 PASS
+- [git] HEAD=1c5f43d8（fix commit）；origin/main=5d43bfba（PR#409 merge）；工作区 3 改（CHANGELOG/README/UPGRADING）未提交
+- [范围1 版本面] README.md:12 badge=v0.80.1 ✓；CHANGELOG.md:11 [Unreleased] 保留且空、:13 ## [0.80.1] - 2026-10-09 + ### 修复 ✓；[0.80.0] 节未被改（git diff -U0 仅 +13,12）✓；UPGRADING.md:279 ### v0.80.1 ✓；CHECK7/CHECK13 PASS ✓
+- [范围1 反向传播] README.zh-CN.md:12 badge 仍 v0.78.0（自 v0.78.0 起漂移）——既有状态非本次引入；TAG0050-P8 review:104 已记「CHECK7 只读 README.md，不构成缺口」
+- [范围2 内容准确性] 对照 PR#409 实际改动（1c5f43d8 / merge 5d43bfba）：协议根改由 base 推导 ✓（agate-ci-verify.py:183/198/206/538）；_task_commit_repo 夹具良构 ✓（test_tag0050_ci_replay.py:25-52）；新增 push-to-main 回归用例 ✓（test_agate_ci_verify.py:216+）；四条路径 base 计算 ✓（main:475-488）
+- [范围3 无破坏性变更] 修复只改 _resolve_protocol 协议根选择 + docstring + 测试；未触碰账本格式/单调检查/等级检查（:498-519 未变）⇒ 无破坏性变更声明正确
+- [范围4 无新承诺] CHANGELOG 新增块 / UPGRADING v0.80.1 无未来版本号预测（grep v0.8[1-9]/将在/预计 均无）
+- [范围5 SELF-GATE] check-protocol-consistency.py 0 ERROR ✓；全量 pytest（仓外副本 /tmp/opencode/tag0050-v0801-review，AGATE_ROOT=副本/agate，-n auto）：1 failed, 2865 passed, 3 skipped（76.5s）；唯一 failed=test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent（opencode debug agent→agents 改名，环境漂移，与本 patch 无关）⇒ 除既有漂移 1 条外 0 failed ✓

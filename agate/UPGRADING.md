@@ -276,6 +276,21 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.80.1 — `agate-ci-verify` 回放协议根修复（**无破坏性变更**）
+
+> 修复 v0.80.0 的缺陷：`agate-ci-verify` 在**推送到默认分支**（merge 后 push）时选错回放协议根。
+
+- **现象**：`_resolve_protocol` 用 `merge-base HEAD origin/<默认分支>` 选协议根；**push 到 main 时
+  `merge-base` = HEAD 自己** ⇒ 用**刚合并的新协议**回放**历史提交** ⇒ 旧 `P{N}-dispatch-context-*.md`
+  里注入的卡片 hash（按当时协议生成）与新版卡片不符 ⇒ `gate-backstop` 误报多个提交 FAIL。
+  （PR 场景因分支尖的 `merge-base` 恰好指向旧协议而**掩盖**了该缺陷。）
+- **修**：协议根改由**回放基准**推导 —— `merge-base(<base>, HEAD)` 处的 `agate/`（`<base>` 为
+  PR 口径的 `merge-base(PR_BASE, HEAD)` 或 push 口径的 `before`）；解析失败时**显式 note 回退**
+  到当前协议根（不静默）。PR / push-to-main / push-new-branch（全零 `before` → 回退
+  `merge-base HEAD origin/<默认分支>`）/ 本地缺省四条路径各自验证正确。
+- **使用者影响**：若你的项目用 `agate-ci-verify` 作 CI 兜底且**在 merge 后向默认分支 push**，
+  v0.80.0 会把历史提交误判为 FAIL。升级到 v0.80.1 即修复；**无需改动你的项目**。
+
 ### v0.80.0 — TAG0050 任务数据契约：结构化判定、可信写入与任务版本（**无破坏性变更**）
 
 > 判定依据从「正文正则 + 自报汇总 + 可改开关 + 作者自标的分类」改为「按**冻结契约快照**

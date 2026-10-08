@@ -10,6 +10,18 @@
 
 ## [Unreleased]
 
+## [0.80.1] - 2026-10-09
+
+### 修复
+
+- **`agate-ci-verify` 回放协议根选错（push 到默认分支时误报 FAIL）**：`_resolve_protocol`
+  用 `merge-base HEAD origin/<默认分支>` 选协议根 —— **push 到 main 时 merge-base = HEAD 自己**
+  ⇒ 用**刚合并的新协议**回放**历史提交** ⇒ 旧 dispatch-context 里注入的卡片 hash（按当时协议生成）
+  与新版卡片不符 ⇒ `gate-backstop` 误报多个提交 FAIL（PR 时因 merge-base 恰好指向旧协议而掩盖）。
+  **修**：协议根改由**回放基准**推导（`merge-base(<base>, HEAD)` 处的 `agate/`；解析失败显式 note
+  回退）；`_task_commit_repo` 测试夹具改为**当前协议下良构**（消除对 checkout 协议版本的隐性依赖）；
+  新增 push-to-main 场景回归用例。详见 `agate/UPGRADING.md`「v0.80.1」节。
+
 ## [0.80.0] - 2026-10-09
 
 ### 新增
