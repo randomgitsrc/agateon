@@ -162,7 +162,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | 脚本 | 用途 |
 |------|------|
 | `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `set <field> <value>` / `unset <field>` / `explain <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
-| `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；`--baseline` 落 `.out` 证据并逐字节比对（差异 → 非 0）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
+| `agate-run.py` | 执行层：在不可绕开路径上执行声明 `verify.commands` 中的验证命令（`agate-run [--baseline] <命令>`）。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；**普通运行只返回命令自身退出码**（不做基线比对）；`--baseline` 落 `.out` 证据并逐字节比对（**不一致 → 打印逐行 diff** 并返回非 0）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|
 | `agate-task-init.py` | 任务初始化入口（TAG0050 批 A1）：新建任务（`<TASK_ID> --slug --title [--priority] [--depends]`）创建目录 + `.state.yaml` + P0-brief 骨架，并在账本第 1 行写 `task_created`（记当前契约等级）；存量迁移 `--existing <dir>`（前置写入创建事件并重建哈希链）/ `--adopt <dir>`（写 `task_adopted`）/ `--upgrade <dir>`（写 `task_upgraded`，只升不降）| 0=成功, 1=用法/校验失败 |
 | `agate-state-set.py` | 任务状态写入工具（TAG0050 批 A3）：`phase <Pn\|PAUSED\|READY\|DONE>`（以 **HEAD 版本**为 old_state，用 `check-state-transition.py::check_transition` 同源校验，回退时同写 `retries[...]`，原子替换 + `git add`，**不写事件**）/ `meta.priority low` / `cancel --reason "…"` / `--list`；`status` 是系统字段（现算），不提供 setter | 0=成功, 1=非法转换/用法失败 |

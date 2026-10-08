@@ -390,6 +390,16 @@ git commit
   （`markers.yaml` 的 `lead_variant: default`）；粗体 / 引用块写法仍拦，否定写法
   `- [PROD_TOUCHED]: 无` 继续阻断并给专门指引。
 
+### 未发布 — TAG0050 批 D 前置 hotfix：`agate-run` 基线比对（**无破坏性变更**）
+
+> 修复 TAG0042 实施评审 I-2：`agate-run` 普通运行也会与 `.out` 证据比对，可能因**陈旧证据假失败**
+> （返回 1 而非命令自身退出码）；且 `--baseline` 不一致时声称「diff 已客观报出」却**不真的打印 diff**。
+> 协议语义 / `.state.yaml` schema / 既有任务数据格式均未变；版本号与 CHANGELOG 条目在 P8 统一落。
+
+- **普通运行只返回命令自身退出码**：不带 `--baseline` 时**不再**与 `.out` 证据比对（也**不写**证据）。
+- **基线比对只在 `--baseline` 时进行**：不一致 → 打印**逐行 unified diff**（`--- baseline` / `+++ current`）
+  再返回非 0；证据不存在 → 首次落盘（语义不变）。
+
 ### v0.79.0 — TAG0042 批 1：统一 phase 语义（**无破坏性变更**）
 
 > **协议语义、`.state.yaml` schema、既有任务数据格式均未变**——老任务无需迁移。

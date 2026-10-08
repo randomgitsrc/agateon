@@ -4,8 +4,10 @@
 职责（P1 BDD-9/10/11/12，P2-design §4.2）：
   * BDD-9  从 `agate.config.yaml` 的 `verify.commands` 取命令，经 bash 执行并**如实传播退出码**
            （POSIX 开 `pipefail`，避免 `cmd | tail` 吞掉左侧失败）；非 POSIX 平台显式退化 +
-           WARNING（绝不静默报绿，ADR-015 手段②）。
-  * BDD-10 `--baseline` 首次落盘 `.out` 证据；后续执行与之**逐字节比对**，差异客观报出（二值）。
+           WARNING（绝不静默报绿，ADR-015 手段②）。普通运行（无 `--baseline`）**只返回命令自身
+           退出码**，不与 `.out` 证据比对（I-2 hotfix：陈旧证据不得致假失败）。
+  * BDD-10 `--baseline` 首次落盘 `.out` 证据；后续执行与之**逐字节比对**，不一致时**实际打印
+           逐行 diff** 再返回非 0（I-2 hotfix）。
   * BDD-11 证据文件须被 `.gitignore` 覆盖（`git check-ignore` 判定），否则报错（不落盘）。
   * BDD-12 执行后经 `agate_common.append_event`（**唯一写路径**）追加 `cmd_run` 事件；目标
            账本目录由 `AGATE_TASK_DIR` env 指定（不直接写 gate-events.jsonl，避免破链）。
@@ -18,6 +20,7 @@
 Python 3.8+（禁 match / str.removeprefix）。
 """
 
+import difflib
 import os
 import subprocess
 import sys
@@ -114,6 +117,29 @@ def _read_bytes(path):
         return handle.read()
 
 
+def _baseline_diff(evidence_bytes, output):
+    """由证据（基线）字节与本次输出生成**逐行 unified diff** 文本（I-2：实际打印 diff）。
+
+    逐字节不同但逐行相同时（如尾行换行差异），unified diff 可能为空——此时给出字节级提示，
+    保证「已比对出差异」的结论始终伴随可读证据（不回落为只写一行抽象字样）。
+    """
+    baseline_text = evidence_bytes.decode("utf-8", errors="replace")
+    diff_lines = difflib.unified_diff(
+        baseline_text.splitlines(),
+        output.splitlines(),
+        fromfile="baseline",
+        tofile="current",
+        lineterm="",
+    )
+    rendered = "\n".join(diff_lines)
+    if rendered.strip():
+        return rendered
+    return (
+        f"（逐行内容相同但逐字节不一致：基线 {len(evidence_bytes)} 字节，"
+        f"本次 {len(output.encode('utf-8'))} 字节）"
+    )
+
+
 def _write_evidence(path, output):
     """证据落盘——**字节精确**（写盘字节 == `output.encode("utf-8")`，C8 C1 修复）。
 
@@ -168,6 +194,7 @@ def main(argv):
 
     evidence_path = _evidence_path(cfg, project_root, index)
     baseline_mismatch = False
+    mismatch_diff = ""
     if baseline:
         ignored = _is_ignored(project_root, evidence_path)
         if ignored is False:
@@ -186,14 +213,14 @@ def main(argv):
             _write_evidence(evidence_path, output)
         elif _read_bytes(evidence_path) != output.encode("utf-8"):
             baseline_mismatch = True
-    elif os.path.isfile(evidence_path) and _read_bytes(evidence_path) != output.encode("utf-8"):
-        baseline_mismatch = True
+            mismatch_diff = _baseline_diff(_read_bytes(evidence_path), output)
 
     if baseline_mismatch:
         sys.stderr.write(
-            "agate-run: baseline mismatch（证据与基线逐字节不一致，diff 已客观报出）: "
+            "agate-run: baseline mismatch（证据与基线逐字节不一致）: "
             f"{evidence_path}\n"
         )
+        sys.stderr.write(mismatch_diff + "\n")
         _record_cmd_run(command, exit_code)
         return 1
 

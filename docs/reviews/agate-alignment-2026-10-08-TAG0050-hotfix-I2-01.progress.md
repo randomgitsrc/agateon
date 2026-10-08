@@ -1,0 +1,23 @@
+# 留痕 — TAG0050 hotfix I-2 protocol-alignment-review (2026-10-08)
+
+- 读 dispatch-context（P4-dispatch-context-protocol-alignment-review-hotfix-I2.md）：审查对象=agate-run.py 基线比对 hotfix；范围 5 项。
+- 读 protocol-alignment-review.md（角色定义，A1-A8 + 只读纪律 + 写前防覆盖 BDD-8）。
+- 读设计 §5:505 前置条件（逐字）：普通运行只返回命令自身退出码；基线比对只在 --baseline；并实际打印 diff。
+- 读 agate-run.py（232 行）：移除 :189-190 elif；新增 _baseline_diff()；mismatch_diff 打印。
+- git status：改动 3 文件 + 新增测试 appended（agate-run.py / README.md / UPGRADING.md / test_agate_run.py），另有 2 个未跟踪 dispatch-context。
+- 副本 /tmp/opencode/tag0050-i2-copy（仓外，只读纪律）。
+- 副本内 pytest test_agate_run.py：14 passed（含 4 新增）。
+- 变异（git show HEAD:agate-run.py 覆盖副本内脚本）：3 failed / 11 passed —— 3 条新用例改前红（两条普通运行 + baseline diff 打印），首次落盘守护改前即绿（预期）。
+- 手工复现 --baseline alpha→beta：stderr 实际打印 '--- baseline/+++ current/-alpha/+beta'，rc=1。
+- 手工复现 byte-fallback（_baseline_diff(b'alpha','alpha\n')）→ 字节级提示可达但无测试覆盖。
+- 普通运行 + 陈旧证据：rc=0 且证据未改写（手工 + 用例）。
+- check-protocol-consistency.py（副本）→ 0 ERROR / 413 frozen WARNING。
+- SELF-GATE 触发面确认：agate/scripts/*.py + agate/**/*.md 命中。
+- 反向传播：grep '客观报出|基线比对|逐字节比对' 全仓 → README.md 已改；CODE-MAP.md:39 描述仍准确（未称普通运行比对）。
+- 设计 §5 未要求 review I-2 建议中的 formatter 归一化 → 未实现不判 MISALIGNED（范围更窄）。
+- 全量 pytest（副本，-n auto --reruns 2）：8 failed / 2832 passed / 3 skipped；8 条与本 hotfix 无关（反证：stash 掉 hotfix 后同样 8 条失败）。
+- test_events_ledger.py 20 passed（cmd_run 事件语义无副作用）。
+- check-platform-assumptions.py rc=0。
+- A8：progress 声称 410 WARNING，实测 413（=CHECK1-yaml 2 + CHECK10-scriptref 1 + CHECK2-refs 410 的合计；410 为子项）→ frozen 观测口径差异，非缺陷。
+- 真实仓库 git status：仅评审新增 2 文件（成果 + 留痕），无被评审文件改动，无误入 stash。
+- 结论：A1-A8 全 ALIGNED；1 条 INFORMATIONAL（_baseline_diff 字节兜底分支缺测试），不阻断。

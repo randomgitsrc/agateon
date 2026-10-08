@@ -375,3 +375,45 @@ $ 恢复 → RESTORED_OK
 - `check-platform-assumptions.py` → rc=0；`ruff check`（改动文件）→ All checks passed。
 - 可辩护项：L2（注释说明结构面/时间面）、L3（保留偏宽 fail-safe 并声明）、L4/L6（已裁定）；M2 登记为后续批待办（DESIGN_GAP）。
 - [PROD_NOT_TOUCHED] 仅本 checkout 改代码 + pytest tmp_path + `/tmp/opencode` 备份；未接触生产环境。
+
+## 批 D 前置 hotfix（I-2，`agate-run` 基线比对缺陷）implementer（2026-10-08）
+
+- 已读：`implementer.md`、dispatch-context（hotfix-I2）、P0-brief、设计 §5 前置条件（:505）、
+  `agate-run.py`、`test_agate_run.py`、`agate/scripts/README.md`、`agate/UPGRADING.md`、conftest fixtures。
+- 环境隔离：[PROD_NOT_TOUCHED]（仅本 checkout 改代码 + pytest tmp_path；未接触生产环境）。
+- HEAD=`f21b314e`（G2 已提交），分支 `feat/TAG0050-task-data-contract`。
+
+### 改前红（负向证据，命令 + 输出）
+
+```
+$ timeout 600s python3 -m pytest agate/tests/unit/test_agate_run.py -q -k hotfix_i2
+FFF.                                                                     [100%]
+3 failed, 1 passed, 10 deselected in 0.34s
+```
+- `test_hotfix_i2_plain_run_returns_command_exit_code_with_stale_evidence` → rc=1（陈旧证据假失败；应为 0）
+- `test_hotfix_i2_plain_run_propagates_nonzero_with_stale_evidence` → rc=1（应为命令退出码 7）
+- `test_hotfix_i2_baseline_mismatch_prints_real_diff` → 输出只有「diff 已客观报出」字样、无 `---`/`+++`/`-alpha`/`+beta`
+- `test_hotfix_i2_baseline_first_write_...`（首次落盘：语义不变的回归守护）→ 改动前即绿
+
+### 实现
+
+- `agate/scripts/agate-run.py`：
+  - 删 `:189-190` 的 `elif`——普通运行**不做**基线比对，`return exit_code`（命令自身退出码）；
+  - `--baseline` 不一致时新增 `_baseline_diff()`（`difflib.unified_diff`，`fromfile=baseline`/`tofile=current`）
+    **实际打印逐行 diff** 再返回 1；逐行相同但逐字节不同时给出字节级提示（保证总有可读证据）；
+  - 首次落盘语义不变（`--baseline` 且文件不存在 → 写证据、不 mismatch）；docstring 同步。
+- `agate/tests/unit/test_agate_run.py`：新增 4 条回归用例（普通运行+陈旧证据 rc 归命令自身 /
+  普通运行失败 rc 归命令自身 / `--baseline` 打印真实 diff / 首次落盘）。
+- 文档同步：`agate/scripts/README.md` agate-run 行（普通运行不做比对 + 不一致打印 diff）；
+  `agate/UPGRADING.md` 新增「未发布 — TAG0050 批 D 前置 hotfix」节。
+
+### 自查（自查 ≠ gate）
+
+- `pytest agate/tests/unit/test_agate_run.py -q` → **14 passed**（含 4 新增）。
+- `check-protocol-consistency.py` → **0 ERROR / 410 WARNING**（基线）。
+- `check-platform-assumptions.py` → rc=0（无命中）。
+- `bash agate/tests/scripts/count-tests.sh` → **2843**（G2 C8 上轮 2839 +4）。
+- `ruff check agate-run.py test_agate_run.py` → All checks passed。
+- `git status --porcelain` → 仅 3 改动 + 1 新增测试文件，无账本污染（测试全在 tmp_path）。
+- [PROD_NOT_TOUCHED]
+
