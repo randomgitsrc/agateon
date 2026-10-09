@@ -2169,7 +2169,7 @@ closure_note: >-
 id: DEBT0055
 category: protocol
 title: "P6 的「pytest 全绿」类 BDD 遇预存失败无机械豁免口径——P5 卡有 known-failures 机制，P6 无对应，judge 据此判 needs-revision"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/phase-cards/P6-acceptance.md
@@ -2180,18 +2180,31 @@ evidence:
     note: "judge 据 BDD-75 字面全绿判 needs-revision（76/77），须人工裁定「无新增失败」+ 一轮重验"
   - ref: agate/phase-cards/P5-verification.md
     note: "P5 卡有预存失败机制（登记 known-failures + 不阻止门槛），P6 无对应"
+  - ref: agate/phase-cards/P6-acceptance.md
+    note: >-
+      **关单证据（批次 hotfix-batchA-0106，RM-AG0106）**：P6 无预存失败豁免口径 已修；
+      P6 卡新增「预存失败豁免口径」节（判定基准=本次引入失败 0；豁免来源=known-failures.md
+      逐条且须在证据中显式引用；judge 按「实际失败集 − known-failures 集 = ∅」复核；
+      未登记即不豁免）；`check-maintainability.py` docstring 明确「设计强制改动越阈」的
+      **既定出口 = known-violations.md 登记 + 评审**（不引入机械豁免，理由见 ADR-015）。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   任何在「pytest 全绿」类 BDD 上遇到与本任务无关的预存失败的任务，都会被 judge 按字面判
   needs-revision，须人工裁定 + 额外一轮重验（成本随环境漂移概率放大）。
 recommendation: >-
   P6 卡为「pytest 全绿」类 BDD 补预存失败豁免口径（与 P5 卡 known-failures 一致，须 judge 可机械复核）。
-  落点：agate/phase-cards/P6-acceptance.md + check-judge-verdict.py。
+  落点：`agate/phase-cards/P6-acceptance.md`（口径 + 机械面指向 P5 baseline diff）。**2026-10-09 更正（SELF-GATE r1 证伪）**：原写「须 judge 可机械复核」**不成立**（judge 信息隔离 + `check-judge-verdict.py` 无该逻辑）⇒ judge 侧为**人工**复核。
 closure_criteria:
-  - "P6 卡含「pytest 全绿 = 无新增失败」的预存失败豁免口径且 judge 可机械复核"
-  - "回归用例覆盖预存失败存在时的 P6/judge 判定"
+  - "P6 卡含「pytest 全绿 = **本次引入失败 0**」的预存失败豁免口径"
+  - "⚠️ **2026-10-09 判据更正（SELF-GATE r1 证伪）**：原写「**judge 可机械复核**」——**不成立**：judge 处信息隔离（白名单不含 `known-failures.md`、且禁读 `P6-acceptance.md`），`check-judge-verdict.py` **无**该逻辑 ⇒ 口径改为「judge **人工**复核 + 机械面在 **P5** 的 `pre-task-baseline.md` ↔ `fail-list.txt` diff」"
+  - "文档断言用例覆盖该口径存在（`test_docs_assertions.py`）"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: hotfix-batchA-0106   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0106 hotfix）：P6 豁免口径 + 维护性越阈既定出口；RM-AG0106 同步回写 done。
+
 ```
 
 ## DEBT0056
@@ -2200,7 +2213,7 @@ task_id: null   # 待立项；由 TAG0050 复盘登记
 id: DEBT0056
 category: technical
 title: "维护性 god_file_threshold 遇「设计强制改动」无机械豁免——pre-commit-gate.py 因 §3.1 强制 T4 改动 998→1144 越阈，只能走 known-violations.md 登记"
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/known-violations.md
@@ -2209,6 +2222,14 @@ evidence:
       （P2 §3.1）+ F10 接线（§3.6）为设计强制改动
   - ref: agate/scripts/check-maintainability.py
     note: "god_file_threshold 判定无「设计强制改动」豁免——设计强制的越阈改动只能登记 known-violations.md"
+  - ref: agate/scripts/check-maintainability.py
+    note: >-
+      **关单证据（批次 hotfix-batchA-0106，RM-AG0106）**：维护性 god_file_threshold 遇设计强制改动
+      无豁免 已修——`check-maintainability.py` docstring 明确**既定出口 = `known-violations.md`
+      登记 + 评审确认**，并给出**准确口径**「机械可查的**登记/计数**路径 + 人工评审确认」
+      （机械面只到「文件存在 + 条目数 ≥ violation 数」，不判「是否设计强制」；不引入机械豁免，
+      理由见 ADR-015）。该 hotfix 的 **P5/P6 等价验证** = 全量 pytest +
+      `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   设计强制引入的越阈改动只能走 known-violations 登记（登记数=检测数，可放行），但缺少「设计强制」的
   机械豁免语义，未来同类任务每次都须人工登记与评审确认。
@@ -2219,7 +2240,11 @@ closure_criteria:
   - "明确「设计强制改动越阈」的处置路径（机械豁免或确认 known-violations 为既定出口）并文档化"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: hotfix-batchA-0106   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0106 hotfix）：P6 豁免口径 + 维护性越阈既定出口；RM-AG0106 同步回写 done。
+
 ```
 
 ## DEBT0057

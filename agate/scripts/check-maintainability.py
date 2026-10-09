@@ -22,6 +22,14 @@ god-file 跨越 + fuzzy-boundary 两类 G0 反模式检测，diff 驱动（git d
 
 移动代码假阳性（BDD-12）：纯 diff 层面"删除行 + 新增行"中的新增行照判 violation——
 已知行为非 bug，靠 known-violations 登记吸收，不引入跨行移动检测。
+
+**「设计强制改动越阈」的既定出口（RM-AG0106 / DEBT0056）**：当越阈是**设计要求**（如协议 §3.1
+强制在既有大文件上新增逻辑）而非实现自选时，**既定出口 = `known-violations.md` 登记 + 评审确认**——
+逐条写明「文件 / before / after / 阈值 / **理由**」，经评审确认后长期留存。
+⚠️ **准确口径**：该出口是「**机械可查的登记/计数路径 + 人工评审确认**」——机械面只到
+「`known-violations.md` 文件存在 + 条目数 ≥ violation 数」（`gate_p4`），**不判**「是否设计强制」
+（那是**评审**的判断）。本脚本**不**为此引入机械豁免：无法从 diff 区分「设计强制」与「实现自选」，
+self-declaration 会被滥用（ADR-015 门禁只用于实质错误）。
 fuzzy 正则集只覆盖 Python/TS；其它扩展名只做 god-file 行数判定，不做 fuzzy（P0 out-of-scope）。
 """
 

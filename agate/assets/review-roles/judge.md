@@ -88,3 +88,11 @@ Header 字段机器可读（`read_judge_verdict` 解析）；正文结论行 `- 
 ## double-judge（可选，高风险任务人工指定）
 
 P1 `risk_level=high` 时主 Agent 可派两个独立 judge 并行（double-judge，`.state.yaml` `judge.double_judge: true` 文档登记）。两份 verdict 不一致 → 复用专家组/组长机制汇总或交人工。本轮无机器校验（YAGNI，文档级可选）。
+
+## 遇「pytest 全绿」类 BDD 时的口径（RM-AG0106）
+
+判据是「**本次任务引入的失败 = 0**」——**不是**「全量 0 失败」。你处**信息隔离**
+（白名单**不含** `known-failures.md`，且**禁读** `P6-acceptance.md`）⇒ 你**不**机械读豁免集，
+按「BDD 声称 vs **客观证据**（`P6-evidence/*.log` 的失败清单）」**人工**核对，**不得**仅凭
+「有失败」判 needs-revision。豁免的机械依据在 **P5**（`pre-task-baseline.md` ↔ `fail-list.txt`
+diff）——你需要时**由主 Agent 转述**该 baseline，不得自行越白名单取文件。
