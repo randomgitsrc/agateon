@@ -99,13 +99,13 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 |
 |------|------|
-| `agate_common.py` | 公共函数库（替代 `gate-result.sh` + `agate-workspace-resolve.sh`）：`write_gate_result` / `read_state_phase` / `read_state_task_id` / `has_staged_phase_change` / `resolve_formatter` / `run_test_with_formatter` / `resolve_workspace` / `probe_python` / `run_git` / `read_vision_tri_state`（P1 vision 能力三态统一解析）/ `MAX_RETRY_MAP` 等。执行模式输出 `AGATE_WORKSPACE=` / `AGATE_TASKS_DIR=` 两行（workspace-resolve 契约）|
+| `agate_common.py` | 公共函数库（替代 `gate-result.sh` + `agate-workspace-resolve.sh`）：`write_gate_result` / `read_state_phase` / `read_state_task_id` / `has_staged_phase_change` / `resolve_formatter` / `run_test_with_formatter` / `resolve_workspace` / `resolve_workspace_from_task_dir`（由 `task_dir` 解析工作区：向上找项目根后交 `resolve_workspace`，RM-AG0084 / DEBT0028 的**单源实现**） / `probe_python` / `run_git` / `read_vision_tri_state`（P1 vision 能力三态统一解析）/ `MAX_RETRY_MAP` 等。执行模式输出 `AGATE_WORKSPACE=` / `AGATE_TASKS_DIR=` 两行（workspace-resolve 契约）|
 
 ### CI 兜底
 
 | 脚本 | 用途 | 退出码语义 |
 |------|------|-----------|
-| `agate-ci-verify.py` (TAG0042 批5；TAG0050 批 A2 改造) | **逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），防 `--no-verify` 绕过 hook（修复 F15）。`--base <sha>`（**必填**——PR 口径取 merge-base；**缺 `--base` 不再静默推断，即 FAIL**，见 TAG0050 评审 M-1 配套）/ `--push --base <sha>`（push 口径；`before` 全零时回退 `merge-base HEAD origin/<默认分支>`）；`gate-backstop` 的 **PR 事件同时跑两条口径**（覆盖两条独立的范围/协议根解析路径）；只回放改动任务目录的提交，无则 `SKIP:` + 原因；协议版本：仓库含协议本体（agateon-like）或 `AGATE_ROOT` 提供协议 → **回放基准 `base`** 处（协议仓库中 `merge-base(base, HEAD)`）的 `agate/`（push-to-main 时 = `before`；`base` 不在协议仓库则回退当前 HEAD 协议并在 note 写明原因）；`.agate-version` 仅用于**单调不降**检查（降级判 FAIL），**不用于选协议根**（分支①「按 `.agate-version` 定位版本目录」未实现，见 P4-implementation-G1 的 DESIGN_GAP）；`AGATE_REPLAY=1` 回放模式；含账本最终状态检查 + legacy 新增 PROD_TOUCHED ERROR 单独统计。每个「跳过」面显式 `SKIP:` + 原因 | 0=通过/跳过, 1=判定失败 |
+| `agate-ci-verify.py` (TAG0042 批5；TAG0050 批 A2 改造) | **逐提交回放本地 hook**（`pre-commit-gate.py` + `commit-msg-self-gate.py`），防 `--no-verify` 绕过 hook（修复 F15）。`--base <sha>`（**必填**——PR 口径取 merge-base；**缺 `--base` 不再静默推断，即 FAIL**，见 TAG0050 评审 M-1 配套）/ `--push --base <sha>`（push 口径；`before` 全零时回退 `merge-base HEAD origin/<默认分支>`；**`before` 不可解析**（对象缺失，如 rebase / 强推后旧 head 不再挂任何 ref）时回退 `merge-base HEAD origin/<默认分支>` 并显式 NOTE——RM-AG0112）；`gate-backstop` 的 **PR 事件同时跑两条口径**（覆盖两条独立的范围/协议根解析路径）；只回放改动任务目录的提交，无则 `SKIP:` + 原因；协议版本：仓库含协议本体（agateon-like）或 `AGATE_ROOT` 提供协议 → **回放基准 `base`** 处（协议仓库中 `merge-base(base, HEAD)`）的 `agate/`（push-to-main 时 = `before`；`base` 不在协议仓库则回退当前 HEAD 协议并在 note 写明原因）；`.agate-version` 仅用于**单调不降**检查（降级判 FAIL），**不用于选协议根**（分支①「按 `.agate-version` 定位版本目录」未实现，见 P4-implementation-G1 的 DESIGN_GAP）；`AGATE_REPLAY=1` 回放模式；含账本最终状态检查 + legacy 新增 PROD_TOUCHED ERROR 单独统计。每个「跳过」面显式 `SKIP:` + 原因 | 0=通过/跳过, 1=判定失败 |
 
 ### 诊断
 

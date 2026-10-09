@@ -59,7 +59,11 @@ except Exception:  # pragma: no cover - 独立副本降级
     requirement_active = None
     resolve_rules_root = None
 
-CHECK_GATE = os.path.join(SCRIPT_DIR, "check-gate.py")
+# check-gate 入口：**受控覆盖**（RM-AG0111 / DEBT0050）——测试可用合成 gate 制造
+# 「exit ∉ pass_set 且 ≠ 1」以恢复 `agate-next` 真暂停分支的**端到端**覆盖
+# （原先该分支经真实 gate 不可达 ⇒ BDD-8 只能直调落盘函数）。
+# ⚠️ 仅作测试/诊断入口，**不改变**默认行为（未设 env 时与既有逐字一致）。
+CHECK_GATE = os.environ.get("AGATE_CHECK_GATE") or os.path.join(SCRIPT_DIR, "check-gate.py")
 RETREAT_TO = os.path.join(SCRIPT_DIR, "agate-retreat-to.py")
 CHECK_PROVENANCE = os.path.join(SCRIPT_DIR, "check-p6-provenance.py")
 

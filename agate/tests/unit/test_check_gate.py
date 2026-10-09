@@ -3219,21 +3219,22 @@ def test_tag0031_bdd_8_gate_p4_code_map_uses_resolve_workspace(
     git_repo, agate_scripts, monkeypatch, capsys
 ):
     """BDD-8（DEBT0016，正常流）：gate_p4 的 CODE-MAP.md 路径解析改用
-    agate_common.resolve_workspace，标准两级嵌套场景下不再本地执行
-    dirname(dirname(...)) 路径算术。
+    `agate_common.resolve_workspace_from_task_dir`（RM-AG0084 后的**单源实现**），
+    标准两级嵌套场景下不再本地执行 dirname(dirname(...)) 路径算术。
 
     Given task_dir 处于标准两级嵌套（{repo}/agate-workspace/tasks/T001——本地
-      dirname(dirname(task_dir)) 算术与 resolve_workspace 默认解析结果本会重合）
+      dirname(dirname(task_dir)) 算术与权威解析默认结果本会重合）
     When gate_p4 解析 CODE-MAP.md 路径
-    Then 解析结果须来自真正调用 resolve_workspace(project_root) 并使用其返回值——
-      用白盒依赖注入手法验证：monkeypatch 模块级 resolve_workspace 让它返回一个"重定向"
+    Then 解析结果须来自真正调用权威解析器并使用其返回值——用白盒依赖注入手法验证：
+      monkeypatch 模块级 `resolve_workspace_from_task_dir` 让它返回一个"重定向"
       workspace（与本地算术会推导出的路径不同），只在重定向位置放 CODE-MAP.md、本地算术
-      位置刻意留空。若 gate_p4 真的调用了 resolve_workspace，就应在重定向位置找到文件并
-      触发「新增文件核对表」WARNING；若仍在本地重新推导路径（忽略 monkeypatch），则两处
+      位置刻意留空。若 gate_p4 真的调用了权威解析器，就应在重定向位置找到文件并触发
+      「新增文件核对表」WARNING；若仍在本地重新推导路径（忽略 monkeypatch），则两处
       都找不到文件，不触发 WARNING。
 
-    现状（P3 设计时点）：gate_p4 未 import/调用 resolve_workspace，本地算术路径下无
-    CODE-MAP.md 也无 P2-skeleton.md → 断言 FAIL（红灯，B 类 AssertionError）。
+    历史：本用例原注入 `resolve_workspace`（DEBT0016 修复时 gate_p4 直接调它）；
+    RM-AG0084 把四处（含 gate_p4）统一为单源 `resolve_workspace_from_task_dir` 后，
+    注入点随之改为后者（**意图不变**：须走权威解析器，而非本地算术）。
     """
     repo = git_repo.path
     (repo / "README.md").write_text("init\n", encoding="utf-8")
@@ -3260,10 +3261,7 @@ def test_tag0031_bdd_8_gate_p4_code_map_uses_resolve_workspace(
     git_repo.stage("src.py")
 
     mod = _load_check_gate_direct(agate_scripts)
-    mod.resolve_workspace = lambda project_root: (
-        str(redirected_dir),
-        str(redirected_dir / "tasks"),
-    )
+    mod.resolve_workspace_from_task_dir = lambda task_dir: str(redirected_dir)
 
     monkeypatch.chdir(repo)
     result = mod.gate_p4(str(task_dir_path))
@@ -3271,7 +3269,7 @@ def test_tag0031_bdd_8_gate_p4_code_map_uses_resolve_workspace(
 
     assert result == 0, f"WARNING 不应阻断（期望 exit 0），实际 exit {result}，stderr={captured.err!r}"
     assert "新增文件核对表" in captured.err, (
-        "期望 gate_p4 调用 resolve_workspace 并在重定向 workspace 找到 CODE-MAP.md 从而触发"
+        "期望 gate_p4 调用权威解析器并在重定向 workspace 找到 CODE-MAP.md 从而触发"
         f"「新增文件核对表」WARNING；实际未触发，说明仍在用本地 dirname(dirname(...)) 算术"
         f"（该算术推导到的位置未放文件）。stderr={captured.err!r}"
     )

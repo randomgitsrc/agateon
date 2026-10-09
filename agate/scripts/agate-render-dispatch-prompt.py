@@ -28,8 +28,12 @@ from datetime import date
 
 try:
     from agate_common import resolve_agate_root as _agate_common_resolve
+    from agate_common import (
+        resolve_workspace_from_task_dir as _agate_common_resolve_workspace_from_task_dir,
+    )
 except (ImportError, SystemExit):
     _agate_common_resolve = None
+    _agate_common_resolve_workspace_from_task_dir = None
 
 _PHASES = ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8")
 
@@ -44,6 +48,15 @@ def _resolve_agate_root():
         return env_root
     script_real = os.path.realpath(__file__)
     return os.path.dirname(os.path.dirname(script_real))
+
+
+def _resolve_workspace(task_dir):
+    """由 task_dir 解析工作区（RM-AG0084 / DEBT0028）——委托 `agate_common` 的**单源实现**
+    （`resolve_workspace_from_task_dir`，三处消费方共用）；`agate_common` 不可用时回退
+    旧的两级 dirname 推导，保持既有行为。"""
+    if _agate_common_resolve_workspace_from_task_dir is not None:
+        return _agate_common_resolve_workspace_from_task_dir(task_dir)
+    return os.path.dirname(os.path.dirname(os.path.abspath(str(task_dir).rstrip(os.sep))))
 
 
 def _range(lines, start_re, end_re):
@@ -188,7 +201,7 @@ def main():
     if appendix:
         rendered += "\n\n" + appendix
 
-    workspace_render = os.path.dirname(os.path.dirname(task_dir))
+    workspace_render = _resolve_workspace(task_dir)
 
     # sed s 替换（原顺序逐个字面替换；esc_repl 转义在此不再需要）
     replacements = [

@@ -24,6 +24,40 @@
   `.strip('"').strip("'")` **各自**剥首尾引号 ⇒ 值以引号结尾时被吞（`"pytest -k 'foo'"` →
   `pytest -k 'foo`，命令语法破损）。改为只剥**成对**引号（不成对则原样保留）；
   `agate/phase-cards/P2-design.md` 补「引号与通配 pathspec」两条写法约束。
+- **三处设备路径推导绕过 `resolve_workspace()`（RM-AG0084 / DEBT0028）**：`check-retrospective.py`、
+  `agate-render-dispatch-prompt.py`、`check-gate.py`（gate_p7 的 debt 定位——第三处，SELF-GATE
+  评审 grep 发现，`return 1` 阻断性）用 `dirname(dirname(task_dir))` 硬编码 `<ws>/tasks/<task>`
+  两级嵌套 ⇒ **忽略 `.agate.env` 的 `AGATE_WORKSPACE=` 与 env `AGATE_TASKS_DIR` 覆盖**。三处统一
+  改用 `agate_common.resolve_workspace_from_task_dir`（**单源实现**：向上找含 `.agate.env` 或
+  `agate-workspace/` 的项目根后交 `resolve_workspace`；找不到则回退旧推导）。
+- **`agate-feedback.py` 匿名化正则过宽（RM-AG0082 / DEBT0008）**：原 `ABS_PATH_RE` 把任何 `/`
+  开头 token 当绝对路径 ⇒ 中文散文斜杠词被误脱敏（`机制/执行层面` → `/执行层面`）。收窄为三选一
+  （Windows 盘符 / Unix 已知顶层目录 / `/` 开头且**首段为 ASCII 路径段**）——既排除中文斜杠词，
+  又不漏真实路径（`/data/secret`、`/proj/foo` 仍脱敏）。
+- **`agate-ci-verify` 对「`before` 不可解析」判假 FAIL（RM-AG0112）**：push 口径下
+  `rev-list <before>..HEAD` 在 `before` **不可解析**（对象在本次 clone 中不存在——rebase / 强推后
+  旧 head 不再挂在任何 ref，而 CI 的 fetch refspec 只取 `refs/heads/*` + tags）时直接失败 ⇒ 判
+  FAIL——但被回放的提交本身没问题（2026-10-09 实测：`gate-backstop` 升 required 后**首次拦下
+  merge**，经诊断为判据自身缺陷）。**修**：回退 `merge-base(HEAD, origin/<默认分支>)`（与 PR 口径
+  同源）并**显式** NOTE（不静默）；merge-base 也解析不出才 FAIL。⚠️ 注意 `rev-list A..B` **不要求**
+  A 是 B 的祖先（A 存在即成功）——失败源是**不可解析**，非「非祖先」。
+- **`env_constraints` 语义边界与构建产物落点（RM-AG0083 / DEBT0015，**未关单**）**：
+  `P4-implementation.md`「自查≠gate」节把「UI/前端等需构建任务应构建并确认 dist 等产物存在」
+  **明确为 checklist 落点**（`gate_commands` 声明构建/打包/部署类命令时，P4 后须实际产出并确认
+  产物；协议无对应机械 gate——产物路径项目各异 ⇒ 该条目即「无机械 gate 时的既定出口」）；
+  `implementer.md` 同步该条。**说明**：closure_criteria (1)(2) 经复核**早已满足**（`P2-design.md`
+  「env_constraints 与 gate_commands 的边界」节 + P4 卡条目），**(3)「自动产出 dist」需一次真实
+  UI 任务实证 ⇒ 本条维持 `open`**，余项即 (3)。
+- **`agate-next` 真暂停分支的端到端覆盖（RM-AG0111 / DEBT0050）**：新增**受控 gate 入口**
+  `AGATE_CHECK_GATE`（env 覆盖 check-gate 路径；**未设时行为逐字不变**，仅测试/诊断用）⇒
+  合成 gate 可制造「exit ∉ `gate_pass_exit` 且 ≠ 1」，恢复该分支的**端到端**覆盖
+  （此前真实 gate 已无法产生该 exit：`pass_exit=0` 的 phase 不含 `return 2`，`pass_exit=2`
+  的 phase 里 2 本就是通过码 ⇒ BDD-8 只能直调落盘函数）。
+- **`check-debt` 挂载 gate + closed 判据替换（RM-AG0088 / DEBT0033）**：① `pre-commit-gate.py`
+  新增 **2z** 步（置于 `for state_file in state_files:` 循环**之外**）——`tech-debt.md` 被**暂存**时跑 `check-debt.py <file>`，exit 1 → 阻断 commit
+  （原先该脚本**未挂任何 gate/CI**，改动不会被自动拦截）；② closed 条目的证据要求由
+  「evidence 含 `P[56]` 子串」改为「含 `task_id` + **`closed_at`**（关闭时间的显式字段）」
+  ——原 `P[56]` 与「已关闭」无因果，属粗糙启发式（存量 2 条缺 `closed_at` 已迁移）。
 
 ## [0.80.2] - 2026-10-09
 

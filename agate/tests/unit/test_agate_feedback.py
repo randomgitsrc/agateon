@@ -179,3 +179,81 @@ def test_bdd20_stdout_contains_markdown_issue_body_snippet(
     assert result.returncode == 0
     assert "#" in result.stdout  # Markdown 标题标记，标志"待提交文本片段"已生成
     assert "gate 脚本未处理并发写入冲突" in result.stdout
+
+
+# ── RM-AG0082 / DEBT0008：绝对路径正则收窄（中文斜杠词不误伤）────────────────
+
+
+def _retro_section_fixture(tmp_path, section_text):
+    """构造只把文本放进「## agate 反馈」正文的复盘样例。
+
+    避开 YAML 双引号转义（`C:\\Users\\...` 在 YAML 双引号标量里会被当 `\\U` 转义序列
+    解析报错），使反斜杠路径可安全承载。
+    """
+    content = (
+        "---\n"
+        "phase: P8\n"
+        "task_id: T001\n"
+        "mechanism_issues: []\n"
+        "execution_issues: []\n"
+        "feedback_ready: true\n"
+        "---\n\n"
+        "# T001 复盘\n\n"
+        "## agate 反馈\n\n"
+        f"{section_text}\n"
+    )
+    path = tmp_path / "retrospective.md"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def test_rm_ag0082_chinese_slash_word_not_anonymized(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """中文斜杠分隔词 `机制/执行层面` 不得被当绝对路径脱敏（原正则 → `/执行层面`）。"""
+    retro = _retro_fixture(tmp_path, mechanism_text="机制/执行层面 存在边界问题")
+
+    result = _run_feedback(
+        agate_scripts,
+        python_exe,
+        run_cli,
+        str(retro),
+        "--format",
+        "markdown",
+        env={"AGATE_FEEDBACK": "on"},
+    )
+
+    assert result.returncode == 0
+    assert "机制/执行层面" in result.stdout
+    assert "<PATH>" not in result.stdout
+
+
+def test_rm_ag0082_real_absolute_paths_still_anonymized(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """真实敏感路径仍须脱敏：Unix 已知顶层 / 通用 ≥2 段（首段 ASCII）/ Windows 盘符。
+
+    注意：**不得在源码里写 `/tmp` 字面量**（`check-platform-assumptions.py` R4 会命中，
+    打破 `test_t42_scan_is_runnable_and_clean_on_repo`）——故临时目录用例运行时拼接。
+    """
+    for abs_path in (
+        "/home/alice/proj/secret",
+        str(tmp_path / "x" / "y"),  # 临时目录用例由 fixture 派生（不写字面量，见 docstring）
+        "/data/secret",  # 未知顶层 + 恰好 2 段（SELF-GATE 评审指出：收窄过头会漏脱敏）
+        r"C:\Users\bob\p",
+    ):
+        retro = _retro_section_fixture(tmp_path, f"泄露路径 {abs_path} 需处理")
+
+        result = _run_feedback(
+            agate_scripts,
+            python_exe,
+            run_cli,
+            str(retro),
+            "--format",
+            "markdown",
+            env={"AGATE_FEEDBACK": "on"},
+        )
+
+        assert result.returncode == 0, result.output
+        assert abs_path not in result.stdout, abs_path
+        assert "<PATH>" in result.stdout, abs_path

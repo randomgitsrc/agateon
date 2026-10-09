@@ -195,3 +195,70 @@ def test_bdd_28_workspace_resolve_unaffected_by_symlink_agate_home(agate_scripts
     assert result.returncode == 0, result.output
     assert _ws_out(result) == _realpath(project / "agate-workspace")
     assert H.snapshot_tree(real) == {}, "不得往软链目标写任何内容"
+
+
+# ── RM-AG0084 / DEBT0028：resolve_workspace_from_task_dir（三处消费方共用的单源实现）─────
+
+def _load_agate_common(agate_scripts):
+    """以文件路径加载 agate_common 模块（文件名无 `-`，但为与其它测试一致仍用 importlib）。
+
+    `agate_common` 依赖**同目录**的兄弟模块（`agate_package` 等）⇒ 加载前把 scripts 目录
+    加入 `sys.path`。
+    """
+    import importlib.util
+    import sys
+
+    scripts_dir = str(agate_scripts)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    spec = importlib.util.spec_from_file_location(
+        "_ac_ws_resolve_test", agate_scripts / "agate_common.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_ac_ws_resolve_test"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_rm_ag0084_from_task_dir_default_layout(tmp_path, agate_scripts):
+    """默认布局：`<root>/agate-workspace/tasks/T1` → 工作区 = `<root>/agate-workspace`。"""
+    root = tmp_path / "proj"
+    task = root / "agate-workspace" / "tasks" / "T1"
+    task.mkdir(parents=True)
+
+    mod = _load_agate_common(agate_scripts)
+    got = mod.resolve_workspace_from_task_dir(str(task))
+    assert _realpath(got) == _realpath(root / "agate-workspace"), got
+
+
+def test_rm_ag0084_from_task_dir_env_override(tmp_path, agate_scripts):
+    """`.agate.env` 的 `AGATE_WORKSPACE=` 覆盖：旧的两级 dirname 会算错，本实现须算对。"""
+    root = tmp_path / "proj"
+    (root / "agate-workspace" / "tasks" / "T1").mkdir(parents=True)
+    (root / ".agate.env").write_text("AGATE_WORKSPACE=custom-ws\n", encoding="utf-8")
+    (root / "custom-ws" / "tasks" / "T1").mkdir(parents=True)
+
+    mod = _load_agate_common(agate_scripts)
+    got = mod.resolve_workspace_from_task_dir(str(root / "agate-workspace" / "tasks" / "T1"))
+    assert _realpath(got) == _realpath(root / "custom-ws"), got
+
+
+def test_rm_ag0084_from_task_dir_external_workspace_not_double_nested(tmp_path, agate_scripts):
+    """**外部工作区**（`AGATE_WORKSPACE=` 指向项目外）+ task_dir 在 git 仓库外：
+    须返回工作区本身，**不得**多套一层 `agate-workspace/`。
+
+    这是 SELF-GATE r2 实测到的回归：用 `git rev-parse --show-toplevel` 取项目根时，
+    该场景 `show-toplevel` 失败 ⇒ 把回退值（= 工作区本身）再喂 `resolve_workspace`
+    ⇒ 得到 `<ws>/agate-workspace/debt/tech-debt.md`（错）⇒ gate_p7 `return 1` 误阻断。
+    """
+    ext = tmp_path / "ext-ws"
+    task = ext / "tasks" / "T1"
+    task.mkdir(parents=True)
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / ".agate.env").write_text(f"AGATE_WORKSPACE={ext}\n", encoding="utf-8")
+
+    mod = _load_agate_common(agate_scripts)
+    got = mod.resolve_workspace_from_task_dir(str(task))
+    assert _realpath(got) == _realpath(ext), got
+    assert not got.endswith(os.path.join("agate-workspace", "").rstrip(os.sep)), got

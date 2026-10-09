@@ -237,7 +237,7 @@ closed_at: 2026-09-04
 id: DEBT0008
 category: technical
 title: agate-feedback.py 匿名化正则 ABS_PATH_RE 误伤中文散文里的斜杠分隔词（非路径场景过度脱敏）
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate-workspace/tasks/TAG0015-retrospective-feedback/retrospective.md
@@ -250,6 +250,14 @@ evidence:
       误判为绝对路径并替换成 `<PATH>`（复现：`ABS_PATH_RE.findall('机制/执行层面')` →
       `['/执行层面']`），产出的脱敏 JSON/Markdown 里出现"归因到 <PROJECT> 机制<PATH> ...
       提取"这类语义被破坏的乱码式替换
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-H2-HYGIENE-r4.md
+    note: >-
+      **关单证据（批次 hotfix-batchB-H2，PR #422，merge 1aca419b）**：RM-AG0082 已修；
+      回归用例见 `agate/tests/unit/`（含**外部工作区**场景——旧 `run_git` 取法在该场景
+      会多套一层 `agate-workspace/` ⇒ 误阻断）。该 hotfix 的 **P5/P6 等价验证** =
+      全量 pytest 2895+ passed + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` +
+      `P[56]` 子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: 不影响 BDD-18 验收的核心诉求（不泄露项目名/绝对路径，方向正确，偏保守不算安全问题），
   但会让 agate-feedback.py 产出的待提交内容出现明显语义破损的乱码片段，人工复核时体验差、
   可能被误认为脚本 bug 而不敢提交，间接削弱 AG0021 反馈机制的可用性
@@ -264,7 +272,11 @@ closure_criteria:
   - 新增覆盖本条 evidence 场景的回归用例
 source: retrospective
 created_at: 2026-08-19
-task_id: null
+task_id: hotfix-batchB-H2   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR #422，触 agate/ 协议本体与脚本，SELF-GATE 多轮独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H2 hotfix，PR #422）：见上方 evidence 的关单证据条目；RM-AG0082 同步回写 done。
+
 ```
 
 ## DEBT0009
@@ -604,7 +616,7 @@ evidence:
   - ref: agate/scripts/check-gate.py
     note: "grep env_constraints.deploy / deploy / debug_env / test_cmd / workspace_path 零命中——gate 不检查 env_constraints 字段值（只确认字段存在）"
   - ref: agate/phase-cards/P2-design.md / P4-implementation.md / agate/assets/execution-roles/architect.md
-    note: "env_constraints 全部是'确认/细化 + 注入'语义（P2 卡 L50、P4 卡 L41、architect L135），无'必须执行其中某命令'的 gate 绑定"
+    note: "env_constraints 全部是'确认/细化 + 注入'语义（P2 卡「gate_commands 声明」节、P4 卡「自查≠gate」节、architect 角色「env_constraints 边界」节；**2026-10-09 更正**：原写死行号 L50/L41/L135 已陈旧，改指节名），无'必须执行其中某命令'的 gate 绑定"
   - ref: TQC0001 跨项目复盘（Qt 计算器）
     note: "P2 声明 env_constraints.deploy（windeployqt 构建 dist），但全流程 P0-P8 从未主动执行，用户双击 exe 报缺 DLL 后才补做——声明了但没有执行点"
   - ref: agate/phase-cards/P2-design.md「gate_commands 声明」节 / agate/assets/execution-roles/architect.md
@@ -616,6 +628,19 @@ evidence:
       dist，不靠用户提醒）本会话未验证**——这是一条面向未来的行为性指标，需要下一个实际的 UI 任务
       走完 P4 阶段后才能实证确认提醒条目是否真的改变了 implementer 行为，本任务自身不涉及 UI/dist
       构建场景，无法自我验证，不在此提前标记 closed"
+  - ref: agate/phase-cards/P2-design.md
+    note: >-
+      **2026-10-09 批 B/H3 复核（未关单——留 ③ 余项）**：closure_criteria 逐条现状——
+      (1) 「env_constraints 语义边界文档化」**已满足**（`P2-design.md`「### env_constraints
+      与 gate_commands 的边界（不等价）」节，现 :207-211；明写「任何需要被强制执行的约束，
+      必须落到 gate_commands…或者落到 P4/P8 阶段卡片里的明确 checklist 条目」）；
+      (2) 「UI 任务 P4 后 dist 构建有明确落点」**已满足**（`P4-implementation.md`「自查≠gate」
+      节 :57-58；本批**小幅强化**：明确为 checklist 落点 + 「无机械 gate 时的既定出口」）；
+      (3) 「TQC0001 类 UI 任务在 P4 后**自动**产出 dist（不靠用户提醒）」——**仍未满足**：
+      需**一次真实 UI 任务实证**（协议侧只给了卡片条目，无机械校验；本批未提供实证）
+      ⇒ **本条维持 open**，余项即 ③；
+      (4) 全量 pytest（本机 1 项环境失败——opencode CLI `debug agent` 子命令漂移，与协议无关）
+      + consistency 0 ERROR + shellcheck 0 issue。
 impact: 任何依赖 env_constraints 声明 deploy/pack/build 产物的任务，可能出现'设计说要做但流程不强制'的静默缺口；UI 任务 dist 产物、打包产物、部署产物均无 gate 检查；TQC0001（真实跨项目）已实证
 recommendation: 三改一并做——(1) 明确 env_constraints 字段语义边界（声明性 vs 执行性）：P2 卡片/architect 角色说明'执行性约束必须落到 gate_commands 或 P4/P8 明确 checklist'；(2) UI 任务 P4 后应构建 dist：P4 卡片「自查≠gate」节补'UI 任务 P4 后构建 dist（windeployqt 等）'或 P8 gate 加 dist 产物存在性检查；(3) 可选：check-gate.py 或新脚本校验 gate_commands 声明了 deploy/构建命令时 P4/P8 产出物存在
 closure_criteria:
@@ -1057,7 +1082,7 @@ closure_note: "TAG0029 关闭：① 纯命令/解析错误exit非0（BDD-1/2，P
 id: DEBT0028
 category: technical
 title: "dirname(dirname(...)) 本地 task_dir 路径推导同款模式的另外 2 处非本体实例（DEBT0016 同类扫描，本次范围锁定只处理 check-gate.py 一处）"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate-workspace/tasks/TAG0031-debt-cleanup/P1-requirements.md
@@ -1071,6 +1096,14 @@ evidence:
       （`workspace_render = os.path.dirname(os.path.dirname(task_dir))` 用于渲染
       {AGATE_WORKSPACE} 占位符）；判定：本次不处理（P0-brief scope 锁定 gate_p4 CODE-MAP 路径一处，
       其余属越界），按同类扫描规则转入 BDD-14 登记为新 DEBT，不留白
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-H2-HYGIENE-r4.md
+    note: >-
+      **关单证据（批次 hotfix-batchB-H2，PR #422，merge 1aca419b）**：RM-AG0084 已修；
+      回归用例见 `agate/tests/unit/`（含**外部工作区**场景——旧 `run_git` 取法在该场景
+      会多套一层 `agate-workspace/` ⇒ 误阻断）。该 hotfix 的 **P5/P6 等价验证** =
+      全量 pytest 2895+ passed + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` +
+      `P[56]` 子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: 若未来 workspace 布局非标准嵌套（如经 .agate.env 的 AGATE_WORKSPACE= 覆盖工作区位置），
   check-retrospective.py 的 debt/roadmap 信号扫描定位、agate-render-dispatch-prompt.py 的
   {AGATE_WORKSPACE} 占位符渲染均可能静默产出错误路径而无提示，与 DEBT0016 本体描述的风险同源，
@@ -1085,7 +1118,11 @@ closure_criteria:
   - 全量 pytest + consistency 0 ERROR
 source: review
 created_at: 2026-09-04
-task_id: TAG0031
+task_id: hotfix-batchB-H2   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR #422，触 agate/ 协议本体与脚本，SELF-GATE 多轮独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H2 hotfix，PR #422）：见上方 evidence 的关单证据条目；RM-AG0084 同步回写 done。
+
 ```
 
 ## DEBT0029
@@ -1249,11 +1286,21 @@ task_id: TAG0030
 id: DEBT0033
 category: technical
 title: "check-debt 关闭 schema 校验器无任何 gate/CI 挂载 + closed 证据判定为 P[56] 子串启发式（TAG0030 复盘发现）"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate-workspace/tasks/TAG0030-acceptance-blindspot/retrospective.md
     note: "DEBT 关闭 schema 校验器 check-debt 无任何 gate/CI 挂载，closed 证据判定为 P[56] 子串启发式：P8 纯 status 翻转关闭后 main 上 check-debt exit 1——关闭动作无机械防护"
+  - ref: agate/scripts/agate-debt-check.py
+    note: >-
+      **关单证据（批次 hotfix-batchB-H5）**：
+      ① **挂载 gate**：`pre-commit-gate.py` 新增 2l 步——`tech-debt.md` 被**暂存**时跑
+      `check-debt.py <file>`，exit 1 → 阻断 commit（原先该脚本**未挂任何 gate/CI**）；
+      ② **判据替换**：closed 条目的证据要求由「evidence 含 `P[56]` 子串」改为
+      「含 `task_id` + **`closed_at`**（关闭时间显式字段）」——原 `P[56]` 与「已关闭」无因果，
+      属粗糙启发式（本批迁移 2 条缺 `closed_at` 的存量条目）；
+      回归用例：`test_agate_debt_check.py::test_bdd_8_*` 子场景 3（缺 closed_at 拦截）+ BDD-5 夹具补字段。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
 impact: "DEBT 关闭动作可绕过证据校验直接翻转 status，关闭质量依赖人工自觉；main 上 check-debt 失败暴露时已晚"
 recommendation: "check-debt 挂载 gate/CI（P8 关闭时强制校验证据存在）；closed 证据判定从子串启发式改为显式字段校验"
 closure_criteria:
@@ -1261,7 +1308,12 @@ closure_criteria:
   - 全量 pytest + consistency 0 ERROR
 source: retrospective
 created_at: 2026-09-04
-task_id: TAG0030
+task_id: hotfix-batchB-H5   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR 见 roadmap RM-AG0088），触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H5 hotfix）：check-debt 挂 pre-commit + closed 判据由 P[56] 启发式改为 closed_at；
+  RM-AG0088 同步回写 done。
+
 ```
 
 ## DEBT0034
@@ -1287,6 +1339,8 @@ closure_criteria:
 source: review
 created_at: 2026-09-07
 task_id: TAG0032
+closed_at: 2026-09-29   # RM-AG0088 迁移：closed 条目补 closed_at（原缺）
+
 ```
 
 ## DEBT0035
@@ -1593,6 +1647,8 @@ closure_criteria:
 source: retrospective
 created_at: 2026-09-18
 task_id: TAG0035   # 由 TAG0035 复盘派生（PR #334 修测试侧，本 PR 补实现侧）
+closed_at: 2026-09-29   # RM-AG0088 迁移：closed 条目补 closed_at（原缺）
+
 ```
 
 ## DEBT0043
@@ -1894,7 +1950,7 @@ closure_note: >-
 id: DEBT0050
 category: technical
 title: "agate-next 的「真暂停」（exit ∉ pass_set 且 ≠ 1）分支经**真实 gate 不可达**——BDD-8 改直驱落盘函数后失去端到端覆盖"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate/scripts/check-gate.py
@@ -1908,6 +1964,16 @@ evidence:
       两条 BDD-8 用例原先**借用**「P4 缺 agent ⇒ return 2」作真实 gate 锚点；X7 后锚点消失，
       改为直接调用 `_write_exit2_resolution()` ⇒ 该分支的**端到端**（经 agate-next 三态分发）
       覆盖随之失去，只剩落盘函数本身的覆盖。
+  - ref: agate/scripts/agate-next.py
+    note: >-
+      **关单证据（批次 hotfix-batchB-H4）**：新增**受控 gate 入口** `AGATE_CHECK_GATE`
+      （env 覆盖 check-gate 路径；未设时行为逐字不变）⇒ 测试可用合成 gate 制造
+      「exit ∉ pass_set 且 ≠ 1」，端到端覆盖恢复：
+      `test_rm_ag0111_non_pass_exit_end_to_end_via_controlled_gate`
+      （合成 gate exit 2 → `agate-next.py` 主流程判真暂停 → 落盘 `P4-exit2-resolution.md`）。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` +
+      `P[56]` 子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: >-
   agate-next 的 exit ∉ pass_set 分支（会写 {phase}-exit2-resolution.md 并转主 Agent 决策）
   若将来被改坏，现有测试不会发现——因为触发它的入口在真实 gate 上已不存在。
@@ -1920,7 +1986,11 @@ closure_criteria:
   - "存在能以受控输入让 agate-next 走到 exit ∉ pass_set 分支的用例（端到端）"
 source: review  # 实现期的独立评审发现
 created_at: 2026-10-04
-task_id: TAG0042-config-and-enforcement
+task_id: hotfix-batchB-H4   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR 见 roadmap RM-AG0111），触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H4 hotfix）：受控 gate 入口 + 端到端回归用例；RM-AG0111 同步回写 done。
+
 ```
 
 ## DEBT0051

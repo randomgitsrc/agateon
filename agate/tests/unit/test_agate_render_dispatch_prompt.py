@@ -262,3 +262,44 @@ def test_bdd_11_dispatch_prompt_declares_write_time_selfcheck_section(agate_root
     tmpl_path = agate_root / "assets" / "templates" / "dispatch-prompt.md"
     tmpl = tmpl_path.read_text(encoding="utf-8")
     assert "P1/P2 声明写时自检" in tmpl
+
+
+# ── RM-AG0084 / DEBT0028：{AGATE_WORKSPACE} 改走 resolve_workspace（.agate.env 覆盖）─
+
+
+def test_rm_ag0084_default_layout_workspace_placeholder(
+    agate_scripts, python_exe, run_cli, tmp_path
+):
+    """默认布局 `<root>/agate-workspace/tasks/T1` → {AGATE_WORKSPACE}=`<root>/agate-workspace`。"""
+    root = tmp_path / "proj"
+    task_dir = root / "agate-workspace" / "tasks" / "T1"
+    task_dir.mkdir(parents=True)
+
+    result = _render(agate_scripts, python_exe, run_cli, "P2", "architect", task_dir)
+    assert result.returncode == 0
+    # 模板行 `读取并严格遵循：{AGATE_WORKSPACE}/tasks/{Txxx}/...` 渲染后须指向默认工作区。
+    expected_ws = str((root / "agate-workspace").resolve())
+    assert expected_ws + "/tasks/T1/P2-dispatch-context-architect.md" in result.output
+
+
+def test_rm_ag0084_env_override_workspace_placeholder(
+    agate_scripts, python_exe, run_cli, tmp_path
+):
+    """`.agate.env` 的 AGATE_WORKSPACE=custom-ws 覆盖 → {AGATE_WORKSPACE}=`<root>/custom-ws`。
+
+    回归核心：task_dir 物理上仍在 `<root>/agate-workspace/tasks/T1`，旧的两级 dirname
+    推导会把占位符填成 `<root>/agate-workspace`，而非声明的工作区 `<root>/custom-ws`。
+    """
+    root = tmp_path / "proj"
+    task_dir = root / "agate-workspace" / "tasks" / "T1"
+    task_dir.mkdir(parents=True)
+    (root / ".agate.env").write_text("AGATE_WORKSPACE=custom-ws\n", encoding="utf-8")
+
+    result = _render(agate_scripts, python_exe, run_cli, "P2", "architect", task_dir)
+    assert result.returncode == 0
+    assert str((root / "custom-ws").resolve()) + "/tasks/T1/P2-dispatch-context-architect.md" in result.output
+    assert (
+        str((root / "agate-workspace").resolve())
+        + "/tasks/T1/P2-dispatch-context-architect.md"
+        not in result.output
+    )

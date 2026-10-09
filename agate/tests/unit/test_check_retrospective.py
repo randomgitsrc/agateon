@@ -323,3 +323,59 @@ def test_tag0015_bdd10_roadmap_signal_triggers_mechanism_gap_reminder(
     result = _run_retro(agate_scripts, python_exe, run_cli, td)
     assert result.returncode == 0
     assert "发现机制缺口" in result.output
+
+
+# ── RM-AG0084 / DEBT0028：工作区推导改走 resolve_workspace（.agate.env 覆盖）────
+
+
+def _make_nested_task(root, task_id="T1"):
+    """建 `<root>/agate-workspace/tasks/<task_id>`（默认两级嵌套布局），返回 task_dir。"""
+    td = root / "agate-workspace" / "tasks" / task_id
+    td.mkdir(parents=True)
+    (td / ".state.yaml").write_text(
+        f"task_id: {task_id}\nphase: P4\nstatus: active\nretries: {{}}\n",
+        encoding="utf-8",
+    )
+    return td
+
+
+def test_rm_ag0084_default_layout_workspace_resolved(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """默认布局 `<root>/agate-workspace/tasks/T1` → 工作区 = `<root>/agate-workspace`。"""
+    root = tmp_path / "proj"
+    td = _make_nested_task(root)
+    debt_dir = root / "agate-workspace" / "debt"
+    debt_dir.mkdir(parents=True)
+    (debt_dir / "tech-debt.md").write_text(
+        '- task_id: "T1"\n  desc: 示例技术债\n', encoding="utf-8"
+    )
+
+    result = _run_retro(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0
+    assert "发现机制缺口" in result.output
+
+
+def test_rm_ag0084_env_override_workspace_resolved(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """`.agate.env` 的 AGATE_WORKSPACE=custom-ws 覆盖 → 工作区 = `<root>/custom-ws`。
+
+    回归核心：task_dir 物理上仍在 `<root>/agate-workspace/tasks/T1`（旧的两级 dirname
+    推导会得到 `<root>/agate-workspace`），而声明的工作区是 `<root>/custom-ws`——
+    DEBT 只在 custom-ws 下，旧实现读不到信号。
+    """
+    root = tmp_path / "proj"
+    td = _make_nested_task(root)
+    (root / ".agate.env").write_text("AGATE_WORKSPACE=custom-ws\n", encoding="utf-8")
+    debt_dir = root / "custom-ws" / "debt"
+    debt_dir.mkdir(parents=True)
+    (debt_dir / "tech-debt.md").write_text(
+        '- task_id: "T1"\n  desc: 示例技术债\n', encoding="utf-8"
+    )
+    # 反向守护：默认位置**没有** debt 文件——若仍按旧 dirname 推导则读不到信号。
+    assert not (root / "agate-workspace" / "debt").exists()
+
+    result = _run_retro(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0
+    assert "发现机制缺口" in result.output

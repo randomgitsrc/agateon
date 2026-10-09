@@ -22,8 +22,9 @@ schema 校验规则（P2-design.md §2.2）：
   - source_ref（TAG0050 批 E，可选）：`basis: followup:DEBT<n>` 的**双向回指**锚——
     格式 `<task_id>:<DG id>`（如 `TAG0050:P4-implementation:DG1`），回指该 DEBT 由哪个
     任务的设计缺口析出。gate_p7 校验 followup 的 DEBT 条目存在且 source_ref 回指本任务的 DG id。
-  - closed 准入（BDD-8）：status==closed → task_id 非空 + evidence 序列化文本同时包含
-    task_id 与 P5/P6 标记
+  - closed 准入（BDD-8；RM-AG0088 / DEBT0033 更新）：status==closed → task_id 非空 +
+    evidence 序列化文本包含该 task_id + **`closed_at`**（关闭时间显式字段）。
+    原判据要求 evidence 含 `P[56]` 子串——与「已关闭」无因果，属粗糙启发式，已替换。
   - id 唯一性：同文件内重复 id → 拦截
 """
 
@@ -159,8 +160,19 @@ def check_entry(basename, eid, data, errors):
             errors.append(f"{basename}:{eid}: closed 条目必须含 task_id")
         else:
             ev = serialize_evidence(data.get("evidence"))
-            if task_id not in ev or not re.search(r"P[56]", ev):
-                errors.append(f"{basename}:{eid}: closed 条目 evidence 须引用 task_id 与 P5/P6 证据")
+            if task_id not in ev:
+                errors.append(
+                    f"{basename}:{eid}: closed 条目 evidence 须引用 task_id（{task_id}）"
+                )
+            # RM-AG0088 / DEBT0033：原判据额外要求 evidence 含 `P[56]` 子串——**与「已关闭」
+            # 无因果**（实测该子串只是恰好出现在多数条目的验证描述里，属粗糙启发式，且逼迫
+            # 关单者「为满足判据」而写无关字串）。改为要求 **`closed_at`**——关闭时间的**显式
+            # 字段**，closed 条目必须记录何时关闭（可复核、与语义直接相关）。
+            if not str(data.get("closed_at") or "").strip():
+                errors.append(
+                    f"{basename}:{eid}: closed 条目必须含 closed_at（关闭时间；"
+                    "RM-AG0088 / DEBT0033 取代原 P[56] 子串启发式）"
+                )
 
 
 def main():

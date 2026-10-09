@@ -114,6 +114,7 @@ def test_bdd_5_valid_entry_passes_schema(tmp_path, agate_scripts, python_exe, ru
         "  - 验收通过\n"
         "source: review\n"
         "created_at: 2026-08-12\n"
+        "closed_at: 2026-08-20\n"
         "```\n",
         encoding="utf-8",
     )
@@ -207,7 +208,7 @@ def test_bdd_8_closed_missing_task_id_or_p5p6_intercepted(tmp_path, agate_script
     assert result.returncode == 1
     assert "task_id" in result.stderr
 
-    # 子场景 2：closed 有 task_id 但 evidence 未引用 P5/P6
+    # 子场景 2：closed 有 task_id 但 evidence 未引用 task_id（RM-AG0088 后判据）
     md2 = tmp_path / "closed-no-evidence-ref.md"
     md2.write_text(
         "# 技术债登记\n"
@@ -222,19 +223,53 @@ def test_bdd_8_closed_missing_task_id_or_p5p6_intercepted(tmp_path, agate_script
         "priority: medium\n"
         "task_id: TAG0002\n"
         "evidence:\n"
-        "  - path: docs/tasks/TAG0002/meeting.md\n"
+        "  - path: docs/tasks/OTHER/meeting.md\n"
         "impact: 影响验收\n"
         "recommendation: 补证据引用\n"
         "closure_criteria:\n"
         "  - 补证据引用\n"
         "source: review\n"
         "created_at: 2026-08-12\n"
+        "closed_at: 2026-08-20\n"
         "```\n",
         encoding="utf-8",
     )
     result = _run_check_debt(agate_scripts, python_exe, run_cli, str(md2))
     assert result.returncode == 1
-    assert "P5" in result.stderr or "P6" in result.stderr or "evidence" in result.stderr
+    assert "evidence" in result.stderr
+
+    # 子场景 3（RM-AG0088 / DEBT0033）：closed 缺 `closed_at` → 拦截
+    # （取代原「evidence 须含 P[56]」启发式——该子串与「已关闭」无因果）
+    md3 = tmp_path / "closed-no-closed-at.md"
+    md3.write_text(
+        "# 技术债登记\n"
+        "\n"
+        "## DEBT0001\n"
+        "\n"
+        "```yaml\n"
+        "id: DEBT0001\n"
+        "category: management\n"
+        "title: 已关闭债\n"
+        "status: closed\n"
+        "priority: medium\n"
+        "task_id: TAG0002\n"
+        "evidence:\n"
+        "  - path: agate/tests/unit/test_x.py\n"
+        "    note: TAG0002 的关单证据\n"
+        "impact: 影响验收\n"
+        "recommendation: 补 closed_at\n"
+        "closure_criteria:\n"
+        "  - 补 closed_at\n"
+        "source: review\n"
+        "created_at: 2026-08-12\n"
+        "```\n",
+        encoding="utf-8",
+    )
+    result = _run_check_debt(agate_scripts, python_exe, run_cli, str(md3))
+    assert result.returncode == 1
+    assert "closed_at" in result.stderr, (
+        f"closed 缺 closed_at 须被拦截（RM-AG0088）；stderr={result.stderr!r}"
+    )
 
 
 def test_bdd_9_three_state_and_open_with_task_id_legal(tmp_path, agate_scripts, python_exe, run_cli):

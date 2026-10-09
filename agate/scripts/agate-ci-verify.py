@@ -7,7 +7,10 @@
 
 回放范围（合并提交一律跳过）：
   * GitHub PR（`--base <sha>`）：`rev-list --no-merges <merge-base(base,HEAD)>..HEAD`
-  * GitHub push（`--push --base <sha>`）：`rev-list --no-merges <before>..HEAD`
+  * GitHub push（`--push --base <sha>`）：`rev-list --no-merges <before>..HEAD`；
+    `before` **不可解析**（对象缺失，如 rebase / 强推后旧 head 不再挂任何 ref）时回退
+    `merge-base HEAD origin/<默认分支>` 并**显式** NOTE（RM-AG0112）；`before` 可解析但
+    非祖先时 `rev-list` 差集语义本身能成功，仅打印诊断 NOTE、不回退
   * 本地彩排：**必须显式**给 `--base "$(git merge-base HEAD origin/<默认分支>)"`——
     **不再支持**缺省推断（缺 `--base` 即 FAIL，见下）
 只回放**改动了任一任务目录**的提交；没有这类提交 → `SKIP:` + 原因。
@@ -481,6 +484,36 @@ def main():
                 return _skip(
                     f"push 的 before 为全零且无法解析 merge-base HEAD "
                     f"origin/{_default_branch(repo)}")
+            # RM-AG0112：`before` **不可解析**（对象在本次 clone 中不存在——rebase / 强推后
+            # 旧 head 不再挂在任何 ref，而 CI 的 fetch refspec 只取 `refs/heads/*` + tags）
+            # ⇒ `rev-list <before>..HEAD` 失败 ⇒ 判 FAIL——但**被回放的提交本身没问题**（假红）。
+            # 2026-10-09 实测：PR #422 rebase 后强推，`before` = rebase 前 head（对象缺失）
+            # ⇒ `FAIL: rev-list 7c419e93..ac93f22c 失败`；该 check 已升 required ⇒ PR 被 BLOCKED。
+            # **回退** `merge-base(HEAD, origin/<默认分支>)`（与 PR 口径同源 = 分支点）并**显式** NOTE。
+            # ⚠️ 注意：`rev-list A..B` **不要求** A 是 B 的祖先（A 存在即成功）——故非祖先
+            # （历史改写但旧对象仍在）**不是**失败源，只有「不可解析」才是（评审 r1 澄清）。
+            if not _git_out(["rev-parse", "--verify", f"{base}^{{commit}}"], repo):
+                _mb = _merge_base(repo, "HEAD")
+                if not _mb:
+                    return _fail(
+                        f"push 的 before（{base}）在本地不可解析（对象缺失），且无法解析 "
+                        f"merge-base HEAD origin/{_default_branch(repo)}——无法确定回放范围"
+                    )
+                print(
+                    f"NOTE: push 的 before {base[:8]} 在本地**不可解析**（对象缺失——常见于 "
+                    f"rebase / force-push 后旧 head 不再挂在任何 ref；RM-AG0112）⇒ 回放范围回退 "
+                    f"merge-base(HEAD, origin/{_default_branch(repo)}) = {_mb[:8]}"
+                )
+                base = _mb
+            else:
+                # 可解析但**非**祖先（历史改写、旧对象仍在）：`rev-list` 本身能成功
+                # （语义 = `<before>..HEAD` 的差集），保留显式 NOTE 便于诊断，不回退。
+                _rc_anc, _, _ = _git(["merge-base", "--is-ancestor", base, head], repo)
+                if _rc_anc != 0:
+                    print(
+                        f"NOTE: push 的 before {base[:8]} 不是 HEAD 的祖先（历史改写）——"
+                        f"`rev-list <before>..HEAD` 按差集语义回放（RM-AG0112）"
+                    )
         else:
             base = _git_out(["merge-base", args.base, head], repo) or args.base
     else:
