@@ -1094,7 +1094,7 @@ task_id: TAG0031
 id: DEBT0029
 category: technical
 title: "check-gate.py:881 gate_p2 bootstrap 骨架声明校验的标题字符串子串判定（DEBT0017 同款模式，风险高于本体——此处触发 return 1 阻断性）"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate-workspace/tasks/TAG0031-debt-cleanup/P1-requirements.md
@@ -1107,6 +1107,14 @@ evidence:
       骨架声明检查比 DEBT0017 描述的场景更容易因假阴性/假阳性判定错误产生真实阻断误判；判定：
       本次不处理（P0-brief scope 锁定「新增文件核对表」一处），按同类扫描规则转入 BDD-14 登记为
       新 DEBT，正文加粗提示避免被误认为已随 DEBT0017 一并修复
+  - ref: agate/tests/unit/test_tag0050_proxy_judgment.py
+    note: >-
+      **关单证据（TAG0050-task-data-contract 批 G3，提交 3b0bd755）**：判定已改标题级正则
+      `^#{1,6}\s*骨架声明\s*$`；回归用例 `test_bdd_69_skeleton_prose_not_treated_as_heading`
+      实跑 passed（反向守护 `test_check_gate.py -k "skeleton or 骨架 or bootstrap"` 2 passed）。
+      该批次的 **P5/P6** 验证（全量 pytest + consistency 0 ERROR）即为本条的验证证据。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` + `P[56]`
+      子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: "**本条风险高于 DEBT0017 本体**——若骨架声明文件中出现说明性散文提及『## 骨架声明』字样
   （而非真正的标题行），子串判定会误判为已满足，本该触发的骨架缺失检测被静默跳过；反向场景（标题
   确实存在但缺失其他必要内容）同样可能因子串宽松匹配产生误判；由于此处判定结果直接决定 gate_p2
@@ -1122,7 +1130,16 @@ closure_criteria:
   - 全量 pytest + consistency 0 ERROR
 source: review
 created_at: 2026-09-04
-task_id: TAG0031
+task_id: TAG0050-task-data-contract   # 关单任务（批 G3，提交 3b0bd755）；原发现任务 TAG0031
+closed_at: 2026-10-09
+closure_note: >-
+  已修（TAG0050 批 G3，提交 `3b0bd755`）：`check-gate.py` 的骨架声明判定由子串包含改为**标题级
+  正则** `^#{1,6}\s*骨架声明\s*$`（现位于 `:1112-1114`）；回归用例
+  `agate/tests/unit/test_tag0050_proxy_judgment.py::test_bdd_69_skeleton_prose_not_treated_as_heading`
+  （"正文仅以散文提及「## 骨架声明」而非标题行"→ 不被误判为已满足），实跑通过；反向守护
+  `test_check_gate.py -k "skeleton or 骨架 or bootstrap"` 2 passed。**验证证据**：TAG0050 的
+  P5/P6 阶段全量 pytest（2863 passed）+ consistency 0 ERROR。**回写滞后说明**：本条为 2026-09-29
+  「逐条实测复核」批的遗留——修复早已落地，仅 DEBT/roadmap 回写未做（2026-10-09 实测复核确认）。
 ```
 
 ## DEBT0030
