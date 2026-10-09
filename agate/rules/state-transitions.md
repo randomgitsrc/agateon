@@ -86,6 +86,15 @@ python3 agate/scripts/agate-retreat-to.py {TASK_DIR} {目标阶段} "{诊断原�
 
 **回退落地后必须建 DEBT 条目（TAG0001 强制）**：任何正式回退（`retreat:` 提交，含多步回退）完成后，必须建立 `source: retreat` 的 DEBT 条目，`evidence` 引用该 retreat 提交的哈希——模板见 `assets/templates/tech-debt-template.md`，条目登记于 `{AGATE_WORKSPACE}/debt/tech-debt.md`。回退是协议定义的事实事件，登记不依赖任何人的判断（BDD-12）；事后 `check-debt.py --retreat-coverage` 会把未登记的 retreat 提交比对出来并报 WARNING（只读提醒，不阻断 commit/发布）。
 
+## 前向跨阶规则（TAG0050 评审 M-1）
+
+前向跨阶（`Pn → Pn+k`，k ≥ 2）**对非 legacy 任务（账本含 `task_created`/`task_adopted`）由 `check-state-transition.py::check_transition` 机械校验**——hook 与 CI 回放共用该函数，不是只由目标阶段产出兜底（TAG0050 实测：`gate_p5` 兜底返回 2、`_gate_p7_structured` 曾对缺产出放行）：
+
+- 被跨过的阶段须**已从 P1 `phases` 移除并在 `pruned` 中声明**（读结构化 frontmatter，不用正文正则）；
+- **不可跳过的阶段**（P1 需求基线 / P2 方案设计 / P4 实现 / P5 技术验证 / P6 验收）**一律不得跨过**；
+- 合法前向跳只有裁剪后的跳变，如 `P2→P4`（裁 P3）、`P6→P8`（裁 P7）。
+- **legacy 任务维持不检查**（历史任务行为不变，详见 `state-machine.md`《阶段跳过转移规则》）。
+
 ## PAUSED 恢复
 
 - 人工确认/决策后恢复到 PAUSED 前的阶段

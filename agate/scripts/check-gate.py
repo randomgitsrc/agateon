@@ -1833,6 +1833,9 @@ def _read_debt_source_refs(debt_file):
 
 def _gate_p7_structured(task_dir, p7_file):
     """非 legacy 任务的 P7 成对声明判据（设计 §6，含 F2）。返回 gate 退出码。"""
+    if not os.path.isfile(p7_file):
+        sys.stderr.write("GATE P7: P7-consistency.md 不存在（非 legacy 任务须有 P7 产出）\n")
+        return 1
     p7_text = _read_text(p7_file)
 
     # 计数为系统字段：正文 tripwire 标记 + findings 现算，**不读 frontmatter 汇总值**（F2）。

@@ -199,6 +199,7 @@ P8 gate 通过 ≠ 直接标记 READY。主 Agent 必须逐项检查：
   跳过时，当前阶段的 gate 自动判定为"通过"，直接转移到裁剪声明中的下一个阶段。
 
   **裁剪条件（hook 验证，见 scripts/check-pruning.py）**：
+  - P1 不可裁剪（需求基线是全流程脊梁，无论任务大小都需建立——小任务可简化，见 WORKFLOW.md 适用边界）
   - P2 不可裁剪（方案设计是必经阶段。P1 analyst 做需求分析不做方案设计，无法预知 P2 architect 会发现哪些隐含问题。design_trivial / follows_existing_pattern 可简化 P2（1 个候选方案），不可省略 P2）
   - P3：仅 low 风险可裁剪（medium/high 必须走 TDD 红灯）
   - P4 不可裁剪（实现是交付底线——没有实现就没有可发布产物）
@@ -216,10 +217,8 @@ P8 gate 通过 ≠ 直接标记 READY。主 Agent 必须逐项检查：
   必须在 P1-requirements.md 追加 override 字段。
 
   可跳过的阶段及其跳过转移：
-    跳过 P2（无设计阶段）→ P1--[P1 gate 通过]--> P3 或 P4（取决于 phases 列表）
     跳过 P3（无 TDD）→ P2--[P2 gate 通过]--> P4
       （P3 跳过时 P4 gate 不要求红灯变绿，P5 的 gate_commands.P5 全绿兜底）
-    跳过 P6（无验收）→ P5--[P5 gate 通过]--> P7
     跳过 P7（无一致性检查）→ P6--[P6 gate 通过]--> P8
     跳过 P8（无发布）→ P7--[P7 gate 通过]--> DONE（仅限不涉及发布的内部任务）
 
@@ -228,7 +227,7 @@ P8 gate 通过 ≠ 直接标记 READY。主 Agent 必须逐项检查：
     P4/P5 是交付底线——没有实现和验证就没有可发布产物
 
   gate 判定方式：主 Agent 读 P1-requirements.md 的 phases 字段，确认跳过列表，按上述转移规则推进。
-  若 P1 声明的 phases 列表与实际 gate 判定冲突（如声明跳过 P6 但 P5 发现行为不符需验收），主 Agent PAUSED 报告人工决策。
+  若 P1 声明的 phases 列表与实际 gate 判定冲突（如声明跳过 P3 但 P4 gate 发现仍需红灯变绿），主 Agent PAUSED 报告人工决策。
 
 特殊转移（SCOPE+ 定向回补）：（行首声明格式：`^\s*(?:[-*+]\s*)?(?:>\s*)?(?:\*\*|__)?\[SCOPE+\]`——粗体/引用块同为声明，句中引用与反引号包裹不触发；格式权威源 = `WORKFLOW.md` §[SCOPE+]）
 任意阶段 Pn 产出含 [SCOPE+] → 主 Agent 增补 P1 基线 → 判断影响范围 → 定向回补：
@@ -402,7 +401,7 @@ function 执行一步(task_id):
        → 强制 PAUSED，报告"跨 N 阶段回退，需人工确认"
        检测基于 phase 编号差值，不依赖 commit message 格式。
        例外：P5→P4（差 1，正常回归）不需要 PAUSED。
-       注意：仅检查**回退**方向，不检查前向跨阶跳。前向跳（P2→P5）通常是裁剪后的合法跳变（state-machine.md:160-161），由 P5 gate 的阶段产出文件检查兜底。
+       注意：**前向跨阶（delta ≥ 2）对非 legacy 任务同样由 `check_transition` 检查**（与上一行回退方向共用同一规则，TAG0050 评审 M-1）。被跨过的阶段须已从 P1 `phases` 移除并在 `pruned` 中声明，且不得跨过**不可跳过的阶段**（P1/P2/P4/P5/P6，见上文「阶段跳过转移规则」）。**legacy 任务维持不检查**（历史任务行为不变；`agate-state-set` 此前对 legacy 前向跳从严，现与 hook 统一为同一判据——判据单源）。
     7. if 下一状态 == READY:
           输出交付小结（强制）：见「进入 READY 时」的格式要求
           用 agate-state-set.py 写回 .state.yaml（phase=READY）

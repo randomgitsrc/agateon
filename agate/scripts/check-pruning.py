@@ -18,6 +18,23 @@ import re
 import subprocess
 import sys
 
+# 不可裁剪阶段集（P1 需求基线 / P2 方案设计 / P4 实现 / P5 技术验证 / P6 验收）。
+# ⚠️ 与 `agate/scripts/check-state-transition.py::NON_PRUNABLE_PHASES` **逐字一致**
+# （ADR-014 判据单源；等价守护见 agate/tests/unit/test_non_prunable_phases_guard.py）。
+NON_PRUNABLE_PHASES = ("P1", "P2", "P4", "P5", "P6")
+
+_NON_PRUNABLE_REASONS = {
+    "P1": "P1 不可裁剪——需求基线是全流程脊梁，无论任务大小都需建立",
+    "P2": (
+        "P2 不可裁剪——方案设计是必经阶段，P1 analyst 做需求分析不做方案设计，"
+        "无法预知 P2 architect 会发现哪些隐含问题。design_trivial / "
+        "follows_existing_pattern 可简化 P2（1 个候选方案），不可省略 P2"
+    ),
+    "P4": "P4 不可裁剪——实现是交付底线，无实现则无可发布产物",
+    "P5": "P5 不可裁剪——验证是交付底线，无验证则无可发布产物",
+    "P6": "P6 不可裁剪——验收是质量最后防线。no_behavior_change 可简化 P6（快速验收），不可省略 P6",
+}
+
 try:
     from agate_common import run_git
 except ImportError:
@@ -230,27 +247,12 @@ def main():
     if not risk_level:
         errors.append("P1-requirements.md 缺 risk_level 字段")
 
-    # 检查 2：P2 不可裁剪（无例外口）
-    if "P2" not in phases:
-        errors.append(
-            "P2 不可裁剪——方案设计是必经阶段，P1 analyst 做需求分析不做方案设计，"
-            "无法预知 P2 architect 会发现哪些隐含问题。design_trivial / "
-            "follows_existing_pattern 可简化 P2（1 个候选方案），不可省略 P2"
-        )
-
-    # 检查 3：P6 不可裁剪（无例外口）
-    if "P6" not in phases:
-        errors.append(
-            "P6 不可裁剪——验收是质量最后防线。no_behavior_change 可简化 P6（快速验收），不可省略 P6"
-        )
-
-    # 检查 4: P4 不可裁剪（交付底线——没有实现就没有可发布产物）
-    if "P4" not in phases:
-        errors.append("P4 不可裁剪——实现是交付底线，无实现则无可发布产物")
-
-    # 检查 5: P5 不可裁剪（交付底线——没有验证就没有可发布产物）
-    if "P5" not in phases:
-        errors.append("P5 不可裁剪——验证是交付底线，无验证则无可发布产物")
+    # 检查 2~5：不可裁剪阶段（P1/P2/P4/P5/P6）均须在 phases 中（无例外口）。
+    # 集与文案源自模块级 NON_PRUNABLE_PHASES / _NON_PRUNABLE_REASONS（与
+    # check-state-transition.py::NON_PRUNABLE_PHASES 逐字一致，ADR-014 判据单源）。
+    for _p in NON_PRUNABLE_PHASES:
+        if _p not in phases:
+            errors.append(_NON_PRUNABLE_REASONS[_p])
 
     # 检查 6：裁剪 P3 的条件
     if "P3" not in phases and risk_level != "low":

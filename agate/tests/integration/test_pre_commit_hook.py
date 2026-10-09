@@ -893,13 +893,134 @@ def test_it9_pruning_skip_low_passes(git_repo, agate_root, agate_scripts, python
     git_repo.stage("agate-workspace/tasks/T001/P2-dispatch-context-architect.md")
     _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P2")
 
+    # TAG0050 评审 M-1：前向跨阶仅允许跳过**已裁剪**阶段。原用例 P2→P5 跳过了仍声明的
+    # P4（把缺陷固化为期望行为），改为 P2→P4（只跳已裁剪的 P3），并补齐 P4 最小合法产出。
+    _write_state_yaml(task_dir, "TXX0001", "P4")
+    (task_dir / "P4-review.md").write_text(
+        "---\nstatus: approved\nagent: reviewer-subagent\n---\nP4 review approved.\n",
+        encoding="utf-8",
+    )
+    (task_dir / "P4-implementation.md").write_text(
+        "---\nagent: implementer\nprod_touched: false\n---\nimpl\n",
+        encoding="utf-8",
+    )
+    src = repo / "src"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "app.py").write_text("print('impl')\n", encoding="utf-8")
+    git_repo.stage("agate-workspace/tasks/T001/")
+    git_repo.stage("src/app.py")
+    result = _git_commit(run_cli, agate_root, repo, "-m", "T001 skip to P4")
+    assert result.returncode == 0
+
+
+def _m1_p1_requirements_low():
+    """M-1 负向用例共用：非 legacy 任务的 P1 声明（跳 P3，P4 仍声明未裁剪）。"""
+    return (
+        "---\nagent: test\nrisk_level: low\n"
+        "phases: [P1, P2, P4, P5, P6, P7, P8]\n"
+        "packages: [pkg-a]\ndomains: [backend]\n"
+        "pruned:\n  - {phase: P3, reason: 低风险可裁剪, risk: low}\n"
+        "---\n跳过风险: 低\n"
+    )
+
+
+def test_m1_forward_jump_p0_to_p5_blocked(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """M-1 负向①：非 legacy 任务 P0 → P5（跨 P1-P4）应被 check_transition 拦截。
+
+    改前行为：前向跨阶规则只在 agate-state-set.py（工具路径），pre-commit hook 与 CI
+    回放共用的 check_transition 不检查前向跳 ⇒ 手改 .state.yaml 可从 P0 直跳 P5。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_state_yaml(task_dir, "TXX0001", "P0")
+    (task_dir / "P1-requirements.md").write_text(
+        _m1_p1_requirements_low(), encoding="utf-8"
+    )
+    git_repo.stage("agate-workspace/tasks/T001/")
+    _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P0")
+
     _write_state_yaml(task_dir, "TXX0001", "P5")
     (task_dir / "P5-verification.md").write_text(
         "---\nagent: test\n---\n", encoding="utf-8"
     )
     git_repo.stage("agate-workspace/tasks/T001/")
-    result = _git_commit(run_cli, agate_root, repo, "-m", "T001 skip to P5")
-    assert result.returncode == 0
+    result = _git_commit(run_cli, agate_root, repo, "-m", "T001 jump P0 to P5")
+    assert result.returncode != 0, f"P0→P5 应被拦截\n{result.output[-600:]}"
+    assert "前向跨阶" in result.output
+
+
+def test_m1_forward_jump_p0_to_p7_blocked(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """M-1 负向②：非 legacy 任务 P0 → P7（跨含 judge 的 P1-P6）应被拦截。"""
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_state_yaml(task_dir, "TXX0001", "P0")
+    (task_dir / "P1-requirements.md").write_text(
+        _m1_p1_requirements_low(), encoding="utf-8"
+    )
+    git_repo.stage("agate-workspace/tasks/T001/")
+    _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P0")
+
+    _write_state_yaml(task_dir, "TXX0001", "P7")
+    git_repo.stage("agate-workspace/tasks/T001/")
+    result = _git_commit(run_cli, agate_root, repo, "-m", "T001 jump P0 to P7")
+    assert result.returncode != 0, f"P0→P7 应被拦截\n{result.output[-600:]}"
+    assert "前向跨阶" in result.output
+
+
+def test_m1_forward_jump_p2_to_p5_blocked(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """M-1 负向③：非 legacy 任务 P2 → P5（P4 已声明未裁剪）应被拦截。"""
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    _write_state_yaml(task_dir, "TXX0001", "P2")
+    (task_dir / "P1-requirements.md").write_text(
+        _m1_p1_requirements_low(), encoding="utf-8"
+    )
+    (task_dir / "P2-design.md").write_text(
+        "---\nagent: test\nphase: P2\ntask_id: TXX0001\ntype: design\n"
+        "parent: P1-requirements.md\ntrace_id: T001-P2-20260708\n"
+        "status: approved\ncreated: 2026-07-08\nprod_touched: false\n---\n"
+        "### 候选方案 A：方案一\n### 候选方案 B：方案二\n## 权衡\nA 简单 B 稳健\n"
+        "candidate_count: 2\npackages: [pkg-a]\ndomains: [backend]\n"
+        "ui_affected: false\ngate_commands: {}\n",
+        encoding="utf-8",
+    )
+    (task_dir / "P2-review.md").write_text(
+        "---\nstatus: approved\nagent: reviewer-subagent\n---\nP2 review approved.\n",
+        encoding="utf-8",
+    )
+    git_repo.stage("agate-workspace/tasks/T001/")
+    _write_min_valid_dispatch_context(
+        run_cli, python_exe, agate_scripts, agate_root, task_dir, "P2", "architect"
+    )
+    git_repo.stage("agate-workspace/tasks/T001/P2-dispatch-context-architect.md")
+    _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P2")
+
+    _write_state_yaml(task_dir, "TXX0001", "P5")
+    (task_dir / "P5-verification.md").write_text(
+        "---\nagent: test\n---\n", encoding="utf-8"
+    )
+    git_repo.stage("agate-workspace/tasks/T001/")
+    result = _git_commit(run_cli, agate_root, repo, "-m", "T001 jump P2 to P5")
+    assert result.returncode != 0, f"P2→P5（P4 未裁剪）应被拦截\n{result.output[-600:]}"
+    assert "前向跨阶" in result.output
 
 
 def test_it9b_pruning_skip_medium_blocked(

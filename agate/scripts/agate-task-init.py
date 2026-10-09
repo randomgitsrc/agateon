@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -76,6 +77,30 @@ def _workspace_paths(start_dir):
     root = project_root(start_dir)
     _workspace, tasks_dir = resolve_workspace(root)
     return root, tasks_dir
+
+
+def _resolver_label():
+    """账本 `resolver` 字段：记 AGATE_HOME 相对路径（如 `v0.80.1/agate`），无 AGATE_HOME 则记
+    版本目录 + basename（如 `v0.80.1/agate`），再否则只记 basename；
+    **不记绝对路径**（避免本机用户名/目录结构随账本入库）。"""
+    root = os.environ.get("AGATE_ROOT", "")
+    if not root:
+        return ""
+    home = os.environ.get("AGATE_HOME", "")
+    if home:
+        try:
+            rel = os.path.relpath(root, home)
+            if not rel.startswith(".."):
+                return rel.replace(os.sep, "/")
+        except ValueError:
+            pass
+    base = os.path.basename(root.rstrip("/")) or ""
+    parent = os.path.basename(os.path.dirname(root.rstrip("/")))
+    # 无 AGATE_HOME 时（hook 运行的常见情形）：父目录是版本目录则一并记入，保留版本信息；
+    # 否则只记 basename——不把任意父目录名（可能是用户名）写进账本。
+    if base and re.match(r"^v?[0-9]+(\.[0-9]+)+$", parent or ""):
+        return f"{parent}/{base}"
+    return base
 
 
 def _rebuild_chain(events):
@@ -154,7 +179,7 @@ def _cmd_new(args):
         "task_id": args.task_id,
         "contract_level": level if level is not None else 1,
         "agate_version": os.environ.get("AGATE_VERSION", ""),
-        "resolver": os.environ.get("AGATE_ROOT", ""),
+        "resolver": _resolver_label(),
     })
     run_git(["add", os.path.relpath(task_dir, repo_root)], cwd=repo_root)
     sys.stderr.write(f"agate-task-init: 已创建 {task_dir}（等级 {level}）\n")
@@ -182,7 +207,7 @@ def _cmd_existing(args):
         "task_id": os.path.basename(task_dir).split("-", 1)[0],
         "contract_level": level if level is not None else 1,
         "agate_version": os.environ.get("AGATE_VERSION", ""),
-        "resolver": os.environ.get("AGATE_ROOT", ""),
+        "resolver": _resolver_label(),
     }
     lines = _rebuild_chain([head, *events])
     with open(ledger, "w", encoding="utf-8") as fh:

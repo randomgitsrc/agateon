@@ -75,6 +75,85 @@ def test_st_3_forward_jump_p1_to_p3_exit_0(git_repo, agate_scripts, python_exe, 
     assert result.returncode == 0
 
 
+def _seed_non_legacy(task):
+    """标非 legacy：写含 `task_created` 的首行账本（`read_ledger_events` 只逐行 JSON，不校验哈希链）。"""
+    (task / "gate-events.jsonl").write_text(
+        '{"event": "task_created", "task_id": "T001", "contract_level": 1, '
+        '"ts": "2026-10-09T00:00:00.000000Z", "prev_hash": "0"}\n',
+        encoding="utf-8",
+    )
+
+
+def _write_p1(task, phases, pruned):
+    lines = ["---", "agent: test", "risk_level: low", f"phases: [{', '.join(phases)}]"]
+    if pruned:
+        lines.append("pruned:")
+        lines += [f"  - {{phase: {p}, reason: r, risk: low}}" for p in pruned]
+    lines += ["---", "跳过风险: 低", ""]
+    (task / "P1-requirements.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def test_st_3a_forward_jump_non_legacy_pruned_ok_exit_0(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """M-1：非 legacy 任务前向跳 P2→P4，被跨的 P3 已裁剪并声明 → 放行。"""
+    repo = git_repo.path
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    _seed_non_legacy(task)
+    _write_p1(task, ["P0", "P1", "P2", "P4", "P5", "P6", "P7", "P8"], ["P3"])
+    _write_state(task / ".state.yaml", "P2")
+    git_repo.commit("init")
+
+    _write_state(task / ".state.yaml", "P4")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 0, result.output
+
+
+def test_st_3b_forward_jump_non_legacy_p6_to_p8_pruned_p7_exit_0(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """M-1：合法裁剪路径 P6→P8（裁 P7）须放行——此前零覆盖，曾被 judge 判据误拦。"""
+    repo = git_repo.path
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    _seed_non_legacy(task)
+    _write_p1(task, ["P0", "P1", "P2", "P4", "P5", "P6", "P8"], ["P3", "P7"])
+    _write_state(task / ".state.yaml", "P6")
+    git_repo.commit("init")
+
+    _write_state(task / ".state.yaml", "P8")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 0, result.output
+
+
+def test_st_3c_forward_jump_non_legacy_unpruned_exit_1(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """M-1：非 legacy 任务 P2→P5，被跨的 P4 未裁剪（不可跳过）→ 拦截。"""
+    repo = git_repo.path
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    _seed_non_legacy(task)
+    _write_p1(task, ["P0", "P1", "P2", "P4", "P5", "P6", "P7", "P8"], ["P3"])
+    _write_state(task / ".state.yaml", "P2")
+    git_repo.commit("init")
+
+    _write_state(task / ".state.yaml", "P5")
+    git_repo.stage("agate-workspace/tasks/T001/.state.yaml")
+    result = _run_state(
+        agate_scripts, python_exe, run_cli, repo, "agate-workspace/tasks/T001/.state.yaml"
+    )
+    assert result.returncode == 1, result.output
+    assert "前向跨阶" in result.output
+
+
 def test_st_4_backward_jump_p3_to_p1_exit_1_paused(git_repo, agate_scripts, python_exe, run_cli):
     repo = git_repo.path
     _write_state(repo / ".state.yaml", "P3")
