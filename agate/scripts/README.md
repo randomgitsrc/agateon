@@ -99,7 +99,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 |
 |------|------|
-| `agate_common.py` | 公共函数库（替代 `gate-result.sh` + `agate-workspace-resolve.sh`）：`write_gate_result` / `read_state_phase` / `read_state_task_id` / `has_staged_phase_change` / `resolve_formatter` / `run_test_with_formatter` / `resolve_workspace` / `probe_python` / `run_git` / `read_vision_tri_state`（P1 vision 能力三态统一解析）/ `MAX_RETRY_MAP` 等。执行模式输出 `AGATE_WORKSPACE=` / `AGATE_TASKS_DIR=` 两行（workspace-resolve 契约）|
+| `agate_common.py` | 公共函数库（替代 `gate-result.sh` + `agate-workspace-resolve.sh`）：`write_gate_result` / `read_state_phase` / `read_state_task_id` / `has_staged_phase_change` / `resolve_formatter` / `run_test_with_formatter` / `resolve_workspace` / `resolve_workspace_from_task_dir`（由 `task_dir` 解析工作区：向上找项目根后交 `resolve_workspace`，RM-AG0084 / DEBT0028 的**单源实现**） / `probe_python` / `run_git` / `read_vision_tri_state`（P1 vision 能力三态统一解析）/ `MAX_RETRY_MAP` 等。执行模式输出 `AGATE_WORKSPACE=` / `AGATE_TASKS_DIR=` 两行（workspace-resolve 契约）|
 
 ### CI 兜底
 

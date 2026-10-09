@@ -32,8 +32,30 @@ MD_FIELD_GET = os.path.join(SCRIPT_DIR, "agate-md-field-get.py")
 
 AGATE_FEEDBACK_SECTION_RE = re.compile(r"^## agate 反馈\s*$", re.MULTILINE)
 NEXT_HEADING_RE = re.compile(r"^## ", re.MULTILINE)
-# 绝对路径匹配：类 Unix（/ 开头）与类 Windows（C:\ 开头）连续 token（P2-design.md §2 候选方案 B1）
-ABS_PATH_RE = re.compile(r'(?:[A-Za-z]:\\|/)[^\s\'"`]+')
+# 绝对路径匹配：类 Unix 与类 Windows 连续 token（P2-design.md §2 候选方案 B1）。
+# RM-AG0082 / DEBT0008：原正则 `(?:[A-Za-z]:\\|/)[^\s'"`]+` 把**任何以 / 开头的
+# 子串**都当绝对路径，中文散文里的斜杠分隔词被误伤（`机制/执行层面` → `/执行层面`）。
+# 现收窄为"真的像绝对路径"的形态，满足其一即可：
+#   1. Windows 盘符 `C:\...`（保持现状）；
+#   2. Unix 已知顶层目录 `/home/ /Users/ /tmp/ /var/ /etc/ /opt/ /root/ /mnt/
+#      /srv/ /usr/` 开头且至少含 2 段；
+#   3. 以 `/` 开头且至少含 3 段（`/a/b/c` 形态）。
+# 取舍：匿名化是隐私功能，宁可多留不可漏——故不额外加"斜杠前须是边界"的负向断言
+# （那会漏掉紧贴中文/标点的真实路径）。判据 3 改用「**首段为 ASCII 路径段**」——
+# 既排除中文斜杠词（`机制/执行层面`、`机制/执行/流程/层面`：首段为 CJK ⇒ 不匹配），
+# 又不漏真实路径（`/data/secret`、`/proj/foo`：首段为 ASCII ⇒ 匹配）。
+# **已知残留漏脱敏面**（SELF-GATE 评审如实登记，取舍在"更宽"侧之外）：
+#   * **首段为 CJK 的真实路径**（如 `/项目/secret`）不匹配 ⇒ 不脱敏；
+#   * **单段绝对路径**（如 `/data`、`/secret`）不匹配 ⇒ 不脱敏（1 段无法与斜杠词区分）。
+#   二者均属罕见形态；如需覆盖，应在**消费方**用更精确的来源（如已知路径前缀）判定，
+#   而非继续放宽本正则（放宽会把中文斜杠词重新误伤）。
+ABS_PATH_RE = re.compile(
+    r"(?:"
+    r"[A-Za-z]:\\[^\s'\"`]+"  # 1. Windows 盘符路径
+    r"|/(?:home|Users|tmp|var|etc|opt|root|mnt|srv|usr)/[^\s'\"`]+"  # 2. Unix 已知顶层目录（≥2 段）
+    r"|/[A-Za-z0-9._-]+/[^\s'\"`]+"  # 3. 通用：/ 开头、首段为 ASCII 路径段、≥2 段
+    r")"
+)
 
 DISABLED_MESSAGE = "agate-feedback: 功能未启用（设置 AGATE_FEEDBACK=on 启用）\n"
 

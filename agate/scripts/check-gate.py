@@ -44,11 +44,15 @@ except ImportError:
     yaml = None
 
 try:
-    from agate_common import read_vision_tri_state, resolve_workspace, run_git
+    from agate_common import (
+        read_vision_tri_state,
+        resolve_workspace_from_task_dir,
+        run_git,
+    )
 except ImportError:
     read_vision_tri_state = None
     run_git = None
-    resolve_workspace = None
+    resolve_workspace_from_task_dir = None
 
 try:
     from agate_common import resolve_evidence_ref
@@ -1222,28 +1226,22 @@ def gate_p4(task_dir):
     # 「## 新增文件核对表」标题 → WARNING 不阻断（仍 return 0）。change_type 字段不读取、
     # 不分支（BDD-10：refactor 任务同样触发，不豁免）。
     skeleton_file = os.path.join(task_dir, "P2-skeleton.md")
-    # DEBT0016：CODE-MAP.md 路径改用 agate_common.resolve_workspace 权威解析（取代本地
-    # dirname(dirname(task_dir)) 路径算术，该算术假定 task_dir 恰好两级嵌套在 workspace 下，
-    # 非标准嵌套 / .agate.env 覆盖工作区位置时会算错）。project_root 优先取
-    # run_git(["rev-parse", "--show-toplevel"]) 的 git 顶层；run_git 不可用/失败时退化为
-    # 本地算术推导值仅作 resolve_workspace 的入参兜底（resolve_workspace 内部按
-    # project_root/.agate.env 覆盖解析，找不到该文件时走其默认 {project_root}/agate-workspace
-    # 规则，不因入参不精确而抛错）。resolve_workspace 本身不可用（agate_common 整体不可导入，
-    # 与 run_git 同一 import 块，生产环境下二者必然同生共死）时才整体回退旧算术——本分支是
-    # WARNING-only（不 return 1），不是 DEBT0018 evidence 点名的 4 个"关键读取器"之一，
-    # 保持 fail-open 与既有 WARNING 语义一致（R3）。
+    # DEBT0016 + RM-AG0084 / DEBT0028：CODE-MAP.md 路径改用**单源**
+    # `agate_common.resolve_workspace_from_task_dir`（取代本地 `dirname(dirname(task_dir))`
+    # 路径算术——该算术假定 task_dir 恰好两级嵌套在 workspace 下，非标准嵌套 /
+    # `.agate.env` 覆盖 / **外部工作区**场景会算错）。
+    # 本分支是 WARNING-only（不 return 1），不是 DEBT0018 evidence 点名的 4 个"关键读取器"
+    # 之一，保持 fail-open 与既有 WARNING 语义一致（R3）；`agate_common` 不可用时整体回退旧算术。
     code_map_file = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(task_dir))), "agents", "CODE-MAP.md"
     )
-    if resolve_workspace is not None:
-        project_root = None
-        if run_git is not None:
-            _rc, _out = run_git(["rev-parse", "--show-toplevel"], cwd=task_dir)
-            if _rc == 0 and _out.strip():
-                project_root = _out.strip()
-        if project_root is None:
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(task_dir)))
-        _workspace, _tasks_dir = resolve_workspace(project_root)
+    if resolve_workspace_from_task_dir is not None:
+        # RM-AG0084 / DEBT0028：改用**单源** `resolve_workspace_from_task_dir`（与 gate_p7 的
+        # debt 定位、check-retrospective、render-dispatch 三处同源）——原用
+        # `git rev-parse --show-toplevel` 取 project_root，**外部工作区**场景下 task_dir 在
+        # git 仓库外 ⇒ show-toplevel 失败 ⇒ 回退值（= 工作区本身）再喂 `resolve_workspace`
+        # 会多套一层（SELF-GATE r3 指出：本处 WARNING-only、预存，但同款潜在 bug）。
+        _workspace = resolve_workspace_from_task_dir(task_dir)
         code_map_file = os.path.join(_workspace, "agents", "CODE-MAP.md")
     if os.path.isfile(skeleton_file) or os.path.isfile(code_map_file):
         p4_impl_check = os.path.join(task_dir, "P4-implementation.md")
@@ -1924,9 +1922,18 @@ def _gate_p7_structured(task_dir, p7_file):
 
     # basis: followup:DEBT<n> 双向回指（BDD-66）。
     task_id = _load_state_yaml(task_dir).get("task_id", "")
-    debt_file = os.path.join(
-        os.path.dirname(os.path.dirname(task_dir)), "debt", "tech-debt.md"
+    # RM-AG0084 / DEBT0028（第三处，SELF-GATE 评审 grep 发现）：同款 `dirname(dirname())`
+    # 路径算术改用**单源实现** `agate_common.resolve_workspace_from_task_dir`（三处共用；
+    # 本处为 `return 1` 阻断性，比另两处更重）。**不用** `git rev-parse --show-toplevel` 取
+    # 项目根——外部工作区场景（`AGATE_WORKSPACE=` 指向项目外）task_dir 可能在 git 仓库之外，
+    # `show-toplevel` 失败后若把回退值（= 工作区本身）再喂 `resolve_workspace` 会多套一层
+    # `agate-workspace/` ⇒ 误阻断（SELF-GATE r2 实测复现）。
+    _ws_debt = (
+        resolve_workspace_from_task_dir(task_dir)
+        if resolve_workspace_from_task_dir is not None
+        else os.path.dirname(os.path.dirname(os.path.abspath(task_dir)))
     )
+    debt_file = os.path.join(_ws_debt, "debt", "tech-debt.md")
     debt_refs = _read_debt_source_refs(debt_file)
     for _name, r in reviews:
         basis = str(r.get("basis") or "")

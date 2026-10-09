@@ -24,6 +24,16 @@
   `.strip('"').strip("'")` **各自**剥首尾引号 ⇒ 值以引号结尾时被吞（`"pytest -k 'foo'"` →
   `pytest -k 'foo`，命令语法破损）。改为只剥**成对**引号（不成对则原样保留）；
   `agate/phase-cards/P2-design.md` 补「引号与通配 pathspec」两条写法约束。
+- **三处设备路径推导绕过 `resolve_workspace()`（RM-AG0084 / DEBT0028）**：`check-retrospective.py`、
+  `agate-render-dispatch-prompt.py`、`check-gate.py`（gate_p7 的 debt 定位——第三处，SELF-GATE
+  评审 grep 发现，`return 1` 阻断性）用 `dirname(dirname(task_dir))` 硬编码 `<ws>/tasks/<task>`
+  两级嵌套 ⇒ **忽略 `.agate.env` 的 `AGATE_WORKSPACE=` 与 env `AGATE_TASKS_DIR` 覆盖**。三处统一
+  改用 `agate_common.resolve_workspace_from_task_dir`（**单源实现**：向上找含 `.agate.env` 或
+  `agate-workspace/` 的项目根后交 `resolve_workspace`；找不到则回退旧推导）。
+- **`agate-feedback.py` 匿名化正则过宽（RM-AG0082 / DEBT0008）**：原 `ABS_PATH_RE` 把任何 `/`
+  开头 token 当绝对路径 ⇒ 中文散文斜杠词被误脱敏（`机制/执行层面` → `/执行层面`）。收窄为三选一
+  （Windows 盘符 / Unix 已知顶层目录 / `/` 开头且**首段为 ASCII 路径段**）——既排除中文斜杠词，
+  又不漏真实路径（`/data/secret`、`/proj/foo` 仍脱敏）。
 
 ## [0.80.2] - 2026-10-09
 

@@ -71,6 +71,19 @@ def _task_id(state_file):
     return (proc.stdout or "").rstrip("\n")
 
 
+def _resolve_workspace(task_dir):
+    """由 task_dir 解析工作区（RM-AG0084 / DEBT0028）——委托 `agate_common` 的**单源实现**
+    （`resolve_workspace_from_task_dir`，三处消费方共用）；`agate_common` 不可用时回退
+    旧的两级 dirname 推导，保持既有行为。"""
+    try:
+        import agate_common
+    except ImportError:
+        agate_common = None
+    if agate_common is not None and hasattr(agate_common, "resolve_workspace_from_task_dir"):
+        return agate_common.resolve_workspace_from_task_dir(task_dir)
+    return os.path.dirname(os.path.dirname(os.path.abspath(task_dir.rstrip(os.sep))))
+
+
 def _scan_debt_roadmap_signal(task_dir, state_file):
     """BDD-10：检测 DEBT/roadmap 登记信号（机制缺口检测代理），命中返回 tid，否则返回 ""。"""
     if not os.path.isfile(state_file):
@@ -79,7 +92,7 @@ def _scan_debt_roadmap_signal(task_dir, state_file):
     if not tid:
         return ""
 
-    workspace = os.path.dirname(os.path.dirname(os.path.abspath(task_dir.rstrip(os.sep))))
+    workspace = _resolve_workspace(task_dir)
     debt_file = os.path.join(workspace, "debt", "tech-debt.md")
     roadmap_file = os.path.join(workspace, "roadmap", "roadmap.md")
 
