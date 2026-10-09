@@ -843,6 +843,33 @@ def resolve_workspace(project_root):
 AGATE_CARD_PLACEHOLDER_RE = r"(<!-- AGATE_CARD_START -->\n)(.*?)(<!-- AGATE_CARD_END -->)"
 
 
+# 不可裁剪阶段集的**唯一定义处**（RM-AG0110）：注册表 `rules/phases.yaml` 的顶层键
+# `non_prunable_phases` 不可用时的回退值；消费方（check-pruning / check-state-transition）
+# 一律引用本常量，**不得各自再抄一份**（ADR-014 判据单源）。
+NON_PRUNABLE_PHASES_DEFAULT = ("P1", "P2", "P4", "P5", "P6")
+
+
+def non_prunable_phases(task_dir=None, level=None, script_path=None):
+    """不可跳过/不可裁剪阶段集（RM-AG0110，ADR-014 **判据单源**）。
+
+    从**阶段注册表** `rules/phases.yaml` 的顶层键 `non_prunable_phases` 读取——
+    `check-pruning.py` 与 `check-state-transition.py` 共用本函数，**不再各自硬编码副本**
+    （历史：二者曾各存一份且已分叉，P1 只在 check-state-transition 侧）。
+    该集是**协议级不变量**（与单个任务的契约等级无关），故取注册表顶层键而非任务级快照。
+    `task_dir` / `level` 仅为**向后兼容**保留（本实现不使用）。
+    注册表不可用（文件缺失 / 键缺失 / 解析失败）→ 回退 `NON_PRUNABLE_PHASES_DEFAULT`
+    （**唯一定义处**；消费方不得各自再抄一份——ADR-014）。
+    """
+    try:
+        data = read_rules_yaml(resolve_rules_root(script_path or __file__), "phases")
+        got = data.get("non_prunable_phases") if isinstance(data, dict) else None
+        if isinstance(got, list) and got:
+            return tuple(str(x) for x in got)
+    except Exception:
+        pass
+    return NON_PRUNABLE_PHASES_DEFAULT
+
+
 def resolve_workspace_from_task_dir(task_dir):
     """由 `task_dir` 解析工作区（RM-AG0084 / DEBT0028）——**三处消费方共用的单源实现**。
 

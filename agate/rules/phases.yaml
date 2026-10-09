@@ -18,6 +18,14 @@ schema_version: 1
 #   agate-next.py 按 pass_set 三态消费：exit ∈ gate_pass_exit → 直推（exit 2 正常通过不落盘
 #   resolution）；exit 1 → retreat 委托；exit ∉ pass_set 且 ≠ 1（真暂停/异常）→ 才落盘
 #   {phase}-exit2-resolution.md。P6 的 exit 2 ∈ pass_set 为条件式推进（前置 gate_p65 裁决）。
+# 不可跳过 / 不可裁剪阶段集（RM-AG0110，ADR-014 **判据单源**）。
+# `check-pruning.py`（不可裁剪声明）与 `check-state-transition.py`（前向跨阶）**共读本键**
+# （经 `agate_common.non_prunable_phases()`），不再各自硬编码副本——历史教训：二者曾各存
+# 一份且已分叉（P1 只在 check-state-transition 侧）。
+# 语义见 state-machine.md「阶段跳过转移规则」：P1 需求基线 / P2 方案设计 / P4 实现 /
+# P5 技术验证 / P6 验收。
+non_prunable_phases: [P1, P2, P4, P5, P6]
+
 phases:
   - id: P0
     name: 任务简报
