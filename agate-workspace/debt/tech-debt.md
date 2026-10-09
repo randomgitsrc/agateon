@@ -237,7 +237,7 @@ closed_at: 2026-09-04
 id: DEBT0008
 category: technical
 title: agate-feedback.py 匿名化正则 ABS_PATH_RE 误伤中文散文里的斜杠分隔词（非路径场景过度脱敏）
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate-workspace/tasks/TAG0015-retrospective-feedback/retrospective.md
@@ -250,6 +250,14 @@ evidence:
       误判为绝对路径并替换成 `<PATH>`（复现：`ABS_PATH_RE.findall('机制/执行层面')` →
       `['/执行层面']`），产出的脱敏 JSON/Markdown 里出现"归因到 <PROJECT> 机制<PATH> ...
       提取"这类语义被破坏的乱码式替换
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-H2-HYGIENE-r4.md
+    note: >-
+      **关单证据（批次 hotfix-batchB-H2，PR #422，merge 1aca419b）**：RM-AG0082 已修；
+      回归用例见 `agate/tests/unit/`（含**外部工作区**场景——旧 `run_git` 取法在该场景
+      会多套一层 `agate-workspace/` ⇒ 误阻断）。该 hotfix 的 **P5/P6 等价验证** =
+      全量 pytest 2895+ passed + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` +
+      `P[56]` 子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: 不影响 BDD-18 验收的核心诉求（不泄露项目名/绝对路径，方向正确，偏保守不算安全问题），
   但会让 agate-feedback.py 产出的待提交内容出现明显语义破损的乱码片段，人工复核时体验差、
   可能被误认为脚本 bug 而不敢提交，间接削弱 AG0021 反馈机制的可用性
@@ -264,7 +272,11 @@ closure_criteria:
   - 新增覆盖本条 evidence 场景的回归用例
 source: retrospective
 created_at: 2026-08-19
-task_id: null
+task_id: hotfix-batchB-H2   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR #422，触 agate/ 协议本体与脚本，SELF-GATE 多轮独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H2 hotfix，PR #422）：见上方 evidence 的关单证据条目；RM-AG0082 同步回写 done。
+
 ```
 
 ## DEBT0009
@@ -1057,7 +1069,7 @@ closure_note: "TAG0029 关闭：① 纯命令/解析错误exit非0（BDD-1/2，P
 id: DEBT0028
 category: technical
 title: "dirname(dirname(...)) 本地 task_dir 路径推导同款模式的另外 2 处非本体实例（DEBT0016 同类扫描，本次范围锁定只处理 check-gate.py 一处）"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate-workspace/tasks/TAG0031-debt-cleanup/P1-requirements.md
@@ -1071,6 +1083,14 @@ evidence:
       （`workspace_render = os.path.dirname(os.path.dirname(task_dir))` 用于渲染
       {AGATE_WORKSPACE} 占位符）；判定：本次不处理（P0-brief scope 锁定 gate_p4 CODE-MAP 路径一处，
       其余属越界），按同类扫描规则转入 BDD-14 登记为新 DEBT，不留白
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-H2-HYGIENE-r4.md
+    note: >-
+      **关单证据（批次 hotfix-batchB-H2，PR #422，merge 1aca419b）**：RM-AG0084 已修；
+      回归用例见 `agate/tests/unit/`（含**外部工作区**场景——旧 `run_git` 取法在该场景
+      会多套一层 `agate-workspace/` ⇒ 误阻断）。该 hotfix 的 **P5/P6 等价验证** =
+      全量 pytest 2895+ passed + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` +
+      `P[56]` 子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: 若未来 workspace 布局非标准嵌套（如经 .agate.env 的 AGATE_WORKSPACE= 覆盖工作区位置），
   check-retrospective.py 的 debt/roadmap 信号扫描定位、agate-render-dispatch-prompt.py 的
   {AGATE_WORKSPACE} 占位符渲染均可能静默产出错误路径而无提示，与 DEBT0016 本体描述的风险同源，
@@ -1085,7 +1105,11 @@ closure_criteria:
   - 全量 pytest + consistency 0 ERROR
 source: review
 created_at: 2026-09-04
-task_id: TAG0031
+task_id: hotfix-batchB-H2   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR #422，触 agate/ 协议本体与脚本，SELF-GATE 多轮独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H2 hotfix，PR #422）：见上方 evidence 的关单证据条目；RM-AG0084 同步回写 done。
+
 ```
 
 ## DEBT0029
