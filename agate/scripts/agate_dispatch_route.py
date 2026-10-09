@@ -568,12 +568,12 @@ def _tmux_teardown(session_name):
     try:
         alive = subprocess.run(
             ["tmux", "has-session", "-t", str(session_name)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8",
         ).returncode == 0
         if alive:
             subprocess.run(
                 ["tmux", "kill-session", "-t", str(session_name)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, encoding="utf-8",
             )
     except OSError:
         pass
@@ -604,7 +604,7 @@ def _tmux_collect(session_name, capture_path, *, countdown_n=15, margin_s=10,
         try:
             alive = subprocess.run(
                 ["tmux", "has-session", "-t", str(session_name)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, encoding="utf-8",
             ).returncode == 0
         except OSError:
             break
@@ -620,7 +620,7 @@ def _tmux_collect(session_name, capture_path, *, countdown_n=15, margin_s=10,
         if done_at is not None:
             clients = subprocess.run(
                 ["tmux", "list-clients", "-t", str(session_name)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, encoding="utf-8",
             )
             has_clients = bool((clients.stdout or "").strip())
             action = tmux_cleanup_action(
@@ -684,8 +684,7 @@ def _default_subprocess_run(argv, *, timeout_s=None):
 
     try:
         proc = subprocess.run(
-            launch, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=timeout_s,
+            launch, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout_s,
         )
     except OSError:                                         # FileNotFoundError ⊂ OSError（P4b-I2）
         return "", None, "spawn_oserror"

@@ -101,7 +101,7 @@ check-tdd-red.py $TASK_DIR
 - [ ] UI 任务：Playwright/E2E 用例存在
 - [ ] **新增/改动的测试文件通过平台假设扫描**：`python3 {agate_root}/scripts/check-platform-assumptions.py <测试目录>` → **0 命中**
   - 用 `{agate_root}`（协议根占位符）而非裸 `agate/scripts/`：本卡其余处写 `agate/scripts/...` 是**面向 agateon 自身**的惯例，而本条对**任何使用者项目**都成立（`{agate_root}` 由 `agate-resolve.py` 解析）
-  - 扫 R1~R5（裸 `python3` / 硬编码 `PATH` / 系统临时目录字面量 / 其它平台假设）。**注释里的字面量也算命中**——writer 最常踩的就是这个
+  - 扫 R1~R6（裸 `python3` / 硬编码 `PATH` / 系统临时目录字面量 / 其它平台假设 / **`subprocess` 文本模式缺 `encoding=`**）。**注释里的字面量也算命中**——writer 最常踩的就是这个
   - 来历（DEBT0048）：P3 曾只查"红灯对不对"，平台假设要到 **P4 全量 pytest** 才由 `check-platform-assumptions.py` 的 bdd-8（全树 0 命中）抓出 ⇒ 多一个"收口小修"回合。**本仓 2026-09-29 两批修复各自又踩了一次**（新测试注释写系统临时目录字面量）
   - 修法：需要该路径字面量时**运行时拼接**（如 `TMP = "/" + "tmp"`），仓库既有惯例
   - ⚠️ **扫描面限定**：`check-platform-assumptions.py` 只扫 `.bats/.bash/.sh/.py` 四种后缀（源码 `L128`）——**TS/JS 测试文件不在扫描面内**。故本条对 **Python/shell 测试项目**成立；**前端项目（Playwright/vitest 等 .ts/.js 用例）跑该自查恒绿，不等于无平台假设**——那类项目的平台无关性需另想办法（已知缺口，见 DEBT0048 记录）。

@@ -77,6 +77,15 @@
   里写「到截止版本 `vN` 改 exit 1」「`vN` 将硬切」这类承诺前，**必须**在同一提交登记 `RM`/`DEBT`
   （owner）并在 `roadmap` 可见（TAG0042 公告 `v0.80.0` 硬切后无人兑现、TAG0050 P8 撞上才暴露）。
 
+- **BDD-3 扫描面收窄 + 平台假设新增解码规则（RM-AG0105 / DEBT0053 + DEBT0058）**：
+  ① `check-state-transition.py` 的 BDD-3 关键词扫描**收窄**——剔除代码块/行内代码、剔除**引用
+  协议文档**的行（含 `.md` 路径）、并要求行内含 `subagent`/`子代理`（实测既有真事件均如此、
+  散文误报均否）；② `check-platform-assumptions.py` 新增 **R6（调用级）**——`subprocess` 用文本
+  模式（`text=True`/`universal_newlines=True`）却**未在整次调用内**给 `encoding=` ⇒ 命中
+  （行级判定实测大面积误报，故按**括号配平**取整次调用）；该规则**抓到 3 处真缺陷**
+  （`test_release_workflow.py` 的 `subprocess` 调用缺 `encoding=`，已修）；连带修 `agate/scripts/`
+  的 **5 处**同类缺陷（`agate_dispatch_route.py` ×4 + `check-protocol-consistency.py` ×1）。
+
 ### 文档 / 登记
 
 - **TAG0050 外部实施评审遗留处置（m-1/m-2/m-3/m-4/§3，2026-10-09）**：① **m-1**

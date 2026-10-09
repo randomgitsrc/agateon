@@ -2085,7 +2085,7 @@ closure_note: >-
 id: DEBT0053
 category: protocol
 title: "check-state-transition.py 的 BDD-3 自由文本关键词扫描（「空返回」「重派」）可被散文误命中——RM-AG0101 只排除 AGATE_CARD 块，未收窄扫描面"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/scripts/check-state-transition.py
@@ -2094,6 +2094,15 @@ evidence:
       RM-AG0101 已剔除 AGATE_CARD 块，但 TAG0050 主 Agent 的 dispatch-context 散文写「重派」仍触发误报
   - ref: agate-workspace/roadmap/roadmap.md
     note: "RM-AG0101（同族，done）——只解决卡片块排除，未解决散文本身误命中"
+  - ref: agate/scripts/check-state-transition.py
+    note: >-
+      **关单证据（批次 hotfix-batchA-0105，RM-AG0105）**：BDD-3 关键词扫描散文误命中 已修；
+      BDD-3 扫描面收窄（剔除代码块/行内代码 + **引用协议文档**行 + 要求行内含 `subagent/子代理`）
+      ；R6 **调用级**新规则（`subprocess` 文本模式缺 `encoding=`，括号配平取整次调用——
+      行级判定实测大面积误报）+ 修掉它抓到的 3 处真缺陷（`test_release_workflow.py`）。
+      回归用例：`test_check_platform_assumptions.py::test_rm_ag0105_r6_*`、
+      `test_check_state_transition.py::test_rm_ag0105_bdd3_scan_narrowed_to_event_lines`。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   判据无法区分「真实的空返回重派信号」与「散文里恰好出现该词」——每个含该词的
   dispatch-context/progress 都会误报，长期靠人工判断削弱判据可信度。
@@ -2105,7 +2114,11 @@ closure_criteria:
   - "两向回归用例（散文不触发 / 真实信号仍触发）"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: hotfix-batchA-0105   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0105 hotfix）：BDD-3 扫描收窄 + R6 调用级新规则；RM-AG0105 同步回写 done。
+
 ```
 
 ## DEBT0054
@@ -2256,7 +2269,7 @@ closure_note: >-
 id: DEBT0058
 category: protocol
 title: "check-platform-assumptions.py 未覆盖「subprocess text=True 却无 encoding=」类平台假设——Windows 非 UTF-8 解码失败无静态拦截"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/scripts/check-platform-assumptions.py
@@ -2268,6 +2281,15 @@ evidence:
       TAG0050 批 A4 红灯测试 _run_check_obligations（:54）与 BDD-43 端到端（:279）用
       text=True 无 encoding；Windows cp1252 解码子进程非 ASCII 输出失败 ⇒ 缺陷由 PR #408
       pytest(windows-latest) 抓出，非本地静态扫描
+  - ref: agate/scripts/check-state-transition.py
+    note: >-
+      **关单证据（批次 hotfix-batchA-0105，RM-AG0105）**：平台假设扫描器未覆盖 text=True 缺 encoding 已修；
+      BDD-3 扫描面收窄（剔除代码块/行内代码 + **引用协议文档**行 + 要求行内含 `subagent/子代理`）
+      ；R6 **调用级**新规则（`subprocess` 文本模式缺 `encoding=`，括号配平取整次调用——
+      行级判定实测大面积误报）+ 修掉它抓到的 3 处真缺陷（`test_release_workflow.py`）。
+      回归用例：`test_check_platform_assumptions.py::test_rm_ag0105_r6_*`、
+      `test_check_state_transition.py::test_rm_ag0105_bdd3_scan_narrowed_to_event_lines`。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   测试里「text=True 无 encoding=」这类平台假设逃过静态扫描，只能在 Windows CI 运行时暴露；
   本机（Linux，默认 UTF-8 locale）与扫描器双双静默，缺陷延迟到远端 CI 才被发现。
@@ -2280,7 +2302,11 @@ closure_criteria:
   - "规则对 TAG0050 修复前的 test_tag0050_obligations.py 能命中（负向控制）"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: hotfix-batchA-0105   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0105 hotfix）：BDD-3 扫描收窄 + R6 调用级新规则；RM-AG0105 同步回写 done。
+
 ```
 
 ## DEBT0059
@@ -2435,4 +2461,36 @@ closure_criteria:
 source: review
 created_at: 2026-10-09
 task_id: TAG0050-task-data-contract
+```
+
+
+## DEBT0063
+
+```yaml
+id: DEBT0063
+category: technical
+title: "`test_m1_forward_jump_*`（M-1 hotfix 的 3 条负向用例，实测转红者为 `p0_to_p7`）在 `-n auto` 全量下间歇转红（隔离恒绿）——跨文件 flaky，根因未定位"
+status: open
+priority: medium
+evidence:
+  - ref: agate/tests/integration/test_pre_commit_hook.py
+    note: >-
+      2026-10-09 批 A/RM-AG0105 期间实测：全量 `pytest agate/tests/ -q -n auto` 两次运行中
+      **一次**该用例转红（`assert result.returncode != 0` 失败 ⇒ 提交**未被**拦截），而
+      单文件 `-n auto`（68 passed）与隔离运行（3 passed）均恒绿 ⇒ **跨文件 flaky**。
+      另一次全量运行未复现（间歇性）。
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P8-dispatch-context-implementer-ci-fix3.md
+    note: "该用例由 TAG0050 实施评审 M-1 hotfix（PR #414）新增——本 DEBT 登记其 flaky 面。"
+impact: >-
+  CI（`-n auto`）会间歇性假红；更危险的是**反向**：真失败被当作 flake 忽略的诱因
+  （狼来了效应，与 RM-AG0044 同族）。
+recommendation: >-
+  定位跨文件干扰源（候选：`test_ic_idempotent*` 临时改写真实 `phase-cards/*.md` 与 xdist
+  并发；或 hook 解析 `AGATE_ROOT` 的 HOME/环境隔离不完整）→ 按 RM-AG0041/0044 同法治理
+  （fixture 级隔离或强制串行标记）。复现命令：全量 `-n auto` 连跑 ≥3 次统计转红率。
+closure_criteria:
+  - "全量 `-n auto` 连跑 ≥5 次该用例 0 转红；或已定位并消除跨文件干扰源"
+source: retrospective
+created_at: 2026-10-09
+task_id: null   # 待立项；由批 A/RM-AG0105 实测登记
 ```

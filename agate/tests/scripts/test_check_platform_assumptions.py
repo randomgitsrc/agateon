@@ -63,7 +63,10 @@ def test_bdd_1_scanner_script_exists_platform_neutral(agate_scripts):
     scanner = agate_scripts / "check-platform-assumptions.py"
     assert scanner.is_file()
     text = scanner.read_text(encoding="utf-8")
-    assert not re.search(r"subprocess|os\.system|os\.popen", text)
+    # RM-AG0105：原为**子串**断言（`subprocess|os.system|os.popen` 任一出现即失败）——
+    # 但扫描器**必须**在 R6 规则里提到 `subprocess`（规则主语），子串判定无法区分
+    # 「调用」与「提及」。改为断言**调用形态**（本测试本意 = 扫描器不得调用外部进程）。
+    assert not re.search(r"subprocess\.\w+\s*\(|os\.system\s*\(|os\.popen\s*\(", text)
     assert "--perl-regexp" not in text
 
 
@@ -236,3 +239,46 @@ def test_bdd_9_docstring_exemption_does_not_cover_bare_python3(
     lines = [q, "    " + _PY + _VER + " -c 'print(1)'", q, _PY + _VER + " -c 'print(2)'"]
     fx = _make_fixture(tmp_path, lines)
     _assert_hit(run_cli, python_exe, agate_scripts, fx, "R2")
+
+
+def test_rm_ag0105_r6_text_without_encoding_detected(tmp_path, agate_scripts, python_exe, run_cli):
+    """RM-AG0105 / DEBT0058：R6——`subprocess` 文本模式（`text=True`）**缺 `encoding=`** → 命中。
+
+    **调用级**判定：文本模式与 `encoding=` 常分行，行级判定会大面积误报（本批实测）。
+    """
+    fx = _make_fixture(
+        tmp_path,
+        [
+            # 运行时拼接：避免源码出现 R6 的两个关键字面量
+            # （否则本测试**自身**会被 R6 命中 ⇒ bdd_8 全树 0 命中失守）
+            "import " + "subprocess",
+            "r = sub" + "process.run(",
+            '    ["git", "status"],',
+            "    capture_output=True,",
+            "    text" + "=True,",
+            "    timeout=60,",
+            ")",
+        ],
+    )
+    _assert_hit(run_cli, python_exe, agate_scripts, fx, "R6")
+
+
+def test_rm_ag0105_r6_with_encoding_not_detected(tmp_path, agate_scripts, python_exe, run_cli):
+    """RM-AG0105 / DEBT0058（正向对照）：同一调用**含** `encoding=` → 不命中 R6。"""
+    fx = _make_fixture(
+        tmp_path,
+        [
+            "import " + "subprocess",
+            "r = sub" + "process.run(",
+            '    ["git", "status"],',
+            "    capture_output=True,",
+            "    text" + "=True,",
+            '    encoding="utf-8",',
+            "    timeout=60,",
+            ")",
+        ],
+    )
+    result = run_cli(python_exe, str(agate_scripts / "check-platform-assumptions.py"), str(fx))
+    assert "R6" not in result.output, (
+        f"含 encoding= 不得命中 R6；实际输出 {result.output[:300]!r}"
+    )
