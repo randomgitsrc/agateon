@@ -41,6 +41,13 @@
   merge**，经诊断为判据自身缺陷）。**修**：回退 `merge-base(HEAD, origin/<默认分支>)`（与 PR 口径
   同源）并**显式** NOTE（不静默）；merge-base 也解析不出才 FAIL。⚠️ 注意 `rev-list A..B` **不要求**
   A 是 B 的祖先（A 存在即成功）——失败源是**不可解析**，非「非祖先」。
+- **`env_constraints` 语义边界与构建产物落点（RM-AG0083 / DEBT0015，**未关单**）**：
+  `P4-implementation.md`「自查≠gate」节把「UI/前端等需构建任务应构建并确认 dist 等产物存在」
+  **明确为 checklist 落点**（`gate_commands` 声明构建/打包/部署类命令时，P4 后须实际产出并确认
+  产物；协议无对应机械 gate——产物路径项目各异 ⇒ 该条目即「无机械 gate 时的既定出口」）；
+  `implementer.md` 同步该条。**说明**：closure_criteria (1)(2) 经复核**早已满足**（`P2-design.md`
+  「env_constraints 与 gate_commands 的边界」节 + P4 卡条目），**(3)「自动产出 dist」需一次真实
+  UI 任务实证 ⇒ 本条维持 `open`**，余项即 (3)。
 
 ## [0.80.2] - 2026-10-09
 
