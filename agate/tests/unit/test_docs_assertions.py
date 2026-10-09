@@ -116,3 +116,18 @@ def test_bdd_10_p6_card_p65_threshold(agate_root):
     """BDD-10：P6 验收卡增「P6.5 judge 复核（强制）」门槛条文。"""
     text = _read(agate_root, "phase-cards/P6-acceptance.md")
     assert "P6.5" in text and "judge" in text, "P6 卡缺 P6.5 judge 复核门槛（BDD-10）"
+
+
+def test_rm_ag0106_p6_preexisting_failure_exemption(agate_root):
+    """RM-AG0106 / DEBT0055：P6 卡含「预存失败豁免口径」——判据是**本次引入失败 0**，
+    机械面在 **P5** 的 baseline diff，judge 侧为**人工**复核（不得声称机械复核）。"""
+    text = _read(agate_root, "phase-cards/P6-acceptance.md")
+    assert "预存失败豁免口径" in text, "P6 卡缺「预存失败豁免口径」节（RM-AG0106）"
+    assert "本次任务引入的失败 = 0" in text or "引入失败 0" in text, \
+        "P6 卡缺「判据 = 本次引入失败 0」（非全量 0 失败）的表述"
+    assert "pre-task-baseline.md" in text, \
+        "P6 卡须指明机械依据在 P5 的 pre-task-baseline.md ↔ fail-list.txt diff"
+    assert "禁读" in text and "_WHITELIST_MD" in text, \
+        "P6 卡须写明 judge 处信息隔离（白名单不含 known-failures.md、禁读 P6-acceptance.md）"
+    assert "勿声称机械复核" in text, \
+        "P6 卡须显式禁止「judge 机械复核」的声称（check-judge-verdict.py 无该逻辑）"

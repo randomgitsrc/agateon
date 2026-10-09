@@ -86,6 +86,16 @@
   （`test_release_workflow.py` 的 `subprocess` 调用缺 `encoding=`，已修）；连带修 `agate/scripts/`
   的 **5 处**同类缺陷（`agate_dispatch_route.py` ×4 + `check-protocol-consistency.py` ×1）。
 
+- **判据豁免语义：P6 预存失败 + 维护性越阈（RM-AG0106 / DEBT0055 + DEBT0056）**：
+  ① `P6-acceptance.md` 新增「**预存失败豁免口径**」节——「pytest 全绿」类 BDD 的判据是
+  「**本次任务引入的失败 = 0**」（非全量 0 失败），豁免来源 = `known-failures.md` 逐条且须在
+  证据中**显式**引用；**机械面在 P5**（`pre-task-baseline.md` ↔ `fail-list.txt` diff），
+  judge 处**信息隔离**（白名单不含 `known-failures.md`、禁读 `P6-acceptance.md`）⇒ judge
+  **人工**复核（`check-judge-verdict.py` **无**该逻辑，勿声称机械复核），**未登记即不豁免**；
+  ② `check-maintainability.py` docstring 明确「**设计强制改动越阈**」的既定出口 =
+  `known-violations.md` 登记（含**理由**）+ 评审确认——**机械可查的登记/计数路径 + 人工评审确认**（机械面只到「文件存在 + 条目数 ≥ violation 数」，不判「是否设计强制」）；**不引入机械豁免**
+  （无法从 diff 区分「设计强制」与「实现自选」，self-declaration 会被滥用，ADR-015）。
+
 ### 文档 / 登记
 
 - **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）

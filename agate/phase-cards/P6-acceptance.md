@@ -34,6 +34,27 @@
 
 **验收报告记录的是验收时的事实，不是修复后的状态。** P6-acceptance.md 的 PASS/FAIL 声明必须基于 evidence 文件的实际输出。如果验收时 BDD 为 FAIL，写 FAIL——修复后重新验收时再改 PASS。不能在同一个 P6 acceptance 里写"修复后 PASS"。
 
+## 预存失败豁免口径（RM-AG0106 / DEBT0055）
+
+P5 卡有 `known-failures.md`（只登**预存失败**——P5 之前就存在的、与当前任务无关的），
+**P6 此前无对应口径** ⇒ 遇「pytest 全绿」类 BDD 时，judge 会因**预存失败**判 needs-revision
+（TAG0050 实证：76/77，须人工裁定 + 一轮重验）。本节补齐**与 P5 一致**的口径（机械面在 P5，judge 侧人工复核）：
+
+- **判定基准**：该类 BDD 的 PASS 判据是「**本次任务引入的失败 = 0**」，**不是**「全量 0 失败」；
+- **豁免来源**：任务目录下的 `known-failures.md`（模板见 `{agate_root}/assets/templates/known-failures-template.md`）
+  所列条目**逐条**豁免——证据里须**显式**引用该文件并列出豁免条目；
+- **判据呈现**：PASS 行须写成可核对的形式，如
+  `- PASS BDD-NN: pytest 全绿（引入失败 0；预存失败 N 条见 known-failures.md）(P6-evidence/...)`；
+- **机械面在 P5**：区分「预存 / 本次引入」的**机械依据**是 P5 的
+  `pre-task-baseline.md`（任务前失败基线）↔ `P5-test-results/fail-list.txt`（任务后失败清单）
+  **diff**（`gate_p5` 已实现）；P6 的豁免集须与该 baseline **逐条对应**，不得凭空新增。
+- **judge 侧**：judge 处于**信息隔离**（其白名单 `_WHITELIST_MD` **不含** `known-failures.md`，
+  且**禁读** `P6-acceptance.md`）⇒ judge **不**机械读豁免集，按「BDD 声称 vs 客观证据
+  （`P6-evidence/*.log` 的失败清单）+ 上述 baseline」**人工**核对，**不得**仅凭「有失败」判
+  needs-revision；`check-judge-verdict.py` **无**该逻辑（勿声称机械复核）。
+- **未登记即不豁免**：失败项若**未**在 `known-failures.md` 中登记（且不在 P5 baseline 中）⇒
+  视为本次引入 ⇒ 该 BDD 判 FAIL。
+
 ## 前置条件
 
 - [ ] P1-requirements.md BDD 验收条件完整（含 SCOPE+ 增补）
