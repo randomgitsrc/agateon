@@ -137,18 +137,25 @@ def test_bdd_16_ci_verify_skip_declared_with_reason(
 ):
     """BDD-16（跳过可区分）：无适用场景时**显式声明「跳过 + 原因」**，不静默显示绿。
 
-    Given 一个非 agate 项目（无 `.state.yaml` / 无任务）——无 gate 需兜底
-    When 运行 `agate-ci-verify`
+    Given 一个**有提交、无任务目录**的仓库（真跑到「回放范围未改动任务目录」这条 SKIP 路径——
+    此前该用例在空仓库上跑，实际走的是「无法解析 HEAD」分支，属碰巧通过，评审 A4 指出）
+    When 以 `--base HEAD` 运行 `agate-ci-verify`（`--base` 必填，见 TAG0050 评审 M-1 配套）
     Then 输出显式含「跳过」标识**且**给出原因（不再是「永远 SKIP 却显示绿」的无声绿）。
-
-    现行为：agate-ci-verify.py 不存在 ⇒ 无任何跳过声明（模块未实现）⇒ 红灯。
     """
-    result = _run_ci_verify(agate_scripts, python_exe, run_cli, cwd=git_repo.path)
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+    base = git_repo.git("rev-parse", "HEAD").stdout.strip()
+    result = _run_ci_verify(
+        agate_scripts, python_exe, run_cli, "--base", base, cwd=repo
+    )
     assert re.search(r"SKIP|跳过", result.output), (
         "BDD-16：无适用场景须**显式**声明「跳过」（不再静默假绿）；"
         f"实际输出 {result.output[:300]!r}"
     )
-    assert re.search(r"原因|reason|无|not|absent|non-agate", result.output, re.IGNORECASE), (
+    assert re.search(
+        r"原因|reason|未改动|无|not|absent|non-agate", result.output, re.IGNORECASE
+    ), (
         "BDD-16：跳过须附**原因**（「跳过」与「通过」可区分）；"
         f"实际输出 {result.output[:300]!r}"
     )
@@ -191,6 +198,26 @@ def test_bdd_16_ci_verify_workflow_invokes_new_script(agate_root):
     assert _RETIRED_BACKSTOP not in text, (
         f"BDD-16（M15）：workflow 不应再调用退役的 {_RETIRED_BACKSTOP}"
         "（引用须同步更新）"
+    )
+
+
+def test_m1_pr_job_runs_both_invocations(agate_root):
+    """TAG0050 评审 M-1 配套：PR 事件下 gate-backstop 须**同时**跑两条口径。
+
+    Given `.github/workflows/protocol-tests.yml`
+    When 检查 gate-backstop job
+    Then PR 分支同时给 `--base`（PR 口径）与 `--push --base`（push 口径）——脚本里这是两条
+         独立的范围/协议根解析路径，只跑一条有路径特异性盲区（TAG0050 P8 事故根因）。
+    """
+    workflow = agate_root.parent / _WORKFLOW
+    assert workflow.is_file(), f"BDD-16：找不到 workflow {_WORKFLOW}"
+    text = workflow.read_text(encoding="utf-8")
+    assert re.search(r'args="--base \$PR_BASE"', text), (
+        "PR 事件须跑 `--base $PR_BASE`（PR 口径）"
+    )
+    assert re.search(r'extra_args="--push --base \$PR_BASE"', text), (
+        "PR 事件须**同时**跑 `--push --base $PR_BASE`（push 口径）——"
+        "否则「PR 绿 ⇔ 合并后 main 绿」不成立（TAG0050 P8 事故根因）"
     )
 
 
@@ -303,3 +330,24 @@ def test_resolve_protocol_falls_back_when_base_absent(agate_scripts, git_repo):
             mod._git(["worktree", "remove", "--force", wt], proto_repo)
             shutil.rmtree(wt, ignore_errors=True)
     assert head, "sanity：HEAD 可解析"
+
+
+def test_m1_base_required_no_inference(git_repo, agate_scripts, python_exe, run_cli):
+    """TAG0050 评审 M-1 配套：缺 `--base` **不得静默推断**，须 FAIL。
+
+    Given 一个**有提交**的仓库（HEAD 可解析——与空仓库的「无法解析 HEAD」SKIP 区分）
+    When 不传 `--base` 运行 agate-ci-verify
+    Then rc≠0 且输出指明 `--base` 必填（原行为：静默推断 `merge-base HEAD origin/<默认分支>`，
+         push 到默认分支时该值 = HEAD 自己 ⇒ 用新协议回放历史提交致误报 FAIL）。
+    """
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+
+    result = _run_ci_verify(agate_scripts, python_exe, run_cli, cwd=repo)
+    assert result.returncode != 0, (
+        f"缺 --base 须 FAIL（不得推断），实际 rc={result.returncode}\n{result.output[:300]}"
+    )
+    assert "--base" in result.output, (
+        f"失败原因须指明 --base 必填；实际输出 {result.output[:300]!r}"
+    )

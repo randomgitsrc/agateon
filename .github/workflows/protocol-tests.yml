@@ -315,19 +315,42 @@ jobs:
             exit 0
           fi
           args=""
+          # 回放口径（TAG0050 评审 M-1 配套）：
+          #  · PR：**两条路径都跑**（`--base` 与 `--push --base`）——脚本里这是两条独立的
+          #    范围/协议根解析路径，只跑一条会有路径特异性盲区；两条都跑后
+          #    「PR 两条口径绿 ⇒ 合并后 main 亦绿」对同一组提交成立（前提：本 job 为 required 检查）。
+          #  · push：本就在默认分支上，跑 `--push --base <before>`（= 合并提交的真实口径）。
+          args=""
+          extra_args=""
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE" ]; then
             args="--base $PR_BASE"
+            extra_args="--push --base $PR_BASE"
           elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE" ]; then
             args="--push --base $PUSH_BEFORE"
           fi
-          python3 agate/scripts/agate-ci-verify.py $args 2>&1 | tee /tmp/ci-verify.log
-          if grep -q 'SKIP:' /tmp/ci-verify.log; then
+          rc=0
+          python3 agate/scripts/agate-ci-verify.py $args 2>&1 | tee /tmp/ci-verify.log || rc=$?
+          if [ -n "$extra_args" ]; then
+            echo "── 补充回放：push 口径（$extra_args）──"
+            rc2=0
+            python3 agate/scripts/agate-ci-verify.py $extra_args 2>&1 | tee /tmp/ci-verify-push.log || rc2=$?
+            if [ "$rc2" -ne 0 ]; then
+              rc="$rc2"
+            fi
+          fi
+          # ⚠️ 只 grep **实际存在**的日志——push 事件下 ci-verify-push.log 不存在，
+          #    `grep` 对缺失文件返回 2，经 `pipefail` + bash `-e` 会让整个 step 假红（评审实测）。
+          logs=""
+          if [ -f /tmp/ci-verify.log ]; then logs="/tmp/ci-verify.log"; fi
+          if [ -f /tmp/ci-verify-push.log ]; then logs="$logs /tmp/ci-verify-push.log"; fi
+          if [ -n "$logs" ] && grep -q 'SKIP:' $logs; then
             {
               echo "### ⚠️ gate-backstop 本次**跳过**（未实际执行 gate 兜底）"
               echo ""
               echo '```'
-              grep -A 3 'SKIP:' /tmp/ci-verify.log | head -20
+              grep -A 3 'SKIP:' $logs | head -20 || true
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::warning title=gate-backstop 未生效::本次 gate 兜底未实际执行（输出含 SKIP: 与原因；exit 0 不代表通过）——详见 job summary"
           fi
+          exit "$rc"
