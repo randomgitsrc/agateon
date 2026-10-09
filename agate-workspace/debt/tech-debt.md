@@ -2121,7 +2121,7 @@ task_id: null   # 待立项；由 TAG0050 复盘登记
 id: DEBT0059
 category: protocol
 title: "`_resolve_protocol` 选协议根未纳入回放基准 base——push-to-main 时 merge-base = HEAD 自己 ⇒ 用新协议回放历史提交致误报 FAIL"
-status: open
+status: closed
 priority: high
 evidence:
   - ref: agate/scripts/agate-ci-verify.py
@@ -2137,6 +2137,14 @@ evidence:
     note: >-
       合并后 main 的 CI 实测（run 37851356052）：gate-backstop 7 提交 FAIL + pytest
       test_bdd_23/24 FAIL；仓外副本复现 OLD rc=1（7 FAIL）→ NEW rc=0
+  - ref: agate/tests/unit/test_agate_ci_verify.py
+    note: >-
+      **关单证据（批次 TAG0050-hotfix-M1）**：hotfix 通道无 P5/P6 阶段产出，等价证据为
+      `test_push_to_main_protocol_root_uses_base_not_head`（负向控制：旧逻辑转红）+
+      `test_resolve_protocol_falls_back_when_base_absent` + 全量 pytest 2874 passed /
+      consistency 0 ERROR；合并后 main 的 push run（含 gate-backstop）实测 success。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的
+      `task_id` + `P[56]` 子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: >-
   push 到受保护分支（合并即触发）时 CI 兜底恒误报 FAIL：回放用「合并后的新协议」判定
   「按旧协议书写」的历史提交，卡片 hash / 夹具良构性均按新协议重判 ⇒ 合并后 main 必红，
@@ -2154,5 +2162,14 @@ closure_criteria:
   - "test_bdd_23/24 在任意 checkout HEAD（分支尖或 main）下稳定 PASS"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: TAG0050-hotfix-M1   # ⚠️ 批次标签，无对应任务目录（`agate-workspace/tasks/TAG0050-hotfix-M1*` 不存在）——修复走 hotfix 通道（PR #414，触 agate/ 协议本体与脚本，SELF-GATE 三轮独立评审，未走 P0-P8）；先例 DEBT0049/DEBT0046
+closed_at: 2026-10-09
+closure_note: >-
+  已修（PR #414，merge 108fe8c3；原始修复提交 1c5f43d8）：`_resolve_protocol(repo,
+  agate_root_env, base)` 增 `base` 入参，协议根改由**回放基准**推导（协议仓库中
+  `merge-base(base, HEAD)` 处的 `agate/`）；解析失败显式 note 回退（不静默）。回归用例
+  `test_push_to_main_protocol_root_uses_base_not_head`（负向控制：旧逻辑转红）+
+  `test_resolve_protocol_falls_back_when_base_absent`。合并后 main 的 push run 实测
+  `gate-backstop` 转绿。**机制改进**（`agate-ci-verify --base` 必填 + PR job 跑双口径）
+  已由 RM-AG0103 承载并随 PR #415 落地（含 `gate-backstop` 升为 required 检查）。
 ```
