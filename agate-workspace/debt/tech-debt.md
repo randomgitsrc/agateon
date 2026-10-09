@@ -1999,7 +1999,7 @@ closure_note: >-
 id: DEBT0051
 category: protocol
 title: "发布流程允许在 UPGRADING 预告未排期能力的实施版本号，却不要求同时登记 RM/DEBT——公告发出即无 owner，到期无人兑现"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/UPGRADING.md
@@ -2011,6 +2011,14 @@ evidence:
     note: "RM-AG0102 承接该欠账（给 owner）；TAG0050 P8 已删除两处「截止版本：v0.80.0」承诺"
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/P8-release.md
     note: "§1/§7-4 记录版本语义冲突：v0.79.0 预告 v0.80.0 硬切而本任务不含该硬切"
+  - ref: AGENTS.md
+    note: >-
+      **关单证据（批次 hotfix-batchA-0108，RM-AG0108）**：`AGENTS.md`「版本发布清单」新增
+      **3a 公告约束** + `agate/UPGRADING.md`新增**顶层**「版本号公告约束」节（位于 `## 版本管理生命周期` 之前）
+      ——明确「不得预告未排期能力的实施版本号；确需预告须**同一提交**登记 RM/DEBT（owner）
+      并在 roadmap 可见」。TAG0050 P8 已先行删除两处「截止版本：v0.80.0」承诺（欠账由
+      RM-AG0102 承接）；本条补的是**机制规则**。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   任何「给未排期能力预告未来版本号」的公告都会变成必然过期的承诺——发布时无人负责，等到该版本号
   被其他任务占用才暴露，此时要么违约发布、要么临时改版本号/改述。
@@ -2020,9 +2028,14 @@ recommendation: >-
 closure_criteria:
   - "UPGRADING/发布流程约定含「不得预告未排期能力的实施版本号；确需预告须同时登记 RM/DEBT」条文"
   - "该条有机械或评审判据（新公告的版本号承诺能反查到对应 RM/DEBT）"
+  - "⚠️ **2026-10-09 实测复核**：`grep` 全 `agate/scripts/` **无**「截止版本/未排期/实施版本号」判据 ⇒ 本判据实为**自觉 + 评审**（`AGENTS.md` 发布清单 3a / `UPGRADING` 公告约束节 + 发布 PR 评审），**无机械门禁**——该口径已在上述两条新条文中写明"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记（机制规则缺口；欠账本身已由 RM-AG0102 承接）
+task_id: hotfix-batchA-0108   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0108 hotfix）：AGENTS 发布清单 3a + UPGRADING 公告约束节；RM-AG0108 同步回写 done。
+
 ```
 
 ## DEBT0052
@@ -2101,7 +2114,7 @@ task_id: null   # 待立项；由 TAG0050 复盘登记
 id: DEBT0054
 category: protocol
 title: "implementer 以「保持既有测试全绿」为由不实现设计要求（回退判定/只声明时校验/D5-D7-D9 未实现），implementer.md 未显式禁止且无「设计要求↔实现」机械对照"
-status: open
+status: closed
 priority: high
 evidence:
   - ref: docs/reviews/agate-alignment-review-2026-10-08-TAG0050-G3.md
@@ -2112,6 +2125,13 @@ evidence:
     note: "未显式禁止「以保持既有测试全绿为由不实现设计要求」；无「设计要求↔实现」机械对照"
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/P4-implementation-G2.md
     note: "6 条 [DESIGN_GAP] 含「F10/prod_touched 未接 hook」等回退"
+  - ref: agate/assets/execution-roles/implementer.md
+    note: >-
+      **关单证据（批次 hotfix-batchA-0107，RM-AG0107）**：`implementer.md` 新增「不得以
+      『保持既有测试全绿』为由不实现设计要求」节（契约驱动优先 + 正确/错误动作对照 + 指向
+      **`[CLARIFY]`** 出口）；`protocol-alignment-review.md` 的 A1-A8 汇总表新增
+      **A4b「闭合后既有测试转红 + 夹具更新清单」**（空清单也须显式写出）。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   设计强制要求被「保持测试绿」的局部便利回退，隐性偏离设计，须靠 SELF-GATE 评审逐条抓出并多轮整改
   （G1/G2/G3 各 1–3 轮）。
@@ -2123,7 +2143,11 @@ closure_criteria:
   - "评审角色或 gate 有「设计要求↔实现」对照判据（闭合后既有测试转红清单）"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: hotfix-batchA-0107   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0107 hotfix）：implementer 禁令 + 评审 A4b 输出要求；RM-AG0107 同步回写 done。
+
 ```
 
 ## DEBT0055

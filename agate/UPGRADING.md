@@ -37,6 +37,13 @@ python3 ~/.agate/scripts/agate-summary.py   # 应显示新版本号
 
 ---
 
+## 版本号公告约束（RM-AG0108 / DEBT0051）
+
+本文件（及 `CHANGELOG` / `README`）中**不得预告「未排期能力」的实施版本号**——例如「到截止版本
+`vN` 改 exit 1」「`vN` 将硬切」。这类承诺一经写出即**无 owner**、到期无人兑现，等到该版本号被
+其它任务占用才暴露（TAG0042 公告 `v0.80.0` 硬切、TAG0050 P8 撞上该版本号才暴露，见 RM-AG0102）。
+**确需预告时**：必须**同一提交**登记 `RM`/`DEBT`（owner）并在 `roadmap` 可见，写明 owner 条目 id。
+
 ## 版本管理生命周期
 
 > 本节是版本管理布局（`~/.agate/` = 版本管理根目录：`repo/` + `vX.Y.Z/` + `latest`/`current` 指针 + 根 `scripts/`）下
