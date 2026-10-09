@@ -59,6 +59,13 @@
   「evidence 含 `P[56]` 子串」改为「含 `task_id` + **`closed_at`**（关闭时间的显式字段）」
   ——原 `P[56]` 与「已关闭」无因果，属粗糙启发式（存量 2 条缺 `closed_at` 已迁移）。
 
+- **注入链静默失败 + 占位符无校验（RM-AG0104 / DEBT0052 + DEBT0057）**：① `agate-inject-card.py`
+  遇**首个**缺占位符文件即 `sys.exit(1)` ⇒ 排序其后**全部 dispatch-context 静默不注入**
+  （TAG0050 实测：1 个缺占位符导致其后 **13 个**丢失，人工才发现）——改为**不早退**（继续处理
+  其余文件 + 末尾汇总失败清单 + 非零退出）；② `pre-commit-gate.py` 新增 **2y** 步：暂存
+  `{Pn}-dispatch-context-*.md` 但缺 `AGATE_CARD_START/END` 占位符 → 阻断 commit（原先**无任何
+  gate 拦截**，只靠 inject 早退事后暴露）。
+
 ### 文档 / 登记
 
 - **TAG0050 外部实施评审遗留处置（m-1/m-2/m-3/m-4/§3，2026-10-09）**：① **m-1**

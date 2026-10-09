@@ -87,6 +87,7 @@ def main():
         sys.stderr.write(f"GATE: {phase}-dispatch-context-{{role}}.md 不存在\n")
         sys.exit(1)
 
+    failures = []
     for dc_file in dc_files:
         fd, card_file = tempfile.mkstemp()
         try:
@@ -107,12 +108,23 @@ def main():
                 # 透传 agate-card-inject.py 的错误消息（占位符缺失等）——sh 版 stderr 直通终端
                 if proc is not None and proc.stderr:
                     sys.stderr.write(proc.stderr)
-                sys.exit(1)
+                # RM-AG0104 / DEBT0052：**不早退**——继续处理其余文件，末尾汇总失败清单并非零退出。
+                # 原实现在首个失败处 `sys.exit(1)` ⇒ 排序其后**全部文件静默不注入**
+                # （实测：一个缺占位符的文件导致其后 13 个 dispatch-context 全部丢失，人工才发现）。
+                failures.append(os.path.basename(dc_file))
+                continue
         finally:
             with contextlib.suppress(OSError):
                 os.remove(card_file)
         sys.stdout.write(f"AGATE_CARD 已注入: {os.path.basename(dc_file)}\n")
 
+    if failures:
+        sys.stderr.write(
+            f"GATE: {len(failures)}/{len(dc_files)} 个 dispatch-context 注入失败"
+            f"（RM-AG0104 / DEBT0052）：{', '.join(failures)}\n"
+            "  其余文件已继续注入（不再早退）；请修复上述文件后重跑本命令。\n"
+        )
+        sys.exit(1)
     sys.exit(0)
 
 

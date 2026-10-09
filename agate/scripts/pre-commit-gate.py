@@ -46,6 +46,7 @@ if SCRIPT_DIR not in sys.path:
 
 try:
     from agate_common import (
+        AGATE_CARD_PLACEHOLDER_RE,
         append_event,
         check_ledger_events,
         current_level,
@@ -1106,6 +1107,28 @@ def main():
         elif gate_exit == 2:
             sys.stderr.write(f"GATE {phase} ({task_id}): 需主 Agent 手动判断\n")
             sys.stderr.write(gate_output + "\n")
+
+    # 2y. dispatch-context 占位符存在性校验（RM-AG0104 / DEBT0057）：暂存
+    # `{Pn}-dispatch-context-*.md` 时须含 `AGATE_CARD_START` / `AGATE_CARD_END` 占位符对，
+    # 否则 `agate-inject-card.py` 无法注入卡片。原缺陷：漏写占位符**无任何 gate 拦截**，
+    # 只靠 inject 早退**事后**暴露（且早退使其余文件静默不注入，见 RM-AG0104 主项）。
+    for _rel in _staged_name_only():
+        _base = os.path.basename(_rel.replace("\\", "/"))
+        if re.match(r"^P[0-9]-dispatch-context.*\.md$", _base):
+            _abs = os.path.join(repo_root, _rel)
+            if os.path.isfile(_abs):
+                with open(_abs, encoding="utf-8", errors="replace") as _fh:
+                    _txt = _fh.read()
+                # **判据单源**（RM-AG0104 评审 A1/r2：与 `agate-card-inject.py` 共用
+                # `agate_common.AGATE_CARD_PLACEHOLDER_RE`——校验口径 == 注入口径，既不放行
+                # 「注入会失败」的文件（漏放），也不阻断「注入能成功」的文件（误伤）。
+                # 原用行级 `^…$` 与 inject 的 DOTALL 正则**口径不一致**，两向都会分歧。）
+                if not re.search(AGATE_CARD_PLACEHOLDER_RE, _txt, flags=re.DOTALL):
+                    sys.stderr.write(
+                        f"GATE: {_rel} 缺 AGATE_CARD_START/END **占位符行**"
+                        "（RM-AG0104 / DEBT0057）——agate-inject-card.py 无法注入卡片；"
+                        "请补独占一行的占位符对后重试\n")
+                    sys.exit(1)
 
     # 2z. 技术债登记 schema 校验（RM-AG0088 / DEBT0033）——**循环外**（对任何提交都生效）：
     # `tech-debt.md` 被**暂存**时跑 `check-debt.py <file>`，exit 1 → 阻断 commit。

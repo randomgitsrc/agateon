@@ -2031,7 +2031,7 @@ task_id: null   # 待立项；由 TAG0050 复盘登记（机制规则缺口；�
 id: DEBT0052
 category: protocol
 title: "agate-inject-card.py 遇首个缺占位符文件即 exit 1，其后文件全部静默不注入（无失败清单、无部分完成）"
-status: open
+status: closed
 priority: high
 evidence:
   - ref: agate/scripts/agate-inject-card.py
@@ -2040,6 +2040,14 @@ evidence:
       dispatch-context 均未注入，直到人工发现
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/P4-progress.md
     note: "G1-test-fix 批注入缺失暴露记录（人工发现）"
+  - ref: agate/scripts/agate-inject-card.py
+    note: >-
+      **关单证据（批次 hotfix-batchA-0104，RM-AG0104）**：agate-inject-card.py 遇首个缺占位符文件即 exit 1，其后文件全部静默不注入 已修；
+      回归用例 `test_agate_inject_card.py::test_rm_ag0104_first_missing_placeholder_does_not_skip_rest`
+      （首文件缺占位符 → 其余仍注入 + 末尾汇总 + 非零退出）与
+      `test_pre_commit_hook.py::test_rm_ag0104_staged_dispatch_context_missing_placeholder_blocks`
+      （pre-commit 2y 步占位符校验）。该 hotfix 的 **P5/P6 等价验证** = 全量 pytest +
+      `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   一次缺占位符即静默丢弃其后全部注入，且只报首错——编排者若无逐个核对会拿到「未注入」的上下文派发，
   行为与预期不符且难以察觉。
@@ -2051,7 +2059,11 @@ closure_criteria:
   - "回归用例：首个文件缺占位符时其余文件仍被注入且汇总列出失败文件"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: hotfix-batchA-0104   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0104 hotfix）：注入不再早退 + pre-commit 占位符机械校验；RM-AG0104 同步回写 done。
+
 ```
 
 ## DEBT0053
@@ -2179,7 +2191,7 @@ task_id: null   # 待立项；由 TAG0050 复盘登记
 id: DEBT0057
 category: protocol
 title: "dispatch-context 卡片占位符无机械校验——漏写占位符无 gate 拦截，靠 inject 早退暴露（见 DEBT0052）"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/scripts/agate-inject-card.py
@@ -2188,6 +2200,14 @@ evidence:
       （见 DEBT0052），非主动校验
   - ref: agate/assets/templates/dispatch-prompt.md
     note: "主 Agent 写 dispatch-context 无「卡片占位符存在性」的机械校验步骤"
+  - ref: agate/scripts/agate-inject-card.py
+    note: >-
+      **关单证据（批次 hotfix-batchA-0104，RM-AG0104）**：dispatch-context 卡片占位符无机械校验 已修；
+      回归用例 `test_agate_inject_card.py::test_rm_ag0104_first_missing_placeholder_does_not_skip_rest`
+      （首文件缺占位符 → 其余仍注入 + 末尾汇总 + 非零退出）与
+      `test_pre_commit_hook.py::test_rm_ag0104_staged_dispatch_context_missing_placeholder_blocks`
+      （pre-commit 2y 步占位符校验）。该 hotfix 的 **P5/P6 等价验证** = 全量 pytest +
+      `check-protocol-consistency.py` 0 ERROR。
 impact: >-
   dispatch-context 漏写卡片占位符不会被 gate 拦截，只能靠注入时早退间接暴露（且早退本身有静默缺陷，
   见 DEBT0052）——两缺陷叠加使漏写长期不可见。
@@ -2199,7 +2219,11 @@ closure_criteria:
   - "缺占位符时给出明确失败（不静默）"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由 TAG0050 复盘登记
+task_id: hotfix-batchA-0104   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 A/RM-AG0104 hotfix）：注入不再早退 + pre-commit 占位符机械校验；RM-AG0104 同步回写 done。
+
 ```
 
 ## DEBT0058
