@@ -70,6 +70,15 @@ def test_p2_2_prune_p2_exit_1(task_dir, agate_scripts, python_exe, run_cli):
     assert "P2 不可裁剪" in result.output
 
 
+def test_p2_2b_prune_p1_exit_1(task_dir, agate_scripts, python_exe, run_cli):
+    """TAG0050 评审 A7：P1 不可裁剪——check-pruning 补 P1 项后须真能拦（此前该分支零行为用例）。"""
+    td = task_dir(phases=["P0", "P2", "P3", "P4", "P5", "P6", "P7", "P8"])
+
+    result = _run_pruning(agate_scripts, python_exe, run_cli, str(td))
+    assert result.returncode == 1
+    assert "P1 不可裁剪" in result.output
+
+
 def test_p2_3a_prune_p2_legacy_p2_pruned_exit_1(task_dir, agate_scripts, python_exe, run_cli):
     td = task_dir(phases=["P0", "P1", "P3", "P4", "P5", "P6", "P7", "P8"])
     add_p1_field(td, "legacy_p2_pruned", "true")

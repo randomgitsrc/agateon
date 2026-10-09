@@ -38,6 +38,9 @@ def test_bdd_62_cross_file_declaration_aggregation(
     (d / "P4-implementation-batch1.md").write_text(
         "---\nagent: impl\ndesign_gaps:\n  - {id: DG1, text: x}\n---\nbody\n", encoding="utf-8"
     )
+    # TAG0050 评审 M-1：非 legacy 任务的 P7 gate 缺 P7-consistency.md 即 FAIL（早退），
+    # 故补最小 P7 产出——本用例考的是跨文件聚合，不是「缺产出」。
+    (d / "P7-consistency.md").write_text("---\nagent: test\n---\nP7.\n", encoding="utf-8")
     r = run_cli(python_exe, str(agate_scripts / "check-gate.py"), "P7", str(d))
     assert r.returncode != 0, f"BDD-62：跨文件聚合须覆盖 P4 分文件声明，实际 rc={r.returncode}"
     # 判别性：确实聚合到 P4-implementation-batch1.md 的 DG1（被报为悬空），而非无关失败。
@@ -68,6 +71,8 @@ def test_bdd_64_set_mismatch_or_dangling_errors(
 ):
     """BDD-64：集合不相等或悬空 id 判 ERROR。"""
     d = h.init_task_via_conftest(tmp_path)
+    # TAG0050 评审 M-1：非 legacy 任务缺 P7-consistency.md 即 FAIL（早退），故补最小产出。
+    (d / "P7-consistency.md").write_text("---\nagent: test\n---\nP7.\n", encoding="utf-8")
     r = run_cli(python_exe, str(agate_scripts / "check-gate.py"), "P7", str(d))
     assert r.returncode != 0, f"BDD-64：悬空 id/集合不等须 ERROR，实际 rc={r.returncode}"
     assert "散文" in r.output or "design_gap_reviews" in r.output, r.output
@@ -130,6 +135,9 @@ def _p4_with_reviews(d, review_lines):
         "design_gap_reviews:\n" + review_lines + "---\nbody\n",
         encoding="utf-8",
     )
+    # TAG0050 评审 M-1：非 legacy 任务的 P7 gate 缺 P7-consistency.md 即 FAIL（早退），
+    # 故补最小 P7 产出——本组用例考的是 design_gap_reviews 校验，不是「缺产出」。
+    (d / "P7-consistency.md").write_text("---\nagent: test\n---\nP7.\n", encoding="utf-8")
 
 
 def test_minor4_verdict_enum_out_of_range_errors(

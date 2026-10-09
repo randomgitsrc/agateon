@@ -23,11 +23,12 @@ from pathlib import Path
 
 try:
     from agate_common import MAX_RETRY_MAP as _DEFAULT_MAX_RETRY_MAP
-    from agate_common import run_git, task_level
+    from agate_common import run_git, split_frontmatter, task_level
 except ImportError:
     _DEFAULT_MAX_RETRY_MAP = "P1:3,P2:3,P3:2,P4:3,P5:2,P6:2,P7:2,P8:2"
     run_git = None
     task_level = None
+    split_frontmatter = None
 
 try:
     import yaml
@@ -40,6 +41,11 @@ AGATE_STATE_GET = os.path.join(SCRIPT_DIR, "agate-state-get.py")
 MAX_RETRY_MAP = os.environ.get("MAX_RETRY_MAP", _DEFAULT_MAX_RETRY_MAP)
 
 _CONTROL_PHASES = ("PAUSED", "READY", "DONE")
+
+# 不可跳过/不可裁剪阶段集（P1 需求基线 / P2 方案设计 / P4 实现 / P5 技术验证 / P6 验收）。
+# ⚠️ 与 `agate/scripts/check-pruning.py::NON_PRUNABLE_PHASES` **逐字一致**
+# （ADR-014 判据单源；等价守护见 agate/tests/unit/test_non_prunable_phases_guard.py）。
+NON_PRUNABLE_PHASES = frozenset({"P1", "P2", "P4", "P5", "P6"})
 
 _STALE_OUTPUTS = {
     "P1": ["P1-requirements.md", "P1-review.md"],
@@ -276,6 +282,41 @@ def _declares_internal_only(state_file):
     return False
 
 
+def _p1_pruned_and_declared(task_dir):
+    """读 P1-requirements.md 的结构化 frontmatter → (declared:set, pruned:set)。
+
+    declared = frontmatter `phases`（list 或空格分隔字符串，归一化为 "Pn" 集合）；
+    pruned   = frontmatter `pruned` 各条目的 `phase`。
+    读不到 / 解析失败 → (None, None)（调用方按 fail-closed 处理）。
+    **不得**用 `^phases:\\s*\\[` 正则匹配正文（TAG0050 评审 M-1 明确要求）。
+    """
+    p1 = os.path.join(task_dir, "P1-requirements.md")
+    if not os.path.isfile(p1) or split_frontmatter is None:
+        return None, None
+    try:
+        with open(p1, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return None, None
+    fm, _body = split_frontmatter(text)
+    if not isinstance(fm, dict):
+        return None, None
+    phases = fm.get("phases")
+    if isinstance(phases, list):
+        declared = {str(p).strip() for p in phases if str(p).strip()}
+    elif isinstance(phases, str):
+        declared = {p for p in phases.split() if p}
+    else:
+        declared = set()
+    pruned = set()
+    pruned_raw = fm.get("pruned")
+    if isinstance(pruned_raw, list):
+        for item in pruned_raw:
+            if isinstance(item, dict) and item.get("phase"):
+                pruned.add(str(item["phase"]).strip())
+    return declared, pruned
+
+
 def _emit_retry_warnings(task_dir, current_state_data):
     """RM-AG0042 BDD-1/BDD-3：门槛失败事件 ↔ retries 对应性 WARNING（不阻断）。"""
     for bdd1_phase in sorted(_scan_bdd1_review_retry_phase(task_dir)):
@@ -399,6 +440,43 @@ def check_transition(old_phase, new_phase, task_dir, state_file=None, state_base
                 f"{old_phase} {task_dir}"
             )
             return errors
+
+    # 检查 5（TAG0050 评审 M-1）：前向跨阶（delta >= 2）——非 legacy 任务不得跨过
+    # 未裁剪/不可裁剪阶段。legacy 任务（task_level 为 None）保持既有行为不变。
+    if (old_phase and old_phase not in _CONTROL_PHASES
+            and new_phase not in _CONTROL_PHASES and new_num is not None):
+        _lvl = None
+        if task_level is not None:
+            try:
+                _lvl = task_level(task_dir)
+            except Exception:
+                _lvl = None
+        if _lvl is not None and old_num is not None and new_num - old_num >= 2:
+            skipped = {f"P{i}" for i in range(old_num + 1, new_num)}
+            # 不可跳过阶段（见模块级 NON_PRUNABLE_PHASES 与 state-machine.md「不可跳过的阶段」）。
+            # 注：P7 可裁剪（`P6--[P6 gate]-->P8`，见 state-machine.md「可跳过的阶段」），
+            # 故 P6→P8 是合法前向跳（被跨 P7 已在 pruned 中声明时放行）。
+            non_prunable = skipped & NON_PRUNABLE_PHASES
+            declared, pruned = _p1_pruned_and_declared(task_dir)
+            # 被跨阶段须「已从 P1 phases 移除」**且**「在 pruned 中声明」——两个方向都判
+            # （评审 M-1 原型口径）。对合法任务二者等价（check-pruning 强制 phases ∩ pruned = ∅），
+            # 对未过裁剪校验的任务则更稳。
+            still_declared = skipped & (declared or set())
+            not_pruned = skipped - (pruned or set())
+            if non_prunable or still_declared or not_pruned:
+                reasons = []
+                if non_prunable:
+                    reasons.append(f"不可跳过阶段 {'/'.join(sorted(non_prunable))}")
+                if still_declared:
+                    reasons.append(f"仍在 P1 phases 中声明 {'/'.join(sorted(still_declared))}")
+                if not_pruned:
+                    reasons.append(f"未在 P1 pruned 中声明 {'/'.join(sorted(not_pruned))}")
+                errors.append(
+                    f"前向跨阶 P{old_num}→P{new_num} 被拒绝（被跨过：{'/'.join(sorted(skipped))}）："
+                    + "；".join(reasons)
+                    + "。若确为裁剪，请从 P1 phases 移除对应阶段并在 pruned 中声明；否则请逐阶推进。"
+                )
+                return errors
 
     return errors
 

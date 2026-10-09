@@ -10,6 +10,20 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **非 legacy 任务的前向跨阶在提交期不受约束（TAG0050 实施评审 M-1）**：前向跨阶规则原先只写在
+  `agate-state-set.py`（工具路径），**未进入 hook 与 CI 回放共用的纯函数 `check_transition`**
+  ⇒ 手改 `.state.yaml` 的 phase 可从 P0 直跳 P7，**P1–P6.5（含 judge）全部跳过**而不被拦
+  （`gate_p5` 兜底返回 2、`_gate_p7_structured` 对缺产出放行）。**修**：规则收敛到 `check_transition`
+  单源——非 legacy 任务前向跨阶（delta ≥ 2）时，被跨过的阶段须**已从 P1 `phases` 移除并在 `pruned`
+  中声明**，且**不得跨过不可跳过阶段**（P1/P2/P4/P5/P6）；`agate-state-set.py` 删除自带副本。
+  **legacy 任务行为不变**（历史任务不受影响）。详见 `agate/UPGRADING.md`。
+- **`check-gate.py::_gate_p7_structured` 对缺 `P7-consistency.md` 放行**：非 legacy 任务缺该产出时
+  原先读到空文本、计数全 0 直接 `return 0`（假 PASS）⇒ 改为判 FAIL（exit 1）。
+- **账本 `task_created.resolver` 写入本机绝对路径**：原写 `AGATE_ROOT` 绝对值（含用户名/目录结构，
+  随账本入库）⇒ 改记 `AGATE_HOME` 相对路径（如 `v0.80.1/agate`）/ 版本目录 + basename。
+
 ## [0.80.1] - 2026-10-09
 
 ### 修复

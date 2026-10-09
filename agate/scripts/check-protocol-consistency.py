@@ -616,6 +616,11 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         "keywords": ["diff", "phase_num"],
     },
     {
+        "desc": "前向跨阶检测（非 legacy：被跨阶段须已裁剪且不可跳过阶段不得跨，TAG0050 评审 M-1）",
+        "script": "agate/scripts/check-state-transition.py",
+        "keywords": ["前向跨阶"],
+    },
+    {
         "desc": "门槛失败事件↔retries 对应性校验（RM-AG0042 BDD-1~4）",
         "script": "agate/scripts/check-state-transition.py",
         "keywords": ["RM-AG0042"],

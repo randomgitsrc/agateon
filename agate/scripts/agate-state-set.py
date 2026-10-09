@@ -141,47 +141,6 @@ def _phase_num(phase):
     return int(m.group(1)) if m else None
 
 
-def _declared_phases(task_dir):
-    """读 P1-requirements.md 的 `phases: [...]`（frontmatter 或正文）→ set；读不到 → None。"""
-    p1 = os.path.join(task_dir, "P1-requirements.md")
-    if not os.path.isfile(p1):
-        return None
-    try:
-        with open(p1, encoding="utf-8", errors="replace") as fh:
-            text = fh.read()
-    except OSError:
-        return None
-    m = re.search(r"^phases:\s*\[([^\]]*)\]", text, re.M)
-    if not m:
-        return None
-    items = [x.strip().strip("'\"") for x in m.group(1).split(",")]
-    return {x for x in items if x}
-
-
-def _forward_multi_jump_error(old_phase, new_phase, task_dir):
-    """前向跨阶（delta ≥ 2）默认拒绝；仅当被跨过的阶段均**未**声明（已裁剪）时放行。
-
-    与 pre-commit（`check-state-transition.py`）不同：提交期允许前向跳（裁剪合法，由目标
-    阶段产出文件兜底，见 state-machine.md）；而 state-set 是**推荐写入路径**，对前向跨阶
-    从严——要求被跨过的阶段已从 P1 `phases` 中裁掉，否则提示用阶段产出与 gate 兜底。
-    """
-    old_num = _phase_num(old_phase)
-    new_num = _phase_num(new_phase)
-    if old_num is None or new_num is None:
-        return None
-    if new_num - old_num < 2:
-        return None
-    declared = _declared_phases(task_dir)
-    skipped = {f"P{i}" for i in range(old_num + 1, new_num)}
-    if declared is not None and not (skipped & declared):
-        return None  # 被跨阶段均已裁剪 → 放行
-    return (
-        f"前向跨阶 P{old_num}→P{new_num} 被拒绝：被跨过的阶段 "
-        f"{'/'.join(sorted(skipped))} 仍在 P1 phases 中声明。若确为裁剪，请先从 P1 phases "
-        f"移除对应阶段；否则请逐阶推进（P{old_num}→P{old_num + 1}）。"
-    )
-
-
 def _is_retreat(old_phase, new_phase):
     old_num = _phase_num(old_phase)
     new_num = _phase_num(new_phase)
@@ -215,9 +174,6 @@ def _cmd_phase(task_dir, new_phase, check_transition):
         state_file=_state_path(task_dir), state_basename=_STATE_NAME,
         state_data=prospective,
     )
-    fwd = _forward_multi_jump_error(old_phase, new_phase, task_dir)
-    if fwd:
-        errors = [*errors, fwd]
     if errors:
         for e in errors:
             sys.stderr.write("GATE STATE: " + str(e) + "\n")
