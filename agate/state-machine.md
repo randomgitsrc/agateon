@@ -338,6 +338,11 @@ P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READ
 > **phase 的唯一写入口是 `agate-state-set.py`**（设计 §2.7；进入 PAUSED/READY/DONE 的转换由
 > pre-commit 统一写 `state_transition` 事件并随本次提交入库）。
 > P6/P6.5 的条件式推进（judge 裁决）仍按下方 §「P6.5」的规则。主 Agent / 档位 C 只调用、读结果。
+> **受控 gate 入口（RM-AG0111 / DEBT0050）**：`agate-next.py` 的 check-gate 入口可经 env
+> **`AGATE_CHECK_GATE`** 覆盖（指向合成 gate 脚本）——仅供**测试/诊断**，用于制造「exit ∉
+> `gate_pass_exit` 且 ≠ 1」的**真暂停**场景以恢复端到端覆盖（真实 gate 已无法产生该 exit：
+> `pass_exit=0` 的 phase 不含 `return 2`，`pass_exit=2` 的 phase 里 2 本就是通过码）。
+> **未设该 env 时行为与既有逐字一致**。
 > **手工执行下面全流程是 fallback**（工具不可用时），此时步骤 7 的「写回 `.state.yaml`」按手工规格执行
 > （手工 fallback 仍写 `phase`——但推荐改用 `agate-state-set.py`，使"工具当时判定合法"与"提交时判定合法"一致，
 > 与 `agate next` 自动化路径不同）；本节的手工规格是 `agate next`

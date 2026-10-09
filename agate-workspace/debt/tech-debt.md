@@ -1931,7 +1931,7 @@ closure_note: >-
 id: DEBT0050
 category: technical
 title: "agate-next 的「真暂停」（exit ∉ pass_set 且 ≠ 1）分支经**真实 gate 不可达**——BDD-8 改直驱落盘函数后失去端到端覆盖"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate/scripts/check-gate.py
@@ -1945,6 +1945,16 @@ evidence:
       两条 BDD-8 用例原先**借用**「P4 缺 agent ⇒ return 2」作真实 gate 锚点；X7 后锚点消失，
       改为直接调用 `_write_exit2_resolution()` ⇒ 该分支的**端到端**（经 agate-next 三态分发）
       覆盖随之失去，只剩落盘函数本身的覆盖。
+  - ref: agate/scripts/agate-next.py
+    note: >-
+      **关单证据（批次 hotfix-batchB-H4）**：新增**受控 gate 入口** `AGATE_CHECK_GATE`
+      （env 覆盖 check-gate 路径；未设时行为逐字不变）⇒ 测试可用合成 gate 制造
+      「exit ∉ pass_set 且 ≠ 1」，端到端覆盖恢复：
+      `test_rm_ag0111_non_pass_exit_end_to_end_via_controlled_gate`
+      （合成 gate exit 2 → `agate-next.py` 主流程判真暂停 → 落盘 `P4-exit2-resolution.md`）。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` +
+      `P[56]` 子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: >-
   agate-next 的 exit ∉ pass_set 分支（会写 {phase}-exit2-resolution.md 并转主 Agent 决策）
   若将来被改坏，现有测试不会发现——因为触发它的入口在真实 gate 上已不存在。
@@ -1957,7 +1967,11 @@ closure_criteria:
   - "存在能以受控输入让 agate-next 走到 exit ∉ pass_set 分支的用例（端到端）"
 source: review  # 实现期的独立评审发现
 created_at: 2026-10-04
-task_id: TAG0042-config-and-enforcement
+task_id: hotfix-batchB-H4   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR 见 roadmap RM-AG0111），触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H4 hotfix）：受控 gate 入口 + 端到端回归用例；RM-AG0111 同步回写 done。
+
 ```
 
 ## DEBT0051

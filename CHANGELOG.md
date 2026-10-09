@@ -48,6 +48,11 @@
   `implementer.md` 同步该条。**说明**：closure_criteria (1)(2) 经复核**早已满足**（`P2-design.md`
   「env_constraints 与 gate_commands 的边界」节 + P4 卡条目），**(3)「自动产出 dist」需一次真实
   UI 任务实证 ⇒ 本条维持 `open`**，余项即 (3)。
+- **`agate-next` 真暂停分支的端到端覆盖（RM-AG0111 / DEBT0050）**：新增**受控 gate 入口**
+  `AGATE_CHECK_GATE`（env 覆盖 check-gate 路径；**未设时行为逐字不变**，仅测试/诊断用）⇒
+  合成 gate 可制造「exit ∉ `gate_pass_exit` 且 ≠ 1」，恢复该分支的**端到端**覆盖
+  （此前真实 gate 已无法产生该 exit：`pass_exit=0` 的 phase 不含 `return 2`，`pass_exit=2`
+  的 phase 里 2 本就是通过码 ⇒ BDD-8 只能直调落盘函数）。
 
 ## [0.80.2] - 2026-10-09
 
