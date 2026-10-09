@@ -127,7 +127,7 @@ dispatch_plan: {mode: static-batch, parallel_limit: 3, batches: [{id: pkg-a, com
 - `mode` ∈ {single, static-batch, parallel, recon-then-split, serial}——编排模式（单发/静态拆批/并行/先理解后拆/串行链）
 - `parallel_limit` 可选，≥1 整数——并行上限（缺省 3）
 - `batches` 可选——mode ∈ {static-batch, parallel} 时每批须含 `id` + `complexity` ∈ {low, medium, high}；批数 ≤ parallel_limit
-- 缺字段 / 坏 YAML → P2 gate 跳过校验，行为等同现状（向后兼容，不误拦）
+- 缺字段 / frontmatter 坏 YAML（字段不可读）→ P2 gate 跳过校验（向后兼容，不误拦）；**字段存在但值非合法 JSON / 解析结果非对象 → P2 gate ERROR + exit 1**（RM-AG0090 / DEBT0043 修复 fail-open——原实现两种情形都 `return None`，与调用点「None=无错误」语义重合而静默放行）
 
 ### batches[] 可选键：tests_filter / output 与批切分判据（TAG0036）
 
@@ -179,6 +179,13 @@ gate_commands:
   P5_e2e_timeout_seconds: 300   # 可选：per-key 声明，不同命令类型各自取档
 ```
 
+### 命令值写法约束（引号与通配 pathspec）
+
+`gate_commands` 的值是**交给 shell 执行的一条命令字符串**，两条写法约束（RM-AG0092 / DEBT0047，均来自实测）——**① 为建议（读取器已容错），② 为硬约束**：
+
+1. **含引号的值建议整体加引号**：值内含单/双引号（如 `pytest -k 'foo'`）时，**建议**用**同种引号整体包裹**该值（如 `P5: "pytest -k 'foo'"`）——这是安全惯例（**非硬需求**：读取器已能正确处理含引号但不包裹的值；含空格的值本就不需要引号，实测 `P5: pytest -q --tb=no` 读回正确）。读取器（`agate-read-p5-commands.py`）只剥**成对**的首尾引号——首尾同种才剥除，**不成对则原样保留**（读取器从不吞引号）；故请确保引号成对或整体包裹。（本约束的由来：旧读取器曾**各自**剥首尾引号，把**成对**值 `"pytest -k 'foo'"` 读成 `pytest -k 'foo`，致命令语法破损。）
+2. **未加引号的通配 pathspec 会被 shell 先展开**：命令里的通配路径（如 `git add *.py` / `git rm docs/*.md`）在值未加引号时，会由 shell 先行展开为匹配到的文件名列表——对「删除」类变更（`git rm` / `git clean`）尤其危险：当前工作区无匹配文件时通配符可能展开为空，导致**应删除的文件漏检**。须对通配符**反斜杠转义**（如 `git rm docs/\*.md`）或**给通配符部分加引号**（如 `git rm "docs/*.md"`——注意是**通配符所在的那一段**加引号，**不是**整条命令值加引号；`"git rm docs/*.md"` 整值引号会让 shell 把整串当一个命令名 ⇒ exit 127），把展开交给命令自身。
+
 ### `{key}_timeout_seconds` 字段规则
 
 `timeout_seconds` 是 `gate_commands` 块内的**可选声明性字段**，用来给每条 gate 命令声明"预期耗时上限"，供跑命令的一方（主 Agent / subagent）据此设置 shell 层超时。四点规则：
@@ -193,7 +200,7 @@ gate_commands:
    | E2E 类（Playwright / CDP） | 300s | 覆盖页面加载 + 多步操作；比脚本内部硬超时（HARD 90s/180s）更大——外层命令级预期时长必须留够内层完整走完的余量 |
    | 构建类（编译 / 安装依赖 / 打包） | 600s | 覆盖 `npm install` / 编译等长操作。宁可档位定高，也不要让长命令被误判失败（TPV0093 教训：`make test-quick` 挂 188 分钟） |
 
-4. **向后兼容**：缺字段 → 行为等同现状（沿用 `dispatch_plan` 的"缺字段 / 坏 YAML → gate 跳过校验"先例），不新增强制阻断，老任务无需回填
+4. **向后兼容**：缺字段 → 行为等同现状（沿用 `dispatch_plan` 的"缺字段 / frontmatter 坏 YAML → gate 跳过校验；字段存在但值非合法 JSON → ERROR"口径），不新增强制阻断，老任务无需回填
 
 与运行时超时纪律的关系：本字段是**静态声明**（层级 1），subagent 执行命令时真正去设 shell timeout 的是**层级 4** 的「命令超时兜底」（取值 = 预期耗时 ×1.5；本字段已声明时"预期耗时"直接取该值）。四层超时机制的完整分层见 dispatch-protocol.md「命令超时兜底与既有超时机制的分层关系」。
 

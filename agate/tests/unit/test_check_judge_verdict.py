@@ -713,3 +713,74 @@ def test_tag0035_bdd_14_self_referential_p6_acceptance_still_blocked(
         f"（不得被 BDD-11/12/13 豁免连带放宽）。实际 exit={result.returncode}, "
         f"output={result.output!r}"
     )
+
+
+# ============================================================
+# RM-AG0091 / DEBT0044：信息隔离两处判定过宽修复
+#   ① `_two_sections` 终止符除 `#` 标题外还认闭合标签行（`</...>`）
+#   ② `_check_whitelist_outside` 排除斜杠连写的纯阶段序列（`P0/P1/.../`）
+# ============================================================
+
+
+def test_rm_ag0091_phase_sequence_not_flagged_by_whitelist_outside(agate_scripts):
+    """白盒①：纯阶段序列 `P0/P1/P2/P3/P4/P5/` 是阶段覆盖描述，不是任务路径引用 → 不判白名单外。"""
+    mod = _load_check_judge_verdict_direct(agate_scripts)
+    assert mod._check_whitelist_outside(["覆盖 P0/P1/P2/P3/P4/P5/ 各阶段"]) == []
+
+
+def test_rm_ag0091_real_path_still_flagged_by_whitelist_outside(agate_scripts):
+    """白盒②：真实路径仍判白名单外——真黑名单目录 `p5-test-results/` 与
+    阶段前缀但非纯序列的 `p0/secret-dir/` 都不受阶段序列豁免连带放宽。"""
+    mod = _load_check_judge_verdict_direct(agate_scripts)
+    assert mod._check_whitelist_outside(["p5-test-results/"]) == ["p5-test-results/"]
+    assert mod._check_whitelist_outside(["p0/secret-dir/"]) == ["p0/secret-dir/"]
+
+
+def test_rm_ag0091_two_sections_terminates_at_closing_tag(agate_scripts):
+    """白盒③：`</dispatch_guide>` 闭合标签行终止当前节——其后 `<objective_info>` 等正文不并入扫描面。"""
+    mod = _load_check_judge_verdict_direct(agate_scripts)
+    doc = [
+        "# dispatch_guide",
+        "## 输入文件",
+        "P1-requirements.md",
+        "</dispatch_guide>",
+        "<objective_info>",
+        "本任务覆盖 P0/P1/P2/P3/P4/P5/ 各阶段。",
+        "secret-file.md",
+    ]
+    assert mod._two_sections(doc) == ["P1-requirements.md"]
+
+
+def test_rm_ag0091_phase_sequence_in_context_not_flagged_exit_0(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """端到端：dispatch-context 两节含斜杠连写阶段序列 → 不误报白名单外 → exit 0。"""
+    td = task_dir()
+    _write_judge_fixture(
+        td,
+        context_kwargs={"inputs": ["P1-requirements.md", "覆盖 P0/P1/P2/P3/P4/P5/ 各阶段"]},
+    )
+
+    result = _run_judge(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0, result.output
+
+
+def test_rm_ag0091_sections_end_at_closing_tag_exit_0(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """端到端：两节位于 `<dispatch_guide>…</dispatch_guide>` 内，闭合标签之后的黑名单路径
+    （`P6-acceptance.md`）不属扫描面 → exit 0（修复前会被误并入而判黑名单命中 exit 1）。"""
+    td = task_dir()
+    (td / "P6.5-dispatch-context-judge.md").write_text(
+        "---\nphase: P6.5\ntask_id: T0020\n---\n\n"
+        "<dispatch_guide>\n"
+        "### 输入文件\n- P1-requirements.md\n- P6-evidence/\n\n"
+        "### 上游关联\n- gate-events.jsonl\n- P6.5-judge-verdict.md\n"
+        "</dispatch_guide>\n"
+        "<objective_info>\n- P6-acceptance.md\n</objective_info>\n",
+        encoding="utf-8",
+    )
+    _write_verdict(td)
+
+    result = _run_judge(agate_scripts, python_exe, run_cli, td)
+    assert result.returncode == 0, result.output

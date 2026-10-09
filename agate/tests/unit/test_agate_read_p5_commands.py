@@ -3,6 +3,8 @@
 # 被测：agate/scripts/agate-read-p5-commands.py（P2_DESIGN env 指向 md 文件，stdout 输出 JSON）
 # 流语义：P5C.2 / P5C.3 空输出断言基于合并流 .output（bats $output = stdout + stderr，P2 BLOCKER-1）
 
+import json
+
 import pytest
 
 
@@ -86,3 +88,39 @@ def test_p5c_4_p5_quoted_values_stripped_with_formatter_link(
     assert '"cmd": "pytest -q"' in result.output
     assert '"cmd": "npx vitest"' in result.output
     assert '"formatter": "vitest.sh"' in result.output
+
+
+# ========== RM-AG0092 / DEBT0047：只剥成对引号（值以引号结尾不被吞） ==========
+
+
+def test_rm_ag0092_paired_quotes_only_trailing_quote_preserved(
+    agate_scripts, python_exe, run_cli, tmp_path
+):
+    """值整体加双引号但内部以单引号收尾（`"pytest -k 'foo'"`）→ 只剥外层成对双引号，
+    末尾单引号须保留（原实现 `.strip('"').strip("'")` 各自剥首尾，会吞掉末尾 `'`）。"""
+    p2_file = tmp_path / "P2-design.md"
+    p2_file.write_text(
+        "---\nagent: test\n---\ngate_commands:\n"
+        "  P5: \"pytest -k 'foo'\"\n",
+        encoding="utf-8",
+    )
+    result = _run_p5c(agate_scripts, python_exe, run_cli, p2_file)
+    assert result.returncode == 0
+    data = json.loads(result.output.strip())
+    assert data["commands"][0]["cmd"] == "pytest -k 'foo'"
+
+
+def test_rm_ag0092_unpaired_quote_preserved(
+    agate_scripts, python_exe, run_cli, tmp_path
+):
+    """首尾引号不成对（`'foo`）→ 原样保留，不剥任何引号。"""
+    p2_file = tmp_path / "P2-design.md"
+    p2_file.write_text(
+        "---\nagent: test\n---\ngate_commands:\n"
+        "  P5: 'foo\n",
+        encoding="utf-8",
+    )
+    result = _run_p5c(agate_scripts, python_exe, run_cli, p2_file)
+    assert result.returncode == 0
+    data = json.loads(result.output.strip())
+    assert data["commands"][0]["cmd"] == "'foo"
