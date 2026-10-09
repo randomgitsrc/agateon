@@ -276,6 +276,27 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.80.2 — 非 legacy 前向跨阶收口 + CI 输入显式化（**含一处 CLI 行为变更**）
+
+> 修复 TAG0050 交付后由**外部实施评审**发现的缺陷（M-1）与两处配套项；并闭合 P8 发布事故根因。
+
+- **前向跨阶不再可绕（M-1）**：非 legacy 任务前向跨阶（delta ≥ 2）的判据原先只写在
+  `agate-state-set.py`（工具路径），**未进入 hook 与 CI 回放共用的 `check_transition`** ⇒ 手改
+  `.state.yaml` 的 phase 可从 P0 直跳 P7、跳过 P1–P6.5（含 judge）而不被拦。**修**：规则收敛到
+  `check_transition` 单源——被跨过的阶段须**已从 P1 `phases` 移除并在 `pruned` 中声明**，且**不得
+  跨过不可跳过阶段**（P1/P2/P4/P5/P6）。**legacy 任务行为不变**（历史任务不受影响）。
+- **`check-gate.py::_gate_p7_structured`**：非 legacy 任务缺 `P7-consistency.md` 时判 **FAIL**
+  （原先读到空文本、计数全 0 直接放行，属假 PASS）。
+- **账本 `task_created.resolver`**：不再写**本机绝对路径**（含用户名/目录结构）；改记
+  `AGATE_HOME` 相对路径 / 版本目录 + basename。
+- ⚠️ **`agate-ci-verify --base` 改为必填（CLI 行为变更）**：原先缺 `--base` 时**静默推断**
+  `merge-base HEAD origin/<默认分支>`——push 到默认分支时该值 = HEAD 自己 ⇒ 用新协议回放历史提交
+  致误报 FAIL。**若你直接调用 `agate-ci-verify`，现在必须显式给 `--base`**（本地彩排：
+  `--base "$(git merge-base HEAD origin/<默认分支>)"`，见 `AGENTS.md`「改脚本的工作流」0b）。
+- **`gate-backstop` 的 PR 事件同时跑两条口径**（`--base` 与 `--push --base`）——脚本里是两条独立的
+  范围/协议根解析路径，只跑一条有路径特异性盲区；并**升为 required 检查**，使「PR 两条口径绿 ⇒
+  合并后 main 亦绿」对同一组提交成立。
+
 ### v0.80.1 — `agate-ci-verify` 回放协议根修复（**无破坏性变更**）
 
 > 修复 v0.80.0 的缺陷：`agate-ci-verify` 在**推送到默认分支**（merge 后 push）时选错回放协议根。
