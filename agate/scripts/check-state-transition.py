@@ -71,6 +71,33 @@ _PHASE_PREFIX_RE = re.compile(r"^P(\d+)-")
 # "子代理空返回重派"信号无关，扫描 BDD-3 关键词时须排除该块。
 _AGATE_CARD_START = "<!-- AGATE_CARD_START -->"
 _AGATE_CARD_END = "<!-- AGATE_CARD_END -->"
+# RM-AG0105 / DEBT0053：BDD-3 扫描面**收窄**——只认「事件叙述」，不认「对协议文档的引用」，
+# 且排除代码块/行内代码。实测误报：`RM-AG0003：dispatch-protocol.md L105-135 空返回恢复全手动`
+# 是对协议节的**引用**（含 `.md` 路径），非「子代理空返回」事件（RM-AG0101 只排除了卡片块，
+# 散文命中仍误报——本批收窄扫描面本身）。
+_BDD3_DOC_REF_RE = re.compile(r"[\w./-]+\.md\b|agate/")
+# 事件叙述须**提到 subagent/子代理**——实测既有真事件（`- 注：本批 subagent 3 次空返回…`）
+# 均如此，而散文误报（如「dispatch-context 先写后派…重试时…」）均否。**取舍**：会漏掉
+# 「（上次空返回后重跑）」这类未点名 subagent 的真事件——该信号本为 WARNING 级提醒，
+# 漏报可接受；反之持续误报会让人**关掉判据**（本会话实测误报 3 次）。
+_BDD3_SUBAGENT_RE = re.compile(r"subagent|子代理", re.I)
+_BDD3_FENCE_RE = re.compile(r"^\s*```")
+_BDD3_INLINE_CODE_RE = re.compile(r"`[^`]*`")
+
+
+def _bdd3_event_lines(text):
+    """从文本中取「可能是 BDD-3 事件叙述」的行：剔除 fenced code 块与行内代码，
+    再排除**引用协议文档**的行（含 `.md` 路径或 `agate/`）——引用不是事件。"""
+    out = []
+    in_fence = False
+    for ln in text.splitlines():
+        if _BDD3_FENCE_RE.match(ln):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        out.append(_BDD3_INLINE_CODE_RE.sub("", ln))
+    return out
 
 
 def _strip_agate_card_blocks(text):
@@ -239,8 +266,16 @@ def _scan_bdd3_keyword_phases(task_dir):
         except OSError:
             continue
         # RM-AG0101：剔除内嵌阶段卡片块——卡内"重派"不是子代理空返回信号
-        if any(kw in _strip_agate_card_blocks(text) for kw in _BDD3_EMPTY_RETURN_KEYWORDS):
+        # RM-AG0105 / DEBT0053：再剔除代码块/行内代码 + **引用协议文档**的行（收窄扫描面）
+        for _ln in _bdd3_event_lines(_strip_agate_card_blocks(text)):
+            if not any(kw in _ln for kw in _BDD3_EMPTY_RETURN_KEYWORDS):
+                continue
+            if _BDD3_DOC_REF_RE.search(_ln):
+                continue
+            if not _BDD3_SUBAGENT_RE.search(_ln):
+                continue
             hits.add(f"P{m.group(1)}")
+            break
     return hits
 
 

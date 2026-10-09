@@ -528,7 +528,7 @@ def check_version_badge(root: Path, rep: Report) -> None:
     try:
         tags = subprocess.run(
             ["git", "tag", "-l", f"v{badge_ver}"],
-            capture_output=True, text=True, cwd=str(root),
+            capture_output=True, text=True, encoding="utf-8", cwd=str(root),
         ).stdout.strip()
     except (FileNotFoundError, OSError):
         tags = ""

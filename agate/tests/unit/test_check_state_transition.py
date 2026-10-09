@@ -1170,3 +1170,40 @@ def test_m1_done_after_p7_allowed_when_internal_only(
     assert result.returncode == 0, (
         f"internal_only 裁剪 P8 时 P7 → DONE 应合法\n{result.output[-500:]}"
     )
+
+
+# ── RM-AG0105 / DEBT0053：BDD-3 扫描面收窄（散文/文档引用不再误报）────────────────
+
+def test_rm_ag0105_bdd3_scan_narrowed_to_event_lines(tmp_path, agate_scripts):
+    """RM-AG0105 / DEBT0053：BDD-3 关键词扫描**收窄**——只认「事件叙述」。
+
+    实测误报两类（本会话各踩过）：① 对**协议文档的引用**（含 `.md` 路径）；
+    ② **散文**（如「拆并行/重试时…」）。真事件（`- 注：本批 subagent 3 次空返回…`）仍须命中。
+    """
+    import importlib.util
+    import sys as _sys
+
+    spec = importlib.util.spec_from_file_location(
+        "_cst_bdd3_test", agate_scripts / "check-state-transition.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    _sys.modules["_cst_bdd3_test"] = mod
+    import contextlib
+
+    with contextlib.suppress(SystemExit):
+        spec.loader.exec_module(mod)
+
+    def _hits(text):
+        for ln in mod._bdd3_event_lines(mod._strip_agate_card_blocks(text)):
+            if not any(kw in ln for kw in mod._BDD3_EMPTY_RETURN_KEYWORDS):
+                continue
+            if mod._BDD3_DOC_REF_RE.search(ln) or not mod._BDD3_SUBAGENT_RE.search(ln):
+                continue
+            return True
+        return False
+
+    # ⚠️ 负例必须**含**关键词（「重派」）否则无判别力——原用「重试」不含关键词，
+    # 旧实现同样不命中（SELF-GATE r1 指出）
+    assert not _hits("**dispatch-context 先写后派，绝不补写**。拆并行/**重派**时每个子任务各写一个。"), "散文不得命中"
+    assert not _hits("- RM-AG0003：dispatch-protocol.md L105-135 空返回恢复全手动"), "文档引用不得命中"
+    assert _hits("- 注：本批 subagent 3 次空返回（migrate-workspace）→ 采用策略后成功"), "真事件须命中"

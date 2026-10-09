@@ -40,7 +40,42 @@ _RULES = (
     ("R3", re.compile(r"(^|[\s])\[\[?[\s]+-L[\s]"), None),
     ("R4", re.compile(r"/tmp([\s/\"']|$)"), "r4"),
     ("R5", re.compile(r"(^|[\s=|(])bc([\s]|$|[|])"), None),
+    # R6（RM-AG0105 / DEBT0058）是**调用级**检查，不在此行级规则表内——见
+    # `_r6_text_without_encoding_hits()`（文本模式与 `encoding=` 常**分行**书写，
+    # 行级判定会大面积误报：实测本仓多数调用分行）。
 )
+
+
+def _r6_text_without_encoding_hits(text):
+    """R6（RM-AG0105 / DEBT0058）：`subprocess.*` 调用用了**文本模式**
+    （`text=True` / `universal_newlines=True`）却**未在整次调用内**出现 `encoding=` → 命中行号。
+
+    **调用级**（非行级）：文本模式与 `encoding=` 常**分行**书写，行级判定会大面积误报
+    （实测本仓多数调用分行）。实现：从含 `subprocess.` 的行起做**括号配平**取整次调用文本。
+    局限：不做 AST 解析（**同一行**多调用 / 字符串或注释内的括号属已知近似，见 README 判据边界）。
+    """
+    hits = []
+    lines = text.splitlines()
+    for i, ln in enumerate(lines):
+        if "subprocess." not in ln:
+            continue
+        depth = 0
+        started = False
+        chunk = []
+        for j in range(i, min(len(lines), i + 40)):
+            chunk.append(lines[j])
+            for ch in lines[j]:
+                if ch == "(":
+                    depth += 1
+                    started = True
+                elif ch == ")":
+                    depth -= 1
+            if started and depth <= 0:
+                break
+        call = "\n".join(chunk)
+        if ("text=True" in call or "universal_newlines=True" in call) and "encoding=" not in call:
+            hits.append(i + 1)
+    return hits
 
 
 _FIXTURE_EXEMPT_DIRS = {"agate/tests/fixtures/"}
@@ -116,6 +151,16 @@ def _scan_file(path, hits):
                     hits.append((rule, str(path), line_no, text))
     except OSError:
         pass  # 等价 sh 的 grep 2>/dev/null || true：不可读文件静默跳过
+
+    # R6（调用级，RM-AG0105 / DEBT0058）：`subprocess` 文本模式缺 `encoding=`
+    try:
+        with open(path, encoding="utf-8") as fh:
+            _text = fh.read()
+        _lines = _text.splitlines()
+        for _ln in _r6_text_without_encoding_hits(_text):
+            hits.append(("R6", str(path), _ln, _lines[_ln - 1].strip() if _ln - 1 < len(_lines) else ""))
+    except OSError:
+        pass
 
 
 def _scan_target(target, hits):

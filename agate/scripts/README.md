@@ -88,7 +88,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-frontmatter.py` | 阶段文件 frontmatter 校验 | 0=通过, 1=校验失败 |
 | `check-p6-format.py` | P6 验收结果格式 --check/--fix 归一化 | 0=通过, 1=格式错 |
 | `check-tdd-red.py` | TDD 红灯检查（读 gate_commands.P3 + formatter 判定 A/B 类）| 0=红灯/B 类, 1=A 类, 2=绿灯, 3=无运行器 |
-| `check-platform-assumptions.py` | 平台假设静态扫描器（R1-R5，扫描覆盖 .bats/.bash/.sh/.py）| 0=零命中, 1=有命中, 2=目标不存在 |
+| `check-platform-assumptions.py` | 平台假设静态扫描器（**R1-R6**，扫描覆盖 .bats/.bash/.sh/.py）| 0=零命中, 1=有命中, 2=目标不存在 |
 | `check-debt.py` | 技术债登记校验：默认 FILE 模式=DEBT 条目 schema 校验（fail-closed）；`--retreat-coverage`=回退覆盖比对（`git log retreat:` 提交 vs `source: retreat` 条目，缺失 WARNING）| FILE 模式 0=通过, 1=校验失败；回退模式：依赖加载失败 exit 2（需主 Agent 自判），无 retreat 提交等有意跳过 exit 0 |
 | `check-mvwu.py` | MVWU 阶段 1 观测器（TAG0036）：读任务目录 `P2-design.md` 的 `dispatch_plan.batches` 与 `P4-evidence/<id>.log`，每批输出一行 `MVWU_RESULT: <VERDICT> batch=<id>`（verdict = PASS/FAIL/EXPECTED_RED/UNKNOWN）；`--observe`=输出 7 列观察表行。仅观测、不阻断（不挂 gate/hook/CI）| 0=任一 verdict（含 FAIL/UNKNOWN，不阻断）, 2=用法/目标错误 |
 | `check-obligations.py` | 义务三态归宿登记校验（TAG0042 批6）：读 `rules/obligations.yaml`，校验无「无归宿」项（三态 M 脚本执行 / C 命令生成 / R 强制评审完整）+ M 类占比 ≥ 基线（只增不减）+ 每条义务有可追溯来源锚点 | 0=通过, 1=不通过（无归宿项 / M 类占比低于基线）, 2=目标/YAML 错误 |
@@ -100,6 +100,22 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | 脚本 | 用途 |
 |------|------|
 | `agate_common.py` | 公共函数库（替代 `gate-result.sh` + `agate-workspace-resolve.sh`）：`write_gate_result` / `read_state_phase` / `read_state_task_id` / `has_staged_phase_change` / `resolve_formatter` / `run_test_with_formatter` / `resolve_workspace` / `resolve_workspace_from_task_dir`（由 `task_dir` 解析工作区：向上找项目根后交 `resolve_workspace`，RM-AG0084 / DEBT0028 的**单源实现**） / `probe_python` / `run_git` / `read_vision_tri_state`（P1 vision 能力三态统一解析）/ `MAX_RETRY_MAP` 等。执行模式输出 `AGATE_WORKSPACE=` / `AGATE_TASKS_DIR=` 两行（workspace-resolve 契约）|
+
+### `check-platform-assumptions.py` 的 R6 判据边界（RM-AG0105 / DEBT0058）
+
+**R6**（`subprocess` 文本模式缺 `encoding=`）是**调用级**检查（非行级——文本模式与 `encoding=`
+常**分行**书写，行级判定会大面积误报）。实现为**括号配平**取「从含 `subprocess.` 的行起、
+至括号闭合」的整次调用文本，**不做 AST 解析**，已知局限：
+
+| 局限 | 后果 |
+|------|------|
+| **同一行两个调用** | 取到的是「第一行起至配平」的合并文本 ⇒ 可能**漏报** |
+| `encoding=` 出现在**字符串/注释**里 | 被当作已满足 ⇒ **假阴性** |
+| 单次调用跨 **>40 行** | 窗口截断 ⇒ 可能**误报** |
+| 属性行（如 `subprocess.PIPE`）触发配平 | 可能**误报** |
+| **仅注释**提及 `subprocess.` | 会被当作调用起点 ⇒ 可能**误报** |
+
+⇒ 判据是**启发式**（拦常见形态），不是完备证明；跨行/动态构造的调用仍需**人工核对**。
 
 ### CI 兜底
 

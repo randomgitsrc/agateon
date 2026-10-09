@@ -185,7 +185,7 @@ def _run_tag_verify(tmp_path, run_script, tag, readme, changelog, python_exe):
     env["PATH"] = str(shim) + os.pathsep + env.get("PATH", "")
     return subprocess.run(
         ["bash", "-c", run_script],
-        cwd=str(src), env=env, capture_output=True, text=True, timeout=60,
+        cwd=str(src), env=env, capture_output=True, text=True, encoding="utf-8", timeout=60,
     )
 
 
@@ -268,7 +268,7 @@ def test_bdd_13_6_release_workflow_change_does_not_touch_existing_workflows():
     release_dirty = subprocess.run(
         ["git", "-C", str(H.REPO_ROOT), "status", "--porcelain", "--",
          ".github/workflows/release.yml"],
-        capture_output=True, text=True, env=H.git_env(), timeout=60,
+        capture_output=True, text=True, encoding="utf-8", env=H.git_env(), timeout=60,
     ).stdout.strip()
     if not release_dirty:
         return
@@ -276,6 +276,7 @@ def test_bdd_13_6_release_workflow_change_does_not_touch_existing_workflows():
         ["git", "-C", str(H.REPO_ROOT), "status", "--porcelain", "--", *paths],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         env=H.git_env(),
         timeout=60,
     )
