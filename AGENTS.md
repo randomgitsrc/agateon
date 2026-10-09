@@ -166,6 +166,7 @@
 1. pytest 全绿 + 0 consistency ERROR + 0 shellcheck error（用例数以 `count-tests.sh` 为准）
 2. 更新 `README.md` version badge + `CHANGELOG.md` [Unreleased] → 新版本号
 3. **更新 `agate/UPGRADING.md` 新增本版本章节**——无破坏性变更也写"（无破坏性变更）"（v0.62.0 教训：漏写章节）
+3a. **公告约束（RM-AG0108 / DEBT0051）**：**不得预告「未排期能力」的实施版本号**——`UPGRADING`/`CHANGELOG`/`README` 里写「到截止版本 vN 改 exit 1」「vN 将硬切」这类承诺前，**必须**在同一提交登记 **RM 或 DEBT（给 owner）** 并在 `roadmap` 可见（否则公告发出即无主、到期无人兑现——TAG0042 公告 v0.80.0 硬切、TAG0050 P8 撞上该版本号才暴露，见 RM-AG0102）。**确需预告时**：写清 owner 条目 id，并接受「到期未兑现即欠账」。
 4. `git tag vN.N.0 && git push origin vN.N.0`——`git push` 不带 tag **默认不推送 tag**（v0.51.0 教训）；推送后 `git ls-remote --tags origin vN.N.0` 验证远端到达
 5. CHECK 7（version badge vs **CHANGELOG 最新已发布版本**，v0.78.2 起**不再依赖 git tag**）自动通过；CI ruff job 绿（`ruff==0.16.4`，与本地 `~/.venvs/agate-dev/bin/ruff` 对齐，RM-AG0037 required check）
 5a. **Release 校验（tag 与 Release 双轨，TAG0037）**：推送 `vN.N.0` 后 `.github/workflows/release.yml` 自动构建并创建 GitHub Release；`gh release view vN.N.0` 须存在，且资产至少含 3 个 tarball——本体 `agateon-vN.N.0.tar.gz` 与两平台 offline 包（`agateon-vN.N.0-offline-linux-x86_64.tar.gz`、`agateon-vN.N.0-offline-windows-x86_64.tar.gz`），另有 `SHA256SUMS`（仅防下载损坏，不认证发布者）。

@@ -67,7 +67,7 @@ python3 agate/scripts/check-protocol-consistency.py
 | 类型 | 文件名 | 用途 | 内容 | 生命周期 |
 |------|--------|------|------|---------|
 | 留痕文件 | `docs/reviews/agate-alignment-{date}-{task_id}-{NN}.progress.md` | 空返回诊断 | 原始执行痕迹，逐条追加，不整理不格式化 | subagent 返回后主 Agent 检查；成功可删，失败保留待查 |
-| 成果文件 | `docs/reviews/agate-alignment-review-{date}-{task_id}.md` | 最终交付物 | 结构化审查报告（A1-A8）| 保留，闭环依据 |
+| 成果文件 | `docs/reviews/agate-alignment-review-{date}-{task_id}.md` | 最终交付物 | 结构化审查报告（A1-A8 + A4b）| 保留，闭环依据 |
 
 **关键规则**：
 - 留痕文件和成果文件是**两个不同的文件**
@@ -125,11 +125,12 @@ python3 agate/scripts/check-protocol-consistency.py
 - 如果变更涉及 P6 证据格式，同时读 verifier.md 和 vision-analyst.md
 
 ## 审查清单
-逐项检查 A1-A8（见角色文件），A3 和 A5 必须包含反向传播的检查：
+逐项检查 A1-A8（+ **A4b**，见角色文件），A3 和 A5 必须包含反向传播的检查：
 - A1 文档→脚本对齐
 - A2 脚本→文档对齐
 - A3 一致性连锁 + 反向传播：列出应被影响但 diff 未列出的文件，逐一验证
 - A4 测试覆盖
+- A4b **闭合后既有测试转红 + 夹具更新清单**（RM-AG0107）：逐条列出因本次变更转红的**既有**用例与需更新的夹具；**空清单也须显式写出**
 - A5 下游影响 + 文档传播：CHANGELOG 是否标注？文档是否同步？
 - A6 锚点表覆盖
 - A7 设计原则一致性：变更是否符合已记录的 ADR（agate/adr.md）？逐条检查相关 ADR。如发现未记录的架构决策，建议补充新 ADR
@@ -159,7 +160,7 @@ python3 agate/scripts/check-protocol-consistency.py
 ## 产出（成果文件，最终交付物）
 docs/reviews/agate-alignment-review-{date}-{task_id}.md
 审查完所有文件后，把结构化报告写入成果文件（覆盖写，不是追加）。
-成果文件含 frontmatter + A1-A8 结论汇总表（含反向传播检查）+ 逐项审查详情。
+成果文件含 frontmatter + A1-A8（+ **A4b**「闭合后既有测试转红 + 夹具更新清单」）结论汇总表（含反向传播检查）+ 逐项审查详情。
 ⚠️ 路径是硬约束：必须用 Write 工具写入此路径，不得将产出文件写入 /tmp、工作区根目录或其他路径。
 ```
 
@@ -186,7 +187,7 @@ docs/reviews/agate-alignment-review-{date}-{task_id}.md
 {本次批次要审查的文件列表}
 
 ## 审查清单
-逐项检查 A1-A8（见角色文件）。对每个审查项：
+逐项检查 A1-A8（+ **A4b**「闭合后既有测试转红 + 夹具更新清单」，RM-AG0107）——见角色文件。对每个审查项：
 - 文档说了什么（引用原文 + 行号）
 - 脚本实现了什么（引用代码 + 行号）
 - 结论：ALIGNED / MISALIGNED / NEEDS_HUMAN_REVIEW
@@ -235,5 +236,5 @@ docs/reviews/agate-alignment-review-{date}-{task_id}.md
 
 如果 self-gate 尚未实现（如还在 plan 阶段），实施者至少手动执行等价检查：
 1. 跑现有 check-protocol-consistency.py
-2. 人工逐项核对"文档描述的规则 vs 脚本实现"是否一致（对照 A1-A8）
+2. 人工逐项核对"文档描述的规则 vs 脚本实现"是否一致（对照 A1-A8 + A4b）
 3. 跑全量 pytest

@@ -66,6 +66,17 @@
   `{Pn}-dispatch-context-*.md` 但缺 `AGATE_CARD_START/END` 占位符 → 阻断 commit（原先**无任何
   gate 拦截**，只靠 inject 早退事后暴露）。
 
+- **implementer 不得以「保持既有测试全绿」为由不实现设计要求（RM-AG0107 / DEBT0054）**：
+  `implementer.md` 新增该禁令（**契约驱动优先于既有测试全绿**；设计要求与既有测试冲突时须实现
+  设计要求并同步更新受影响的既有测试/夹具，不得以"会让测试转红"为由回退；认为设计要求有误须走
+  **`[CLARIFY]`**）；`protocol-alignment-review.md` 的汇总表新增 **A4b**
+  「**闭合后既有测试转红 + 夹具更新清单**」（空清单也须显式写出）——把往返整改收敛到一轮。
+
+- **不得预告未排期能力的实施版本号（RM-AG0108 / DEBT0051）**：`AGENTS.md`「版本发布清单」新增
+  **3a 公告约束** + `agate/UPGRADING.md` 新增「版本号公告约束」节——`UPGRADING`/`CHANGELOG`/`README`
+  里写「到截止版本 `vN` 改 exit 1」「`vN` 将硬切」这类承诺前，**必须**在同一提交登记 `RM`/`DEBT`
+  （owner）并在 `roadmap` 可见（TAG0042 公告 `v0.80.0` 硬切后无人兑现、TAG0050 P8 撞上才暴露）。
+
 ### 文档 / 登记
 
 - **TAG0050 外部实施评审遗留处置（m-1/m-2/m-3/m-4/§3，2026-10-09）**：① **m-1**
