@@ -245,6 +245,10 @@ def test_bdd_7_p6_exit1_retreats_to_p4_via_retreat_to(
 #   "非 pass 的 exit 2"**。
 #   ⇒ 改为**直接驱动落盘函数** `_write_exit2_resolution`（与 X6 同法：被测行为不变，
 #     只换触发方式），保留本分支覆盖；"真暂停经真实 gate 不可达"另行登记。
+#   ✅ **RM-AG0111 / DEBT0050 已修（2026-10-09）**：`agate-next.py` 新增**受控 gate 入口**
+#     `AGATE_CHECK_GATE`（env 覆盖 check-gate 路径，默认不变）⇒ 测试可用**合成 gate**
+#     制造「exit ∉ pass_set 且 ≠ 1」，**端到端**覆盖已恢复（见本文件末尾
+#     `test_rm_ag0111_non_pass_exit_end_to_end_via_controlled_gate`）。
 
 def _load_next_module(agate_scripts):
     """import agate-next.py（文件名含连字符 ⇒ 用 importlib 显式加载）。"""
@@ -531,4 +535,31 @@ def test_debt0045_renders_all_warnings_not_just_first(
     # 推进仍应发生（只是警告），但警告不得被截断成一条
     assert result.output.count("缺 agent 字段") >= 2, (
         f"多条 WARNING 被截断（初版 break 的缺陷）：{result.output[:500]}"
+    )
+
+
+# ── RM-AG0111 / DEBT0050：真暂停分支的**端到端**覆盖（受控 gate 入口）─────────────
+
+def test_rm_ag0111_non_pass_exit_end_to_end_via_controlled_gate(
+    task_dir, agate_scripts, python_exe, run_cli, tmp_path
+):
+    """RM-AG0111 / DEBT0050：经 `AGATE_CHECK_GATE` **受控入口**喂入合成 gate（exit 2），
+    让 `agate-next.py` 主流程走到「真暂停」分支（exit ∉ pass_set 且 ≠ 1）——恢复**端到端**覆盖
+    （此前真实 gate 无法产生该 exit ⇒ BDD-8 只能直调落盘函数）。
+
+    Given 一个 phase=P4 的任务（P4 的 gate_pass_exit = 0）+ 一个恒 exit 2 的合成 gate
+    When 以 `AGATE_CHECK_GATE=<合成 gate>` 运行 `agate-next.py P4 <td>`
+    Then 判「真暂停」：落盘 `P4-exit2-resolution.md`（端到端，非直调落盘函数）。
+    """
+    td = task_dir()
+    _write_state(None, td, "P4")
+
+    fake = tmp_path / "fake-gate.py"
+    fake.write_text("import sys\nsys.exit(2)\n", encoding="utf-8")
+
+    result = _run_next(
+        agate_scripts, python_exe, run_cli, td, env={"AGATE_CHECK_GATE": str(fake)}
+    )
+    assert (td / "P4-exit2-resolution.md").is_file(), (
+        f"端到端真暂停须落盘 P4-exit2-resolution.md；rc={result.returncode}\n{result.output[:400]}"
     )
