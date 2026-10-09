@@ -616,7 +616,7 @@ evidence:
   - ref: agate/scripts/check-gate.py
     note: "grep env_constraints.deploy / deploy / debug_env / test_cmd / workspace_path 零命中——gate 不检查 env_constraints 字段值（只确认字段存在）"
   - ref: agate/phase-cards/P2-design.md / P4-implementation.md / agate/assets/execution-roles/architect.md
-    note: "env_constraints 全部是'确认/细化 + 注入'语义（P2 卡 L50、P4 卡 L41、architect L135），无'必须执行其中某命令'的 gate 绑定"
+    note: "env_constraints 全部是'确认/细化 + 注入'语义（P2 卡「gate_commands 声明」节、P4 卡「自查≠gate」节、architect 角色「env_constraints 边界」节；**2026-10-09 更正**：原写死行号 L50/L41/L135 已陈旧，改指节名），无'必须执行其中某命令'的 gate 绑定"
   - ref: TQC0001 跨项目复盘（Qt 计算器）
     note: "P2 声明 env_constraints.deploy（windeployqt 构建 dist），但全流程 P0-P8 从未主动执行，用户双击 exe 报缺 DLL 后才补做——声明了但没有执行点"
   - ref: agate/phase-cards/P2-design.md「gate_commands 声明」节 / agate/assets/execution-roles/architect.md
@@ -628,6 +628,19 @@ evidence:
       dist，不靠用户提醒）本会话未验证**——这是一条面向未来的行为性指标，需要下一个实际的 UI 任务
       走完 P4 阶段后才能实证确认提醒条目是否真的改变了 implementer 行为，本任务自身不涉及 UI/dist
       构建场景，无法自我验证，不在此提前标记 closed"
+  - ref: agate/phase-cards/P2-design.md
+    note: >-
+      **2026-10-09 批 B/H3 复核（未关单——留 ③ 余项）**：closure_criteria 逐条现状——
+      (1) 「env_constraints 语义边界文档化」**已满足**（`P2-design.md`「### env_constraints
+      与 gate_commands 的边界（不等价）」节，现 :207-211；明写「任何需要被强制执行的约束，
+      必须落到 gate_commands…或者落到 P4/P8 阶段卡片里的明确 checklist 条目」）；
+      (2) 「UI 任务 P4 后 dist 构建有明确落点」**已满足**（`P4-implementation.md`「自查≠gate」
+      节 :57-58；本批**小幅强化**：明确为 checklist 落点 + 「无机械 gate 时的既定出口」）；
+      (3) 「TQC0001 类 UI 任务在 P4 后**自动**产出 dist（不靠用户提醒）」——**仍未满足**：
+      需**一次真实 UI 任务实证**（协议侧只给了卡片条目，无机械校验；本批未提供实证）
+      ⇒ **本条维持 open**，余项即 ③；
+      (4) 全量 pytest（本机 1 项环境失败——opencode CLI `debug agent` 子命令漂移，与协议无关）
+      + consistency 0 ERROR + shellcheck 0 issue。
 impact: 任何依赖 env_constraints 声明 deploy/pack/build 产物的任务，可能出现'设计说要做但流程不强制'的静默缺口；UI 任务 dist 产物、打包产物、部署产物均无 gate 检查；TQC0001（真实跨项目）已实证
 recommendation: 三改一并做——(1) 明确 env_constraints 字段语义边界（声明性 vs 执行性）：P2 卡片/architect 角色说明'执行性约束必须落到 gate_commands 或 P4/P8 明确 checklist'；(2) UI 任务 P4 后应构建 dist：P4 卡片「自查≠gate」节补'UI 任务 P4 后构建 dist（windeployqt 等）'或 P8 gate 加 dist 产物存在性检查；(3) 可选：check-gate.py 或新脚本校验 gate_commands 声明了 deploy/构建命令时 P4/P8 产出物存在
 closure_criteria:
