@@ -88,6 +88,11 @@
 
 ### 文档 / 登记
 
+- **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）
+  新增**可执行实现指针**——`docs/design-notes/r6-differential.sh` + `r6-allowlist.yaml`
+  （TAG0050 复盘沉淀，自带跑前/跑后「原仓库干净」自核验），避免每次手写差分。同条的
+  「协议推进示例改用 `agate-state-set`」**早已满足**（`state-machine.md` 推进步骤 7）。
+
 - **TAG0050 外部实施评审遗留处置（m-1/m-2/m-3/m-4/§3，2026-10-09）**：① **m-1**
   `agate/rules/obligations.yaml`——`OBL-P2-12` / `OBL-X-17` 系**任务通用**规则，原误标
   `scope: protocol-repo` ⇒ 改标 `disposition: C` 并移除 scope（二者进入占比统计，总数 119→121；
