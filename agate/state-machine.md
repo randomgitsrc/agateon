@@ -223,6 +223,11 @@ P8 gate 通过 ≠ 直接标记 READY。主 Agent 必须逐项检查：
     跳过 P8（无发布）→ P7--[P7 gate 通过]--> DONE（仅限不涉及发布的内部任务）
 
   不可跳过的阶段：P1（需求基线）、P2（方案设计）、P4（实现）、P5（技术验证）、P6（验收）
+
+  > **该集的单一权威源 = 阶段注册表 `rules/phases.yaml` 的顶层键 `non_prunable_phases`**
+  > （RM-AG0110 / ADR-014）：`check-pruning.py`（不可裁剪声明）与 `check-state-transition.py`
+  > （前向跨阶）**共读** `agate_common.non_prunable_phases()`，不再各自硬编码副本——
+  > 历史教训：二者曾各存一份且已分叉（P1 只在后者）。改集改这一处即可。
     P1 基线是全流程脊梁，无论任务大小都需建立（小任务可简化，见 WORKFLOW.md 适用边界）
     P4/P5 是交付底线——没有实现和验证就没有可发布产物
 

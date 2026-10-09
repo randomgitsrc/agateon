@@ -94,6 +94,11 @@
         "additionalProperties": false
       }
     },
+    "non_prunable_phases": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "不可跳过/不可裁剪阶段集（RM-AG0110 判据单源；check-pruning 与 check-state-transition 共读）"
+    },
     "gate_layer": {
       "type": "object",
       "required": ["commit_types", "transitions"],

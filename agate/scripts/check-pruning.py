@@ -19,9 +19,10 @@ import subprocess
 import sys
 
 # 不可裁剪阶段集（P1 需求基线 / P2 方案设计 / P4 实现 / P5 技术验证 / P6 验收）。
-# ⚠️ 与 `agate/scripts/check-state-transition.py::NON_PRUNABLE_PHASES` **逐字一致**
-# （ADR-014 判据单源；等价守护见 agate/tests/unit/test_non_prunable_phases_guard.py）。
-NON_PRUNABLE_PHASES = ("P1", "P2", "P4", "P5", "P6")
+# **RM-AG0110（ADR-014 判据单源）**：不再硬编码副本——改由
+# `agate_common.non_prunable_phases()` 从**阶段注册表** `rules/phases.yaml` 的顶层键
+# `non_prunable_phases` 读取；注册表不可用时回退 `agate_common.NON_PRUNABLE_PHASES_DEFAULT`。
+# 等价守护见 agate/tests/unit/test_non_prunable_phases_guard.py。
 
 _NON_PRUNABLE_REASONS = {
     "P1": "P1 不可裁剪——需求基线是全流程脊梁，无论任务大小都需建立",
@@ -155,6 +156,18 @@ def _reconcile_p1_fields(p1_text):
         pass
 
 
+def _non_prunable_set(task_dir):
+    """不可裁剪阶段集（RM-AG0110）：经 `agate_common.non_prunable_phases()` 读**注册表单源**；
+    agate_common 不可用（该分支在本文件既有设计下等同"整体降级"，见 `_phase_universe`）→ 返回空集。
+    回退默认值**只**在 `agate_common.NON_PRUNABLE_PHASES_DEFAULT` 定义，此处不再抄副本。"""
+    if agate_common is not None and hasattr(agate_common, "non_prunable_phases"):
+        try:
+            return tuple(agate_common.non_prunable_phases(task_dir, script_path=__file__))
+        except Exception:
+            pass
+    return ()
+
+
 def _phase_universe(task_dir):
     """快照 `phase_universe`（阶段全集）→ set；不可用 → set()（跳过闭合检查）。"""
     if agate_common is None:
@@ -248,11 +261,11 @@ def main():
         errors.append("P1-requirements.md 缺 risk_level 字段")
 
     # 检查 2~5：不可裁剪阶段（P1/P2/P4/P5/P6）均须在 phases 中（无例外口）。
-    # 集与文案源自模块级 NON_PRUNABLE_PHASES / _NON_PRUNABLE_REASONS（与
-    # check-state-transition.py::NON_PRUNABLE_PHASES 逐字一致，ADR-014 判据单源）。
-    for _p in NON_PRUNABLE_PHASES:
+    # 集来自**契约单源**（RM-AG0110：`agate_common.non_prunable_phases()`）；文案源自
+    # `_NON_PRUNABLE_REASONS`。
+    for _p in _non_prunable_set(task_dir):
         if _p not in phases:
-            errors.append(_NON_PRUNABLE_REASONS[_p])
+            errors.append(_NON_PRUNABLE_REASONS.get(_p, f"{_p} 不可裁剪"))
 
     # 检查 6：裁剪 P3 的条件
     if "P3" not in phases and risk_level != "low":

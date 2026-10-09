@@ -23,12 +23,20 @@ from pathlib import Path
 
 try:
     from agate_common import MAX_RETRY_MAP as _DEFAULT_MAX_RETRY_MAP
-    from agate_common import run_git, split_frontmatter, task_level
+    from agate_common import (
+        NON_PRUNABLE_PHASES_DEFAULT,
+        non_prunable_phases,
+        run_git,
+        split_frontmatter,
+        task_level,
+    )
 except ImportError:
     _DEFAULT_MAX_RETRY_MAP = "P1:3,P2:3,P3:2,P4:3,P5:2,P6:2,P7:2,P8:2"
     run_git = None
     task_level = None
     split_frontmatter = None
+    non_prunable_phases = None
+    NON_PRUNABLE_PHASES_DEFAULT = None
 
 try:
     import yaml
@@ -43,9 +51,20 @@ MAX_RETRY_MAP = os.environ.get("MAX_RETRY_MAP", _DEFAULT_MAX_RETRY_MAP)
 _CONTROL_PHASES = ("PAUSED", "READY", "DONE")
 
 # 不可跳过/不可裁剪阶段集（P1 需求基线 / P2 方案设计 / P4 实现 / P5 技术验证 / P6 验收）。
-# ⚠️ 与 `agate/scripts/check-pruning.py::NON_PRUNABLE_PHASES` **逐字一致**
-# （ADR-014 判据单源；等价守护见 agate/tests/unit/test_non_prunable_phases_guard.py）。
-NON_PRUNABLE_PHASES = frozenset({"P1", "P2", "P4", "P5", "P6"})
+# **RM-AG0110（ADR-014 判据单源）**：不再硬编码副本——改由
+# `agate_common.non_prunable_phases()` 从**阶段注册表** `rules/phases.yaml` 的顶层键读取；
+# 不可用时回退 `agate_common.NON_PRUNABLE_PHASES_DEFAULT`（唯一定义处）。
+# 等价守护见 agate/tests/unit/test_non_prunable_phases_guard.py。
+def _non_prunable_phases(task_dir):
+    """注册表单源读取（RM-AG0110）；不可用 → 回退 `NON_PRUNABLE_PHASES_DEFAULT`（唯一副本）。"""
+    if non_prunable_phases is not None:
+        try:
+            return frozenset(non_prunable_phases(task_dir, script_path=__file__))
+        except Exception:
+            pass
+    if NON_PRUNABLE_PHASES_DEFAULT is not None:
+        return frozenset(NON_PRUNABLE_PHASES_DEFAULT)
+    return frozenset()
 
 _STALE_OUTPUTS = {
     "P1": ["P1-requirements.md", "P1-review.md"],
@@ -488,10 +507,10 @@ def check_transition(old_phase, new_phase, task_dir, state_file=None, state_base
                 _lvl = None
         if _lvl is not None and old_num is not None and new_num - old_num >= 2:
             skipped = {f"P{i}" for i in range(old_num + 1, new_num)}
-            # 不可跳过阶段（见模块级 NON_PRUNABLE_PHASES 与 state-machine.md「不可跳过的阶段」）。
+            # 不可跳过阶段（**契约单源**，RM-AG0110；语义见 state-machine.md「不可跳过的阶段」）。
             # 注：P7 可裁剪（`P6--[P6 gate]-->P8`，见 state-machine.md「可跳过的阶段」），
             # 故 P6→P8 是合法前向跳（被跨 P7 已在 pruned 中声明时放行）。
-            non_prunable = skipped & NON_PRUNABLE_PHASES
+            non_prunable = skipped & _non_prunable_phases(task_dir)
             declared, pruned = _p1_pruned_and_declared(task_dir)
             # 被跨阶段须「已从 P1 phases 移除」**且**「在 pruned 中声明」——两个方向都判
             # （评审 M-1 原型口径）。对合法任务二者等价（check-pruning 强制 phases ∩ pruned = ∅），
