@@ -1,7 +1,6 @@
 ---
 title: 博客
 description: 构建 Agateon 的工程笔记与复盘。
-sidebar: false
 ---
 
 # 博客

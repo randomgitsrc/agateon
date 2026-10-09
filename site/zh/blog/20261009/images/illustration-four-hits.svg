@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="900" height="520" fill="#FAF9F4"/>
+  <text x="450" y="52" font-size="27" font-weight="700" fill="#1A1A18" text-anchor="middle" font-family="Noto Sans SC, serif">四类命中，只有一类算数</text>
+  <text x="450" y="82" font-size="16" font-style="italic" fill="#444441" text-anchor="middle" font-family="Noto Sans SC, serif">grep 一个配置键时，把找到的东西分类</text>
+
+  <g font-family="Noto Sans SC, sans-serif">
+    <rect x="60" y="112" width="780" height="62" rx="10" fill="#FAF9F4" stroke="#D8D5CB" stroke-width="2"/>
+    <text x="86" y="140" font-size="15" font-weight="700" fill="#444441">1 · schema / 枚举</text>
+    <text x="86" y="162" font-size="13.5" fill="#444441">"ceremony": ("thin", "standard", "full")</text>
+    <text x="812" y="150" font-size="15" font-weight="700" fill="#D85A30" text-anchor="end">不算读取方</text>
+
+    <rect x="60" y="186" width="780" height="62" rx="10" fill="#FAF9F4" stroke="#D8D5CB" stroke-width="2"/>
+    <text x="86" y="214" font-size="15" font-weight="700" fill="#444441">2 · 校验器分支</text>
+    <text x="86" y="236" font-size="13.5" fill="#444441">if ceremony in ("standard", "full"): exit 0</text>
+    <text x="812" y="224" font-size="15" font-weight="700" fill="#D85A30" text-anchor="end">不算读取方</text>
+
+    <rect x="60" y="260" width="780" height="62" rx="10" fill="#FAF9F4" stroke="#D8D5CB" stroke-width="2"/>
+    <text x="86" y="288" font-size="15" font-weight="700" fill="#444441">3 · 元数据 / 透传</text>
+    <text x="86" y="310" font-size="13.5" fill="#444441">字段注册表 · 格式化白名单</text>
+    <text x="812" y="298" font-size="15" font-weight="700" fill="#D85A30" text-anchor="end">不算读取方</text>
+
+    <rect x="60" y="334" width="780" height="72" rx="10" fill="#9FE1CB" stroke="#1D9E75" stroke-width="3"/>
+    <text x="86" y="364" font-size="15" font-weight="700" fill="#085041">4 · 行为分支</text>
+    <text x="86" y="388" font-size="13.5" fill="#085041">if design_trivial_declared(line): min_candidates = 1</text>
+    <text x="812" y="376" font-size="15" font-weight="700" fill="#085041" text-anchor="end">这个才算</text>
+  </g>
+
+  <text x="450" y="442" font-size="16" font-weight="700" fill="#1A1A18" text-anchor="middle" font-family="Noto Sans SC, sans-serif">校验器问"这个值合法吗"</text>
+  <text x="450" y="470" font-size="16" font-weight="700" fill="#085041" text-anchor="middle" font-family="Noto Sans SC, sans-serif">消费方问"给定这个值，什么会变"</text>
+</svg>
