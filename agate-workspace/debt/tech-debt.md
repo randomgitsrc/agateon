@@ -1601,7 +1601,7 @@ task_id: TAG0035   # 由 TAG0035 复盘派生（PR #334 修测试侧，本 PR �
 id: DEBT0043
 category: technical
 title: "check-gate.py::_gate_p2_dispatch_plan 对解析失败 / 非 dict / 缺字段 return None 静默放行（fail-open），与 TAG0035 子批 A 同类"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate/scripts/check-gate.py
@@ -1611,6 +1611,13 @@ evidence:
     note: "BDD-5 / P0 发现：同类 fail-open 只此一处；其余 gate 函数的 fail-open 属 TAG0035 已处理范围。判断依据：`grep -n \"_gate_p2_dispatch_plan\\|dispatch_plan\" agate-workspace/debt/tech-debt.md` 在本条登记前无相关条目"
   - ref: agate-workspace/tasks/TAG0035-gate-robustness/retrospective.md
     note: "TAG0035 子批 A 收口的同类 fail-open（gate 解析失败静默放行）；该批未覆盖 _gate_p2_dispatch_plan，仅致其行号 743→767"
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-H1-JUDGMENT-r3.md
+    note: >-
+      **关单证据（批次 hotfix-batchB-H1，PR #420，merge 97100b52）**：`_gate_p2_dispatch_plan` 解析失败静默放行（fail-open） 已修；
+      新增回归用例见 `agate/tests/unit/`（RM-AG0090 ×3 / RM-AG0091 ×5 / RM-AG0092 ×2，含端到端 2 条）。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest 2886 passed + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` + `P[56]`
+      子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: "dispatch_plan 是 P4 批编排的机器字段，写坏（如 JSON 语法错误、顶层非对象）时 P2 gate 不拒绝、也不告警，mode / parallel_limit / batches 校验形同虚设；MVWU 观测器（check-mvwu.py）读同一字段，坏字段下只能给 UNKNOWN 而非在 P2 就被拦下"
 recommendation: "本任务（TAG0036）只登记、不修——零内核硬约束。后续修复向：字段存在但 JSON 解析失败 / 非 dict 时返回错误串（fail-closed，exit 1）；仅「字段确实缺失」保持 return None（向后兼容不声明 dispatch_plan 的任务）；补对应红灯用例"
 closure_criteria:
@@ -1619,7 +1626,11 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: review
 created_at: 2026-09-19
-task_id: null   # 待立项；由 TAG0036 P0/P1 发现并登记，不在本任务修复
+task_id: hotfix-batchB-H1   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR #420，触 agate/ 协议本体与脚本，SELF-GATE 三轮独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H1 hotfix，PR #420）：见上方 evidence 的关单证据条目；RM-AG0090 同步回写 done。
+
 ```
 
 ## DEBT0044
@@ -1628,7 +1639,7 @@ task_id: null   # 待立项；由 TAG0036 P0/P1 发现并登记，不在本任�
 id: DEBT0044
 category: technical
 title: "check-judge-verdict.py::_two_sections 无终止符——objective_info 等非标题块被并入『输入文件/上游关联』两节，斜杠连写的阶段序列被白名单正则误报为任务路径"
-status: open
+status: closed
 priority: low
 evidence:
   - path: agate/scripts/check-judge-verdict.py
@@ -1637,6 +1648,13 @@ evidence:
     note: "_check_whitelist_outside（225-240 行）：正则 `[\\w./\\-]+/` 命中 `P0/P1/P2/P3/P4/P5/` 且 `re.match(r'^p[0-9]')` → 判白名单外任务路径；TAG0036 P6.5 实测 exit 1"
   - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P6-gate-diagnosis.md
     note: "误报根因与处置记录（仅改措辞，judge 未读到任何被隔离信息）"
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-H1-JUDGMENT-r3.md
+    note: >-
+      **关单证据（批次 hotfix-batchB-H1，PR #420，merge 97100b52）**：`check-judge-verdict.py` 两处判定过宽（`_two_sections` 终止符 / `_check_whitelist_outside` 斜杠序列） 已修；
+      新增回归用例见 `agate/tests/unit/`（RM-AG0090 ×3 / RM-AG0091 ×5 / RM-AG0092 ×2，含端到端 2 条）。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest 2886 passed + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` + `P[56]`
+      子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: "judge dispatch-context 的写作存在隐性陷阱：objective_info 里写『P0/P1/…/P6 各阶段』这类完全无害的描述会令 P6.5 门槛 exit 1；协议文档只说『两节』，未告知扫描面实际延伸到文件末尾（含 objective_info），主 Agent 只能事后从报错反推。"
 recommendation: "二选一或叠加：① `_two_sections` 在遇到 `</dispatch_guide>` / `<objective_info>` 标签行时终止当前节（与协议『两节』口径一致）；② 在 dispatch-protocol.md「Judge 信息隔离」节与 judge.md 注明『objective_info 也在扫描面内，避免斜杠连写阶段序列』。修脚本走 worktree + SELF-GATE（触 agate/scripts）。"
 closure_criteria:
@@ -1645,7 +1663,11 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-19
-task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+task_id: hotfix-batchB-H1   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR #420，触 agate/ 协议本体与脚本，SELF-GATE 三轮独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H1 hotfix，PR #420）：见上方 evidence 的关单证据条目；RM-AG0091 同步回写 done。
+
 ```
 
 ## DEBT0045
@@ -1753,7 +1775,7 @@ task_id: TAG0043-check-registration   # 直改通道批次名（RM-AG0068，2026
 id: DEBT0047
 category: technical
 title: "gate_commands 取值写法有隐性陷阱且无文档——agate-read-p5-commands.py 会剥离值首尾引号；未加引号的通配 pathspec 被 shell 先展开，对『删除』类变更漏检"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate/scripts/agate-read-p5-commands.py
@@ -1762,6 +1784,13 @@ evidence:
     note: "『gate_commands 声明』一节只讲 && 短路与 key 拆分，未提读取器的引号剥离与通配展开语义"
   - ref: agate-workspace/tasks/TAG0036-mvwu-pilot/P2-review.md
     note: "B2（末尾引号被吞，评审实跑复现）与 B3（去引号后通配由 bash 展开，`git diff -- TAG00[0-2]*` 对被删目录漏检 rc=0；反斜杠转义 `TAG00\\[0-2\\]\\*` 才正确 rc=1）"
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-H1-JUDGMENT-r3.md
+    note: >-
+      **关单证据（批次 hotfix-batchB-H1，PR #420，merge 97100b52）**：`gate_commands` 取值写法两陷阱（读取器各自 strip 引号 / 未加引号 pathspec 被 shell 展开） 已修；
+      新增回归用例见 `agate/tests/unit/`（RM-AG0090 ×3 / RM-AG0091 ×5 / RM-AG0092 ×2，含端到端 2 条）。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest 2886 passed + `check-protocol-consistency.py` 0 ERROR。
+      （本 evidence 条目同时满足 `agate-debt-check.py` 对 closed 条目的 `task_id` + `P[56]`
+      子串启发式——该启发式的粗糙性见 DEBT0033 / RM-AG0088。）
 impact: "gate_commands 在 P2 固化、P4-P6 不可改，写错就没有第二次机会；两个陷阱都是『命令看起来对、实际验证力被悄悄削弱』的静默类缺陷，需要评审者恰好实跑读取器才能发现。"
 recommendation: "在 P2 卡『gate_commands 声明』节补一条：值的末 token 不得以引号结尾；含通配的 pathspec 须反斜杠转义使 git 而非 shell 展开；并建议 architect 用 agate-read-p5-commands.py 读回后 shlex.split 自证。或让读取器改为只剥离成对的外层引号。改文档/脚本走 worktree + SELF-GATE。"
 closure_criteria:
@@ -1770,7 +1799,11 @@ closure_criteria:
   - "consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-19
-task_id: null   # 待立项；由 TAG0036 复盘登记，不在本任务修复（触 agate/ 协议本体与脚本，须走 worktree + SELF-GATE，不满足 hotfix 通道条件 2）
+task_id: hotfix-batchB-H1   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR #420，触 agate/ 协议本体与脚本，SELF-GATE 三轮独立评审，未走 P0-P8）；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H1 hotfix，PR #420）：见上方 evidence 的关单证据条目；RM-AG0092 同步回写 done。
+
 ```
 
 ## DEBT0049
