@@ -32,15 +32,22 @@ baseline:
   m: 56
   total: 119
   m_ratio: 0.4706
-  note: "TAG0050 批 A4 重设后的有效基线（M56/C33/R30；4 条 CI/手工义务归 scope: protocol-repo，不计入 M 占比）"
+  note: "2026-10-09 重设后的有效基线（M56/C35/R30，共 121；2 条 CI/手工义务归 scope: protocol-repo 不计入占比；m-1 后 OBL-P2-12/X-17 由 M 改标 C 并进入统计）"
   # 一次性显式重设（设计 §2.9；TAG0050 批 A4）：首次机械核验后，F13 的 4 条 M
   # （OBL-P2-12/X-10/X-17/X-19）不在必经路径上，改归 scope: protocol-repo（单独统计、
   # 不计入 M 占比），M 占比随之下降——以本字段**显式重设**，避免被误读为质量倒退；
   # 之后恢复「只增不减」（check-obligations.py 以 reset.to 为有效基线）。CHANGELOG 留痕归 P8。
+  # ⚠️ YAML **单键**：历史上两次重设合并为一条（避免重复键——重复键下 PyYAML last-wins，
+  # 结果正确但依赖键序，换严格解析器会由 PASS 变 FAIL；SELF-GATE 评审 r1 指出）。
   reset:
-    reason: "TAG0050 批 A4：义务 enforced_at 机械核验落地；F13 的 4 条 M 归 scope: protocol-repo（不在必经路径，单独统计、不计入 M 占比）"
-    from: "60/123"
-    to: "56/119"
+    reason: >-
+      2026-10-09 外部实施评审 m-1：OBL-P2-12 / OBL-X-17 由 M 改标 C 并移除
+      `scope: protocol-repo`（二者系**任务通用**规则、原属误标）⇒ 二者**进入占比统计**：
+      C 33→35、总数 119→121、**M 计数不变（56）**；M 占比因分母变大而降
+      （56/119=0.4706 → 56/121=0.4628）。此前一次重设（TAG0050 批 A4：F13 的 4 条 M 归
+      scope: protocol-repo）已并入本口径。
+    from: "56/119"
+    to: "56/121"
 
 obligations:
   # ── P0 任务简报（主 Agent 亲自写）────────────────────────────────────
@@ -287,12 +294,11 @@ obligations:
     phase: P2
     statement: "禁止声明 P3_xxx 检测键（只收集精确键 P3）"
     anchor: "agate/phase-cards/P2-design.md#P3_xxx 禁止声明"
-    disposition: M
+    disposition: C
     script: "agate/scripts/check-tdd-red.py"
     enforced_at: {file: agate/scripts/check-tdd-red.py, function: main}
     test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P2-12]
-    scope: protocol-repo
-    evidence: "旧解析器 startswith('P3') 静默收集辅助键致 TDD 误执行"
+    evidence: "旧解析器 startswith('P3') 静默收集辅助键致 TDD 误执行；**2026-10-09 更正（外部实施评审 m-1）**：本规则**每个任务都适用**（使用者项目同样生效），原标 scope: protocol-repo 属误标 → 改标 C（不在必经路径、不计入 M 占比）"
   - id: OBL-P2-13
     phase: P2
     statement: "plan-eng-review（backend 或 risk=high 强制）"
@@ -964,12 +970,11 @@ obligations:
     phase: X
     statement: "回退落地后建 DEBT 条目（source: retreat）"
     anchor: "agate/rules/state-transitions.md#回退规则"
-    disposition: M
+    disposition: C
     script: "agate/scripts/check-debt.py --retreat-coverage"
     enforced_at: {file: agate/scripts/check-debt.py, function: main}
     test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-X-17]
-    scope: protocol-repo
-    evidence: "TAG0001 强制"
+    evidence: "TAG0001 强制；**2026-10-09 更正（外部实施评审 m-1）**：本规则**每个任务都适用**（使用者项目同样生效），原标 scope: protocol-repo 属误标 → 改标 C；且其 `--retreat-coverage` 只发 WARNING，标 M 本身偏高"
   - id: OBL-X-18
     phase: X
     statement: "门禁失败事件 ↔ retries 对应性校验（RM-AG0042）"

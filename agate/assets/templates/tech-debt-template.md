@@ -31,7 +31,7 @@
 | `created_at` | 是 | str | 登记日期 |
 | `task_id` | 否 | str 或 null | 立项任务（`closed` 必填） |
 | `closed_at` | `closed` 时必填 | str（如 `2026-08-20`） | 关闭日期（RM-AG0088 / DEBT0033 起取代原「evidence 须含 P5/P6」子串判据） |
-| `source_ref` | 否 | str，格式 `<task_id>:<DG id>` | **双向回指**锚（TAG0050 批 E）：当该债由某任务的 P4 设计缺口（`basis: followup:DEBT<n>`）析出时，回指 `<task_id>:<DG id>`；`gate_p7` 校验该回指成立 |
+| `source_ref` | 否 | str，格式 `<task_id>:<DG id>`（`task_id` 为**裸编号**，如 `TAG0050`） | **双向回指**锚（TAG0050 批 E）：当该债由某任务的**设计缺口**析出时回指其出处——① P4 缺口（`basis: followup:DEBT<n>`）由 `gate_p7` **机械校验**回指成立；② **P7 缺口**（被「接受/延后」但无 owner 者，2026-10-09 外部实施评审 m-2 用法）**仅作记录**、不受 `gate_p7` BDD-66 校验 |
 
 ## 三态语义
 

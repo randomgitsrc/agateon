@@ -62,7 +62,7 @@ def _run_check_obligations(python_exe, script, root, cwd):
 def test_bdd_40_f13_four_m_items_error(agate_root, agate_scripts):
     """BDD-40：F13 的 4 条 M **未改标时**能检测出 ERROR（临时构造）。
 
-    终态下这 4 条已归 `scope: protocol-repo`（设计 §2.9），其执行方式性质为「—」⇒
+    终态下这 **2** 条（OBL-X-10/X-19）已归 `scope: protocol-repo`（设计 §2.9）——**2026-10-09 外部实施评审 m-1 后 OBL-P2-12/X-17 已改标 C 并进入占比统计**；其执行方式性质为「—」⇒
     不核验必经路径，工具转绿（BDD-44）。BDD-40 与 BDD-44 的终态不可兼得，故 BDD-40 以
     **临时构造**核验"检测能力"：同一条目去掉 scope 时须报 ERROR，加回 scope 时须跳过核验
     （评审 `agate-alignment-review-2026-10-08-TAG0050-G1.md` A1-1 建议）。
