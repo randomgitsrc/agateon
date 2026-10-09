@@ -252,6 +252,60 @@ def test_g2_3_two_candidates_exit_2(task_dir, agate_scripts, python_exe, run_cli
     assert result.returncode == 2
 
 
+# ========== RM-AG0090 / DEBT0043: gate_p2 dispatch_plan fail-open 修复 ==========
+# 契约：字段缺失 → 放行（向后兼容）；字段存在但 JSON 坏 / 非 dict → ERROR + exit 1。
+
+
+def _write_p2_design_with_dispatch(td, dispatch_line):
+    """写含 frontmatter dispatch_plan 的合规 P2-design.md（RM-AG0090 回归用）。"""
+    (td / "P2-design.md").write_text(
+        "---\nagent: test\ncandidate_count: 2\n"
+        f"dispatch_plan: {dispatch_line}\n"
+        "---\n" + _P2_TWO_CAND_BODY,
+        encoding="utf-8",
+    )
+
+
+def test_rm_ag0090_dispatch_plan_missing_field_passes(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """字段缺失 → 向后兼容放行（gate_p2 通过 exit 2，不因 dispatch_plan 判 1）。"""
+    td = task_dir()
+    _write_p2_design(td, _P2_TWO_CAND_BODY)
+    add_p2_candidate_count(td, 2)
+    add_p2_review(td)
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P2", str(td))
+    assert result.returncode == 2, result.output
+    assert "dispatch_plan" not in result.output
+
+
+def test_rm_ag0090_dispatch_plan_bad_json_blocks(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """字段存在但 JSON 坏（`'{"mode": "single"'`）→ ERROR + exit 1（原 fail-open 已修）。"""
+    td = task_dir()
+    _write_p2_design_with_dispatch(td, "'{\"mode\": \"single\"'")
+    add_p2_review(td)
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P2", str(td))
+    assert result.returncode == 1, result.output
+    assert "JSON 解析失败" in result.output
+
+
+def test_rm_ag0090_dispatch_plan_non_dict_blocks(
+    task_dir, agate_scripts, python_exe, run_cli
+):
+    """字段存在但解析结果非 dict（`'[1,2]'`）→ ERROR + exit 1（原 fail-open 已修）。"""
+    td = task_dir()
+    _write_p2_design_with_dispatch(td, "'[1,2]'")
+    add_p2_review(td)
+
+    result = _run_gate(agate_scripts, python_exe, run_cli, "P2", str(td))
+    assert result.returncode == 1, result.output
+    assert "须为对象" in result.output
+
+
 def test_g2_4_h5_candidates_not_recognized_exit_1(
     task_dir, agate_scripts, python_exe, run_cli
 ):

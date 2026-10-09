@@ -155,11 +155,19 @@ def _strip_frontmatter(lines):
     return lines
 
 
+# RM-AG0091 / DEBT0044：闭合标签行（如 `</dispatch_guide>` / `</objective_info>`）也是节的
+# 终止符——两节内容位于 `<dispatch_guide>…</dispatch_guide>` 块内（见
+# assets/templates/dispatch-context.md），其后紧跟的 `<objective_info>` 等正文不属扫描面。
+# 原先只认 `#` 标题 ⇒ 节若为块内最后一节（后接闭合标签而非标题），块外正文会被误并入。
+_TAG_END_RE = re.compile(r"^\s*</[\w.\-]+\s*>\s*$")
+
+
 def _two_sections(lines):
-    """提取『输入文件』『上游关联』两节内容（自含标题的标题行起，至下个标题止）。
+    """提取『输入文件』『上游关联』两节内容（自含标题的标题行起，至下个标题/闭合标签止）。
 
     返回拼接后的列表（两节内容按出现顺序连接）。节标题匹配 = 行首 # 且含
-    「输入文件」或「上游关联」（兼容 `### 输入文件（files_to_read，勿乱搜）` 形态）。
+    「输入文件」或「上游关联」（兼容 `### 输入文件（files_to_read，勿乱搜）` 形态）；
+    终止符 = 下个 `#` 标题行**或闭合标签行**（`</...>`，RM-AG0091）。
     """
     out = []
     current = None
@@ -170,6 +178,8 @@ def _two_sections(lines):
                 out.append(current)
             else:
                 current = None
+        elif _TAG_END_RE.match(line):
+            current = None
         elif current is not None:
             current.append(line)
     return [ln for section in out for ln in section]
@@ -232,6 +242,13 @@ def _is_whitelisted(tok, evidence_basenames=frozenset()):
     return base in _WHITELIST_MD or base in evidence_basenames
 
 
+# RM-AG0091 / DEBT0044：斜杠连写的**纯阶段序列**（如 `P0/P1/P2/P3/P4/P5/`）是文档里描述
+# 阶段覆盖范围的自然写法，不是任务产出路径引用——须从「白名单外任务路径」判定中排除
+# （TAG0036 P6.5 实测 exit 1 误报）。判定锚定「整串恰为 pN/ 的重复」，真实路径
+# （如 `p5-test-results/`、`p0/secret-dir/`）不匹配，仍照常被拦。
+_PHASE_SEQ_RE = re.compile(r"^(?:p[0-9]+/)+$")
+
+
 def _check_whitelist_outside(section_lines, evidence_basenames=frozenset()):
     """BDD-4②：两节白名单外任务产出路径引用扫描（basename 归一，I-1）。越界 → 返回越界路径列表。"""
     low = "\n".join(section_lines).lower()
@@ -244,6 +261,8 @@ def _check_whitelist_outside(section_lines, evidence_basenames=frozenset()):
     for tok in re.findall(r"[\w./\-]+/", low):
         stripped = tok.strip()
         if "p6-evidence/" in stripped:
+            continue
+        if _PHASE_SEQ_RE.match(stripped):
             continue
         if re.match(r"^p[0-9]", stripped):
             outside.append(stripped)

@@ -10,6 +10,21 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **`check-gate.py::_gate_p2_dispatch_plan` fail-open（RM-AG0090 / DEBT0043）**：`dispatch_plan` 字段
+  **存在但值非合法 JSON / 解析结果非对象**时，原实现与「字段缺失」同走 `return None`，与调用点
+  「None = 无错误」语义重合 ⇒ **静默放行**（坏值蒙混过 P2）。改为返回明确错误（P2 gate ERROR +
+  exit 1）；**字段缺失 / frontmatter 坏 YAML（字段不可读）仍放行**（向后兼容，老任务无需回填）。
+- **`check-judge-verdict.py` 两处判定过宽（RM-AG0091 / DEBT0044）**：① `_two_sections` 终止符只认
+  `#` 标题 ⇒ `</dispatch_guide>` / `</objective_info>` 之后的正文被并入「输入文件/上游关联」扫描面；
+  ② `_check_whitelist_outside` 把斜杠连写的**纯阶段序列**（`P0/P1/P2/P3/P4/P5/`）判为白名单外任务
+  路径（TAG0036 P6.5 实测 exit 1 误报）。两处各收窄，**真黑名单路径仍被拦**。
+- **`gate_commands` 取值引号剥离（RM-AG0092 / DEBT0047）**：`agate-read-p5-commands.py` 用
+  `.strip('"').strip("'")` **各自**剥首尾引号 ⇒ 值以引号结尾时被吞（`"pytest -k 'foo'"` →
+  `pytest -k 'foo`，命令语法破损）。改为只剥**成对**引号（不成对则原样保留）；
+  `agate/phase-cards/P2-design.md` 补「引号与通配 pathspec」两条写法约束。
+
 ## [0.80.2] - 2026-10-09
 
 ### 修复

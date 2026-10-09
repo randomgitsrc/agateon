@@ -927,8 +927,10 @@ def gate_p1(task_dir):
 
 # TAG0014（P2-design.md §3.1，BDD-2~7）：P2 门 dispatch_plan 字段校验。
 # 契约：
-#   * op 输出空（无字段 / 坏 YAML）→ 跳过，等同现状（BDD-2/7）
-#   * 非空 → json.loads 解析；解析失败同样跳过（不误拦不崩溃，BDD-7）
+#   * 字段缺失 / op 输出空（含 frontmatter 坏 YAML 导致字段不可读）→ 跳过，等同现状
+#     （BDD-2/7 向后兼容；此时 op 输出空串，与「无字段」同路径）
+#   * 字段存在但值非合法 JSON → **ERROR**（RM-AG0090 / DEBT0043：原 fail-open 静默放行已修）
+#   * 字段存在但解析结果非 dict → **ERROR**（同上）
 #   * mode ∈ {single, static-batch, parallel, recon-then-split, serial}（BDD-3）
 #   * parallel_limit 存在且 ≥1（BDD-4）
 #   * mode ∈ {static-batch, parallel} 时校验 batches：每批含 id + complexity ∈ {low, medium, high}（BDD-5）
@@ -940,10 +942,10 @@ def _gate_p2_dispatch_plan(p2_file):
         return None
     try:
         plan = json.loads(raw)
-    except ValueError:
-        return None
+    except ValueError as exc:
+        return f"dispatch_plan 存在但 JSON 解析失败（{exc}）——请检查 P2-design.md 该字段的 JSON 合法性"
     if not isinstance(plan, dict):
-        return None
+        return f"dispatch_plan 解析结果须为对象（dict），实际 {type(plan).__name__}"
 
     valid_modes = frozenset({"single", "static-batch", "parallel", "recon-then-split", "serial"})
     mode = plan.get("mode")
@@ -1089,8 +1091,9 @@ def gate_p2(task_dir):
                 f"GATE P2 WARNING: gate_commands.{key} 命令 '{token}' 不存在于当前环境——请确认使用完整路径（如 .venv/bin/pytest）或安装依赖。T075 教训：python 不存在导致 P3 gate exit 127\n"
             )
 
-    # TAG0014（dispatch_plan 字段契约，P2-design.md §3.1）：op 输出空（无字段/坏 YAML）→ 跳过，
-    # 行为等同现状（BDD-2/7 向后兼容）；非空 → json.loads 校验 mode / parallel_limit / batches。
+    # TAG0014（dispatch_plan 字段契约，P2-design.md §3.1）：字段缺失 → 跳过（向后兼容，
+    # BDD-2/7）；字段存在但 JSON 坏 / 非 dict → ERROR（RM-AG0090 修复 fail-open）；
+    # 合法 dict → json.loads 校验 mode / parallel_limit / batches。
     _dispatch_error = _gate_p2_dispatch_plan(p2_file)
     if _dispatch_error:
         sys.stderr.write(f"GATE P2 ERROR: {_dispatch_error}\n")
