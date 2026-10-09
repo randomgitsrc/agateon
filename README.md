@@ -25,7 +25,7 @@ LLM agents are powerful but unreliable on long tasks: context gets polluted, sub
 - **Gates are hard boundaries.** Progress is blocked on objective signals — a test runner's exit code, a typechecker, a git log — not on "looks about right."
 - **State is persisted.** Every phase's result lands in version-controlled Markdown, so work survives interruptions and is auditable by humans.
 - **Roles are isolated.** Each phase runs in a dedicated subagent, keeping the orchestrator's context clean and the review genuinely independent.
-- **Zero infrastructure.** Your agent only needs to read files and run commands — nothing to deploy, no service to operate.
+- **Zero infrastructure (on the *user* side).** Your agent only needs to read files and run commands — nothing to deploy, no service to operate. ⚠️ "Zero" is about **using** the protocol (**reading** the protocol docs needs **no runtime installed**); the **install / version-management / CI-backstop** side is *not* zero-infrastructure — see `agate/LIMITATIONS.md`.
 
 > agent gates on → Agateon
 
@@ -127,7 +127,7 @@ If the install root is not the default (i.e. `AGATE_HOME` was set), substitute t
 
 ## Design principles
 
-- **Document protocol, not a code framework.** Zero infrastructure — any agent that can read files can use Agateon.
+- **Document protocol, not a code framework.** Any agent that can read files can use Agateon (see the "zero infrastructure (user side)" note above — it is a property of the docs, not a claim about the installer/CI).
 - **Gates are hard boundaries.** An objective, externally produced result decides whether a phase passes, not a subjective "looks right."
 - **State is persisted.** Any interruption resumes from the last completed phase.
 - **Roles are isolated.** Dedicated subagents execute each phase; the orchestrator never pollutes its own context with implementation work.

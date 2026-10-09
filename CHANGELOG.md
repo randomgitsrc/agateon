@@ -59,6 +59,20 @@
   「evidence 含 `P[56]` 子串」改为「含 `task_id` + **`closed_at`**（关闭时间的显式字段）」
   ——原 `P[56]` 与「已关闭」无因果，属粗糙启发式（存量 2 条缺 `closed_at` 已迁移）。
 
+### 文档 / 登记
+
+- **TAG0050 外部实施评审遗留处置（m-1/m-2/m-3/m-4/§3，2026-10-09）**：① **m-1**
+  `agate/rules/obligations.yaml`——`OBL-P2-12` / `OBL-X-17` 系**任务通用**规则，原误标
+  `scope: protocol-repo` ⇒ 改标 `disposition: C` 并移除 scope（二者进入占比统计，总数 119→121；
+  `baseline.reset` 显式重设，避免被误读为质量倒退）；② **m-2** 三条被「接受/延后」但
+  **无 owner** 的 DESIGN_GAP 各登记 DEBT（DEBT0060 A2 分支①未实现 / DEBT0061 T1-T3 绊线
+  gate 侧扫描未接线 / DEBT0062 `review_output` 仅 WARNING）；③ **m-3** `roadmap` RM-AG0099
+  描述收窄（「修复 F1–F15」**仅对 `agate-task-init`/`--adopt` 的任务生效**，legacy 行为不变）；
+  ④ **m-4** `agate/LIMITATIONS.md` 补「CI 回放的边界」（复核的是 **hook 判定**，**不**复核
+  账本事件是否由 hook 写入、不重跑 `run:<k>`）；⑤ **§3** 「零基础设施」措辞限定为**使用侧**
+  并指向 LIMITATIONS（`README.md` / `README.zh-CN.md` 各 2 处）+ 登记 **RM-AG0114**
+  （git 存状态 + 可选无状态驱动器）/ **RM-AG0115**（阶段图数据化 / profile 化）。
+
 ## [0.80.2] - 2026-10-09
 
 ### 修复

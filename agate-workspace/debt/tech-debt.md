@@ -2293,3 +2293,98 @@ closure_note: >-
   `gate-backstop` 转绿。**机制改进**（`agate-ci-verify --base` 必填 + PR job 跑双口径）
   已由 RM-AG0103 承载并随 PR #415 落地（含 `gate-backstop` 升为 required 检查）。
 ```
+
+
+## DEBT0060
+
+```yaml
+id: DEBT0060
+category: protocol
+title: "A2 分支①未实现：未按逐提交 .agate-version 定位协议版本（.agate-version 只用于「不降级」检查）——对缺失 .agate-version 的提交不判 FAIL，属已知绕过面"
+status: open
+priority: medium
+evidence:
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P7-consistency.md
+    note: >-
+      TAG0050 P7 的 DESIGN_GAP 之一（verdict=accepted）：A2 的「按逐提交 .agate-version 定位
+      协议版本」分支**未实现**——`.agate-version` 只用于单调不降检查，不用于选协议根；
+      DESIGN_GAP 原文写明「对缺失 `.agate-version` 的提交不判 FAIL，属已知绕过面」。
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-HOTFIX-M1.md
+    note: >-
+      **2026-10-09 TAG0050 外部实施评审 m-2** 指出：该 DESIGN_GAP 被「接受/延后」但
+      **tech-debt.md 与 roadmap.md 均无对应条目（无 owner）**——即「有承诺、无主」。
+source_ref: TAG0050:P7-design-gap-a2-branch1
+impact: >-
+  使用者项目若**不写** `.agate-version`，CI 回放对「按当时协议书写」的历史提交缺少版本定位依据
+  ⇒ 该绕过面在协议层无机械拦截（回放退化为「用当前协议判历史提交」，可能误判或漏判）。
+recommendation: >-
+  二选一：① 实现 A2 分支①（按逐提交 `.agate-version` 定位协议版本目录；缺失时按设计口径
+  判 FAIL 或显式 SKIP+原因）；② 明确「不支持」并把该绕过面写入 `agate/LIMITATIONS.md`。
+closure_criteria:
+  - "分支①已实现（逐提交 .agate-version 定位协议版本，有回归用例）；或已明确「不支持」并写入 LIMITATIONS.md"
+  - "该缺口有 owner（本 DEBT / roadmap 条目）"
+source: review
+created_at: 2026-10-09
+task_id: TAG0050-task-data-contract
+```
+
+## DEBT0061
+
+```yaml
+id: DEBT0061
+category: protocol
+title: "T1/T2/T3 绊线的 gate 侧扫描未接线——`traps` 与 `downgrade` 无任何消费方（M2，verdict=followup）"
+status: open
+priority: medium
+evidence:
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P7-consistency.md
+    note: >-
+      TAG0050 P7 的 DESIGN_GAP 之一（verdict=followup）：T1/T2/T3 绊线的 **gate 侧扫描未接线**
+      ——声明里产出了 `traps` / `downgrade` 数据，但**没有任何消费方**读取并据此判定。
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-HOTFIX-M1.md
+    note: >-
+      **2026-10-09 外部实施评审 m-2**：该项为 `followup` 但无 DEBT 条目（无 owner）。
+source_ref: TAG0050:P7-design-gap-t1t2t3-traps
+impact: >-
+  绊线（tripwire）数据被产出但无人消费 ⇒ 「命中即拦」的承诺在 gate 侧**不成立**，
+  实际拦截力依赖其它判据（可能出现「声明了绊线却无人执行」的静默缺口）。
+recommendation: >-
+  给 `traps` / `downgrade` 接上消费方（gate 侧扫描：命中即拦或降级），或明确其为「仅记录、
+  不判定」并从承诺中移除该语义。
+closure_criteria:
+  - "`traps` / `downgrade` 有机械消费方（gate 扫描）并有回归用例；或已明确「仅记录不判定」并同步文档"
+source: review
+created_at: 2026-10-09
+task_id: TAG0050-task-data-contract
+```
+
+## DEBT0062
+
+```yaml
+id: DEBT0062
+category: protocol
+title: "A4 的 `review_output` 缺失只给 WARNING（设计要求 ERROR）——存量约 25 条 R 义务无合格评审产出"
+status: open
+priority: low
+evidence:
+  - ref: agate-workspace/tasks/TAG0050-task-data-contract/P7-consistency.md
+    note: >-
+      TAG0050 P7 的 DESIGN_GAP 之一（verdict=accepted）：A4 的 `review_output` 缺失判
+      **WARNING**（设计原文要求 ERROR）——理由：存量约 25 条 R 义务无合格评审产出；
+      「缺→WARNING、非法→ERROR」的终态被测试锁定。
+  - ref: docs/reviews/agate-alignment-review-2026-10-09-HOTFIX-M1.md
+    note: >-
+      **2026-10-09 外部实施评审 m-2**：该项为 `accepted` 但无 DEBT 条目（无 owner）。
+source_ref: TAG0050:P7-design-gap-a4-review-output-warning
+impact: >-
+  R（强制评审）义务的「必须有合格评审产出」在存量任务上**只发 WARNING 不阻断** ⇒
+  声明与执行之间留有一道弱口（新任务由其它判据兜底，存量任务无机械保障）。
+recommendation: >-
+  为存量 25 条补合格评审产出后，把 `review_output` 缺失由 WARNING 升为 **ERROR**（与设计一致）；
+  或明确「存量豁免 + 新任务 ERROR」并写入判据文档。
+closure_criteria:
+  - "`review_output` 缺失对**新任务**判 ERROR（有回归用例）；存量豁免口径显式文档化"
+source: review
+created_at: 2026-10-09
+task_id: TAG0050-task-data-contract
+```
