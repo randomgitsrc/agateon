@@ -351,3 +351,94 @@ def test_m1_base_required_no_inference(git_repo, agate_scripts, python_exe, run_
     assert "--base" in result.output, (
         f"失败原因须指明 --base 必填；实际输出 {result.output[:300]!r}"
     )
+
+
+def test_rm_ag0112_push_before_unresolvable_falls_back(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """RM-AG0112：push 的 `before` **不可解析**（对象缺失——rebase / 强推后旧 head 不再挂在
+    任何 ref，而 CI 的 fetch refspec 只取 `refs/heads/*` + tags）时不得判 FAIL（**假红**）。
+
+    2026-10-09 实测：PR #422 rebase 后强推 ⇒ CI clone 里 `before` 对象不存在 ⇒
+    `FAIL: rev-list 7c419e93..ac93f22c 失败`（job 113733056770）；该 check 已升 required
+    ⇒ PR 被 BLOCKED。
+
+    ⚠️ 评审 r1 澄清：`rev-list A..B` **不要求** A 是祖先（A 存在即成功）——故失败源是
+    **不可解析**，不是「非祖先」。本用例用不可解析 sha 复现真缺陷。
+
+    Given 一个有 `origin/main` 的仓库（默认分支可解析）
+    When 以 `--push --base <不可解析 sha>` 运行
+    Then 不得 FAIL；须**显式** NOTE 说明回退 `merge-base(HEAD, origin/main)`。
+    """
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+    head = git_repo.git("rev-parse", "HEAD").stdout.strip()
+    git_repo.git("update-ref", "refs/remotes/origin/main", head)
+    git_repo.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+
+    bogus = "f" * 40  # 不可解析（对象缺失）——等价于 rebase 后旧 head 在 clone 中不存在
+    result = _run_ci_verify(
+        agate_scripts, python_exe, run_cli, "--push", "--base", bogus, cwd=repo
+    )
+    assert result.returncode == 0, (
+        f"before 不可解析时不得 FAIL（假红）；rc={result.returncode}\n{result.output[:400]}"
+    )
+    assert "不可解析" in result.output, (
+        f"回退须**显式** NOTE（不静默）；实际输出 {result.output[:400]!r}"
+    )
+
+
+def test_rm_ag0112_push_before_non_ancestor_keeps_diff_semantics(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """RM-AG0112 附：`before` 可解析但**非**祖先（历史改写、旧对象仍在）——`rev-list`
+    本身能成功（差集语义），**不回退**，但保留显式 NOTE 便于诊断。"""
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+    (repo / "a.txt").write_text("a\n", encoding="utf-8")
+    git_repo.stage("a.txt")
+    git_repo.commit("c1")
+    stale = git_repo.git("rev-parse", "HEAD").stdout.strip()
+    git_repo.git("reset", "--hard", "HEAD~1")
+    (repo / "b.txt").write_text("b\n", encoding="utf-8")
+    git_repo.stage("b.txt")
+    git_repo.commit("c2")
+    head = git_repo.git("rev-parse", "HEAD").stdout.strip()
+    git_repo.git("update-ref", "refs/remotes/origin/main", head)
+    git_repo.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+
+    result = _run_ci_verify(
+        agate_scripts, python_exe, run_cli, "--push", "--base", stale, cwd=repo
+    )
+    assert result.returncode == 0, f"不得 FAIL；rc={result.returncode}\n{result.output[:400]}"
+    assert "不是 HEAD 的祖先" in result.output, (
+        f"须保留显式 NOTE（差集语义、不回退）；实际输出 {result.output[:400]!r}"
+    )
+
+
+def test_rm_ag0112_push_before_unresolvable_no_default_branch_fails(
+    git_repo, agate_scripts, python_exe, run_cli
+):
+    """RM-AG0112：`before` 不可解析**且**无法解析 `merge-base HEAD origin/<默认分支>` 时，
+    须 FAIL（信息清晰）——不得静默放行（回退无从谈起）。
+
+    Given 一个**无 origin** 的仓库（默认分支不可解析）
+    When 以 `--push --base <不可解析 sha>` 运行
+    Then rc≠0 且输出含「不可解析」与「无法确定回放范围」。
+    """
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+
+    bogus = "f" * 40
+    result = _run_ci_verify(
+        agate_scripts, python_exe, run_cli, "--push", "--base", bogus, cwd=repo
+    )
+    assert result.returncode != 0, (
+        f"不可解析且无默认分支须 FAIL；rc={result.returncode}\n{result.output[:400]}"
+    )
+    assert "不可解析" in result.output and "无法确定回放范围" in result.output, (
+        f"FAIL 信息须清晰；实际输出 {result.output[:400]!r}"
+    )

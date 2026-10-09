@@ -34,6 +34,13 @@
   开头 token 当绝对路径 ⇒ 中文散文斜杠词被误脱敏（`机制/执行层面` → `/执行层面`）。收窄为三选一
   （Windows 盘符 / Unix 已知顶层目录 / `/` 开头且**首段为 ASCII 路径段**）——既排除中文斜杠词，
   又不漏真实路径（`/data/secret`、`/proj/foo` 仍脱敏）。
+- **`agate-ci-verify` 对「`before` 不可解析」判假 FAIL（RM-AG0112）**：push 口径下
+  `rev-list <before>..HEAD` 在 `before` **不可解析**（对象在本次 clone 中不存在——rebase / 强推后
+  旧 head 不再挂在任何 ref，而 CI 的 fetch refspec 只取 `refs/heads/*` + tags）时直接失败 ⇒ 判
+  FAIL——但被回放的提交本身没问题（2026-10-09 实测：`gate-backstop` 升 required 后**首次拦下
+  merge**，经诊断为判据自身缺陷）。**修**：回退 `merge-base(HEAD, origin/<默认分支>)`（与 PR 口径
+  同源）并**显式** NOTE（不静默）；merge-base 也解析不出才 FAIL。⚠️ 注意 `rev-list A..B` **不要求**
+  A 是 B 的祖先（A 存在即成功）——失败源是**不可解析**，非「非祖先」。
 
 ## [0.80.2] - 2026-10-09
 
