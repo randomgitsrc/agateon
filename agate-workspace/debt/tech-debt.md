@@ -1286,11 +1286,21 @@ task_id: TAG0030
 id: DEBT0033
 category: technical
 title: "check-debt 关闭 schema 校验器无任何 gate/CI 挂载 + closed 证据判定为 P[56] 子串启发式（TAG0030 复盘发现）"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate-workspace/tasks/TAG0030-acceptance-blindspot/retrospective.md
     note: "DEBT 关闭 schema 校验器 check-debt 无任何 gate/CI 挂载，closed 证据判定为 P[56] 子串启发式：P8 纯 status 翻转关闭后 main 上 check-debt exit 1——关闭动作无机械防护"
+  - ref: agate/scripts/agate-debt-check.py
+    note: >-
+      **关单证据（批次 hotfix-batchB-H5）**：
+      ① **挂载 gate**：`pre-commit-gate.py` 新增 2l 步——`tech-debt.md` 被**暂存**时跑
+      `check-debt.py <file>`，exit 1 → 阻断 commit（原先该脚本**未挂任何 gate/CI**）；
+      ② **判据替换**：closed 条目的证据要求由「evidence 含 `P[56]` 子串」改为
+      「含 `task_id` + **`closed_at`**（关闭时间显式字段）」——原 `P[56]` 与「已关闭」无因果，
+      属粗糙启发式（本批迁移 2 条缺 `closed_at` 的存量条目）；
+      回归用例：`test_agate_debt_check.py::test_bdd_8_*` 子场景 3（缺 closed_at 拦截）+ BDD-5 夹具补字段。
+      该 hotfix 的 **P5/P6 等价验证** = 全量 pytest + `check-protocol-consistency.py` 0 ERROR。
 impact: "DEBT 关闭动作可绕过证据校验直接翻转 status，关闭质量依赖人工自觉；main 上 check-debt 失败暴露时已晚"
 recommendation: "check-debt 挂载 gate/CI（P8 关闭时强制校验证据存在）；closed 证据判定从子串启发式改为显式字段校验"
 closure_criteria:
@@ -1298,7 +1308,12 @@ closure_criteria:
   - 全量 pytest + consistency 0 ERROR
 source: retrospective
 created_at: 2026-09-04
-task_id: TAG0030
+task_id: hotfix-batchB-H5   # ⚠️ 批次标签，无对应任务目录——修复走 hotfix 通道（PR 见 roadmap RM-AG0088），触 agate/ 协议本体与脚本，SELF-GATE 独立评审，未走 P0-P8；先例 DEBT0046/DEBT0049
+closed_at: 2026-10-09
+closure_note: >-
+  已修（批 B/H5 hotfix）：check-debt 挂 pre-commit + closed 判据由 P[56] 启发式改为 closed_at；
+  RM-AG0088 同步回写 done。
+
 ```
 
 ## DEBT0034
@@ -1324,6 +1339,8 @@ closure_criteria:
 source: review
 created_at: 2026-09-07
 task_id: TAG0032
+closed_at: 2026-09-29   # RM-AG0088 迁移：closed 条目补 closed_at（原缺）
+
 ```
 
 ## DEBT0035
@@ -1630,6 +1647,8 @@ closure_criteria:
 source: retrospective
 created_at: 2026-09-18
 task_id: TAG0035   # 由 TAG0035 复盘派生（PR #334 修测试侧，本 PR 补实现侧）
+closed_at: 2026-09-29   # RM-AG0088 迁移：closed 条目补 closed_at（原缺）
+
 ```
 
 ## DEBT0043

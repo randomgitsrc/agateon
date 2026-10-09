@@ -53,6 +53,11 @@
   合成 gate 可制造「exit ∉ `gate_pass_exit` 且 ≠ 1」，恢复该分支的**端到端**覆盖
   （此前真实 gate 已无法产生该 exit：`pass_exit=0` 的 phase 不含 `return 2`，`pass_exit=2`
   的 phase 里 2 本就是通过码 ⇒ BDD-8 只能直调落盘函数）。
+- **`check-debt` 挂载 gate + closed 判据替换（RM-AG0088 / DEBT0033）**：① `pre-commit-gate.py`
+  新增 **2z** 步（置于 `for state_file in state_files:` 循环**之外**）——`tech-debt.md` 被**暂存**时跑 `check-debt.py <file>`，exit 1 → 阻断 commit
+  （原先该脚本**未挂任何 gate/CI**，改动不会被自动拦截）；② closed 条目的证据要求由
+  「evidence 含 `P[56]` 子串」改为「含 `task_id` + **`closed_at`**（关闭时间的显式字段）」
+  ——原 `P[56]` 与「已关闭」无因果，属粗糙启发式（存量 2 条缺 `closed_at` 已迁移）。
 
 ## [0.80.2] - 2026-10-09
 

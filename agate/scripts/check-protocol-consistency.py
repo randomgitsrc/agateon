@@ -795,6 +795,7 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         "desc": "tech-debt schema 校验 + 回退覆盖比对（DEBT 条目）",
         "script": "agate/scripts/check-debt.py",
         "keywords": ["debt", "retreat"],
+        "callers": ["agate/scripts/pre-commit-gate.py"],
     },
     {
         "desc": "平台假设静态扫描器（TAG0009：Unix 假设检出 + CI 阻断）",

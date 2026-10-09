@@ -1107,6 +1107,24 @@ def main():
             sys.stderr.write(f"GATE {phase} ({task_id}): 需主 Agent 手动判断\n")
             sys.stderr.write(gate_output + "\n")
 
+    # 2z. 技术债登记 schema 校验（RM-AG0088 / DEBT0033）——**循环外**（对任何提交都生效）：
+    # `tech-debt.md` 被**暂存**时跑 `check-debt.py <file>`，exit 1 → 阻断 commit。
+    # 原先 `check-debt.py` **未挂任何 gate/CI**（只被 2026-09-29 的「逐条实测」批手工调用）。
+    # ⚠️ 必须置于 `for state_file in state_files:` 循环**之外**——循环体内且在 PAUSED/READY/DONE
+    # 的 `continue` 之后 ⇒ 只对「同批暂存 active 阶段 `.state.yaml`」生效，对**纯 `tech-debt.md`
+    # 提交完全失效**（SELF-GATE 评审 r1 实测证伪首版放置：仅暂存非法 tech-debt.md → exit 0）。
+    # 脚本缺失 → fail-open 跳过（旧版协议 / 测试 fake 根未复制该脚本）。
+    if os.path.isfile(os.path.join(SCRIPT_DIR, "check-debt.py")):
+        for _rel in _staged_name_only():
+            _norm = "/" + _rel.replace("\\", "/")
+            if _norm.endswith("/debt/tech-debt.md"):
+                _abs = os.path.join(repo_root, _rel)
+                if os.path.isfile(_abs) and _run_script_rc("check-debt.py", [_abs]) == 1:
+                    sys.stderr.write(
+                        "GATE: 技术债登记 schema 非法（check-debt.py exit 1）——阻断 commit"
+                        "（RM-AG0088 / DEBT0033）\n")
+                    sys.exit(1)
+
     # 3. 扫描暂存的 P{n}-*.md 产出文件（无 .state.yaml 变更的任务也检查一致性）
     # 只做 WARNING，不拦截——覆盖"产出了但忘改 phase"的场景
     processed_dirs = []
