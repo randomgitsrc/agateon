@@ -257,13 +257,15 @@ python3 ~/.agate/scripts/agate-resolve.py
 >
 > | # | 条件 |
 > |---|------|
-> | 1 | 改动面 ≤2 文件、无跨模块影响 |
+> | 1 | **单一主题**：改动服务一个自洽目标、无跨模块影响（**2026-10-03 更正：文件数不再作为条件**，见 `AGENTS.md`） |
 > | 2 | **不是 agate 任务**（无 P0-brief/.state.yaml/P1-P8）。**注意：这与是否触发 SELF-GATE 无关**——若碰 `agate/` 下文件或 `AGENTS.md`/`README.md`/`SELF-GATE.md`，仍须在提交信息写 `self-gate-review:` 留痕 |
 > | 3 | 有明确验证判据（单测 + 目标命令 exit code），不需多轮评审 |
 >
 > **典型**：配置 key 对齐上游 schema（如 DSH persona `text`→`prefix`，PR #325）、文案修正、单文件 bug、CI 配置微调。
 >
-> **不适用 hotfix（必须立项为任务）**：需阶段产出的改动（= agate 任务）、跨子系统探索性设计、**`agate/` 协议本体/脚本改动（触发 SELF-GATE，须独立评审并留痕 `self-gate-review:`；是否另开 worktree 仍按轴 B 判断）**。
+> **不适用 hotfix（必须立项为任务）**：需阶段产出的改动（= agate 任务）、跨子系统探索性设计。
+>
+> ⚠️ **「`agate/` 协议本体/脚本改动」不在上述面内（2026-10-09 更正，与 `AGENTS.md` 同步）**：触发 SELF-GATE 只带来**独立评审义务**（提交信息写 `self-gate-review:`），**不是**立项义务——一次性修复（单一主题、可快速验证）走 **hotfix + 独立评审**即可；只有**跨多子系统 / 需探索性设计 / 需阶段产出**才立项。**是否另开 worktree 仍按轴 B 判断**。
 >
 > **hotfix 也走 PR**（main 受保护），只是不立项、不建任务目录。
 
