@@ -2076,3 +2076,25 @@ def test_rm_ag0088_staged_valid_tech_debt_passes_commit(
 
     result = _git_commit(run_cli, agate_root, repo, "-m", "valid debt passes")
     assert result.returncode == 0, result.output[-500:]
+
+
+def test_rm_ag0104_staged_dispatch_context_missing_placeholder_blocks(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """RM-AG0104 / DEBT0057：暂存 `{Pn}-dispatch-context-*.md` 但**缺 AGATE_CARD 占位符** →
+    pre-commit 阻断（原缺陷：漏写占位符**无任何 gate 拦截**，只靠 inject 早退事后暴露）。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    td = repo / "agate-workspace" / "tasks" / "T001"
+    td.mkdir(parents=True, exist_ok=True)
+    (td / "P1-dispatch-context-analyst.md").write_text("无占位符\n", encoding="utf-8")
+    git_repo.stage("agate-workspace/tasks/T001/P1-dispatch-context-analyst.md")
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", "missing placeholder should block")
+    assert result.returncode != 0, (
+        f"缺占位符须阻断 commit（RM-AG0104 / DEBT0057）；rc={result.returncode}\n{result.output[-400:]}"
+    )
+    assert "AGATE_CARD_START" in result.output or "占位符" in result.output, result.output[-400:]

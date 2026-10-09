@@ -305,3 +305,38 @@ def test_icb_missing_1_no_placeholder_exit_1(agate_scripts, python_exe, run_cli,
     dc.write_text(_MISSING_DC, encoding="utf-8")
     result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(task_dir))
     assert result.returncode == 1
+
+
+def test_rm_ag0104_first_missing_placeholder_does_not_skip_rest(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """RM-AG0104 / DEBT0052：**首个**文件缺占位符时，其余文件**仍被注入** + 末尾汇总 + 非零退出。
+
+    原实现遇首个失败即 `sys.exit(1)` ⇒ 排序其后**全部文件静默不注入**
+    （TAG0050 实测：一个缺占位符的文件导致其后 13 个 dispatch-context 全部丢失，人工才发现）。
+    """
+    td = tmp_path / "T001"
+    td.mkdir()
+    # a-bad 排序在前且缺占位符；b-good / c-good 合法——**占位块为空**（注入后才会被填充，
+    # 这样「未被注入」= 块内容仍为空 ⇒ 断言有判别力；若用非空块则旧实现也会通过，见评审 A4）
+    (td / "P1-dispatch-context-a-bad.md").write_text("无占位符\n", encoding="utf-8")
+    empty_block_dc = (
+        "---\nphase: P1\ngenerated_by: test\ntask_id: T001\nrole: analyst\n---\n\n"
+        "<dispatch_guide>\n### 目标\n分析需求\n</dispatch_guide>\n\n"
+        "<!-- AGATE_CARD_START -->\n<!-- AGATE_CARD_END -->\n"
+    )
+    for name in ("b-good", "c-good"):
+        (td / f"P1-dispatch-context-{name}.md").write_text(empty_block_dc, encoding="utf-8")
+
+    result = _run_inject(agate_scripts, python_exe, run_cli, tmp_path, "P1", str(td))
+    assert result.returncode != 0, (
+        f"有失败文件须非零退出；rc={result.returncode}\n{result.output[-400:]}"
+    )
+    for name in ("b-good", "c-good"):
+        txt = (td / f"P1-dispatch-context-{name}.md").read_text(encoding="utf-8")
+        assert _between_markers(txt).strip(), (
+            f"{name} 应仍被注入（不得早退，RM-AG0104）；实际块内容为空"
+        )
+    assert "个 dispatch-context 注入失败" in result.output, (
+        f"须末尾汇总失败清单；实际输出 {result.output[-400:]!r}"
+    )

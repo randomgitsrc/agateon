@@ -837,6 +837,12 @@ def resolve_workspace(project_root):
     return workspace, tasks_dir
 
 
+# dispatch-context 卡片占位符正则（**单源**，RM-AG0104 / DEBT0057）：
+# `agate-card-inject.py` 用它注入、`pre-commit-gate.py` 的 2y 步用它校验——**同一判据**，
+# 避免「校验口径 ≠ 注入口径」的误伤/漏放（SELF-GATE 评审 r1 指出两处曾不一致）。
+AGATE_CARD_PLACEHOLDER_RE = r"(<!-- AGATE_CARD_START -->\n)(.*?)(<!-- AGATE_CARD_END -->)"
+
+
 def resolve_workspace_from_task_dir(task_dir):
     """由 `task_dir` 解析工作区（RM-AG0084 / DEBT0028）——**三处消费方共用的单源实现**。
 

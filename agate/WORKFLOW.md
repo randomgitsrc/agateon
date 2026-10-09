@@ -361,6 +361,7 @@ P5 gate 要求「测试环境隔离正常（无 [PROD_TOUCHED]）」，是流程
 | 2.7.1 | `check-routing.py` | gate 通过后 | 阶段级 | ceremony 路由校验（TAG0019）：声明 ceremony 与算分 tier 一致性（单向 fail-closed）+ thin 四要素 checklist（coupling_checklist 流式 / 跳过风险 / P5/P6 保留）缺一拦截；不声明 = standard 不拦截（BDD-7/8/9）|
 | 2.11 | `check-scope-resolved.py` | gate 通过后 | 阶段级 | `[SCOPE+]` 必须有 `[SCOPE_RESOLVED:...]` 标记（P2.11）。**非 legacy 任务**（TAG0050 批 E）：改读快照 `declaration_files` 跨文件聚合的 `scope_plus`/`scope_resolved` |
 | 2z | `check-debt.py` | 暂存 `tech-debt.md` 时（**与 `.state.yaml` 无关，循环外**） | 仓库级 | 技术债登记 schema 校验（含 closed 条目须 `task_id` + `closed_at`）；exit 1 阻断 commit（RM-AG0088 / DEBT0033） |
+| 2y | （`pre-commit-gate.py` 内置） | 暂存 `P{n}-dispatch-context-*.md` 时（**与 `.state.yaml` 无关，循环外**） | 仓库级 | dispatch-context **占位符**存在性校验——**判据单源**：与 `agate-card-inject.py` 共用 `agate_common.AGATE_CARD_PLACEHOLDER_RE`（校验口径 == 注入口径）；缺 → 阻断 commit（RM-AG0104 / DEBT0057） |
 | 2.12 | `check-retrospective.py` | gate 任何结果 | 阶段级 | 异常模式提醒（重试超限/SCOPE+/override）→ 写复盘；另检测到 DEBT/roadmap 已登记本任务（机制缺口信号，TAG0015）→ 追加提醒；均不阻塞 commit（P2.12）。**非 legacy 任务**读快照 `declaration_files` 聚合的 `scope_plus` |
 | 2h | `check-p6-format.py` | 阶段 = P6 且**非 legacy** | 阶段级 | P6 正文格式自动归一化（`--fix`）。**TAG0050 批 D：非 legacy 任务跳过**（P6 走结构化 `results` 判据，不依赖正文格式）；legacy 任务保留 |
 
