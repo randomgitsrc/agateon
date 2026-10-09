@@ -100,6 +100,15 @@
     **先例**：2026-10-03 独立评审做全量差分时直接跑在克隆上，弄脏 16 个文件（其自述）；
     同日的作者侧 R6 因先建副本而未污染（事后 `git status` 实测为空）。
     **同理适用于任何「拿存量任务当输入」的批量实验**——先问一句「这个脚本会不会写数据」。
+    **项目固定资产（RM-AG0109）**：本条的「在副本上差分 + 跑前跑后核验原仓干净」已有**可执行实现**——
+    `docs/design-notes/r6-differential.sh` + `docs/design-notes/r6-allowlist.yaml`（TAG0050 复盘沉淀，
+    自带**跑前/跑后「原仓库干净」自核验**）。做「改前/改后行为差分」时**直接用它们**，不要每次手写：
+    ```bash
+    bash docs/design-notes/r6-differential.sh --corpus <副本仓库路径> [--allow <允许差异清单>]
+    ```
+    （脚本**只认选项** `--before/--after/--corpus/--allow`；`--allow` 缺省即用同目录的
+    `r6-allowlist.yaml`。⚠️ 该脚本位于 `docs/design-notes/`，**不在** `agate/scripts/` 的
+    CHECK 9/CHECK 10 扫描面内 ⇒ 其接口正确性**无机械守护**，改动后请手动核对本节。）
 0b. **推之前本地彩排 CI 回放**：`agate-ci-verify.py` 的 `--base` **必填**（不再从 `HEAD`/`origin` 推断——push 到默认分支时 `merge-base` = HEAD 自己 ⇒ 会用新协议回放历史提交致误报）。两条口径都要跑：
     ```bash
     python3 agate/scripts/agate-ci-verify.py --base "$(git merge-base HEAD origin/main)"   # PR 口径
