@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="1200" height="630" fill="#FAF9F4"/>
+
+  <text x="70" y="86" font-family="'Helvetica Neue', Arial, sans-serif" font-size="19" letter-spacing="3.5" fill="#1D9E75" font-weight="600">AGATEON — ORCHESTRATION PROTOCOL</text>
+
+  <text x="70" y="200" font-size="58" font-weight="700" fill="#1A1A18">The switches in your agent</text>
+  <text x="70" y="272" font-size="58" font-weight="700" fill="#1D9E75">workflow that nobody reads</text>
+  <text x="70" y="322" font-size="22" font-style="italic" fill="#444441">a validated setting is not a working setting</text>
+
+  <!-- ===== scene: switch panel, some wired, some dangling ===== -->
+  <!-- panel -->
+  <rect x="90" y="380" width="420" height="150" rx="12" fill="#FAF9F4" stroke="#1A1A18" stroke-width="3"/>
+  <text x="300" y="410" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="700" fill="#444441" text-anchor="middle" letter-spacing="2">CONFIG PANEL</text>
+
+  <!-- switches: 3 wired (teal), 4 dangling (coral dashed) -->
+  <g>
+    <rect x="120" y="430" width="40" height="24" rx="12" fill="#1D9E75"/>
+    <circle cx="150" cy="442" r="9" fill="#FAF9F4"/>
+    <rect x="180" y="430" width="40" height="24" rx="12" fill="#1D9E75"/>
+    <circle cx="210" cy="442" r="9" fill="#FAF9F4"/>
+    <rect x="240" y="430" width="40" height="24" rx="12" fill="#1D9E75"/>
+    <circle cx="270" cy="442" r="9" fill="#FAF9F4"/>
+  </g>
+  <g>
+    <rect x="120" y="474" width="40" height="24" rx="12" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5" stroke-dasharray="5,4"/>
+    <rect x="180" y="474" width="40" height="24" rx="12" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5" stroke-dasharray="5,4"/>
+    <rect x="240" y="474" width="40" height="24" rx="12" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5" stroke-dasharray="5,4"/>
+    <rect x="300" y="474" width="40" height="24" rx="12" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5" stroke-dasharray="5,4"/>
+  </g>
+  <text x="450" y="448" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#0E8A72" text-anchor="middle">3 wired</text>
+  <text x="450" y="492" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#D85A30" text-anchor="middle">4 dead</text>
+
+  <!-- wires: teal to machine (solid), coral ending mid-air (dashed) -->
+  <path d="M 510 442 L 600 442" fill="none" stroke="#1D9E75" stroke-width="4"/>
+  <path d="M 510 486 L 560 486" fill="none" stroke="#D85A30" stroke-width="3" stroke-dasharray="6,5"/>
+  <text x="572" y="478" font-family="'Helvetica Neue', Arial, sans-serif" font-size="13" fill="#D85A30">ends in mid-air</text>
+
+  <!-- machine that moves -->
+  <rect x="600" y="400" width="150" height="110" rx="10" fill="#E3E0F7" stroke="#4C45A8" stroke-width="3"/>
+  <text x="675" y="450" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="700" fill="#4C45A8" text-anchor="middle">BEHAVIOR</text>
+  <text x="675" y="472" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#4C45A8" text-anchor="middle">changes</text>
+
+  <!-- magnifier over the panel -->
+  <g>
+    <circle cx="820" cy="480" r="30" fill="none" stroke="#085041" stroke-width="5"/>
+    <line x1="841" y1="501" x2="866" y2="526" stroke="#085041" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <text x="70" y="612" font-size="18" font-style="italic" fill="#444441">A validated setting is not a working setting.</text>
+</svg>
