@@ -97,6 +97,11 @@
     **先例**：2026-10-03 独立评审做全量差分时直接跑在克隆上，弄脏 16 个文件（其自述）；
     同日的作者侧 R6 因先建副本而未污染（事后 `git status` 实测为空）。
     **同理适用于任何「拿存量任务当输入」的批量实验**——先问一句「这个脚本会不会写数据」。
+0b. **推之前本地彩排 CI 回放**：`agate-ci-verify.py` 的 `--base` **必填**（不再从 `HEAD`/`origin` 推断——push 到默认分支时 `merge-base` = HEAD 自己 ⇒ 会用新协议回放历史提交致误报）。两条口径都要跑：
+    ```bash
+    python3 agate/scripts/agate-ci-verify.py --base "$(git merge-base HEAD origin/main)"   # PR 口径
+    python3 agate/scripts/agate-ci-verify.py --push --base "$(git rev-parse origin/main)"  # push 口径
+    ```
 1. **先加失败测试确认红** → 改脚本转绿
 2. `python3 agate/scripts/check-protocol-consistency.py` 必须 0 ERROR（`--strict` 连 WARNING 都阻断；`--strict-errors-only` 只按 ERROR 判失败，docs-only PR 用它）
 3. `bash agate/tests/scripts/count-tests.sh` 确认用例数未漂移

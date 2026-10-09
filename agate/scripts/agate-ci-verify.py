@@ -8,7 +8,8 @@
 回放范围（合并提交一律跳过）：
   * GitHub PR（`--base <sha>`）：`rev-list --no-merges <merge-base(base,HEAD)>..HEAD`
   * GitHub push（`--push --base <sha>`）：`rev-list --no-merges <before>..HEAD`
-  * 本地缺省：`merge-base HEAD origin/<默认分支>`
+  * 本地彩排：**必须显式**给 `--base "$(git merge-base HEAD origin/<默认分支>)"`——
+    **不再支持**缺省推断（缺 `--base` 即 FAIL，见下）
 只回放**改动了任一任务目录**的提交；没有这类提交 → `SKIP:` + 原因。
 
 回放方法（每个提交 C，临时 worktree）：`worktree add --detach <wt> C` → `clean -fdx`
@@ -483,9 +484,11 @@ def main():
         else:
             base = _git_out(["merge-base", args.base, head], repo) or args.base
     else:
-        base = _merge_base(repo, "HEAD")
-        if not base:
-            return _skip(f"无法解析 merge-base HEAD origin/{_default_branch(repo)}（本地缺省口径）")
+        return _fail(
+            "--base 必填（TAG0050 评审 M-1 配套）：**不得**从 HEAD/origin 推断——push 到默认分支时 "
+            "merge-base = HEAD 自己 ⇒ 会用新协议回放历史提交致误报 FAIL。"
+            "本地彩排请显式给 --base \"$(git merge-base HEAD origin/<默认分支>)\"（见 AGENTS.md）。"
+        )
     rc, out, _ = _git(["rev-list", "--no-merges", f"{base}..{head}"], repo)
     if rc != 0:
         return _fail(f"rev-list {base[:8]}..{head[:8]} 失败")

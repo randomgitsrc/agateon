@@ -23,6 +23,11 @@
   原先读到空文本、计数全 0 直接 `return 0`（假 PASS）⇒ 改为判 FAIL（exit 1）。
 - **账本 `task_created.resolver` 写入本机绝对路径**：原写 `AGATE_ROOT` 绝对值（含用户名/目录结构，
   随账本入库）⇒ 改记 `AGATE_HOME` 相对路径（如 `v0.80.1/agate`）/ 版本目录 + basename。
+- **`agate-ci-verify` 缺 `--base` 时静默推断 + PR 只跑一条口径**（TAG0050 P8 事故根因，评审建议先行落地）：
+  ① `--base` 改为**必填**——原缺省时按 `merge-base HEAD origin/<默认分支>` 推断，push 到默认分支时
+  该值 = HEAD 自己 ⇒ 用新协议回放历史提交致误报；② `gate-backstop` 的 **PR 事件同时跑两条口径**
+  （`--base` 与 `--push --base`，脚本里是两条独立的范围/协议根解析路径），使「PR 两条口径绿 ⇒
+  合并后 main 亦绿」对同一组提交成立（前提：`gate-backstop` 升为 required 检查——见 RM-AG0103）。详见 `AGENTS.md`「改脚本的工作流」0b（本地彩排命令）。
 
 ## [0.80.1] - 2026-10-09
 
