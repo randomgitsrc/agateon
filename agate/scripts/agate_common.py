@@ -837,6 +837,38 @@ def resolve_workspace(project_root):
     return workspace, tasks_dir
 
 
+def resolve_workspace_from_task_dir(task_dir):
+    """由 `task_dir` 解析工作区（RM-AG0084 / DEBT0028）——**三处消费方共用的单源实现**。
+
+    从 `task_dir` 向上找**项目根**（含 `.agate.env` 文件或 `agate-workspace/` 目录的最近
+    祖先），交 `resolve_workspace` 解析；找不到 → 回退 `dirname(dirname(task_dir))`
+    （旧行为：假定 `<workspace>/tasks/<task>` 两级嵌套）。
+
+    **为何不直接用两级 `dirname` 算术**：它假定任务恰好两级嵌套在 workspace 下，
+    `.agate.env` 的 `AGATE_WORKSPACE=` / env `AGATE_TASKS_DIR` 覆盖工作区位置时会算错。
+
+    **为何不用 `git rev-parse --show-toplevel` 取项目根**：**外部工作区**场景下
+    （`AGATE_WORKSPACE=` 指向项目外绝对路径，见 `SETUP.md`）`task_dir` 可能在 git 仓库
+    **之外** ⇒ `show-toplevel` 失败 ⇒ 若把失败时的回退值（= 工作区本身）再喂给
+    `resolve_workspace`，会多套一层 `agate-workspace/`，导致 `return 1` **误阻断**。
+    """
+    start = os.path.abspath(str(task_dir).rstrip(os.sep))
+    d = start
+    while True:
+        if os.path.isfile(os.path.join(d, ".agate.env")) or os.path.isdir(
+            os.path.join(d, "agate-workspace")
+        ):
+            try:
+                return resolve_workspace(d)[0]
+            except Exception:
+                break
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return os.path.dirname(os.path.dirname(start))
+
+
 # ── 项目形态声明（agate.config.yaml 唯一读取函数，TAG0042 批 2）─────────────
 #
 # **唯一读取函数**（BDD-6）：声明文件的解析只此一处；所有消费方（gate / agate-run /

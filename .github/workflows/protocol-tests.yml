@@ -16,10 +16,12 @@ name: Protocol Tests
 #    分支保护即满足。
 #    platform-scan/ruff 非 required，保留 job 级 if 跳过（不阻塞合并）。
 #    代价：docs-only 时各 job 仍会走 checkout/setup（约 20-40s），换取 required check success。
-#    ⚠️ 2026-10-05 更正（TAG0042 批0 m-3）：分支保护实际 required = **5** 个
-#      （pytest×2 / shellcheck×2 / consistency）；**gate-backstop 已移出 required**
-#      （一个永远不失败的必过检查是假保障，见 X3）。本条原标题写"4 个 required job
-#      （…/gate-backstop）"已过期；实际设置以 `gh api .../branches/main/protection` 为准。
+#    ⚠️ 2026-10-05 更正（TAG0042 批0 m-3）：当时分支保护实际 required = **5** 个
+#      （pytest×2 / shellcheck×2 / consistency）；**gate-backstop 曾移出 required**
+#      （理由：一个永远不失败的必过检查是假保障，见 X3）。
+#    ⚠️ **2026-10-09 再更正**：TAG0050 批 A2 已把 gate-backstop 从「恒 SKIP」改造成**真正的
+#      逐提交回放** ⇒ 上述「永远不失败」的理由**已失效**；**gate-backstop 已重新加回 required**
+#      （现 **6** 个，`strict: true` 保留）。实际设置以 `gh api .../branches/main/protection` 为准。
 #
 # ④ 2026-08-26 修"docs/site 改动仍跑全量"的隐性 bug（完整机理见
 #    docs/guides/ci-docs-only-playbook.md）：
