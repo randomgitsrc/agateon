@@ -30,6 +30,7 @@
 | `source` | 是 | `retreat` / `review` / `retrospective` | 债的来源 |
 | `created_at` | 是 | str | 登记日期 |
 | `task_id` | 否 | str 或 null | 立项任务（`closed` 必填） |
+| `closed_at` | `closed` 时必填 | str（如 `2026-08-20`） | 关闭日期（RM-AG0088 / DEBT0033 起取代原「evidence 须含 P5/P6」子串判据） |
 | `source_ref` | 否 | str，格式 `<task_id>:<DG id>` | **双向回指**锚（TAG0050 批 E）：当该债由某任务的 P4 设计缺口（`basis: followup:DEBT<n>`）析出时，回指 `<task_id>:<DG id>`；`gate_p7` 校验该回指成立 |
 
 ## 三态语义
@@ -38,7 +39,7 @@
 |--------|------|------|
 | `open` | 已登记未立项 | 无（`task_id` 非空即视为已立项，属 `in_progress` 语义，schema 不拦截此组合） |
 | `in_progress` | 已立项/进行中 | `task_id` 非空即视为 in_progress |
-| `closed` | 已关闭 | **必须**含 `task_id` + `evidence` 同时引用该 task_id 与 P5/P6 证据（否则 schema 拦截） |
+| `closed` | 已关闭 | **必须**含 `task_id` + `evidence` 引用该 task_id + **`closed_at`**（关闭时间）（否则 schema 拦截；RM-AG0088 / DEBT0033 起取代原 P5/P6 子串判据） |
 
 ## 示例条目
 
@@ -60,7 +61,7 @@ source: review
 created_at: 2026-08-12
 ```
 
-### closed（须 task_id + P5/P6 证据引用）
+### closed（须 task_id + 引用该 task_id 的 evidence + closed_at）
 
 ```yaml
 id: DEBT0002
@@ -77,6 +78,7 @@ closure_criteria:
   - 验收通过
 source: review
 created_at: 2026-08-12
+closed_at: 2026-08-20   # closed 条目必填（RM-AG0088 / DEBT0033）
 ```
 
 ### 回退强制（source: retreat）

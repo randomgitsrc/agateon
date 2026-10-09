@@ -2020,3 +2020,59 @@ def test_x2_staged_phase_used_for_gate_decision(
     assert "暂存了 P4 产出但 phase=P3" in result.output, (
         f"须按暂存区 P3 判定并提示 P4 产出\n{result.output[-800:]}"
     )
+
+
+# ── RM-AG0088 / DEBT0033：tech-debt.md schema 挂载（pre-commit 2z 步，**循环外**）────────
+
+_VALID_DEBT = (
+    "# 技术债登记\n\n## DEBT0001\n\n```yaml\n"
+    "id: DEBT0001\ncategory: management\ntitle: 已关闭债\nstatus: closed\n"
+    "priority: medium\ntask_id: TAG0002\nevidence:\n"
+    "  - path: agate/tests/unit/test_x.py\n    note: TAG0002 的关单证据\n"
+    "impact: 影响\nrecommendation: 补\nclosure_criteria:\n  - 补\n"
+    "source: review\ncreated_at: 2026-08-12\nclosed_at: 2026-08-20\n```\n"
+)
+_INVALID_DEBT = _VALID_DEBT.replace("closed_at: 2026-08-20\n", "")  # 缺 closed_at → 非法
+
+
+def test_rm_ag0088_staged_invalid_tech_debt_blocks_commit(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """RM-AG0088 / DEBT0033：**仅暂存**非法 `tech-debt.md`（无 `.state.yaml` 变更）→ pre-commit 阻断。
+
+    ⚠️ 本用例是「**挂载位置**」的回归守护：首版把该步放进 `for state_file in state_files:`
+    循环体内、且在 PAUSED/READY/DONE 的 `continue` 之后 ⇒ 只对「同批暂存 active 阶段
+    `.state.yaml`」生效，对**纯 `tech-debt.md` 提交完全失效**（SELF-GATE 评审 r1 实测证伪）。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    debt_dir = repo / "agate-workspace" / "debt"
+    debt_dir.mkdir(parents=True, exist_ok=True)
+    (debt_dir / "tech-debt.md").write_text(_INVALID_DEBT, encoding="utf-8")
+    git_repo.stage("agate-workspace/debt/tech-debt.md")
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", "invalid debt should block")
+    assert result.returncode != 0, (
+        f"仅暂存非法 tech-debt.md 须阻断 commit（挂载位置回归）；"
+        f"rc={result.returncode}\n{result.output[-500:]}"
+    )
+    assert "技术债登记 schema 非法" in result.output, result.output[-500:]
+
+
+def test_rm_ag0088_staged_valid_tech_debt_passes_commit(
+    git_repo, agate_root, agate_scripts, run_cli
+):
+    """RM-AG0088 / DEBT0033（正向对照）：合法 `tech-debt.md` 不阻断 commit。"""
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+
+    debt_dir = repo / "agate-workspace" / "debt"
+    debt_dir.mkdir(parents=True, exist_ok=True)
+    (debt_dir / "tech-debt.md").write_text(_VALID_DEBT, encoding="utf-8")
+    git_repo.stage("agate-workspace/debt/tech-debt.md")
+
+    result = _git_commit(run_cli, agate_root, repo, "-m", "valid debt passes")
+    assert result.returncode == 0, result.output[-500:]
