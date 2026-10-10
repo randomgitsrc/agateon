@@ -2646,7 +2646,7 @@ closure_note: >-
 id: DEBT0064
 category: protocol
 title: "T3 绊线（`strict_verdict_line_in_prose`）无任何消费方——契约声明 default_action: error 但无脚本执行"
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate/rules/task-data/level-1.yaml
@@ -2656,6 +2656,13 @@ evidence:
     note: >-
       **2026-10-10 实测（批次 hotfix-debt-triage，DEBT0061 关单时拆出）**：全仓 `grep T3` /
       `strict_verdict` **0 消费方**（仅快照出现）。同族 T1/T2/T4 均有代码消费方，T3 是唯一缺口。
+  - ref: agate/LIMITATIONS.md
+    note: >-
+      **关单证据（批次 hotfix-gate-evidence-gaps，2026-10-10）**：判据二选一取「已在用户可见面写明
+      『仅记录不判定』」——`LIMITATIONS.md` 新增「契约声明的绊线并非全部被机械执行」节：列表写明
+      T1/T2/T4 的**消费方**（`count_p7_markers` / `check-gate.py` P1 分支 BDD-71 / `pre-commit-gate.py`
+      PROD_TOUCHED），并显式标注 **T3 无消费方、仅记录不判定**（快照冻结不能就地删），且写明若要生效
+      应在 P7 分支接线并先设计误报面。**未接线**（接线需误报面设计，属设计项而非 hotfix）。
 impact: >-
   契约声明「P7 正文出现严格判定行 ⇒ error」，但无脚本执行 ⇒ 该承诺**不成立**（与 T1/T2/T4 不同）。
 recommendation: >-
@@ -2666,5 +2673,9 @@ closure_criteria:
   - "T3 有机械消费方并有回归用例；或已在用户可见面（LIMITATIONS/规则说明）写明「仅记录不判定」"
 source: review
 created_at: 2026-10-10
-task_id: null   # 待立项；由 DEBT0061 关单时拆出
+task_id: hotfix-gate-evidence-gaps   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-10
+closure_note: >-
+  关单（批次 hotfix-gate-evidence-gaps）：取判据的「用户可见面写明仅记录不判定」分支（LIMITATIONS 新增绊线执行面节）；接线属设计项（误报面须先设计），不在 hotfix 范围。
+
 ```

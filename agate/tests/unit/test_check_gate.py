@@ -4041,3 +4041,58 @@ def test_x7_missing_agent_returns_not_pass(agate_scripts, phase, review_file):
         f"该 phase 的通过码是 {pass_exit[phase]}："
         f"{'返回 2 = 通过码 ⇒ fail-open 放行' if got == pass_exit[phase] else '返回值不符合未通过码语义'}"
     )
+
+
+def test_rm_ag0097_p6_evidence_gitignored_warns(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """RM-AG0097：P6-evidence 被 `.gitignore` 忽略 ⇒ P6 gate **提示**（不阻断）。
+
+    判据意义：证据文件被忽略时「证据存在性」判据只在**作者本机**成立（他人复核 / CI / 换机
+    时克隆里没有这些文件）。本用例造一个「忽略 `*.log`」的仓库 ⇒ 须出现该 WARNING；
+    对照：不忽略时**不**出现（已入库文件 `check-ignore` 返回非 0 ⇒ 不误报）。
+    """
+    import subprocess
+
+    repo = git_repo.path
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=False)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=False)
+    (repo / ".gitignore").write_text("*.log\n", encoding="utf-8")
+
+    task_dir = repo / "agate-workspace" / "tasks" / "T001"
+    (task_dir / "P6-evidence").mkdir(parents=True, exist_ok=True)
+    (task_dir / "P6-acceptance.md").write_text(
+        "---\nagent: test\nphase: P6\ntask_id: T001\n---\n", encoding="utf-8"
+    )
+    ev = task_dir / "P6-evidence" / "ev.log"
+    ev.write_text("run\nEXIT_CODE: 0\n", encoding="utf-8")
+
+    result = run_cli(
+        python_exe, str(agate_scripts / "check-gate.py"), "P6", str(task_dir),
+        cwd=str(repo),
+    )
+    assert "RM-AG0097" in result.output and "被 .gitignore 忽略" in result.output, (
+        f"证据被忽略时须给提示；实际输出 {result.output[-500:]!r}"
+    )
+
+    # 对照一：已**跟踪**（tracked）的文件即便匹配 .gitignore 规则也不被忽略 ⇒ 不得误报
+    subprocess.run(["git", "-C", str(repo), "add", "-f", str(ev)], check=False)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "add evidence"],
+                   check=False, capture_output=True)
+    result_tracked = run_cli(
+        python_exe, str(agate_scripts / "check-gate.py"), "P6", str(task_dir),
+        cwd=str(repo),
+    )
+    assert "被 .gitignore 忽略" not in result_tracked.output, (
+        f"已入库文件不得误报；实际输出 {result_tracked.output[-500:]!r}"
+    )
+
+    # 对照二：不忽略（删掉 .gitignore 规则）⇒ 同样不出现该 WARNING
+    (repo / ".gitignore").write_text("# none\n", encoding="utf-8")
+    result2 = run_cli(
+        python_exe, str(agate_scripts / "check-gate.py"), "P6", str(task_dir),
+        cwd=str(repo),
+    )
+    assert "被 .gitignore 忽略" not in result2.output, (
+        f"未被忽略时不得误报；实际输出 {result2.output[-500:]!r}"
+    )

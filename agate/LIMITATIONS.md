@@ -147,3 +147,18 @@ P6 的视觉验收需要截图能力——依赖 Agent 平台提供浏览器 / �
 - **某提交**缺失 `.agate-version`（仓库整体写了、个别提交没写）→ **不判 FAIL**（已知绕过面）。
 
 ⇒ 引用「CI 回放通过」时请勿读成「按当时协议逐提交复算」；要精确复算须为每个提交钉版本。
+
+## 契约声明的绊线并非全部被机械执行（DEBT0064，2026-10-10）
+
+契约快照 `rules/task-data/level-1.yaml` 的 `traps` 声明了 T1–T4，**但只有三条有脚本消费方**：
+
+| 绊线 | 消费方 |
+|------|--------|
+| **T1** `positive_declaration_in_prose` | **多消费方**：`check-gate.py::count_p7_markers`（P7 计数，仅覆盖部分 marker）+ 各阶段 gate 的标记消费（`SCOPE+`/`DESIGN_GAP` 等按阶段分别判定） |
+| **T2** `bdd_heading_format` | `check-gate.py` P1 分支（BDD-71 硬拦） |
+| **T4** `prod_touched_safety_gate` | `pre-commit-gate.py` PROD_TOUCHED 面 |
+| **T3** `strict_verdict_line_in_prose` | **无消费方——仅记录，不判定** |
+
+⇒ 引用 `traps` 时请勿假定四条都被强制；**T3 目前是「声明但未执行」**（快照冻结，不能就地删）。
+若需要它生效，应在 `check-gate.py` 的 P7 分支接线，并**先设计误报面**（P7 正文合法引用 P6 判定行
+的写法）。见 DEBT0064。
