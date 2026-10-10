@@ -20,8 +20,9 @@ import subprocess
 import sys
 
 try:
-    from agate_common import run_git
+    from agate_common import git_hooks_dir, run_git
 except (ImportError, SystemExit):
+    git_hooks_dir = None
     # 同 commit-msg-self-gate.py：公共库依赖缺失时降级本地 subprocess 实现，保持永不阻断。
     def run_git(args, cwd=None):
         try:
@@ -54,7 +55,41 @@ def _count_changed(remote_sha, local_sha):
     return count
 
 
+def _run_project_local_hook(repo_root, *args):
+    """**项目本地 hook 扩展点**（pre-push 版，与 pre-commit 版同口径）：`<git-common-dir>/hooks/pre-push-local`
+    存在且**可执行** ⇒ 先跑它（参数原样透传，stdin 未消费 ⇒ 它可自行读），**非 0 即中止 push**。
+
+    与 pre-commit 版同一条分层原则：**协议不假设项目分支/流程**（有的项目允许直推 `main`）——
+    「禁止直推 main」这类策略写在**项目自己的** `pre-push-local`；协议只给它机会跑。
+    本 hook 自身的检查仍是**提示型永不阻断**（两者互不影响）。
+    解析 hook 目录复用**单源** `agate_common.git_hooks_dir`（ADR-014）；不可用/不存在 ⇒ 跳过。
+    """
+    if git_hooks_dir is None:
+        return 0
+    try:
+        hooks_dir = git_hooks_dir(repo_root)
+    except Exception:
+        return 0
+    path = os.path.join(hooks_dir or "", "pre-push-local")
+    if not (hooks_dir and os.path.isfile(path) and os.access(path, os.X_OK)):
+        return 0
+    try:
+        return subprocess.run([path, *args], cwd=repo_root).returncode
+    except OSError:
+        return 0
+
+
 def main():
+    # 0. 项目本地 hook 扩展点（中立）：项目自己的 pre-push-local 存在则可执行先跑，非 0 即中止。
+    rc, out = run_git(["rev-parse", "--show-toplevel"])
+    _repo_root = out.strip() if rc == 0 and out.strip() else os.getcwd()
+    if _run_project_local_hook(_repo_root, *sys.argv[1:]) != 0:
+        sys.stderr.write(
+            "GATE LOCAL: 项目本地 pre-push-local 未通过 ⇒ 本次 push 中止\n"
+            "  （该策略由项目自定义；见 <git-common-dir>/hooks/pre-push-local）\n"
+        )
+        sys.exit(1)
+
     try:
         threshold = int(os.environ.get("AGATE_ALIGNMENT_REVIEW_THRESHOLD", "20"))
     except ValueError:

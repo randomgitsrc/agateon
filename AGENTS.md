@@ -67,6 +67,14 @@
 >
 > **hotfix 也走 PR**（不直接推 main——main 受保护），只是不立项、不建任务目录。
 
+> **本仓守卫（把这条策略变成机制）**：协议提供**中立扩展点**——`pre-commit-gate.py` 见
+> `<git-common-dir>/hooks/pre-commit-local` **可执行**就先跑它、非 0 即中止提交（协议**不内置**
+> 任何分支策略：有的项目允许直提 `main`）。agateon 自己的策略放在受版本控制的
+> **`.githooks/pre-commit-local`**（禁在 `main`/`master` 直提），软链到 hook 目录即可生效：
+> ```bash
+> ln -sf ../../.githooks/pre-commit-local "$(git rev-parse --git-path hooks)/pre-commit-local"
+> ```
+
 ## 本机稳定版布局（`~/.agate`）
 
 `~/.agate` 是**版本管理根目录**（非软链），与开发 checkout **解耦**：

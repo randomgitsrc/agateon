@@ -50,6 +50,7 @@ try:
         append_event,
         check_ledger_events,
         current_level,
+        git_hooks_dir,
         load_contract,
         match_declaration_file,
         read_ledger_events,
@@ -694,12 +695,51 @@ def _scan_prod_touched_and_rerun(repo_root, tasks_dir, staged_all, state_files_r
 # ---------- 主流程 ----------
 
 
+def _run_project_local_hook(repo_root):
+    """**项目本地 hook 扩展点**（中立机制）：`<git-common-dir>/hooks/pre-commit-local`
+    存在且**可执行** ⇒ 先跑它；**非 0 即中止本次提交**。返回其退出码（无则 0）。
+
+    **为什么不把策略写进协议**：协议**不得假设项目分支/流程**——有的项目允许直接提交并推送到
+    `main`，有的用 `master` / `develop` / 自定义默认分支，有的要求先建分支。而「禁止直提 main」
+    这类是**项目策略**，应当写在**项目自己的** `pre-commit-local` 里。协议只负责**给它机会跑**：
+    内容完全由项目决定（不写 = 无策略，行为与从前逐字节一致）。
+
+    解析用 `git rev-parse --git-path hooks`（尊重 `core.hooksPath` 与共享 git 目录）；找不到 git /
+    hook 缺失 / 不可执行 ⇒ **跳过**（不阻断）。
+    """
+    # 复用**单源** `agate_common.git_hooks_dir`（ADR-014）——它已正确处理：
+    # 链接 worktree（`.git` 是文件 ⇒ 共享 hooks 目录）与 `core.hooksPath`（相对路径按 cwd 解析）。
+    # 此前本处自己再解析一遍，属重复实现（SELF-GATE r1 指出）。
+    try:
+        hooks_dir = git_hooks_dir(repo_root)
+    except Exception:
+        return 0
+    if not hooks_dir:
+        return 0
+    path = os.path.join(hooks_dir, "pre-commit-local")
+    if not (os.path.isfile(path) and os.access(path, os.X_OK)):
+        return 0
+    try:
+        return subprocess.run([path], cwd=repo_root).returncode
+    except OSError:
+        return 0
+
+
 def main():
     # REPO_ROOT = 当前 git 仓库根（项目仓库或 agate 仓库本身）
     # realpath -m 归一（Git for Windows 的 --show-toplevel 返回 C:/...，统一归一）
     rc, out = run_git(["rev-parse", "--show-toplevel"])
     repo_root = out.strip() if rc == 0 and out.strip() else os.getcwd()
     repo_root = os.path.realpath(repo_root)
+
+    # 0. 项目本地 hook 扩展点（中立）：项目自己的 pre-commit-local 存在则可执行先跑，非 0 即中止。
+    #    协议不内置任何分支/流程策略（有的项目允许直提 main）——策略留在项目。
+    if _run_project_local_hook(repo_root) != 0:
+        sys.stderr.write(
+            "GATE LOCAL: 项目本地 pre-commit-local 未通过 ⇒ 本次提交中止\n"
+            "  （该策略由项目自定义；见 <git-common-dir>/hooks/pre-commit-local）\n"
+        )
+        sys.exit(1)
 
     # AGATE_ROOT = 协议本体路径（env 优先 → 脚本真实路径上溯 → 复制模式 .agate-root 恢复）
     resolve_agate_root(os.path.abspath(__file__))

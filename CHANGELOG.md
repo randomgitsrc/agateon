@@ -212,6 +212,23 @@
   文件（`UPGRADING.md` **不动**——历史记录不得改写）；此前简写**照敲会 command not found**（审计实测：全仓无真实调用形态）。
   ③ `SETUP.md` 新增「把 agate CLI 加入 PATH（推荐，一次即可）」节。
 
+- **协议不再假设项目分支 + 项目本地 hook 扩展点**：
+  ① **修协议越界**：`agate-changes.py` 原**写死** `origin/main` 算 tag 范围 ⇒ 默认分支是
+  `master`/`develop`/自定义的项目会算错；现经 `agate_common.default_branch` **单源**解析
+  （`origin/HEAD` → `origin/main` → `origin/master` → 兜底），`agate-ci-verify.py` 同源共用
+  （ADR-014）。**协议不假设分支名**——有的项目允许直接提交/推送到 `main`。
+  ② **中立扩展点**：`pre-commit-gate.py` 见 `<git-common-dir>/hooks/pre-commit-local` **可执行**
+  就先跑它、**非 0 即中止提交**（内容完全由项目决定；不写 = 行为逐字节不变）。此前 hook 槽被
+  协议占据且重装会替换 ⇒ 项目自己的守卫**无处可放**。
+  ③ **对称扩展点**：`pre-push-gate.py` 同口径支持 `<git-common-dir>/hooks/pre-push-local`
+  （可执行则先跑、非 0 即中止 push；本 hook 自身仍是提示型永不阻断，两者互不影响）。
+  ④ **复用单源**：扩展点解析走 `agate_common.git_hooks_dir()`（已正确处理链接 worktree 与
+  `core.hooksPath`）——初版自己再解析一遍属重复实现（SELF-GATE r1 指出）。
+  ⑤ `check-mvwu.py::_default_branch_base` 是**第三份**默认分支实现且口径不同（本地 `refs/heads/*`
+  vs `origin/<name>`）⇒ 未硬并，登记 **DEBT0065**。
+  ⑥ **agateon 自己的策略**落在受版本控制的 **`.githooks/pre-commit-local`**（禁在 `main`/`master`
+  直提，软链生效）——把「push 被拒」的困惑提前到「commit 时」；`AGENTS.md` 写明安装一行命令。
+
 ### 文档 / 登记
 
 - **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）

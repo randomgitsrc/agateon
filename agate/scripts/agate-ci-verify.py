@@ -73,8 +73,10 @@ _LEDGER_NAME = "gate-events.jsonl"
 
 try:
     from agate_common import check_ledger_events as _check_ledger_events
+    from agate_common import default_branch as _default_branch_impl
 except Exception:  # pragma: no cover - 安装破损时降级（CI 账本事件规则检查跳过）
     _check_ledger_events = None
+    _default_branch_impl = None
 
 _VERSION_RE = re.compile(r"agate:\s*v?([0-9]+)\.([0-9]+)\.([0-9]+)")
 
@@ -112,13 +114,8 @@ def _norm(text):
 
 
 def _default_branch(repo):
-    rc, out, _ = _git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], repo)
-    if rc == 0 and out.strip():
-        return out.strip().split("/")[-1]
-    for name in ("main", "master"):
-        if _git_out(["rev-parse", "--verify", f"origin/{name}"], repo):
-            return name
-    return "main"
+    """默认分支名——**单源**（ADR-014）走 `agate_common.default_branch`，协议不假设项目分支。"""
+    return _default_branch_impl(repo) if _default_branch_impl else "main"
 
 
 def _merge_base(repo, a="HEAD", b=None):

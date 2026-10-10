@@ -1,0 +1,21 @@
+#!/bin/sh
+# pre-commit-local —— **agateon 本仓策略**（不是协议规则；协议只提供扩展点，见 pre-commit-gate.py）
+#
+# 策略：**禁止在受保护分支上直接提交**。本仓改动一律走「分支 + PR」（AGENTS.md 改动通道），
+# main 受远端保护 —— 此守卫把失败从「push 被拒」提前到「commit 时」，省掉一轮困惑排查。
+#
+# 为什么不在协议里：**协议不得假设项目分支/流程**——有的项目允许直接提交并推送到 main、有的用
+# master/develop/自定义默认分支。这条只是 agateon 自己的选择。
+#
+# 安装（一次性；.git/ 不入库，故本文件放受版本控制的 .githooks/ 并软链过去）：
+#   ln -sf ../../.githooks/pre-commit-local "$(git rev-parse --git-path hooks)/pre-commit-local"
+# 卸载：rm "$(git rev-parse --git-path hooks)/pre-commit-local"
+branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
+case "$branch" in
+    main|master)
+        echo "agateon 本仓策略：不得直接在 $branch 上提交。" >&2
+        echo "  请先建分支：git checkout -b <类型>/<主题>   （AGENTS.md「改动通道」）" >&2
+        exit 1
+        ;;
+esac
+exit 0
