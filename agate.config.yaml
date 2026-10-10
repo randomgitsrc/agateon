@@ -1,0 +1,19 @@
+# agate.config.yaml — agateon 本项目的形态声明（由 agate-setup.py 生成骨架，此处按真实情况填实）
+#
+# 消费方：`agate-run`（按 `verify.commands` **白名单**执行验证命令 + 落证据 + 记账本）。
+# 说明：这是**项目**声明，不是协议规则；其它项目按各自情况填写（不填即用默认，行为不变）。
+schema_version: 1
+project:
+  language: python
+  package_manager: none   # 只依赖系统 python3 + pyyaml（见 pyproject.toml）
+verify:
+  # 本仓的常跑验证命令（**逐字匹配**才能被 `agate-run` 执行；未声明的命令一律拒绝）
+  commands:
+    - "python3 agate/scripts/check-protocol-consistency.py"
+    - "python3 -m pytest agate/tests/ -q -n auto"
+    - "bash agate/tests/scripts/count-tests.sh"
+    - "$HOME/.venvs/agate-dev/bin/ruff check agate/"
+release:
+  preset: semver-changelog-tag
+paths:
+  evidence: .agate-evidence
