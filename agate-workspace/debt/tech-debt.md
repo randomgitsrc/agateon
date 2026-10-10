@@ -2709,3 +2709,36 @@ source: review
 created_at: 2026-10-10
 task_id: null   # 待立项；由 RM-AG0116 批次登记
 ```
+
+## DEBT0066
+
+```yaml
+id: DEBT0066
+category: protocol
+title: "`gate_p0` 的声明校验按**进程 cwd** 找 `agate.config.yaml`——从项目外调用会校验错的项目（低影响：hook 里 cwd=仓库恰好掩盖）"
+status: open
+priority: low
+evidence:
+  - ref: agate/scripts/check-gate.py
+    note: >-
+      2026-10-11 实测：`gate_p0` 调 `agate-config.py validate` **未传 cwd**，而该脚本按 cwd 找
+      `agate.config.yaml` ⇒ 从别处调用（gate 可被任意目录调起）时读的是**调用方目录**的声明，
+      不是**目标任务所属项目**的。hook 场景 cwd=仓库 ⇒ 结果恰好正确，掩盖了该缺陷。
+      触发实证：本仓 2026-10-11 加入自己的 `agate.config.yaml` 后，CI 里两条 BDD-8
+      （断言「项目无声明 ⇒ gate_p0 出 WARNING」）**转红** —— 因为 pytest 进程 cwd = 仓库根、
+      而仓库此时**有**声明。用例已改为**自带项目根**（显式 cwd）；本缺陷本身未修。
+  - ref: agate/scripts/agate-config.py
+    note: "`validate` 子命令按 cwd 解析声明（`read_project_config(project_root)` 的 project_root 取 cwd）。"
+impact: >-
+  从项目外调用 gate（CI 脚本 / 手工诊断 / 多项目并存）时，声明缺失/非法的 WARNING 可能**指向错的项目**
+  （漏报或误报）。当前均为**提示级**（不阻断），故影响低。
+recommendation: >-
+  让 `gate_p0` 由 `task_dir` 推导项目根再传 `cwd=`（注意：`agate_common.project_root(task_dir)`
+  语义与「任务所属项目根」**不同**——实测对临时目录返回入参本身；需先明确「项目根」的判定口径，
+  例如「含 `agate-workspace/` 的最近祖先」或经 `.state.yaml`/workspace 解析）。属**口径先定**类小设计。
+closure_criteria:
+  - "`gate_p0` 的声明校验以**目标任务所属项目根**为基准（有回归用例：任务在 A 项目、调用方 cwd 在 B 项目时，按 A 判定）"
+source: review
+created_at: 2026-10-11
+task_id: null   # 待立项；由 v0.81.0 发版期实测登记
+```

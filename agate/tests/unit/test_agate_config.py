@@ -376,7 +376,14 @@ def test_bdd_8_gate_p0_missing_declaration_keeps_passing_exit(task_dir, agate_sc
     声明缺失 WARNING（接入的证据），再断言通过码未变。
     """
     td = task_dir(phases=["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"])
-    result = run_cli(python_exe, str(agate_scripts / "check-gate.py"), "P0", str(td))
+    # ⚠️ 显式 cwd = **自带项目根**（task_dir 的上级）：`agate-config.py validate` 按 **cwd** 找
+    # `agate.config.yaml`，不显式传就会拿 pytest 进程的 cwd（= **agateon 仓库根**）——那样
+    # 「仓库有没有声明」会决定本用例红绿（本仓 2026-10-11 加了自己的 agate.config.yaml 后即被
+    # CI 抓出）。用例要断言的语义是「**该项目**没有声明」，故必须自带项目根。
+    _project = td.parent.parent
+    result = run_cli(
+        python_exe, str(agate_scripts / "check-gate.py"), "P0", str(td), cwd=str(_project)
+    )
     assert "WARNING" in result.output and _CONFIG_FILE in result.output, (
         "BDD-8：前置——gate_p0 应已接入声明校验并输出声明缺失 WARNING；"
         f"当前无该 WARNING（校验未接入）\n{result.output[:500]}"
@@ -394,7 +401,11 @@ def test_bdd_8_gate_p0_missing_declaration_emits_warning(task_dir, agate_scripts
     ⇒ 红灯。
     """
     td = task_dir(phases=["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"])
-    result = run_cli(python_exe, str(agate_scripts / "check-gate.py"), "P0", str(td))
+    # 同上：显式 cwd = 自带项目根（不依赖仓库根是否有声明）
+    result = run_cli(
+        python_exe, str(agate_scripts / "check-gate.py"), "P0", str(td),
+        cwd=str(td.parent.parent),
+    )
     assert "WARNING" in result.output and _CONFIG_FILE in result.output, (
         "BDD-8：声明文件缺失时 gate_p0 应输出含声明文件名的显眼 WARNING（迁移期）；"
         f"当前输出缺少该 WARNING\n{result.output[:500]}"
