@@ -226,7 +226,7 @@ def _check_review_output(item, oid, errors):
     """R 义务的 review_output：须是合格评审产出。"""
     ro = item.get("review_output")
     if not ro:
-        return  # 缺 review_output 的 R 交由调用方按「改标 C」提示（不阻断，见 _evaluate）
+        return  # 缺 review_output 的处置见 `_evaluate`（DEBT0062：仅「有产出可指」的阶段判 ERROR）
     if ro not in _QUALIFIED_REVIEW_OUTPUTS:
         errors.append(
             f"{oid}: review_output={ro!r} 不是合格评审产出（须为 "
@@ -286,11 +286,20 @@ def _evaluate(data, reachable, repo_root):
                 _check_enforced_at(item, oid, reachable, errors)
                 _check_test_node(item, oid, repo_root, errors)
         elif disposition == "R":
-            if not item.get("review_output"):
-                warnings.append(
-                    f"{oid}: R 义务缺 review_output——找不到合格评审产出的 R 应改标为 C")
-            else:
-                _check_review_output(item, oid, errors)
+            # DEBT0062（2026-10-10）：判据**收窄到「该阶段存在合格评审产出」**——只有这些阶段
+            # 才可能（也必须）给出 `review_output`，缺则判 **ERROR**（可行动）。
+            # 其余阶段（P0/P3/P5/P6/P7/P8/X）协议**本就没有**评审产出文件 ⇒ 其 R 义务由
+            # **主 Agent / 阶段纪律**强制，无产出可指 ⇒ 既不告警也不判错（原判据在此处
+            # 一律提示「应改标为 C」——C 是「命令生成」，语义不符，属误判）。
+            _ph = str(item.get("phase") or "")
+            _has_artifact = any(a.startswith(_ph + "-") for a in _QUALIFIED_REVIEW_OUTPUTS)
+            if _has_artifact:
+                if not item.get("review_output"):
+                    errors.append(
+                        f"{oid}: {_ph} 阶段有合格评审产出，R 义务缺 review_output"
+                        f"（须为 {'/'.join(a for a in _QUALIFIED_REVIEW_OUTPUTS if a.startswith(_ph + '-'))}）")
+                else:
+                    _check_review_output(item, oid, errors)
 
     total = sum(counts.values())
     if unassigned:

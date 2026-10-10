@@ -240,39 +240,46 @@ def test_bdd_42_negative_control_mutation(tmp_path, agate_root, python_exe):
 
 
 def test_bdd_43_r_without_review_output_errors(agate_root, agate_scripts, python_exe):
-    """BDD-43：R 义务 `review_output` 的**终态**（与实现一致，锁定 DESIGN_GAP 降级结果）。
+    """BDD-43：R 义务 `review_output` 的判据（**DEBT0062 收窄后**，2026-10-10）。
 
-    设计原文为「缺 `review_output` 的 R 判 ERROR」，但实现按 DESIGN_GAP 降为
-    **WARNING 且 rc=0**（见 `P4-implementation-G1.md` §3：存量约 25 条 R 无合格评审产出，
-    逐条改标 C 超出本批范围）；`review_output` 存在但非 P1/P2/P4-review.md 时判 **ERROR**。
-    本用例断言该终态：缺 → WARNING（不阻断，rc=0）；合格 → 无告警；非法 → ERROR。
+    判据收窄到「**该阶段存在合格评审产出**」：仅 P1/P2/P4 有 `*-review.md` ⇒ 只有这些阶段的 R
+    才可能（也必须）给出 `review_output`，**缺则 ERROR**（可行动）。其余阶段（P0/P3/P5/P6/P7/P8/X）
+    协议**本就没有**评审产出文件 ⇒ 其 R 由主 Agent / 阶段纪律强制，无产出可指 ⇒ **不告警不判错**
+    （原判据在此一律提示「应改标为 C」——C 是「命令生成」，语义不符，属误判）。
+
+    断言：① P2 阶段 R 缺 → **ERROR**；② 非评审阶段（X）R 缺 → 无告警无错；
+    ③ 合格产出 → 无告警；④ 非合格产出 → ERROR。
     """
     mod = _load_check_obligations(agate_scripts)
     repo_root = str(agate_root.parent)
 
-    def _r_item(**extra):
-        item = {"id": "OBL-X-99", "disposition": "R", "anchor": "a", "statement": "s"}
+    def _r_item(phase="X", **extra):
+        item = {"id": "OBL-X-99", "phase": phase, "disposition": "R",
+                "anchor": "a", "statement": "s"}
         item.update(extra)
         return item
 
     def _data(item):
         return {"schema_version": 1, "baseline": {"m": 0, "total": 1}, "obligations": [item]}
 
-    # 缺 review_output → WARNING（不阻断），ok=True（即 rc=0）
-    ok, errors, warnings, _ = mod._evaluate(_data(_r_item()), set(), repo_root)
-    assert ok and not errors, f"BDD-43：缺 review_output 不应阻断（rc=0），errors={errors}"
-    assert any("review_output" in w for w in warnings), (
-        f"BDD-43：缺 review_output 须给 WARNING，warnings={warnings}"
+    # ① P2 阶段 R 缺 review_output → ERROR（该阶段有 P2-review.md，可行动）
+    ok, errors, _, _ = mod._evaluate(_data(_r_item(phase="P2")), set(), repo_root)
+    assert not ok and any("review_output" in e for e in errors), (
+        f"BDD-43：P2 阶段 R 缺 review_output 须判 ERROR，errors={errors}"
     )
+
+    # ② 非评审阶段（X）R 缺 review_output → 无告警无错（协议无该阶段评审产出）
+    ok_x, errors_x, warnings_x, _ = mod._evaluate(_data(_r_item(phase="X")), set(), repo_root)
+    assert ok_x and not errors_x and not warnings_x, (errors_x, warnings_x)
 
     # 合格评审产出 → 无告警、无 ERROR
     ok2, errors2, warnings2, _ = mod._evaluate(
-        _data(_r_item(review_output="P2-review.md")), set(), repo_root)
+        _data(_r_item(phase="P2", review_output="P2-review.md")), set(), repo_root)
     assert ok2 and not errors2 and not warnings2, (errors2, warnings2)
 
     # 非合格评审产出 → ERROR
     ok3, errors3, _, _ = mod._evaluate(
-        _data(_r_item(review_output="foo.md")), set(), repo_root)
+        _data(_r_item(phase="P2", review_output="foo.md")), set(), repo_root)
     assert not ok3 and any("review_output" in e for e in errors3), errors3
 
     # 端到端：真实 obligations.yaml 上同样 rc=0（缺 review_output 不阻断）

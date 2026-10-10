@@ -34,6 +34,25 @@ grep -qE "^(agate/scripts/.*\.(sh|py)|agate/[^/]+\.md|agate/.+/.*\.md|agate/rule
 
 > **不触发**：`docs/**`（开发资料）、`agate-workspace/**`（任务数据）、`site/**`（产品 Web 层）。
 
+## 轻量档（trivial 改动免派评审）
+
+**判定**：改动**仅**涉及文档措辞 / 错别字 / 注释 / 纯格式（**无**判据语义、脚本行为、契约数据、
+hook 正则的变化）⇒ 走轻量档。
+
+**轻量档做什么**：跑 `python3 agate/scripts/check-protocol-consistency.py --strict-errors-only`
+（0 ERROR）+ 全量 pytest；commit message 写 `self-gate-skip: <一句话理由>`（满足 commit-msg hook
+的留痕检查）。
+
+**轻量档不做什么**：**不派独立评审**。理由：本仓实测——评审的收益集中在**判据 / 脚本 / 契约**
+类改动（2026-10-09/10 一批非 trivial PR 的独立评审抓出多处作者自身错误，逐条见 `docs/reviews/agate-alignment-review-2026-10-*.md`）；纯措辞类改动
+的错误面由 consistency + 全量 pytest 已覆盖，再派评审是成本大于收益（用户 2026-10-10 明确要求：
+「不要因为改一个错别字就要走一个 review」）。来源：RM-AG0079。
+
+**边界（易错点）**：
+- 只改一个字但**动了判据语义**（gate 条文里的 `必须`→`应`、`=`→`≥`、阈值数字）⇒ **不是**轻量档；
+- 同批还改了脚本 / 契约 / hook ⇒ 按**最重**的那类走（正常档）；
+- 拿不准 ⇒ 按正常档（派评审）。
+
 ## 检查清单
 
 1. **跑 check-protocol-consistency.py** — 确认结构 CHECK 全集（当前 1-16）无 ERROR
