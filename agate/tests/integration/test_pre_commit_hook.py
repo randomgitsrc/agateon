@@ -891,7 +891,12 @@ def test_it9_pruning_skip_low_passes(git_repo, agate_root, agate_scripts, python
         run_cli, python_exe, agate_scripts, agate_root, task_dir, "P2", "architect"
     )
     git_repo.stage("agate-workspace/tasks/T001/P2-dispatch-context-architect.md")
-    _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P2")
+    _setup = _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P2")
+    # DEBT0063 取证：首次提交必须成功——否则 HEAD 无该版本 ⇒ 后续提交的 `old_phase` 为空
+    # ⇒ `check_transition` 的前向跨阶分支被跳过 ⇒ 本用例静默转红（原实现忽略该结果）。
+    assert _setup.returncode == 0, (
+        f"setup 提交（T001 P2）应成功；rc={_setup.returncode}\n{_setup.output[-1500:]}"
+    )
 
     # TAG0050 评审 M-1：前向跨阶仅允许跳过**已裁剪**阶段。原用例 P2→P5 跳过了仍声明的
     # P4（把缺陷固化为期望行为），改为 P2→P4（只跳已裁剪的 P3），并补齐 P4 最小合法产出。
@@ -934,7 +939,11 @@ def test_m1_forward_jump_p0_to_p5_blocked(
     """
     repo = git_repo.path
     _install_pre_commit_hook(repo, agate_scripts)
-    _init_commit(run_cli, agate_root, git_repo, repo)
+    _init = _init_commit(run_cli, agate_root, git_repo, repo)
+    # DEBT0063 取证：init 提交必须成功（否则 HEAD 为空，后续 old_phase 全为空）
+    assert _init.returncode == 0, (
+        f"init 提交应成功；rc={_init.returncode}\n{_init.output[-1500:]}"
+    )
 
     task_dir = repo / "agate-workspace" / "tasks" / "T001"
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -943,15 +952,24 @@ def test_m1_forward_jump_p0_to_p5_blocked(
         _m1_p1_requirements_low(), encoding="utf-8"
     )
     git_repo.stage("agate-workspace/tasks/T001/")
-    _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P0")
+    _setup = _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P0")
+    # DEBT0063 取证：首次提交必须成功——否则 HEAD 无该版本 ⇒ 后续提交的 `old_phase` 为空
+    # ⇒ `check_transition` 的前向跨阶分支被跳过 ⇒ 本用例静默转红（原实现忽略该结果）。
+    assert _setup.returncode == 0, (
+        f"setup 提交（T001 P0）应成功；rc={_setup.returncode}\n{_setup.output[-1500:]}"
+    )
 
     _write_state_yaml(task_dir, "TXX0001", "P5")
     (task_dir / "P5-verification.md").write_text(
         "---\nagent: test\n---\n", encoding="utf-8"
     )
     git_repo.stage("agate-workspace/tasks/T001/")
+    # DEBT0063 取证：jump 前 `.state.yaml` 必须**确已在暂存区**——否则 hook 的
+    # `check-state-transition` 按「暂存区无 .state.yaml」SKIP ⇒ 不拦（GitRepo.stage 忽略返回码）。
+    _staged = git_repo.staged_files()
+    assert ".state.yaml" in _staged, f"jump 前 .state.yaml 须已暂存；实际 {_staged!r}"
     result = _git_commit(run_cli, agate_root, repo, "-m", "T001 jump P0 to P5")
-    assert result.returncode != 0, f"P0→P5 应被拦截\n{result.output[-600:]}"
+    assert result.returncode != 0, f"P0→P5 应被拦截\n{result.output[-1500:]}"
     assert "前向跨阶" in result.output
 
 
@@ -961,7 +979,11 @@ def test_m1_forward_jump_p0_to_p7_blocked(
     """M-1 负向②：非 legacy 任务 P0 → P7（跨含 judge 的 P1-P6）应被拦截。"""
     repo = git_repo.path
     _install_pre_commit_hook(repo, agate_scripts)
-    _init_commit(run_cli, agate_root, git_repo, repo)
+    _init = _init_commit(run_cli, agate_root, git_repo, repo)
+    # DEBT0063 取证：init 提交必须成功（否则 HEAD 为空，后续 old_phase 全为空）
+    assert _init.returncode == 0, (
+        f"init 提交应成功；rc={_init.returncode}\n{_init.output[-1500:]}"
+    )
 
     task_dir = repo / "agate-workspace" / "tasks" / "T001"
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -974,8 +996,10 @@ def test_m1_forward_jump_p0_to_p7_blocked(
 
     _write_state_yaml(task_dir, "TXX0001", "P7")
     git_repo.stage("agate-workspace/tasks/T001/")
+    _staged = git_repo.staged_files()
+    assert ".state.yaml" in _staged, f"jump 前 .state.yaml 须已暂存；实际 {_staged!r}"
     result = _git_commit(run_cli, agate_root, repo, "-m", "T001 jump P0 to P7")
-    assert result.returncode != 0, f"P0→P7 应被拦截\n{result.output[-600:]}"
+    assert result.returncode != 0, f"P0→P7 应被拦截\n{result.output[-1500:]}"
     assert "前向跨阶" in result.output
 
 
@@ -1018,8 +1042,10 @@ def test_m1_forward_jump_p2_to_p5_blocked(
         "---\nagent: test\n---\n", encoding="utf-8"
     )
     git_repo.stage("agate-workspace/tasks/T001/")
+    _staged = git_repo.staged_files()
+    assert ".state.yaml" in _staged, f"jump 前 .state.yaml 须已暂存；实际 {_staged!r}"
     result = _git_commit(run_cli, agate_root, repo, "-m", "T001 jump P2 to P5")
-    assert result.returncode != 0, f"P2→P5（P4 未裁剪）应被拦截\n{result.output[-600:]}"
+    assert result.returncode != 0, f"P2→P5（P4 未裁剪）应被拦截\n{result.output[-1500:]}"
     assert "前向跨阶" in result.output
 
 

@@ -130,6 +130,16 @@
   `agate-inject-card.py` 弄脏 47 个任务文件）；`protocol-alignment-review.md` 改为
   **指向该单源**（不重复正文）。
 
+- **M-1 跨阶用例消除「静默假通过」（DEBT0063 关单）**：`test_m1_forward_jump_*`（3 条）此前
+  **忽略 setup/init 提交的返回码**——首次提交失败时静默进入「`HEAD` 无 `.state.yaml` ⇒
+  `old_phase=""` ⇒ 跨阶判据整体跳过」的形态，表现为「本该被拦却没拦」的**假通过**。
+  现三条用例**断言 init/setup 提交成功** + **断言 jump 前 `.state.yaml` 已暂存** + 失败消息
+  600→1500 字符 ⇒ 任何一步失败都立即、准确暴露（附 hook 输出）。
+  机制已**证明**（对照/反向实验），并完成**排除清单**（`git add` 静默 no-op 300 次 0 漏 /
+  协议目录就地写 0 命中 / env 泄漏仅一处且有 `finally` / `core.hooksPath` 未设 / `git_repo`
+  function 级 / session 夹具不可变 / `run_cli` 无 timeout）；累计 **11 轮全量 + 16 轮单文件
+  （含 CPU 负载）0 转红** ⇒ 触发条件属**环境性**，残余假设与排除清单已入 DEBT0063。
+
 ### 文档 / 登记
 
 - **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）
