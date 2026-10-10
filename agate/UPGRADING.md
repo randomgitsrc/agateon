@@ -283,6 +283,33 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.81.0 — `agate-*` 成为真命令 + 协议不再假设项目分支（**无破坏性变更**）
+
+> 一批判据/安装器/文档修正的汇总；无破坏性变更，但有一条**升级后需知**（见 ⚠️）。
+
+- ⚠️ **`agate-*` 现在是真命令（升级后需知）**：安装时会在 `<AGATE_HOME>/bin/` 为每个
+  `agate-*.py` 生成包装（POSIX `sh` + Windows `.cmd`），解析 `AGATE_ROOT` env → 由包装自身位置推
+  `<home>/current/agate`（**兼容 POSIX 软链与 Windows 文本指针两种 `current` 布局**），**幂等**、
+  **版本无关**（随 `current` 指针走，升级无需重建）。此前文档用空格简写（`agate next`）指代脚本、
+  照敲会 command not found；现简写与真实调用同形。**要拿到包装**：重跑安装器（`agate-install.py
+  latest` 或 `install.sh`），再把 `<AGATE_HOME>/bin` 加入 PATH（一次性，见 `SETUP.md`）。
+  ⚠️ 请把 `<AGATE_HOME>/bin` **直接**放进 PATH；经别处软链转发调用不支持（包装按自身位置推 home）。
+- **协议不再假设项目默认分支**：`agate-changes.py` 原**写死** `origin/main` 算 tag 范围 ⇒ 默认分支
+  是 `master`/`develop`/自定义的项目会算错。现经 `agate_common.default_branch()` **单源**解析
+  （`origin/HEAD` → `origin/main` → `origin/master` → 兜底），`agate-ci-verify.py` 同源共用。
+- **项目本地 hook 扩展点（中立机制，可选）**：`<git-common-dir>/hooks/pre-commit-local` /
+  `pre-push-local` 存在且可执行 ⇒ 协议 hook 先跑它、**非 0 即中止提交/推送**。协议**不内置**任何
+  分支/流程策略（**有的项目允许直接 commit/push 到 `main`**）——「禁直提 main」这类策略写在**项目
+  自己**的 `-local` 里；不写 = 行为与从前逐字节一致。
+- **`agate-run` 可执行任务级声明**：`--task <TASK_DIR>` 时命令**亦可**取自该任务 `P2-design.md` 的
+  `gate_commands`（此前只认项目 `agate.config.yaml` 的 `verify.commands` ⇒ 协议流程无入口）；
+  `P5-verification.md` 的执行入口推荐为 `agate-run --task`（白名单 + `runs/<k>.log` 证据 + 账本
+  `cmd_run`，使「谁跑了什么」可审计）。
+- **其他修正**：`install.sh` 重跑时更新已存在的 `repo/`（原来会装出旧整仓形态）；`check-gate.py P6`
+  新增「P6-evidence 被 `.gitignore` 忽略」提示；`check-obligations.py` 对 **P1/P2/P4 阶段**的 R 义务
+  缺 `review_output` 判 ERROR（可行动范围内的收紧，协议自有登记表用）；`check-debts` 关单判据改为
+  `task_id` + `closed_at`（去掉与「已关闭」无因果的 `P[56]` 子串启发式）。
+
 ### v0.80.2 — 非 legacy 前向跨阶收口 + CI 输入显式化（**含一处 CLI 行为变更**）
 
 > 修复 TAG0050 交付后由**外部实施评审**发现的缺陷（M-1）与两处配套项；并闭合 P8 发布事故根因。
