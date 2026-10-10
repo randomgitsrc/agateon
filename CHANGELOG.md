@@ -119,6 +119,17 @@
   `agate-md-field-set` 写入 rc=0、新增回归用例锁定；原「P6→P7 被 exit 2 挡住」早由 `agate-next`
   的 `_P6_PROVENANCE_PASS=(0,2)` 消解）。
 
+- **登记/治理小修（批 A2 收尾）**：① **RM-AG0087 标记满足**——其机械校验是 `check-pruning.py`
+  的**硬检**「`phases ∪ pruned == phase_universe`（不一致 ⇒ ERROR/exit 1）」（锚点由 `check-gate`
+  更正为 `check-pruning`）；⚠️ **BDD-70 原为假绿灯**（跑 `check-gate.py`、只断 rc≠0，真实 rc=1
+  来自 judge.enabled 缺失）⇒ 已改为直接跑 `check-pruning.py` + 断言具体缺陷消息；
+  DEBT0031 关单（其 substance = `_reconcile_p1_fields` 的 WARNING 对账，是**另一机制**）；② **RM-AG0103 → `scheduled`**（已拆任务
+  **TAG0051-release-decoupling**）；③ **只读纪律补「写类工具」条**——`dispatch-prompt.md` 的「Review 角色特别指令」
+  **围栏内**（RM-AG0081 只读块）新增一条：`agate-inject-card.py` / `agate-md-field-set.py` /
+  `agate-state-set.py` 等写类工具**不得对真实仓库运行**（2026-10-09 实证：一次评审误跑
+  `agate-inject-card.py` 弄脏 47 个任务文件）；`protocol-alignment-review.md` 改为
+  **指向该单源**（不重复正文）。
+
 ### 文档 / 登记
 
 - **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）

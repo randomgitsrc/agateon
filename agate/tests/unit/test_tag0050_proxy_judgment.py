@@ -80,10 +80,33 @@ def test_gap5_ui_design_missing_required_dimension_errors(
 
 
 def test_bdd_70_phase_set_not_closed_errors(tmp_path, agate_scripts, python_exe, run_cli):
-    """BDD-70：阶段集合不闭合判 ERROR（RM-AG0087）。"""
+    """BDD-70：阶段集合不闭合判 ERROR（RM-AG0087）。
+
+    ⚠️ **2026-10-09 修正（批 A2 评审 r1 实测指出本用例原为「假绿灯」）**：原实现跑
+    `check-gate.py P1` 并只断言 `rc != 0`——但 `check-gate.py` **不调用** `check-pruning.py`，
+    其 rc=1 的真实原因是 **judge.enabled 缺失**，与本条声称的「阶段集合不闭合」**无关**。
+    现改为**直接跑 `check-pruning.py`**（RM-AG0087 硬检的真实落点）+ 断言**具体缺陷消息**。
+    删 **P8**（不在不可裁剪集、不触发 P3/P7 条件）——注意删任何阶段都会连带触发其**裁剪条件**
+    检查（如 P8 需 `internal_only: true`），故本用例靠「**阶段全集** + P8」这条**只有硬检才会
+    产生**的消息锁定判据（已 scratch 实测：抽掉硬检 ⇒ 本用例转红）。
+    """
     d = h.init_task_via_conftest(tmp_path)
-    r = run_cli(python_exe, str(agate_scripts / "check-gate.py"), "P1", str(d))
-    assert r.returncode != 0, f"BDD-70：phases∪pruned 不等于 phase_universe 须 ERROR，实际 rc={r.returncode}"
+    p1 = d / "P1-requirements.md"
+    txt = p1.read_text(encoding="utf-8")
+    assert "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n" in txt
+    p1.write_text(
+        txt.replace("phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n",
+                    "phases: [P1, P2, P3, P4, P5, P6, P7]\n", 1),
+        encoding="utf-8",
+    )
+    r = run_cli(python_exe, str(agate_scripts / "check-pruning.py"), str(d))
+    assert r.returncode == 1, (
+        f"BDD-70：phases∪pruned 不等于 phase_universe 须判失败（check-pruning 硬检）；"
+        f"实际 rc={r.returncode}\n{r.output[-400:]}"
+    )
+    assert "阶段全集" in r.output and "P8" in r.output, (
+        f"BDD-70：须报出「阶段全集」缺失项（P8）；实际输出 {r.output[-400:]!r}"
+    )
 
 
 def test_bdd_71_t2_catches_nonconforming_bdd_heading(
