@@ -69,6 +69,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$AGATE_VER_ROOT"
 if [ ! -d "$AGATE_VER_ROOT/repo/.git" ]; then
     git clone -- "${AGATE_REPO_URL:-https://github.com/randomgitsrc/agateon}" "$AGATE_VER_ROOT/repo"
+else
+    # RM-AG0069（升级自举缺口）：`repo/` 已存在时**先更新**——否则旧安装器（≤v0.72）升级到
+    # 新版本布局时会装出**旧整仓形态**（仅靠文档说明「两步升级」不足）。
+    # 用 `--ff-only`：**不改写本地历史**（不产生 merge commit）；失败（网络/本地改动/分叉）
+    # **降级为 WARNING、不阻断**——继续用现有副本。
+    # fail-open ≠ fail-silent：把 git 的**真因**（stderr 首行）带进警告（与 agate-install.py 同口径）
+    # `|| true`：`set -e` 下赋值中的失败命令会终止脚本 ⇒ 必须吞掉其退出码（本分支要「不阻断」）
+    _pull_err="$(git -C "$AGATE_VER_ROOT/repo" pull --ff-only 2>&1 >/dev/null || true)"
+    if [ -n "$_pull_err" ]; then
+        _pull_first="$(printf '%s\n' "$_pull_err" | head -n 1)"
+        echo "警告: 更新 $AGATE_VER_ROOT/repo 失败（继续用现有副本，RM-AG0069）: $_pull_first" >&2
+    fi
 fi
 # 优先用刚 clone 的 repo 副本内的安装器（curl … | bash 场景下
 # $SCRIPT_DIR 是当前工作目录、无 agate/scripts/）；仅 repo 缺失时回退 $SCRIPT_DIR。
