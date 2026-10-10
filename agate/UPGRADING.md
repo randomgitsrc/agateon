@@ -807,6 +807,7 @@ python3 ~/.agate/scripts/agate-setup.py --uninstall --purge         # 再删本�
 5. **版本目录改为"本体包"形态**：新装的 `vX.Y.Z/` 只含 `agate/` 与登记根文件（`CHANGELOG.md` / `LICENSE` / `NOTICES.md`），不再是整仓检出；契约与边界清单见「版本目录结构契约」。**已装的整仓形态版本目录继续可解析，不迁移、不归一化。**
 6. **新增 Release + portable 安装**：Release 资产 = 本体 tarball `agateon-vX.Y.Z.tar.gz` + 各平台离线包 + `SHA256SUMS`；无 git 环境按「portable 安装」小节命令即可安装（`--adopt` / `--check --portable`）。`SHA256SUMS` 只防下载损坏、不认证发布者。
 7. **升级说明（两步升级，仅文档）**：v0.72.x 用户**用旧安装器**（旧 `install.sh` / 旧根 `scripts/agate-install.py`）升级到 v0.73.0 时，装出的 v0.73.0 **自身仍是旧整仓形态**（旧安装器不认识本体包；该形态仍可解析、可用）。该次安装会把根 `scripts/` 同步为 v0.73.0 自带的新安装器，此后经根 `scripts/` 执行的安装（`agate-install.py latest` / `vX.Y.Z`）才只装本体、得到契约形态。既有整仓形态版本目录无需处理（见上条）。
+   ⚠️ **2026-10-10 更新（RM-AG0069）**：`install.sh` 现在遇 `repo/` 已存在会先 `git pull --ff-only` 更新它（失败降级为 WARNING、不阻断、不改写本地历史）⇒ **重跑 `install.sh` 即可获得最新安装器**，不再必须手工两步。
 8. **钉老版本的副作用**：`agate-install.py vX.Y.Z` 预装老版本会把根 `scripts/` 同步为**该老版本的安装器**，其后再执行 `latest` 可能重走旧安装路径。须先 `python3 ~/.agate/scripts/agate-install.py latest`（用新版本重新同步根 `scripts/`）或直接用 `repo/` 里最新版的安装器。
 9. **仅仓库开发者可用的内容**：`agate/tests/` 不进本体包（包内对 `agate/tests/README.md` 的引用仅对 git 仓库开发者有效）。
 10. **离线路径行为收紧（使用 `agate-pack-offline.py` / `install-offline.py` 的用户注意）**：

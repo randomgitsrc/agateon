@@ -335,3 +335,51 @@ def test_bdd_26_install_sh_rerun_is_idempotent_and_does_not_pollute_source(agate
     assert r2.returncode == 0, r2.output
     assert _shape(home / ".agate") == shape1, "重跑后版本根结构应不变（幂等）"
     assert not _source_pollution(agate_scripts)
+
+
+def test_rm_ag0069_rerun_updates_existing_repo(
+    agate_scripts, bash, run_cli, synth, tmp_path
+):
+    """RM-AG0069：`repo/` 已存在时重跑 install.sh 须**更新**它（否则旧安装器装出新版本布局时
+    会装出**旧整仓形态**）；更新失败（本地改动/分叉）须**降级为 WARNING、不阻断**。
+
+    用**每用例独立上游**（synth 是 session 共享夹具，不能往里加 commit）。
+    """
+    guard, _log = _git_guard(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    upstream = tmp_path / "upstream"
+    subprocess.run(["git", "clone", "-q", synth.url, str(upstream)], check=True)
+    for k, v in (("user.email", "t@t"), ("user.name", "t")):
+        subprocess.run(["git", "-C", str(upstream), "config", k, v], check=True)
+    env = _env(home, guard, synth, extra={"AGATE_REPO_URL": str(upstream)})
+
+    r1 = run_cli(bash, str(_install_sh(agate_scripts)), env=env, cwd=tmp_path)
+    assert r1.returncode == 0, r1.output
+    repo = home / ".agate" / "repo"
+    assert (repo / ".git").is_dir(), "首次安装须 clone 出 repo/"
+
+    # 上游新增提交 ⇒ 重跑后 repo/ 应已 ff 到它
+    (upstream / "NEW-MARKER").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(upstream), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(upstream), "commit", "-qm", "new"], check=True)
+    r2 = run_cli(bash, str(_install_sh(agate_scripts)), env=env, cwd=tmp_path)
+    assert r2.returncode == 0, r2.output
+    assert (repo / "NEW-MARKER").is_file(), (
+        "repo/ 已存在时重跑须 `git pull --ff-only` 更新（RM-AG0069）"
+    )
+
+    # 更新失败（repo/ 内有本地提交 ⇒ ff-only 失败）⇒ WARNING 且**不阻断**
+    (repo / "LOCAL-ONLY").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-qm", "local"],
+        check=True, capture_output=True,
+    )
+    (upstream / "NEWER").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(upstream), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(upstream), "commit", "-qm", "newer"], check=True)
+    r3 = run_cli(bash, str(_install_sh(agate_scripts)), env=env, cwd=tmp_path)
+    assert r3.returncode == 0, f"更新失败不得阻断；rc={r3.returncode}\n{r3.output[-400:]}"
+    assert "RM-AG0069" in r3.output, f"更新失败须给 WARNING；实际 {r3.output[-400:]!r}"
