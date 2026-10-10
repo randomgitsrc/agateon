@@ -117,6 +117,11 @@ set 报错但改不明白 → 报告主 Agent，不要绕过 set 直接手改文
 任何写仓操作都会**销毁他人的工作**。
 - **禁止**任何破坏性或写仓命令：`git checkout -- .` / `git restore` / `git reset` / `git stash` /
   `git clean` / `git add` / `git commit` / `git switch -f` / 直接编辑或删除被评审文件
+- **写类工具一律不得对真实仓库运行**：`agate-inject-card.py`（改写 dispatch-context 文件）/
+  `agate-md-field-set.py` / `agate-state-set.py` / `agate-task-init.py` 等会**改写任务文件**——
+  要验证就 `cp -r` 到一次性副本、`AGATE_ROOT` 指向副本，跑完核验真实仓库 `git status --porcelain`
+  与开跑前一致（**2026-10-09 实证**：一次评审误跑 `agate-inject-card.py`，弄脏 47 个
+  `P4-dispatch-context-*.md`，事后逐个 `git checkout --` 才还原）
 - 需要跑验证、做变异测试（mutation test）时，**只在仓外或可丢弃的副本上做**：
   - 优先 `git worktree add <仓外路径>`（用完 `git worktree remove`）；或
   - 复制到**一次性临时目录**，并把「创建 → 操作 → 清理」放进**同一次 bash 调用**

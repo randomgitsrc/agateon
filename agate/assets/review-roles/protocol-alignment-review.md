@@ -108,6 +108,13 @@ files_changed: [{文件列表}]
 
 三态结论（ALIGNED/MISALIGNED/NEEDS_HUMAN_REVIEW）不变。若某一审查项本应判为 MISALIGNED，但差异点完全对应一条已被 P7 接受的 DESIGN_GAP，则按原则 6 结论记为 ALIGNED，并在该项下追加 `[KNOWN_DEVIATION: 来源 {task} P7-consistency.md，REVIEWED-ACCEPTED，理由摘要]` 标注，以便读者知晓这里曾存在过字面偏离、已被正式核实接受（而非"从未出现过差异"），与"必须修复"的普通 MISALIGNED 区分开。
 
+## 只读纪律（指向单源）
+
+评审是**只读**活动；**写类工具一律在副本上跑**。完整口径（含禁止命令清单、scratch 语义、
+事故实例）见**单源**：`agate/assets/templates/dispatch-prompt.md` 的 **Review 角色**指令围栏内
+「**只读纪律（强制…RM-AG0081）**」块——每次派发评审时由模板注入，本文件不重复正文。
+（⚠️ 该围栏标题的字面串在 **`agate/` 协议目录内仅允许出现于模板一处**——`test_tag0005_bdd_9` 守护，本文件不得照抄。）
+
 ## 闭环规则
 
 | 结论 | 主 Agent 动作 |

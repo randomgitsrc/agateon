@@ -228,6 +228,24 @@ def test_sg_9b_selfgate_role_file_has_readonly_discipline(agate_root):
     )
 
 
+def test_sg_9e_write_class_tools_rule_inside_fence(agate_root):
+    """SG.9e（2026-10-09 批 A2 新增）：围栏内的只读纪律须**点名「写类工具不得对真实仓库运行」**
+    并给出**副本做法**——RM-AG0081 初版只写「禁止 git 写命令」，未覆盖 `agate-inject-card.py`
+    这类**改写任务文件**的工具（实证：一次评审误跑它弄脏 47 个 `P4-dispatch-context-*.md`）。
+    """
+    tpl = agate_root / "assets" / "templates" / "dispatch-prompt.md"
+    lines = tpl.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("### Review 角色特别指令"))
+    open_idx = next(i for i in range(start, len(lines)) if lines[i].startswith("```"))
+    close_idx = next(i for i in range(open_idx + 1, len(lines)) if lines[i].startswith("```"))
+    inside = "\n".join(lines[open_idx + 1 : close_idx])
+    assert "写类工具一律不得对真实仓库运行" in inside, (
+        "「写类工具不得对真实仓库运行」不在 Review 角色指令**围栏内**——不会被注入（存在 ≠ 生效）"
+    )
+    assert "agate-inject-card" in inside, "未点名实际出事的工具 `agate-inject-card.py`"
+    assert "git status --porcelain" in inside, "未给出副本做法后的「原仓干净」核验"
+
+
 def test_sg_9c_platform_notes_has_cross_call_scratch_rule(agate_root):
     """SG.9c：`platform-notes.md` 受限 harness 节须含「跨调用不保留 ⇒ 建/用/清同一次调用」约定。"""
     text = (agate_root / "platform-notes.md").read_text(encoding="utf-8")
