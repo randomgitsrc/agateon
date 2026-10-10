@@ -2533,7 +2533,7 @@ task_id: TAG0050-task-data-contract
 id: DEBT0063
 category: technical
 title: "`test_m1_forward_jump_*`（M-1 hotfix 的 3 条负向用例，实测转红者为 `p0_to_p7`）在 `-n auto` 全量下间歇转红（隔离恒绿）——跨文件 flaky，根因未定位"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/tests/integration/test_pre_commit_hook.py
@@ -2544,6 +2544,31 @@ evidence:
       另一次全量运行未复现（间歇性）。
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/P8-dispatch-context-implementer-ci-fix3.md
     note: "该用例由 TAG0050 实施评审 M-1 hotfix（PR #414）新增——本 DEBT 登记其 flaky 面。"
+  - ref: agate/tests/integration/test_pre_commit_hook.py
+    note: >-
+      **2026-10-10 系统取证（批次 hotfix-debt0063）**：机制已**证明**（非推测）——
+      ① 对照实验（scratch 仓 + 真 hook：先提交 P0 再改 P5）→ **被拦**；
+      ② 反向实验（**不做** setup 提交，直接以 P5 新增 `.state.yaml`）→ **rc=0 未拦**。
+      机理：`check-state-transition.py:566 get_old_phase()` 读 `git show HEAD:<path>`；
+      HEAD 无该文件 ⇒ `old_phase=""` ⇒ `old_num=None` ⇒ `check_transition` 的**前向跨阶分支
+      （前置 `old_num is not None`）整体跳过** ⇒ 不拦。
+      穷举「不拦」的充要条件（三个触发条件对 P0→P5 恒为真 ⇒ 判据一旦运行必拦）：
+      (a) hook 按「暂存区无 `.state.yaml`」SKIP；(b) `phase_changed` 为假；(c) HEAD 无该文件 /
+      `git show` 失败。
+      ⇒ **三条用例原本忽略 setup/init 提交的返回码** ⇒ 一旦 setup 失败即**静默**进入 (c) 形态
+      （表现为「本该被拦却没拦」）——**静默假通过**是本债真正的危害面。
+  - ref: agate/scripts/pre-commit-gate.py
+    note: >-
+      **已排除清单（逐项有证据）**：① `git add` 静默 no-op（racy git）——300 次
+      `write+add+diff --cached` 循环 **0 次漏暂存**；② 就地写协议目录的测试——左侧为
+      `agate_root`/`REPO_ROOT` 的写操作 **0 命中**；③ `os.environ` 直改泄漏——仅
+      `test_platform_setup.py:1213` 且有 `finally` 恢复；④ `core.hooksPath` 劫持——全局/系统/
+      本仓均未设，无 `XDG_CONFIG_HOME`/`GIT_*` 泄漏；⑤ `git_repo` 夹具共享——**function 级**；
+      ⑥ session 级夹具可变状态——6 个全为不可变路径/探测结果；⑦ `run_cli` 超时——无 timeout 参数；
+      ⑧ `test_agate_inject_card` 改写真实 `phase-cards/P3-tdd.md`——**已改为 tmp 协议树**。
+      **领先假设（未证实，因未再复现）**：`_run_script_rc()`（`:130`）fail-closed——高负载下
+      子进程**启动失败**（`OSError`，如 fork EAGAIN）⇒ 返回 1 ⇒ setup 提交失败 ⇒ 落 (c)。
+      与全部观测吻合（罕见 / 依赖系统负载 / 隔离恒绿 / 单文件恒绿）。
 impact: >-
   CI（`-n auto`）会间歇性假红；更危险的是**反向**：真失败被当作 flake 忽略的诱因
   （狼来了效应，与 RM-AG0044 同族）。
@@ -2555,5 +2580,15 @@ closure_criteria:
   - "全量 `-n auto` 连跑 ≥5 次该用例 0 转红；或已定位并消除跨文件干扰源"
 source: retrospective
 created_at: 2026-10-09
-task_id: null   # 待立项；由批 A/RM-AG0105 实测登记
+task_id: hotfix-debt0063   # ⚠️ 批次标签，无对应任务目录——测试取证/加固批（SELF-GATE 触发面外：仅 tests/*.py + debt + CHANGELOG）
+closed_at: 2026-10-10
+closure_note: >-
+  关单（批次 hotfix-debt0063）：① **危害面已消除**——三条用例现**断言 init/setup 提交成功** +
+  **断言 jump 前 `.state.yaml` 已暂存** + 失败消息 600→1500 字符 ⇒ 任何一步失败都**立即、准确**暴露
+  （不再有「本该被拦却没拦」的静默假通过），复发时错误信息直接指向失败步骤与其 hook 输出；
+  ② 判据①（全量 `-n auto` 连跑 ≥5 次 0 转红）**已满足**：本轮累计 **11 轮全量**（含 CPU 负载轮）
+  + **16 轮单文件**（含负载）**0 转红**；③ 触发条件（高负载下偶发子进程失败）属**环境性**，
+  未再复现，按系统性调试流程「环境性 ⇒ 文档化 + 适当处理 + 留监控」处置——残余假设与排除清单
+  已完整记录在本条 evidence，复发即可据此定位。
+
 ```
