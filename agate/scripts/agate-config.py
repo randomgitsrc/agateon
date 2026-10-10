@@ -140,7 +140,7 @@ def _cmd_init(project_root):
 def _cmd_validate(project_root):
     cfg = agate_common.read_project_config(project_root)
     if not cfg.get("present"):
-        sys.stderr.write(f"声明文件缺失或不可解析: {CONFIG_FILE}（迁移期不阻断）\n")
+        sys.stderr.write(f"声明文件缺失或不可解析: {CONFIG_FILE}（不阻断；RM-AG0102）\n")
         return 1
     schema, _ = _load_schema()
     errors = []

@@ -736,7 +736,9 @@ def gate_p0(task_dir):
             validate_rc = 0
     if validate_rc != 0:
         sys.stderr.write(
-            "WARNING: agate.config.yaml 缺失或非法（迁移期不阻断；截止版本起将 exit 1）\n"
+            "WARNING: agate.config.yaml 缺失或非法（**不阻断**）——该声明目前仅被 `agate-run`\n"
+            "  消费（`verify.commands` 白名单 / `paths.evidence`）；项目可自行决定是否采纳\n"
+  "  （`agate-config.py init` 生成）。**协议不预告硬切版本号**（RM-AG0102 / RM-AG0108）\n"
         )
     sys.stderr.write(
         "GATE P0: 立项阶段无需脚本 gate（仅 P0-brief.md）。主 Agent 确认 P0-brief 四字段齐全即可推进 P1。\n"
