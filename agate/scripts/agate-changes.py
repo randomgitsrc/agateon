@@ -21,6 +21,11 @@ import re
 import subprocess
 import sys
 
+try:
+    from agate_common import default_branch as _default_branch
+except Exception:  # pragma: no cover - 安装破损时降级（范围行退化为不显示）
+    _default_branch = None
+
 _CORE_FILES = (
     r"^agate/WORKFLOW\.md$|^agate/state-machine\.md$|^agate/dispatch-protocol\.md$"
 )
@@ -115,8 +120,14 @@ def _check_upstream(repo):
             "如果持续落后，检查 git remote 是否指向 "
             "https://github.com/randomgitsrc/agateon.git"
         )
-        upstream_range = f"{local_tag}..origin/main"
-        proc = _run_git(repo, ["log", "--oneline", upstream_range])
+        # 协议**不假设项目默认分支**（有的项目用 master/develop/自定义）：经单源解析；
+        # 解析不可用（安装破损）时退化为不显示变更清单，不阻断。
+        _branch = _default_branch(repo) if _default_branch else None
+        if _branch is None:
+            proc = None
+        else:
+            upstream_range = f"{local_tag}..origin/{_branch}"
+            proc = _run_git(repo, ["log", "--oneline", upstream_range])
         commit_count = _line_count(proc.stdout) if proc is not None and proc.returncode == 0 else 0
         if commit_count > 0:
             lines.append("")

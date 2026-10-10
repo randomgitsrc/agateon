@@ -1288,6 +1288,27 @@ def read_rules_yaml(rules_root, name):
         return None
 
 
+def default_branch(repo_root=None, script_path=None):
+    """默认分支名 —— **协议不得假设项目分支**（有的项目直接用 `main`，有的 `master`/`develop`/自定义）。
+
+    解析顺序：`origin/HEAD` 符号引用 → 本地 `origin/main` → `origin/master` → 兜底 `"main"`。
+    兜底仅用于**完全问不到**（无 origin）的场景；调用方应对解析失败保持宽容（不据此阻断）。
+    **单源**（ADR-014）：`agate-ci-verify.py`（回放基准）与 `agate-changes.py`（上游变更范围）共用。
+    """
+    def _git(args, cwd):
+        rc, out = run_git(args, cwd=cwd)
+        return rc, (out or "").strip()
+
+    rc, out = _git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], repo_root)
+    if rc == 0 and out:
+        return out.split("/")[-1]
+    for name in ("main", "master"):
+        rc2, out2 = _git(["rev-parse", "--verify", f"origin/{name}"], repo_root)
+        if rc2 == 0 and out2:
+            return name
+    return "main"
+
+
 def resolve_rules_root(script_path):
     """解析 AGATE_ROOT 协议根下 rules/ 目录（env → 版本链 → 脚本路径上溯兜底）。
 

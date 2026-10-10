@@ -2679,3 +2679,33 @@ closure_note: >-
   关单（批次 hotfix-gate-evidence-gaps）：取判据的「用户可见面写明仅记录不判定」分支（LIMITATIONS 新增绊线执行面节）；接线属设计项（误报面须先设计），不在 hotfix 范围。
 
 ```
+
+## DEBT0065
+
+```yaml
+id: DEBT0065
+category: protocol
+title: "`check-mvwu.py::_default_branch_base` 是默认分支解析的**第三份实现**（口径与 `agate_common.default_branch` 不同）"
+status: open
+priority: low
+evidence:
+  - ref: agate/scripts/check-mvwu.py
+    note: >-
+      `:296 _default_branch_base(cwd)` 自建候选表 `refs/remotes/origin/HEAD` → **`refs/heads/main`**
+      → `refs/heads/master`（用的是**本地分支** ref，非 `origin/<name>`）——与
+      `agate_common.default_branch()`（返回 `origin/<name>` 的**名字**）**语义不同**，故本批
+      （RM-AG0116：协议不假设项目分支）**未合并**，仅登记。
+  - ref: docs/reviews/agate-alignment-review-2026-10-10-BRANCH-NEUTRAL.md
+    note: "SELF-GATE r1 全仓扫描发现（同类越界第三处；`--observe` 口径、不阻断）。"
+impact: >-
+  同一「默认分支」概念三处实现（`agate_common` / `check-mvwu` / 测试基线），后续调整口径需改多处
+  （ADR-014 判据单源）。
+recommendation: >-
+  评估是否可统一为「`default_branch()` 给分支名 → 调用方自组 ref」；若 `--observe` 确实需要
+  「本地优先」语义，则显式写明差异并加等价守护，或拆成两个**有名字**的解析口径（而非各写一份）。
+closure_criteria:
+  - "默认分支解析收敛到单一实现（或差异被显式命名 + 有等价守护用例）；全仓无第三份副本"
+source: review
+created_at: 2026-10-10
+task_id: null   # 待立项；由 RM-AG0116 批次登记
+```

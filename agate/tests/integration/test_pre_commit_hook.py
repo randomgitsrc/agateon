@@ -2124,3 +2124,40 @@ def test_rm_ag0104_staged_dispatch_context_missing_placeholder_blocks(
         f"缺占位符须阻断 commit（RM-AG0104 / DEBT0057）；rc={result.returncode}\n{result.output[-400:]}"
     )
     assert "AGATE_CARD_START" in result.output or "占位符" in result.output, result.output[-400:]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="依赖 POSIX 可执行位语义")
+def test_project_local_hook_extension_point(
+    git_repo, agate_root, agate_scripts, python_exe, run_cli
+):
+    """**中立扩展点**：`<git-common-dir>/hooks/pre-commit-local` 存在且**可执行** ⇒ 先跑它，
+    **非 0 即中止提交**；缺失/不可执行 ⇒ 跳过（行为与从前一致）。
+
+    设计要点（协议**不内置分支策略**）：有的项目允许直接提交到 `main`、有的用 `master`/自定义
+    默认分支 ⇒「禁止直提 main」这类**策略只写在项目自己的 `pre-commit-local`**，协议只给它机会跑。
+    """
+    repo = git_repo.path
+    _install_pre_commit_hook(repo, agate_scripts)
+    _init_commit(run_cli, agate_root, git_repo, repo)
+    local = repo / ".git" / "hooks" / "pre-commit-local"
+
+    # ① 非 0 ⇒ 阻断（其余全部合规也不放行）
+    local.write_text("#!/bin/sh\nexit 3\n", encoding="utf-8")
+    local.chmod(0o755)
+    (repo / "f.txt").write_text("x\n", encoding="utf-8")
+    git_repo.stage("f.txt")
+    r = _git_commit(run_cli, agate_root, repo, "-m", "blocked by project local hook")
+    assert r.returncode != 0, f"本地 hook 非 0 须阻断；rc={r.returncode}\n{r.output[-500:]}"
+    assert "pre-commit-local" in r.output, r.output[-500:]
+
+    # ② 0 ⇒ 放行
+    local.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    r2 = _git_commit(run_cli, agate_root, repo, "-m", "allowed by project local hook")
+    assert r2.returncode == 0, f"本地 hook 返回 0 须放行；rc={r2.returncode}\n{r2.output[-500:]}"
+
+    # ③ 不可执行 ⇒ 跳过（与从前一致）
+    local.chmod(0o644)
+    (repo / "g.txt").write_text("y\n", encoding="utf-8")
+    git_repo.stage("g.txt")
+    r3 = _git_commit(run_cli, agate_root, repo, "-m", "local hook not executable -> skipped")
+    assert r3.returncode == 0, f"不可执行须跳过；rc={r3.returncode}\n{r3.output[-500:]}"
