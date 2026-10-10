@@ -855,3 +855,63 @@ def test_missing_version_error_mentions_fetch_failure(
         "报错未归因到 fetch 失败——用户会去查版本号（假因），而真因是拉取失败。"
         f"实际输出: {combined!r}"
     )
+
+
+def _load_install_module(agate_scripts):
+    """按路径加载 `agate-install.py`（其依赖 agate_package 同目录）。"""
+    import importlib.util
+
+    scripts_dir = str(agate_scripts)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    spec = importlib.util.spec_from_file_location(
+        "_inst_rm0102", agate_scripts / "agate-install.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_inst_rm0102"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_rm_ag0102_cli_wrappers_generated_and_runnable(
+    agate_scripts, tmp_path, run_cli
+):
+    """RM-AG0102 采纳配套：安装后在 `<AGATE_HOME>/bin` 生成 **可执行** 的 `agate-*` 包装。
+
+    意义：协议文档长期用空格简写（`agate next`）指代脚本，但那些名字**不是命令**（照敲
+    command not found）。包装让简写与真实调用同形。本用例覆盖：① 只对 `agate-*.py` 生成；
+    ② POSIX `sh` 包装可执行且**真能跑**（行为验证）；③ `.cmd` 一并生成（Windows）；
+    ④ **幂等**（内容相同不重写）。
+    """
+    mod = _load_install_module(agate_scripts)
+    home = tmp_path / ".agate"
+    scripts = home / "v9.9.9" / "agate" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "agate-next.py").write_text(
+        "import sys\nprint('NEXT-OK')\n", encoding="utf-8"
+    )
+    (scripts / "agate-run.py").write_text("print('RUN-OK')\n", encoding="utf-8")
+    (scripts / "not-a-cli.py").write_text("print('nope')\n", encoding="utf-8")
+
+    made = mod.ensure_cli_wrappers(str(home), "v9.9.9")
+    assert made >= 4, f"应至少生成 next/run 的 sh+cmd 四个；实际 {made}"
+    sh = home / "bin" / "agate-next"
+    assert sh.is_file() and os.access(sh, os.X_OK), "POSIX 包装须存在且可执行"
+    assert (home / "bin" / "agate-next.cmd").is_file(), "Windows 包装须一并生成"
+    assert not (home / "bin" / "agate-not-a-cli").exists(), "只对 agate-*.py 生成"
+
+    # 行为验证：包装真能跑（AGATE_ROOT 指向版本目录，走 env 快路径）
+    r = run_cli(str(sh), env={"AGATE_ROOT": str(home / "v9.9.9" / "agate")})
+    assert r.returncode == 0 and "NEXT-OK" in r.output, (
+        f"包装须能执行对应脚本；rc={r.returncode}\n{r.output[-400:]}"
+    )
+
+    # 幂等：第二次无内容变化 ⇒ 不重写（返回 0）
+    assert mod.ensure_cli_wrappers(str(home), "v9.9.9") == 0, "幂等：内容相同不重写"
+
+    # ② current 为**文本指针文件**（Windows 兼容布局）时，包装须仍能找到协议根
+    (home / "current").write_text("v9.9.9\n", encoding="utf-8")   # 覆盖为普通文件
+    r2 = run_cli(str(sh))   # 不传 AGATE_ROOT ⇒ 走指针解析分支
+    assert r2.returncode == 0 and "NEXT-OK" in r2.output, (
+        f"`current` 为文本指针文件时包装须仍可解析；rc={r2.returncode}\n{r2.output[-400:]}"
+    )

@@ -202,6 +202,16 @@
   ③ **`agate-md-field-set-gate-commands` 接线**——P2 卡的「gate_commands 声明」节点名
   （正文块写入工具，逐 key 与 `check-gate.py::_reconcile_p2_fields` **同一校验函数**）。
 
+- **`agate-*` 成为真命令（PATH 包装）+ 文档简写统一（RM-AG0102 采纳配套）**：
+  ① **安装器生成 CLI 包装**——`agate-install.py` 在 `<AGATE_HOME>/bin/` 为每个 `agate-*.py`
+  生成 `agate-<x>`（POSIX `sh` + Windows `.cmd`），解析 `AGATE_ROOT` env → `<home>/current/agate`（**兼容两种 `current` 布局**：POSIX 软链 /
+  Windows 文本指针文件）；**幂等**（内容相同不重写）、**版本无关**（随 `current` 指针走，升级无需重建 PATH）、
+  失败仅 WARNING。⇒ `agate-next` / `agate-run` / `agate-summary` 等可直接调用。
+  ② **文档简写统一**——把空格简写（`agate next` / `agate advance` / `agate dispatch route`）
+  全量改为**真命令形态**（`agate-next` / `agate-advance` / `agate-dispatch route`），共 **9** 个
+  文件（`UPGRADING.md` **不动**——历史记录不得改写）；此前简写**照敲会 command not found**（审计实测：全仓无真实调用形态）。
+  ③ `SETUP.md` 新增「把 agate CLI 加入 PATH（推荐，一次即可）」节。
+
 ### 文档 / 登记
 
 - **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）

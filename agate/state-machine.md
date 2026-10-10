@@ -334,9 +334,9 @@ P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READ
 主 Agent 不跑 while 循环，而是执行"单步函数"，每次调用推进一个阶段：
 
 > **机械化（RM-AG0054，v0.66.0；TAG0042 批 1 / TAG0050 批 A3 更新）**：下面步骤 5-7（跑 gate → 按转移规则算下一
-> 状态 → 建议推进）对**普通 phase** 是纯查表动作，由 `agate next`（`agate-next.py`）完成——
+> 状态 → 建议推进）对**普通 phase** 是纯查表动作，由 `agate-next`（`agate-next.py`）完成——
 > 消费 `phases.yaml` 的 `next`/`retreat`/`gate_pass_exit`，不做临场判断；gate exit 1 且表有
-> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate advance` 是回退侧的引导壳）。`agate next`
+> `retreat` 时委托 `agate-retreat-to.py` 逐阶回退（`agate-advance` 是回退侧的引导壳）。`agate-next`
 > 只**输出「下一阶段建议」**（打印建议的 `agate-state-set.py <dir> phase <Pn>` 命令），
 > **不追加 `state_transition` 事件、不预写 `.state.yaml` 的 `phase`、不 `git add`**
 > ——`phase` 一律由**下一阶段产出 commit**写入（`phase` = 本 commit 的产出阶段，见 `git-integration.md`）。
@@ -350,7 +350,7 @@ P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READ
 > **未设该 env 时行为与既有逐字一致**。
 > **手工执行下面全流程是 fallback**（工具不可用时），此时步骤 7 的「写回 `.state.yaml`」按手工规格执行
 > （手工 fallback 仍写 `phase`——但推荐改用 `agate-state-set.py`，使"工具当时判定合法"与"提交时判定合法"一致，
-> 与 `agate next` 自动化路径不同）；本节的手工规格是 `agate next`
+> 与 `agate-next` 自动化路径不同）；本节的手工规格是 `agate-next`
 > 判定所依据的权威语义。
 
 ```
@@ -420,16 +420,16 @@ function 执行一步(task_id):
        （本步为**手工 fallback 规格**——手工推进时写 `phase`；推荐用
         `python3 {agate_root}/scripts/agate-state-set.py <task_dir> phase <Pn>`
         使"工具当时判定合法"与"提交时判定合法"一致；
-        `agate next` 自动化路径**不写** `phase`，只输出「下一阶段建议」+ 建议命令，
+        `agate-next` 自动化路径**不写** `phase`，只输出「下一阶段建议」+ 建议命令，
         `phase` 由下一阶段产出 commit 写入）
     8. 返回：下一状态是什么
 ```
 
-"一步"就是一次完整的派发 + 跑命令验证 + 状态更新。gate 判定由主 Agent 亲笔完成（或经 `agate next`
+"一步"就是一次完整的派发 + 跑命令验证 + 状态更新。gate 判定由主 Agent 亲笔完成（或经 `agate-next`
 查表机械完成），不信任 subagent 产出的文件字段。
 
 谁来反复调用？三种方式（见 loop-orchestration.md）：人工逐步、半自动、全自动 /loop。档位 C 的每步
-即调用一次 `agate next`。
+即调用一次 `agate-next`。
 
 **ceremony（thin/standard/full）对本节的影响**：ceremony 是 P1 声明的仪式深度档位（见
 `WORKFLOW.md` / `phase-cards/P1-requirements.md`），只影响 P2/P4 是否派 LLM 评审、以及 thin 档是否

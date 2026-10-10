@@ -20,7 +20,7 @@ description: Agateon 协议的 Codex 适配层——Codex 工具映射、「必�
 ## 何时加载
 
 - 你要在 Codex 上跑 Agateon 任务（P0-P8）→ 加载本 skill
-- 你要把 Agateon 阶段派发到 Codex 子进程（`agate dispatch route` 路由）→ 本 skill 说明 Codex 侧的工具面与判成败方式
+- 你要把 Agateon 阶段派发到 Codex 子进程（`agate-dispatch route` 路由）→ 本 skill 说明 Codex 侧的工具面与判成败方式
 - 首次接入后验证 → 见末节「验证清单」
 
 ## ⚠️ 必须显式要求派发（Codex 特有硬约束）

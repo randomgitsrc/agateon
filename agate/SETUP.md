@@ -77,6 +77,26 @@ python3 ~/.agate/scripts/agate_common.py    # 输出 AGATE_WORKSPACE / AGATE_TAS
 
 ---
 
+## 把 agate CLI 加入 PATH（推荐，一次即可）
+
+安装时会生成 `<AGATE_HOME>/bin/agate-*`（默认 `~/.agate/bin/`）——**每个 `agate-*.py` 一个包装**，
+这样 `agate-next` / `agate-run` / `agate-summary` 等就是**真命令**，不必记 `python3 <路径>` 全路径，
+文档里的写法与实际调用**同形**（此前文档用空格简写 `agate next` 指代脚本，照敲会 command not found）。
+
+```bash
+# 一次性（写进你的 shell 配置：~/.bashrc / ~/.zshrc）
+export PATH="$HOME/.agate/bin:$PATH"
+# 验证
+agate-summary        # 或任意 agate-<x>；无参数时打印用法
+```
+
+- **版本无关**：包装随 `current` 指针走，装新版本**不用**重建 PATH（升级后自动指向新版）。
+- **环境变量优先**：设了 `AGATE_ROOT` 时包装走它（多协议根 / 探针场景）。
+- **Windows**：同一目录下另有 `.cmd` 包装；把 `%USERPROFILE%\.agate\bin` 加入 PATH 即可。
+- **没装包装**（手工 clone 未走安装器）：仍可用 `python3 <AGATE_ROOT>/scripts/agate-<x>.py`。
+- ⚠️ **把 `<AGATE_HOME>/bin` 直接放进 PATH**（如上）。经**别处软链**转发调用（如自己在
+  `~/.local/bin` 建链指向它）会让包装按**软链所在目录**推 home ⇒ 解析失败（`exit 127`）。
+
 ## 步骤 1：（可选）创建 project.md
 
 如果你的项目有 orchestrator 专属的操作细节（不适合塞进通用的 AGENTS.md/CLAUDE.md），复制模板：
@@ -326,9 +346,9 @@ mkdir -p {AGATE_WORKSPACE}/{roadmap,tasks,agents,archived,reviews,decisions,plan
 
 然后真开一个会话，指定/选择 orchestrator agent，让它执行「开始」那几步（读 `agate-summary.py` 输出、读 `active-tasks.md`），确认它能正常找到 `{agate_root}`（`~/.agate` 或你设置的路径）、解析出 `{AGATE_WORKSPACE}` 并读到阶段卡片。
 
-## 步骤 5（可选）：派发路由（`agate dispatch route`，TAG0034 / RM-AG0060）
+## 步骤 5（可选）：派发路由（`agate-dispatch route`，TAG0034 / RM-AG0060）
 
-派发路由（`agate dispatch route`）是**机会式启用**：不填任何自定义配置 = 派发行为与现状逐字节一致（全 `(phase, role)` 解析为 `standard` 档 = 继承主 Agent 当前 model 的原生派发）。**配置文件本身应保留**（即使全空）：空配置 = 显式声明「走默认派发」，后续按本机现状填充即可。本步只在你想让某些阶段跑异 model / 异 CLI（部分缓解 `LIMITATIONS.md` 局限 2）时才需要**填内容**——比照上方「步骤 2-Codex」的 per-platform onboarding 形态。
+派发路由（`agate-dispatch route`）是**机会式启用**：不填任何自定义配置 = 派发行为与现状逐字节一致（全 `(phase, role)` 解析为 `standard` 档 = 继承主 Agent 当前 model 的原生派发）。**配置文件本身应保留**（即使全空）：空配置 = 显式声明「走默认派发」，后续按本机现状填充即可。本步只在你想让某些阶段跑异 model / 异 CLI（部分缓解 `LIMITATIONS.md` 局限 2）时才需要**填内容**——比照上方「步骤 2-Codex」的 per-platform onboarding 形态。
 
 **1. 建项目级配置文件**（`agate-workspace/dispatch-routing.yaml`，非协议本体、不触发 SELF-GATE，对齐 `maintainability.yaml`）：从仓库复制带注释的 scaffold（`agate-workspace/dispatch-routing.yaml`）到目标项目同名路径——若项目由 Agateon 仓库克隆 / 骨架生成，该文件已随 `agate-workspace/` 自带；缺失时手动复制一份即可。缺失 / 损坏 → 全兜底回出厂默认（= 现状），不报错。
 

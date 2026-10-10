@@ -396,6 +396,98 @@ def _reject_symlink_home(agate_home):
             sys.exit(1)
 
 
+# ── CLI PATH 包装（RM-AG0102 采纳配套：让 `agate-<x>` 成为可执行命令）──────────
+#
+# **为什么**：协议文档长期用**空格简写**（`agate next` / `agate advance`）指代脚本，但那些名字
+# **不是命令**——照敲会 command not found（审计实测：全仓无真实调用形态）。本函数在
+# `<AGATE_HOME>/bin/` 生成 `agate-<x>` 包装（对每个 `agate-*.py`），使简写与真实调用**同形**。
+#
+# 位置选 `<AGATE_HOME>/bin`（**版本无关**）：随 `current` 指针走，装新版本无需重建 PATH。
+# 生成物**幂等**（内容相同不重写）；POSIX 写 `sh` 包装；Windows 写 `.cmd`（Git Bash 下 `sh` 亦可）。
+_CLI_WRAPPER_SH = """#!/bin/sh
+# agate-{name} —— agate CLI 包装（由 agate-install.py 生成，勿手改；RM-AG0102）
+# 协议根：AGATE_ROOT env 优先；否则由**本包装自身位置**推 home（`<home>/bin/`）——内容与安装
+# 路径无关（两条安装入口产出的树逐字节一致）。
+# ⚠️ `current` 有**两种布局**：POSIX 是**软链**；Windows 兼容布局是**文本指针文件**（内容为版本名）
+# ——两者都要认（否则路径穿过文件 ⇒ 必然失败）。⚠️ 请把 `<home>/bin` 直接放进 PATH；经**别处软链**
+# 转发调用时 `dirname "$0"` 是软链所在目录、home 会推错（不支持，故不声明「可随意转发」）。
+home="$(cd "$(dirname "$0")/.." && pwd)"
+root="${{AGATE_ROOT:-}}"
+if [ -z "$root" ]; then
+    if [ -d "$home/current" ]; then
+        root="$home/current/agate"
+    elif [ -f "$home/current" ]; then
+        root="$home/$(sed -n '1p' "$home/current")/agate"
+    else
+        root="$home/current/agate"
+    fi
+fi
+if [ ! -f "$root/scripts/agate-{name}.py" ]; then
+    echo "agate-{name}: 找不到协议根（$root）——请确认已安装版本（agate-install.py latest）或设 AGATE_ROOT" >&2
+    exit 127
+fi
+exec python3 "$root/scripts/agate-{name}.py" "$@"
+"""
+
+_CLI_WRAPPER_CMD = r"""@echo off
+rem agate-{name} —— agate CLI 包装（由 agate-install.py 生成，勿手改；RM-AG0102）
+rem current 两种布局都要认：软链（目录）或文本指针文件（内容为版本名）
+setlocal enabledelayedexpansion
+set "root=%AGATE_ROOT%"
+if "%root%"=="" (
+  if exist "%~dp0..\current\agate\scripts" (
+    set "root=%~dp0..\current\agate"
+  ) else (
+    set /p agate_cur=<"%~dp0..\current"
+    set "root=%~dp0..\!agate_cur!\agate"
+  )
+)
+python "%root%\scripts\agate-{name}.py" %*
+"""
+
+
+def ensure_cli_wrappers(agate_home, version):
+    """在 `<agate_home>/bin/` 生成/刷新 `agate-*` CLI 包装（幂等）。返回生成数。
+
+    只对**已装版本**里的 `agate-*.py` 生成（读 `<agate_home>/<version>/agate/scripts/`）；
+    内容相同不重写（保持 mtime，避免无谓 diff）。失败仅 WARNING（不阻断安装）。
+    """
+    scripts_dir = os.path.join(agate_home, version, "agate", "scripts")
+    if not os.path.isdir(scripts_dir):
+        return 0
+    bin_dir = os.path.join(agate_home, "bin")
+    made = 0
+    try:
+        os.makedirs(bin_dir, mode=0o755, exist_ok=True)
+    except OSError as exc:
+        sys.stderr.write(f"WARNING: 无法创建 {bin_dir}（CLI 包装未生成）：{exc}\n")
+        return 0
+    names = sorted(
+        n[len("agate-"):-len(".py")]
+        for n in os.listdir(scripts_dir)
+        if n.startswith("agate-") and n.endswith(".py")
+    )
+    for name in names:
+        for suffix, content in (
+            ("", _CLI_WRAPPER_SH.format(name=name)),
+            (".cmd", _CLI_WRAPPER_CMD.format(name=name)),
+        ):
+            path = os.path.join(bin_dir, "agate-" + name + suffix)
+            try:
+                if os.path.isfile(path):
+                    with open(path, encoding="utf-8") as fh:
+                        if fh.read() == content:
+                            continue
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(content)
+                if not suffix:
+                    os.chmod(path, 0o755)
+                made += 1
+            except OSError as exc:
+                sys.stderr.write(f"WARNING: 写 CLI 包装 {path} 失败：{exc}\n")
+    return made
+
+
 def _sync_root_scripts(agate_home, version_dir):
     """建立/刷新根 ~/.agate/scripts/ 入口副本（TAG0032 决策 B1，单源 copytree，副本非软链）。
 
@@ -443,6 +535,14 @@ def _register(agate_home, version, move_pointers):
             sys.stderr.write(f"错误: 写 latest/current 指针失败（已还原）：{exc}\n")
             sys.exit(1)
     _sync_root_scripts(agate_home, os.path.join(agate_home, version))
+    # RM-AG0102 采纳配套：生成/刷新 `<AGATE_HOME>/bin/agate-*` CLI 包装（幂等、失败仅 WARNING）
+    made = ensure_cli_wrappers(agate_home, version)
+    if made:
+        # 信息性输出走 **stdout**（stderr 在部分路径上有「静默」契约，如离线安装的 --skip-* 用例）
+        sys.stdout.write(
+            f"提示: 已生成 {made} 个 CLI 包装于 {os.path.join(agate_home, 'bin')}"
+            "——把它加入 PATH 即可直接用 `agate-next` / `agate-run` 等命令\n"
+        )
 
 
 def _cmd_install(agate_home, version=None):
