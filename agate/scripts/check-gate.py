@@ -725,11 +725,35 @@ def gate_p0(task_dir):
     # 存量项目无声明的行为与引入前一致：无论 validate 返回 0 还是非 0，恒 return 2。
     config_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agate-config.py")
     validate_rc = 0
+    # DEBT0066：`agate-config.py validate` 按 **cwd** 找 `agate.config.yaml` ⇒ 必须传**目标任务所属
+    # 项目根**；否则从项目外调用会校验**错的项目**（hook 里 cwd=仓库恰好掩盖）。项目根判定：
+    # ① git 仓库根（`rev-parse --show-toplevel`，稳妥且与「项目根声明」口径一致）；
+    # ② 退化为「最近一个含 `agate-workspace` 的祖先目录」；
+    # ③ 都拿不到 ⇒ `None`（保持旧行为：按 cwd，不改变既有语义）。
+    _proj_root = None
+    if run_git is not None:
+        try:
+            _rc, _out = run_git(["rev-parse", "--show-toplevel"], cwd=task_dir)
+            if _rc == 0 and (_out or "").strip():
+                _proj_root = os.path.realpath(_out.strip())
+        except Exception:
+            _proj_root = None
+    if not _proj_root:
+        _cur = os.path.abspath(task_dir)
+        while True:
+            if os.path.isdir(os.path.join(_cur, "agate-workspace")):
+                _proj_root = _cur
+                break
+            _parent = os.path.dirname(_cur)
+            if _parent == _cur:
+                break
+            _cur = _parent
     if os.path.isfile(config_script):
         try:
             proc = subprocess.run(
                 [sys.executable, config_script, "validate"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
+                cwd=_proj_root or None,
             )
             validate_rc = proc.returncode
         except OSError:

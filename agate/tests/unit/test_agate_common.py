@@ -409,3 +409,49 @@ def test_x2_falls_back_to_working_tree_when_not_staged(tmp_path):
     phase, from_staged = C.read_staged_state_phase(str(state), str(repo))
     assert phase == "P7", f"应回退读工作区（P7），实际 {phase}"
     assert from_staged is False
+
+
+def test_default_branch_keeps_slash_in_branch_name(git_repo, agate_root, agate_scripts):
+    """`default_branch`：分支名**含 `/`** 时不得截断（SELF-GATE r1 抓出的回归）。
+
+    实测背景：原实现 `out.split("/")[-1]` 把 `origin/feature/foo` 截成 `foo` ⇒ 后续按
+    `origin/foo` 找 ⇒ 解析失败 ⇒ `check-mvwu --observe` 返回 `None`（而**旧实现反而是对的**）。
+    该函数是**单源**，故 `agate-ci-verify` / `agate-changes` 同受影响。
+    """
+    import importlib.util
+    import subprocess
+    import sys as _sys
+    from pathlib import Path
+
+    sd = str(Path(agate_scripts))
+    if sd not in _sys.path:
+        _sys.path.insert(0, sd)
+    spec = importlib.util.spec_from_file_location(
+        "_ac_branch_test", agate_scripts / "agate_common.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    _sys.modules["_ac_branch_test"] = mod
+    import contextlib
+
+    with contextlib.suppress(SystemExit):
+        spec.loader.exec_module(mod)
+
+    repo = str(git_repo.path)
+    # 夹具仓库**无提交** ⇒ 先造一个（否则 `update-ref … HEAD` 报 128）
+    subprocess.run(
+        ["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "--allow-empty", "-qm", "init"],
+        check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", repo, "update-ref", "refs/remotes/origin/feature/foo", "HEAD"],
+        check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", repo, "symbolic-ref",
+         "refs/remotes/origin/HEAD", "refs/remotes/origin/feature/foo"],
+        check=True, capture_output=True,
+    )
+    assert mod.default_branch(repo) == "feature/foo", (
+        "含 `/` 的分支名不得被截断（只应剥掉 `origin/` 前缀）"
+    )

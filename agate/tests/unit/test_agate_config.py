@@ -434,3 +434,31 @@ def test_bdd_8_upgrading_documents_cutoff_version(agate_root):
     assert "RM-AG0102" in section, (
         "BDD-8：批 2 小节应指向承接该欠账的 RM-AG0102"
     )
+
+
+def test_debt0066_gate_p0_uses_task_project_root_not_cwd(
+    tmp_path, agate_scripts, python_exe, run_cli
+):
+    """DEBT0066：`gate_p0` 的声明校验须以**目标任务所属项目根**为基准，而不是调用方 cwd。
+
+    构造：项目 **A**（任务所在，**无**声明）+ 项目 **B**（**有**声明）；从 **B** 调用
+    （`cwd=B`）对 **A 的任务**跑 gate_p0 ⇒ 须按 **A** 判定（即**出**声明缺失 WARNING）。
+    修前行为：`agate-config.py validate` 按 cwd 找 ⇒ 读到 B 的声明 ⇒ **漏报**。
+    """
+    a = tmp_path / "A"
+    task = a / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    (task / ".state.yaml").write_text("task_id: TXX0001\nphase: P0\n", encoding="utf-8")
+    b = tmp_path / "B"
+    b.mkdir()
+    (b / "agate.config.yaml").write_text(
+        "schema_version: 1\nproject:\n  language: python\n", encoding="utf-8"
+    )
+
+    result = run_cli(
+        python_exe, str(agate_scripts / "check-gate.py"), "P0", str(task), cwd=str(b)
+    )
+    assert "WARNING" in result.output and "agate.config.yaml" in result.output, (
+        "DEBT0066：须按**任务所属项目（A，无声明）**判定并出 WARNING；"
+        f"不得被调用方 cwd（B，有声明）掩盖\n{result.output[:600]}"
+    )

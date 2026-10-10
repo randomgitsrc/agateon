@@ -1102,3 +1102,19 @@ def test_bdd_45_observe_huge_duration_does_not_drop_rows(tmp_path, huge):
     assert rows[1][COL_DUR] == "-"
     assert rows[0][COL_DUR] == "8s" and rows[2][COL_DUR] == "8.5s"
     assert rows[0][COL_VERDICT] == rows[2][COL_VERDICT] == "PASS"
+
+
+def test_debt0065_default_branch_is_single_source(agate_scripts):
+    """DEBT0065：`check-mvwu` 的默认分支解析**收敛到单源** `agate_common.default_branch`。
+
+    修前它是全仓**第三份**实现（自建 `symbolic-ref origin/HEAD` + 本地 `refs/heads/*` 候选表，
+    口径还与 `agate_common` 不同）。本用例锁定：源码里不再有自建的 `symbolic-ref` 解析，
+    且明确引用单源。
+    """
+    src = (agate_scripts / "check-mvwu.py").read_text(encoding="utf-8")
+    assert "symbolic-ref" not in src, (
+        "DEBT0065：check-mvwu 不应再自建默认分支解析（symbolic-ref）——须走 agate_common.default_branch"
+    )
+    assert "default_branch" in src, (
+        "DEBT0065：check-mvwu 须引用单源 agate_common.default_branch"
+    )
