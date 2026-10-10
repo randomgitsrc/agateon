@@ -178,6 +178,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 |
 |------|------|
+| `agate-install.py` | 版本安装/迁移/回退（`agate-install.py vX.Y.Z` / `--adopt` / `--uninstall` / `--check`）：装本体（git plumbing 构建器）、写 `latest`/`current` 指针、`_sync_root_scripts`，并调 `ensure_cli_wrappers()` 在 `<AGATE_HOME>/bin/` 为每个 `agate-*.py` 生成 `agate-<x>` CLI 包装（POSIX `sh` + Windows `.cmd`；**由包装自身位置推 home** ⇒ 内容与安装路径无关、可搬迁、两条安装入口产出的树逐字节一致；**幂等**）|
 | `agate-config.py` | 项目形态声明（`agate.config.yaml`）读写/校验：`init`（幂等，不覆盖）/ `validate`（schema 校验）/ `get <field>` / `set <field> <value>` / `unset <field>` / `explain <field>` / `list` / `show`；退出码 0=成功、非 0=失败；声明解析只经 `agate_common.read_project_config`（唯一读取函数）|
 | `agate-run.py` | 执行层：在不可绕开路径上执行**声明**中的验证命令（`agate-run [--baseline] [--task <TASK_DIR>] <命令>`）——**两个命令源**：项目 `agate.config.yaml` 的 `verify.commands`，以及（给了 `--task` 时）该任务 `P2-design.md` 的 `gate_commands` 块（P5 的命令在此声明，RM-AG0102 采纳）；两处都无 ⇒ 拒绝执行。bash+pipefail 如实传播退出码（POSIX；非 POSIX 退化 + WARNING）；**普通运行只返回命令自身退出码**（不做基线比对）；`--baseline` 落 `.out` 证据并逐字节比对（**不一致 → 打印逐行 diff** 并返回非 0）；`--task` 写任务内日志 `runs/<k>.log`（头部 cmd/cwd/git_head/时间，尾行 `EXIT_CODE: n`，须入库）并在 `cmd_run` 事件记 `k`/`log`/`sha256`（供 `run:<k>` 引用核验）；证据须被 `.gitignore` 覆盖（`git check-ignore`）；执行后经 `agate_common.append_event` 追加 `cmd_run` 事件（账本目录由 `AGATE_TASK_DIR` env 指定）|
 | `agate-migrate-workspace.py` | 旧布局（docs/tasks → agate-workspace/）迁移工具（git mv 目录级，幂等）|

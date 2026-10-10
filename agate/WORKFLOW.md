@@ -503,17 +503,17 @@ P1 不可能预见所有隐含需求。P2 设计、P4 实现时，subagent 常�
 
 ### 方式 B：半自动（推荐）
 
-主 Agent 连续派发，每过一个门槛自动推进（推进这一步用 `agate next` 查表机械完成，见 `state-machine.md`
+主 Agent 连续派发，每过一个门槛自动推进（推进这一步用 `agate-next` 查表机械完成，见 `state-machine.md`
 「主 Agent 的单步执行」），只在门槛失败或重试超限时停下来问人。详见 `loop-orchestration.md`。
 
 ### 方式 C：全自动 /loop（增强）
 
 主 Agent 自动跑完 P1-P8，全程不需人工介入，只在最终发布前汇报。仅在方式 B 稳定后启用。每步即调用一次
-`agate next`。详见 `loop-orchestration.md`。
+`agate-next`。详见 `loop-orchestration.md`。
 
 > **相关可选机制**（正文各归其权威源）：subagent 存活/卡死可观测性 = 命令流日志机制（RM-AG0055，
 > `docs/design-notes/260903-design-subagent-liveness-and-self-dispatch/`）；跨 CLI/model 派发路由 =
-> `agate-workspace/dispatch-routing.yaml` + `agate dispatch route`（RM-AG0060，`dispatch-protocol.md`
+> `agate-workspace/dispatch-routing.yaml` + `agate-dispatch route`（RM-AG0060，`dispatch-protocol.md`
 > 「派发路由」节；不配置 = 逐字节现状）。
 
 ---

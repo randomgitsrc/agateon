@@ -354,7 +354,7 @@ python3 ~/.agate/scripts/agate-summary.py
 
 ## 跨 CLI 子进程结构化输出判成败字段（派发路由 / TAG0034）
 
-> 派发路由（`agate dispatch route`）以子进程形式派 `claude-code` / `codex` / `opencode` 时，用各平台结构化输出流判「这次派发成功 / 基础设施失败 / 无可解析产出」三态（`agate_dispatch_route.classify_outcome`）。素材 = 本机真机样本（2026-09-09，Claude Code 2.1.266 / codex-cli 0.153.4 / opencode 1.18.11），夹具在 `agate/tests/fixtures/tag0034_{claude_code,codex,opencode}/`。**判据只到 presence 级**——产出文件非空 + frontmatter 可解析 + 必需锚点在即算「有产出」，内容完整度 / 质量一律交 gate（走同候选 retry，不换候选）。
+> 派发路由（`agate-dispatch route`）以子进程形式派 `claude-code` / `codex` / `opencode` 时，用各平台结构化输出流判「这次派发成功 / 基础设施失败 / 无可解析产出」三态（`agate_dispatch_route.classify_outcome`）。素材 = 本机真机样本（2026-09-09，Claude Code 2.1.266 / codex-cli 0.153.4 / opencode 1.18.11），夹具在 `agate/tests/fixtures/tag0034_{claude_code,codex,opencode}/`。**判据只到 presence 级**——产出文件非空 + frontmatter 可解析 + 必需锚点在即算「有产出」，内容完整度 / 质量一律交 gate（走同候选 retry，不换候选）。
 
 | 平台 | 命令 | HAS_OUTPUT（成功 → 停回落、交 gate） | INFRA_ERROR（→ 回落 `infra_error`） | NO_PARSEABLE_OUTPUT（→ 回落 `no_parseable_output`） |
 |---|---|---|---|---|

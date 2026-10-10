@@ -46,7 +46,7 @@
 ### 档位 C：全自动 /loop（增强，谨慎用）
 
 主 Agent 自动跑完 P1-P8，**自动跑完不需要决策的部分，遇到硬中断点必停**（不是"全程不停"）。
-档位 C 的每次阶段推进判定统一经 `agate next {TASK_DIR}`（TAG0027 §3.7 档位 C 定案）——
+档位 C 的每次阶段推进判定统一经 `agate-next {TASK_DIR}`（TAG0027 §3.7 档位 C 定案）——
 主 Agent 不临场自行改 .state.yaml phase，推进记录（state_transition 事件 + git log）
 可观测（BDD-11）。档位 A/B 手动/半自动路径不受影响。
 
@@ -233,33 +233,33 @@ LOOP:
 
 档位 C（"主 Agent 自动跑完 P1-P8"）自 v0.4 起承担一条硬约束：**每次阶段 commit 都要先过 pre-commit hook**。这是 /loop 推进时必须严格遵守的客观边界。
 
-**自动推进时的 gate 处理流程**（TAG0027 §3.7：推进判定统一走 `agate next`）：
+**自动推进时的 gate 处理流程**（TAG0027 §3.7：推进判定统一走 `agate-next`）：
 
 ```
 单步函数推进（如 P4→P5）：
   ├─ subagent 完成任务，commit wf(Txxx-P4)
   │    └─ pre-commit hook 触发
-  │         ├─ exit 0（通过）→ 主 Agent 运行 agate next {TASK_DIR} 推进到下一 phase
-  │         │     └─ agate next 内部：check-gate exit ∈ gate_pass_exit（该 phase 的通过出口
+  │         ├─ exit 0（通过）→ 主 Agent 运行 agate-next {TASK_DIR} 推进到下一 phase
+  │         │     └─ agate-next 内部：check-gate exit ∈ gate_pass_exit（该 phase 的通过出口
   │         │        码，多数 phase = 2）→ 按 phases.yaml next 输出「下一阶段建议」+ 追加
   │         │        state_transition 事件，**不预写** .state.yaml phase、不 git add（phase
   │         │        由下一阶段产出 commit 写入——跳变合法性由该 commit 的 pre-commit 校验；
   │         │        exit 2 是多数 phase 正常通过码 ∈ pass_set，直推不是暂停）
   │         ├─ exit 1（拦截）→ 主 Agent 分析错误并修复后重试；
-  │         │     若确认该阶段 gate 判负（check-gate exit 1）→ agate next 自动走
+  │         │     若确认该阶段 gate 判负（check-gate exit 1）→ agate-next 自动走
   │         │     retreat 分支（按 phases.yaml retreat 表值委托 agate-retreat-to.py 逐阶回退）
   │         └─ exit ∉ gate_pass_exit 且 ≠ 1（真暂停/异常，协议实际极少）→ 主 Agent 运行
-  │               agate next：落盘 {phase}-exit2-resolution.md（暂停转主 Agent，不自动 retry）；
+  │               agate-next：落盘 {phase}-exit2-resolution.md（暂停转主 Agent，不自动 retry）；
   │               P6 前进特例：exit 2 ∈ pass_set（gate_p6 通过码）但推进前置 judge 复核裁决
   │               （gate_p65 exit 0 才直推 P7），见下
   └─ push → CI backstop 重跑 gate（捕获 --no-verify 绕过）
 ```
 
-**可观测证据（BDD-11）**：`agate next` 每次推进 append `state_transition` 事件
+**可观测证据（BDD-11）**：`agate-next` 每次推进 append `state_transition` 事件
 （gate-events.jsonl，字段 from/to/ts）+ 随 .state.yaml 的 commit（git log 可查）——
-档位 C 的"推进均经 agate next 判定"落在这两个证据面，可二值判定。
+档位 C 的"推进均经 agate-next 判定"落在这两个证据面，可二值判定。
 
-**P6 前进特例（A1 裁决，§3.1/§3.4）**：P6 恒 check-gate exit 2；`agate next` 在
+**P6 前进特例（A1 裁决，§3.1/§3.4）**：P6 恒 check-gate exit 2；`agate-next` 在
 phase=P6 且 check-p6-provenance exit 0/2（2 = 协作规范 WARNING，不阻塞）时按 judge 裁决推进：
 - judge 未启用（历史任务）→ gate_p65 早退 0 → 直推 P7；
 - judge 启用 → 跑 check-gate P6.5（= verdict 存在 + check-judge-verdict + check-events

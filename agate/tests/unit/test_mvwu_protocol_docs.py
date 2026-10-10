@@ -216,7 +216,7 @@ _CONTEXT_BASELINE_TERMS = [
     "gate", "裁剪", "机制交叉", "声明性改动", "行为逻辑改动", "BDD", "NEED_CONFIRM", "SCOPE+",
     "SCOPE_GAP", "C8 域", "agent 字段", "PAUSED", "READY", "dispatch-context", "PROD_TOUCHED",
     "DESIGN_GAP", "自审", "裁剪说明", "风险等级", "ceremony", "P6.5 / judge",
-    "gate-events.jsonl（事件账本）", "命令流日志（cmdstream）", "agate next / agate advance",
+    "gate-events.jsonl（事件账本）", "命令流日志（cmdstream）", "agate-next / agate-advance",
     "派发路由 / tier", "pytest", "windows_smoke marker", "conftest",
 ]
 
