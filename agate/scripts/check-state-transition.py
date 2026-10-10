@@ -25,6 +25,8 @@ try:
     from agate_common import MAX_RETRY_MAP as _DEFAULT_MAX_RETRY_MAP
     from agate_common import (
         NON_PRUNABLE_PHASES_DEFAULT,
+        body_field_value,
+        fm_field_value,
         non_prunable_phases,
         run_git,
         split_frontmatter,
@@ -37,6 +39,8 @@ except ImportError:
     split_frontmatter = None
     non_prunable_phases = None
     NON_PRUNABLE_PHASES_DEFAULT = None
+    body_field_value = None
+    fm_field_value = None
 
 try:
     import yaml
@@ -339,10 +343,15 @@ def _declares_internal_only(state_file):
 def _p1_pruned_and_declared(task_dir):
     """读 P1-requirements.md 的结构化 frontmatter → (declared:set, pruned:set)。
 
-    declared = frontmatter `phases`（list 或空格分隔字符串，归一化为 "Pn" 集合）；
-    pruned   = frontmatter `pruned` 各条目的 `phase`。
+    declared = `phases`（归一化为 "Pn" 集合）——**与 `check-pruning.py::_p1_field`
+    走同一代码路径（RM-AG0113 / ADR-014 判据单源）**：`agate_common.fm_field_value`
+    （frontmatter）优先，缺失时回退 `agate_common.body_field_value`（正文结构化解析）。
+    pruned   = frontmatter `pruned` 各条目的 `phase`（结构化字段，仅 frontmatter）。
     读不到 / 解析失败 → (None, None)（调用方按 fail-closed 处理）。
-    **不得**用 `^phases:\\s*\\[` 正则匹配正文（TAG0050 评审 M-1 明确要求）。
+    ⚠️ **M-1 读法修订（RM-AG0113）**：M-1 禁止的是「**用 `^phases:\\s*\\[` 正则匹配正文**」这种
+    写法（易被正文散文误命中）；本函数改走 `agate_common` 的规范解析（与 `check-pruning` 恒检
+    同源），且**仅在 frontmatter 缺失时**回退正文 ⇒ 回退只会让 `declared` **变大**（前向跨阶判据
+    因此**更严**，不会放松）。如实留痕见 `agate/rules/state-transitions.md`。
     """
     p1 = os.path.join(task_dir, "P1-requirements.md")
     if not os.path.isfile(p1) or split_frontmatter is None:
@@ -355,13 +364,14 @@ def _p1_pruned_and_declared(task_dir):
     fm, _body = split_frontmatter(text)
     if not isinstance(fm, dict):
         return None, None
-    phases = fm.get("phases")
-    if isinstance(phases, list):
-        declared = {str(p).strip() for p in phases if str(p).strip()}
-    elif isinstance(phases, str):
-        declared = {p for p in phases.split() if p}
-    else:
-        declared = set()
+    # RM-AG0113（判据单源）：与 `check-pruning.py::_p1_field` **同一代码路径**——
+    # frontmatter 结构化值（`fm_field_value`）优先，缺失回退正文结构化解析（`body_field_value`）。
+    if fm_field_value is None or body_field_value is None:
+        return None, None
+    _phases_val = fm_field_value(fm, "phases")
+    if not _phases_val:
+        _phases_val = body_field_value(_body, "phases")
+    declared = {p for p in str(_phases_val).split() if p}
     pruned = set()
     pruned_raw = fm.get("pruned")
     if isinstance(pruned_raw, list):

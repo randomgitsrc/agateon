@@ -106,6 +106,19 @@
   新任务须登记**当前等级** ⇒ 该路径会强制**全部**在途/测试夹具升到 level-2（实测 35 个用例转红），
   与「纯新增、不追溯」的意图相悖 ⇒ 改挂**阶段注册表**（本就非冻结、且是阶段权威源）。
 
+- **两条判据统一读取口径（RM-AG0113 / ADR-014 判据单源）**：「`phases ∪ pruned == 阶段全集`」
+  恒检（`check-pruning.py`）用 `_md_field`（**规范字段读取器**：frontmatter + 正文回退），
+  而前向跨阶判据（`check-state-transition.py::_p1_pruned_and_declared`）**只读 frontmatter**
+  ⇒ 同一 P1 在「正文声明而 frontmatter 缺失」时**两条判据结论相反**（恒检过 / 跨阶报错）。
+  现**统一为同一读取口径（同代码路径）**：`check-pruning._p1_field` 与 `check-state-transition` 均用 `agate_common.fm_field_value` 优先、缺失时回退 `agate_common.body_field_value`
+  （与 `agate-md-field-get.py` 同源的正文结构化解析——**不是** M-1 禁止的 `^phases:\s*\[`
+  正则；协议对该形态本就**容忍**（`_reconcile_p1_fields` 仅 WARNING），恒检亦应容忍）。
+  新增**判别力回归用例** `test_rm_ag0113_two_judgments_same_read`（旧实现下 state-transition
+  侧读到空集 ⇒ 转红，已 scratch 实测）。**一并复核**：DEBT0031 关单（机械对账已存在、默认开、
+  在 gate 路径；锚点更正为 check-pruning）；DEBT0041 **关单**（实测 P3 `agent` 可由
+  `agate-md-field-set` 写入 rc=0、新增回归用例锁定；原「P6→P7 被 exit 2 挡住」早由 `agate-next`
+  的 `_P6_PROVENANCE_PASS=(0,2)` 消解）。
+
 ### 文档 / 登记
 
 - **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）
