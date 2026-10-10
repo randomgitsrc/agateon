@@ -641,6 +641,15 @@ evidence:
       ⇒ **本条维持 open**，余项即 ③；
       (4) 全量 pytest（本机 1 项环境失败——opencode CLI `debug agent` 子命令漂移，与协议无关）
       + consistency 0 ERROR + shellcheck 0 issue。
+  - ref: agate/scripts/check-gate.py
+    note: >-
+      **2026-10-10 范围重定（批次 hotfix-debt-triage）**：本条**不可 hotfix**——`env_constraints`
+      是**正文散文声明**（实测 `agate-workspace/tasks/TAG000*/P2-design.md` 均为散文条目），
+      **非机器可读** ⇒ 无法直接机械校验；且它有**真实消费方**（`agate-extract-context.py:161-170`
+      抽入派发上下文供 P4 实现者读）⇒ 不属 roadmap「范围」节所列的「无消费方声明层」。
+      落点要机械化须先做**设计**：为「需产出构建/部署产物」的声明引入**结构化键**（如
+      `artifacts: [{path, phase, required}]`）+ 在 P4/P6 gate 做**存在性**校验（含误报面设计：
+      多数任务声明环境约束但无产物）。⇒ 列为**设计项**，随 TAG0038 之后的机制批处理，不占 hotfix 通道。
 impact: 任何依赖 env_constraints 声明 deploy/pack/build 产物的任务，可能出现'设计说要做但流程不强制'的静默缺口；UI 任务 dist 产物、打包产物、部署产物均无 gate 检查；TQC0001（真实跨项目）已实证
 recommendation: 三改一并做——(1) 明确 env_constraints 字段语义边界（声明性 vs 执行性）：P2 卡片/architect 角色说明'执行性约束必须落到 gate_commands 或 P4/P8 明确 checklist'；(2) UI 任务 P4 后应构建 dist：P4 卡片「自查≠gate」节补'UI 任务 P4 后构建 dist（windeployqt 等）'或 P8 gate 加 dist 产物存在性检查；(3) 可选：check-gate.py 或新脚本校验 gate_commands 声明了 deploy/构建命令时 P4/P8 产出物存在
 closure_criteria:
@@ -2438,7 +2447,7 @@ closure_note: >-
 id: DEBT0060
 category: protocol
 title: "A2 分支①未实现：未按逐提交 .agate-version 定位协议版本（.agate-version 只用于「不降级」检查）——对缺失 .agate-version 的提交不判 FAIL，属已知绕过面"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/P7-consistency.md
@@ -2450,6 +2459,14 @@ evidence:
     note: >-
       **2026-10-09 TAG0050 外部实施评审 m-2** 指出：该 DESIGN_GAP 被「接受/延后」但
       **tech-debt.md 与 roadmap.md 均无对应条目（无 owner）**——即「有承诺、无主」。
+  - ref: agate/LIMITATIONS.md
+    note: >-
+      **关单证据（批次 hotfix-debt-triage，2026-10-10）**：判据二选一，取「**已明确「不支持」
+      并写入 LIMITATIONS.md**」——新增「CI 回放的版本定位边界」节，写明：逐提交 `.agate-version`
+      定位**未实现**（依赖 CI 安装各版本）；仓库未写 `.agate-version` 且不含协议本体 ⇒ **直接 FAIL**；
+      含协议本体 ⇒ 用**回放基准 `base` 与 HEAD 的 `merge-base` 处**的协议（整次回放**共用一个
+      版本**，非逐提交）⇒ 跨度大的历史提交可能误判/漏判；**某提交**缺失 ⇒ 不判 FAIL（已知绕过面）。`agate-ci-verify.py:32-38`
+      的 docstring 原本已自述该边界，本次补的是**用户可见面**（LIMITATIONS）。
 source_ref: TAG0050:P7-design-gap-a2-branch1
 impact: >-
   使用者项目若**不写** `.agate-version`，CI 回放对「按当时协议书写」的历史提交缺少版本定位依据
@@ -2462,7 +2479,11 @@ closure_criteria:
   - "该缺口有 owner（本 DEBT / roadmap 条目）"
 source: review
 created_at: 2026-10-09
-task_id: TAG0050-task-data-contract
+task_id: hotfix-debt-triage   # ⚠️ 批次标签，无对应任务目录——债务清欠批（2026-10-10）
+closed_at: 2026-10-10
+closure_note: >-
+  已处置（批次 hotfix-debt-triage）：选「明确不支持 + 写入 LIMITATIONS.md」分支——协议层不再暗示「按当时协议逐提交复算」；精确复算的前置（为每个提交钉版本）已写明。
+
 ```
 
 ## DEBT0061
@@ -2471,7 +2492,7 @@ task_id: TAG0050-task-data-contract
 id: DEBT0061
 category: protocol
 title: "T1/T2/T3 绊线的 gate 侧扫描未接线——`traps` 与 `downgrade` 无任何消费方（M2，verdict=followup）"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/P7-consistency.md
@@ -2481,7 +2502,15 @@ evidence:
   - ref: docs/reviews/agate-alignment-review-2026-10-09-HOTFIX-M1.md
     note: >-
       **2026-10-09 外部实施评审 m-2**：该项为 `followup` 但无 DEBT 条目（无 owner）。
-source_ref: TAG0050:P7-design-gap-t1t2t3-traps
+  - ref: agate/scripts/check-gate.py
+    note: >-
+      **关单证据（批次 hotfix-debt-triage，2026-10-10；经 SELF-GATE r1 更正）**：原诊断
+      「绊线无任何消费方 ⇒ 命中即拦不成立」**部分不成立**——**T1**（正文 tripwire 标记）由
+      `count_p7_markers` 消费、**T2**（BDD 标题格式）由 `check-gate.py:771-785` 硬拦（BDD-71）、
+      **T4**（prod_touched 安全门）由 `pre-commit-gate.py` 的 PROD_TOUCHED 消费 ⇒ 这三条的
+      「命中即拦」**成立**。**T3**（`strict_verdict_line_in_prose`）**全仓 0 消费方**（仅出现在
+      `level-1.yaml:269`）⇒ **该条的承诺不成立**，已**另立 DEBT0064** 承接（不随本条关单）。
+      另：契约快照的 `traps`/`downgrade` 键本身亦无脚本消费（描述性数据，执行在代码里）。
 impact: >-
   绊线（tripwire）数据被产出但无人消费 ⇒ 「命中即拦」的承诺在 gate 侧**不成立**，
   实际拦截力依赖其它判据（可能出现「声明了绊线却无人执行」的静默缺口）。
@@ -2492,7 +2521,11 @@ closure_criteria:
   - "`traps` / `downgrade` 有机械消费方（gate 扫描）并有回归用例；或已明确「仅记录不判定」并同步文档"
 source: review
 created_at: 2026-10-09
-task_id: TAG0050-task-data-contract
+task_id: hotfix-debt-triage   # ⚠️ 批次标签，无对应任务目录——债务清欠批（2026-10-10）
+closed_at: 2026-10-10
+closure_note: >-
+  关单（批次 hotfix-debt-triage；经 SELF-GATE r1/r2 更正）：T1/T2/T4 **有代码消费方** ⇒ 这三条的「命中即拦」**成立**；**T3 全仓 0 消费方** ⇒ 该条承诺**不成立**，已另立 **DEBT0064** 承接；契约键 `traps`/`downgrade` 本身为**描述性数据**（执行在代码里）。本条**不再持有未闭合的 T3**。
+
 ```
 
 ## DEBT0062
@@ -2501,7 +2534,7 @@ task_id: TAG0050-task-data-contract
 id: DEBT0062
 category: protocol
 title: "A4 的 `review_output` 缺失只给 WARNING（设计要求 ERROR）——存量约 25 条 R 义务无合格评审产出"
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate-workspace/tasks/TAG0050-task-data-contract/P7-consistency.md
@@ -2512,6 +2545,16 @@ evidence:
   - ref: docs/reviews/agate-alignment-review-2026-10-09-HOTFIX-M1.md
     note: >-
       **2026-10-09 外部实施评审 m-2**：该项为 `accepted` 但无 DEBT 条目（无 owner）。
+  - ref: agate/scripts/check-obligations.py
+    note: >-
+      **关单证据（批次 hotfix-debt-triage，2026-10-10）**：判据**收窄到「该阶段存在合格评审产出」**——
+      `_QUALIFIED_REVIEW_OUTPUTS` 仅 P1/P2/P4-review.md ⇒ 只有这些阶段的 R 才可能（也必须）给
+      `review_output`，**缺则 ERROR**（原为 WARNING 且提示「改标 C」，不可行动且语义错——C 是
+      「命令生成」）。实测 25 条告警中 **7 条**属这些阶段，已**补 `review_output`**（连同已存在的，
+      现 12 条 R 有产出指针）；其余 **18 条**所在阶段（P0/P3/P5/P6/P6.5/P7/P8/X）协议**本就没有**
+      评审产出文件 ⇒ 其 R 由主 Agent / 阶段纪律强制，无产出可指 ⇒ 不再告警。判据自检：**0 WARNING
+      0 ERROR**；回归用例 `test_tag0050_obligations.py::test_bdd_43_r_without_review_output_errors`
+      已按新语义改写（P2 阶段缺 ⇒ ERROR；X 阶段缺 ⇒ 无告警）。
 source_ref: TAG0050:P7-design-gap-a4-review-output-warning
 impact: >-
   R（强制评审）义务的「必须有合格评审产出」在存量任务上**只发 WARNING 不阻断** ⇒
@@ -2523,7 +2566,11 @@ closure_criteria:
   - "`review_output` 缺失对**新任务**判 ERROR（有回归用例）；存量豁免口径显式文档化"
 source: review
 created_at: 2026-10-09
-task_id: TAG0050-task-data-contract
+task_id: hotfix-debt-triage   # ⚠️ 批次标签，无对应任务目录——债务清欠批（2026-10-10）
+closed_at: 2026-10-10
+closure_note: >-
+  关单（批次 hotfix-debt-triage）：判据收窄到「有产出可指的阶段」（P1/P2/P4）并**升为 ERROR**（可行动）；无产出阶段的 R 明确为「主 Agent / 阶段纪律强制」，不再误报「改标 C」。
+
 ```
 
 
@@ -2591,4 +2638,33 @@ closure_note: >-
   未再复现，按系统性调试流程「环境性 ⇒ 文档化 + 适当处理 + 留监控」处置——残余假设与排除清单
   已完整记录在本条 evidence，复发即可据此定位。
 
+```
+
+## DEBT0064
+
+```yaml
+id: DEBT0064
+category: protocol
+title: "T3 绊线（`strict_verdict_line_in_prose`）无任何消费方——契约声明 default_action: error 但无脚本执行"
+status: open
+priority: low
+evidence:
+  - ref: agate/rules/task-data/level-1.yaml
+    note: >-
+      `traps.T3 = {kind: strict_verdict_line_in_prose, default_action: error}`（快照冻结，不可就地改）。
+  - ref: agate/scripts/check-gate.py
+    note: >-
+      **2026-10-10 实测（批次 hotfix-debt-triage，DEBT0061 关单时拆出）**：全仓 `grep T3` /
+      `strict_verdict` **0 消费方**（仅快照出现）。同族 T1/T2/T4 均有代码消费方，T3 是唯一缺口。
+impact: >-
+  契约声明「P7 正文出现严格判定行 ⇒ error」，但无脚本执行 ⇒ 该承诺**不成立**（与 T1/T2/T4 不同）。
+recommendation: >-
+  二选一：① 在 `check-gate.py` 的 P7 分支接 T3（检测正文 `- PASS|FAIL ...` 严格判定行并拦/告警，
+  须先设计**误报面**：P7 引用 P6 判定时的合法写法）；② 明确其为**仅记录不判定**（须在用户可见面
+  说明——快照冻结，不能就地改）。
+closure_criteria:
+  - "T3 有机械消费方并有回归用例；或已在用户可见面（LIMITATIONS/规则说明）写明「仅记录不判定」"
+source: review
+created_at: 2026-10-10
+task_id: null   # 待立项；由 DEBT0061 关单时拆出
 ```

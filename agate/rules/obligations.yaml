@@ -142,6 +142,7 @@ obligations:
     statement: "同类扫描结论写入正文（命中清单 + 逐条处理判定）"
     anchor: "agate/phase-cards/P1-requirements.md#同类扫描（强制节）"
     disposition: R
+    review_output: P1-review.md
     script: ""
     evidence: "DEBT0046：凭推理判『不处理』已被证伪（TAG0036 M18）"
   - id: OBL-P1-08
@@ -197,6 +198,7 @@ obligations:
     statement: "P1 基线保护（后续变更须授权 + [BASELINE_CHANGE]）"
     anchor: "agate/phase-cards/P1-requirements.md#P1 基线保护"
     disposition: R
+    review_output: P1-review.md
     script: ""
     evidence: "TAG0025：P3/P4 隐含扩展范围未授权"
 
@@ -240,6 +242,7 @@ obligations:
     statement: "影响面梳理三部分（改什么 / 不改什么 / 风险在哪）"
     anchor: "agate/phase-cards/P2-design.md#影响面梳理（强制节）"
     disposition: R
+    review_output: P2-review.md
     script: ""
     evidence: ""
   - id: OBL-P2-06
@@ -272,6 +275,7 @@ obligations:
     statement: "minimal_validation 最小验证（或声明纯代码逻辑 + 理由）"
     anchor: "agate/phase-cards/P2-design.md#派发"
     disposition: R
+    review_output: P2-review.md
     script: ""
     evidence: ""
   - id: OBL-P2-10
@@ -328,6 +332,7 @@ obligations:
     statement: "项目侧架构决策读取/写入 decisions/"
     anchor: "agate/phase-cards/P2-design.md#项目侧架构决策（decisions/）"
     disposition: R
+    review_output: P2-review.md
     script: ""
     evidence: "DEBT0039：决策落点缺失"
   - id: OBL-P2-17
@@ -335,6 +340,7 @@ obligations:
     statement: "评审组长汇总（多评审角色并行后组长汇总统一 status）"
     anchor: "agate/phase-cards/P2-design.md#评审派发（C8 机械映射）"
     disposition: R
+    review_output: P2-review.md
     script: ""
     evidence: ""
 
@@ -406,6 +412,7 @@ obligations:
     statement: "P3 测试变绿（不修改测试迁就实现）"
     anchor: "agate/assets/execution-roles/implementer.md#认知模式"
     disposition: R
+    review_output: P4-review.md
     script: ""
     evidence: ""
   - id: OBL-P4-03
