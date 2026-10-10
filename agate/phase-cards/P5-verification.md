@@ -33,13 +33,19 @@
 
 ## 执行方式
 
-verifier subagent 从 P2-design.md 读取 gate_commands.P5 并执行：
+verifier subagent 从 P2-design.md 读取 gate_commands.P5 并执行。
+
+> **执行入口（推荐，RM-AG0102 采纳）**：`python3 {agate_root}/scripts/agate-run.py --task <TASK_DIR> "<命令>"`。
+> 它按 **P2 的 `gate_commands` 白名单**执行（未声明命令**拒绝执行**）、把输出写
+> `<TASK_DIR>/runs/<k>.log`（**证据入库**）并追加账本事件 `cmd_run`——使「谁跑了什么」**可审计**，
+> 而不是只有自述。退出码**如实传播**（POSIX 开 pipefail，`cmd | tail` 不吞左侧失败）。
+> 直接 bash 执行也能跑，但**没有**白名单/证据/账本这三样。
 
 ```bash
-# 示例（实际命令取决于 P2 声明）
-pytest -q --tb=no                    # 后端单元测试
-vitest run --reporter=verbose        # 前端单元测试
-playwright test --reporter=line tests/e2e/  # E2E（ui_affected: true 时）
+# 示例（实际命令取决于 P2 声明；下面写法与 P2 的 gate_commands 值**逐字一致**）
+agate-run.py --task <TASK_DIR> "pytest -q --tb=no"          # 后端单元测试
+agate-run.py --task <TASK_DIR> "vitest run --reporter=verbose"   # 前端单元测试
+agate-run.py --task <TASK_DIR> "playwright test --reporter=line tests/e2e/"  # E2E（ui_affected: true 时）
 ```
 
 紧凑输出模式：用工具的汇总模式（pytest --tb=no / vitest --reporter=dot / go test | tail -30）。只保留通过/失败汇总+失败清单，不逐项 traceback。

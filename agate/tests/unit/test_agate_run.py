@@ -467,3 +467,41 @@ def test_hotfix_i2_baseline_first_write_lands_evidence_and_returns_exit_code(
     assert evidence_path.read_bytes() == b"", (
         "I-2：首次落盘内容须逐字节等于命令输出（此处为空输出）"
     )
+
+
+def test_rm_ag0102_task_source_gate_commands(git_repo, agate_scripts, python_exe, run_cli):
+    """RM-AG0102 **采纳**：`agate-run --task <TASK_DIR> <cmd>` 须认**任务源**——
+    `P2-design.md` 的 `gate_commands` 块（P5 的命令在此声明）。
+
+    此前只认项目级 `agate.config.yaml` 的 `verify.commands` ⇒ 协议流程里**没有入口**（零采纳，
+    实测：模板/卡片/rules 0 命中）。本用例覆盖：① 任务源命令可执行并写 `runs/<k>.log` +
+    账本 `cmd_run`；② **未声明**命令仍被拒（「不可绕开路径」不因新增源而失效）。
+    """
+    repo = git_repo.path
+    task = repo / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    cmd = "printf 'ok\\n'"
+    # 项目根**不写** agate.config.yaml（模拟真实：只有任务级声明）
+    (task / "P2-design.md").write_text(
+        "---\nagent: test\n---\n\n## gate_commands 声明\n\n"
+        "gate_commands:\n"
+        f'  P5: "{cmd}"\n'
+        "  P5_timeout_seconds: 60\n"
+        "  P5_formatter: cat\n",
+        encoding="utf-8",
+    )
+    r = run_cli(
+        python_exe, str(agate_scripts / "agate-run.py"), "--task", str(task), cmd,
+        cwd=str(repo),
+    )
+    assert r.returncode == 0, f"任务源命令须可执行；rc={r.returncode}\n{r.output[-600:]}"
+    assert (task / "runs" / "1.log").is_file(), f"须写 runs/<k>.log；输出 {r.output[-400:]!r}"
+    ledger = (task / "gate-events.jsonl").read_text(encoding="utf-8")
+    assert "cmd_run" in ledger, f"须追加 cmd_run 账本事件；实际 {ledger[-300:]!r}"
+
+    # 对照：**未声明**命令仍须拒绝（不可绕开路径不因新增源而失效）
+    r2 = run_cli(
+        python_exe, str(agate_scripts / "agate-run.py"), "--task", str(task),
+        "echo not-declared", cwd=str(repo),
+    )
+    assert r2.returncode == 1, f"未声明命令须拒绝；rc={r2.returncode}\n{r2.output[-400:]}"

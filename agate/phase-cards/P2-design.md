@@ -168,7 +168,13 @@ P2-design.md 正文必须含影响面梳理节，覆盖三部分：
 
 ## gate_commands 声明
 
-gate_commands 在 P2 固化，后续阶段按此执行：
+gate_commands 在 P2 固化，后续阶段按此执行。
+
+> **写入工具（别手写正文块）**：`agate-md-field-set-gate-commands.py FILE <yaml块或@文件路径>` ——
+> 写入 P2-design.md **正文**的 `gate_commands` 多行 YAML 块，逐 key 用
+> `agate_common.is_legal_gate_key()` 校验（与 `check-gate.py::_reconcile_p2_fields` **同一函数**，
+> 非重写）。`gate_commands` 是**正文**（非 frontmatter），故不归 `agate-md-field-set.py`（它只写
+> frontmatter 字段）——两个工具分工不同，都需要时分别调用。
 
 ```yaml
 gate_commands:
