@@ -13,7 +13,7 @@ import shutil
 
 import pytest
 
-from conftest import GitRepo, add_p1_field, add_pruning_excuse
+from conftest import GitRepo, add_p1_field, add_pruning_excuse, init_task
 
 _YAML_LIST_P1 = (
     "---\n"
@@ -408,3 +408,54 @@ def test_p2_6f_staged_source_count_uses_task_repo_not_outer_cwd_repo_exit_0(
         agate_scripts, python_exe, run_cli, str(task_in_repo), cwd=str(outer_repo.path)
     )
     assert result.returncode == 0
+
+
+def test_rm_ag0113_two_judgments_same_read(agate_scripts, python_exe, run_cli, tmp_path):
+    """RM-AG0113（ADR-014 判据单源）：同一 P1 在**两条判据**下结论一致。
+
+    判别场景（该 RM 唯一场景）：P1 的 `phases` **只在正文**声明而 frontmatter 缺失 ⇒
+    修前 `check-pruning` 的恒检用 `_md_field`（frontmatter + **正文回退**）读到全集而**通过**，
+    而 `check-state-transition._p1_pruned_and_declared` 只读 frontmatter ⇒ 读到**空集**
+    ⇒ **两条判据结论相反**（恒检过 / 前向跨阶报错）。修后二者统一为同一读取口径
+    （规范字段读取器：frontmatter 优先、缺失回退正文）⇒ 本用例在修前**转红**。
+    """
+    import contextlib
+    import importlib.util
+    import sys as _sys
+    from pathlib import Path
+
+    # 非 legacy 任务（账本首行 task_created）——恒检只对非 legacy 生效
+    init_task(tmp_path, task_id="T001", slug="same-read")
+    td = tmp_path / "T001-same-read"
+    p1 = td / "P1-requirements.md"
+    text = p1.read_text(encoding="utf-8")
+    assert "phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n" in text
+    # 把 phases 从 frontmatter 移到正文（fm 删除 + 正文加声明）
+    text = text.replace("phases: [P1, P2, P3, P4, P5, P6, P7, P8]\n", "", 1)
+    text = text.replace(
+        "---\n\n", "---\n\nphases: [P1, P2, P3, P4, P5, P6, P7, P8]\n\n", 1
+    )
+    p1.write_text(text, encoding="utf-8")
+
+    # ① state-transition 侧：须与 check-pruning 同口径（正文回退 ⇒ 读到全集）
+    _sd = str(Path(agate_scripts))
+    if _sd not in _sys.path:
+        _sys.path.insert(0, _sd)
+    spec = importlib.util.spec_from_file_location(
+        "_cst_rm0113", agate_scripts / "check-state-transition.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    _sys.modules["_cst_rm0113"] = mod
+    with contextlib.suppress(SystemExit):
+        spec.loader.exec_module(mod)
+    declared, _pruned = mod._p1_pruned_and_declared(str(td))
+    assert declared == {"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"}, (
+        f"正文声明 phases ⇒ state-transition 侧应读到全集（与恒检同口径）；实际 {declared}"
+    )
+
+    # ② check-pruning 恒检：同一 P1 须**通过**（与 ① 结论一致）
+    result = _run_pruning(agate_scripts, python_exe, run_cli, str(td))
+    assert result.returncode == 0, (
+        f"恒检与 state-transition 同口径 ⇒ 同一 P1 应通过；rc={result.returncode}\n"
+        f"{result.output[-500:]}"
+    )

@@ -88,9 +88,12 @@ python3 agate/scripts/agate-retreat-to.py {TASK_DIR} {目标阶段} "{诊断原�
 
 ## 前向跨阶规则（TAG0050 评审 M-1）
 
-前向跨阶（`Pn → Pn+k`，k ≥ 2）**对非 legacy 任务（账本含 `task_created`/`task_adopted`）由 `check-state-transition.py::check_transition` 机械校验**——hook 与 CI 回放共用该函数，不是只由目标阶段产出兜底（TAG0050 实测：`gate_p5` 兜底返回 2、`_gate_p7_structured` 曾对缺产出放行）：
+前向跨阶（`Pn → Pn+k`，k ≥ 2）**对非 legacy 任务（账本含 `task_created`/`task_adopted`）由 `check-state-transition.py::check_transition` 机械校验**（**M-1 读法修订（RM-AG0113）**：`declared` 的读取与 `check-pruning.py::_p1_field` **同代码路径**——`agate_common.fm_field_value` 优先、**frontmatter 缺失时**回退 `body_field_value` 的正文结构化解析；M-1 禁止的是「用 `^phases:\s*\[` 正则匹配正文」这一**写法**，非「读正文」本身，且回退只会让判据**更严**）——hook 与 CI 回放共用该函数，不是只由目标阶段产出兜底（TAG0050 实测：`gate_p5` 兜底返回 2、`_gate_p7_structured` 曾对缺产出放行）：
 
-- 被跨过的阶段须**已从 P1 `phases` 移除并在 `pruned` 中声明**（读结构化 frontmatter，不用正文正则）；
+- 被跨过的阶段须**已从 P1 `phases` 移除并在 `pruned` 中声明**（`declared` 读法与
+  `check-pruning.py::_p1_field` **同代码路径**：frontmatter 结构化值优先，**缺失时**回退
+  `agate_common.body_field_value` 的正文结构化解析——**M-1 读法修订见上**；`pruned` 恒为
+  frontmatter 结构化字段）；
 - **不可跳过的阶段**（P1 需求基线 / P2 方案设计 / P4 实现 / P5 技术验证 / P6 验收）**一律不得跨过**
   ——该集为**数据面单源**：`agate/rules/phases.yaml` 顶层键 `non_prunable_phases`
   （`check-pruning.py` 与 `check-state-transition.py` 经 `agate_common.non_prunable_phases()` 共读，RM-AG0110）；

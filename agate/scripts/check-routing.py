@@ -55,6 +55,7 @@ def _load_script(name, module_name=None):
 # --- 同源复用（BDD-10）：check-routing 自身暴露 check-pruning 同源函数，无独立重写 ---
 _check_pruning = _load_script("check-pruning")
 _md_field = _check_pruning._md_field
+_p1_field = _check_pruning._p1_field
 _read_p1 = _check_pruning._read_p1
 _staged_source_count = _check_pruning._staged_source_count
 
@@ -110,7 +111,9 @@ def main():
         errors.append("thin 需 '跳过风险:' 跳过风险评估声明")
 
     # 要素 4：phases 含 P5 与 P6（薄化仪式不薄化验证；check-pruning 检查 3/5 双闸兜底）
-    phases = _md_field("phases", p1_file).split()
+    # RM-AG0113：`phases` 走**与 check-pruning 恒检 / check-state-transition 同代码路径**的读取器
+    # （同源复用 `check-pruning._p1_field`）——不再用 `_md_field`（其回退扫全文，口径不同）。
+    phases = _p1_field(_read_p1(p1_file), "phases").split()
     if "P5" not in phases or "P6" not in phases:
         errors.append("thin 需 phases 含 P5 与 P6（P5/P6 保留，薄化仪式不薄化验证）")
 

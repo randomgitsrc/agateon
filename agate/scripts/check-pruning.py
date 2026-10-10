@@ -96,6 +96,28 @@ def _md_field(op, p1_file):
     return (proc.stdout or "").rstrip("\n")
 
 
+def _p1_field(p1_text, field):
+    """P1 字段读取（**RM-AG0113 判据单源**）：与
+    `check-state-transition.py::_p1_pruned_and_declared` 走**同一代码路径**——
+    `agate_common.fm_field_value`（frontmatter 结构化值）优先，缺失时回退
+    `agate_common.body_field_value`（正文结构化解析：内联 `[P1, P2]` / 块式 `- Pn` / 空格串）。
+    两处共用同一对函数 ⇒ **有效 `declared` 必一致**（不再一处走 `_md_field`（`agate-md-field-get.py`，
+    回退扫**全文**）、一处只读 frontmatter）。
+
+    注：正文回退**不是**「用 `^phases:\\s*\\[` 正则匹配正文」（TAG0050 评审 M-1 禁止的**写法**），
+    而是 `agate_common` 的规范解析；且回退只会让 `declared` 变大（前向跨阶判据因此**更严**，不会放松）。
+    """
+    fm, body = split_frontmatter(p1_text)
+    if not isinstance(fm, dict):
+        # 无 / 坏 frontmatter ⇒ **不回退正文**（与 `check-state-transition` 的 fail-closed 一致：
+        # 该形态任务本身不合规，回退会掩盖问题 ⇒ 两处判据仍一致）
+        return ""
+    v = fm_field_value(fm, field)
+    if not v:
+        v = body_field_value(body, field)
+    return v
+
+
 def _read_p1(p1_file):
     try:
         with open(p1_file, encoding="utf-8", errors="replace") as f:
@@ -213,9 +235,9 @@ def main():
         )
         sys.exit(2)
 
-    risk_level = _md_field("risk_level", p1_file)
-    phases_declared = _md_field("phases", p1_file)
     p1_text = _read_p1(p1_file)
+    risk_level = _p1_field(p1_text, "risk_level")
+    phases_declared = _p1_field(p1_text, "phases")
     has_override = len(re.findall(r"^override:", p1_text, re.MULTILINE))
     phases = phases_declared.split()
 
@@ -238,6 +260,9 @@ def main():
             _missing = [f for f in _pruned_required_fields(task_dir) if not item.get(f)]
             if _missing:
                 errors.append(f"pruned 条目缺必填字段：{_missing}")
+        # RM-AG0113（ADR-014 判据单源）：`phases` 取自 `_p1_field`——与
+        # `check-state-transition.py::_p1_pruned_and_declared` **同一代码路径**
+        # （`agate_common.fm_field_value` → 缺失回退 `body_field_value`）。二者现必一致。
         declared = set(phases)
         pruned_phases = {
             str(item.get("phase"))

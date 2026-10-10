@@ -1232,11 +1232,21 @@ task_id: TAG0031
 id: DEBT0031
 category: technical
 title: "P1 frontmatter phases 列表与正文裁剪声明一致性无机械校验（TAG0030 复盘发现）"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate-workspace/tasks/TAG0030-acceptance-blindspot/retrospective.md
     note: "frontmatter 机制缺口：P1 phases 漏写 P2 靠 requirements-review 打回才暴露，check-frontmatter/check-gate P1 均未拦截——frontmatter phases 列表与正文裁剪声明的一致性依赖人工核对"
+  - ref: agate/scripts/check-pruning.py
+    note: >-
+      **2026-10-09 实测复核（批次 hotfix-batchA2-0113，RM-AG0113 一并复核）**：机械一致性校验**已存在**——
+      `check-pruning.py:240` 调 `_reconcile_p1_fields(p1_text)`（经 `agate_common.reconcile_field`），
+      对 P1 的 `risk_level`/`phases` 做 **frontmatter ↔ 正文双读对账**，不一致即输出
+      `RECONCILE WARNING` + 计数汇总；开关 `reconcile_enabled()` **缺省 on**（`AGATE_RECONCILE`
+      未设即启用）⇒ **默认在 gate 路径上生效**。⚠️ **锚点更正**：本债原判据锚指 `check-gate`，
+      实际落地在 **check-pruning**（同一 P1 gate 路径，同为 P1 阶段产出检查）。
+      ⚠️ **级别说明**：对账按设计**不改退出码**（warning-only）——协议刻意如此（正文↔fm
+      不一致多为 legacy 归一化差异，硬阻断会误伤）。
 impact: "P1 阶段裁剪声明错误只能靠 review 打回暴露，额外消耗 review 轮次；严重时裁剪声明与实际产出不符直达下游阶段"
 recommendation: "check-gate P1 阶段校验 frontmatter phases 列表与 P1-requirements.md 正文声明的阶段裁剪一致性；先加失败测试确认红再修"
 closure_criteria:
@@ -1244,7 +1254,12 @@ closure_criteria:
   - 全量 pytest + consistency 0 ERROR
 source: retrospective
 created_at: 2026-09-04
-task_id: TAG0030
+task_id: hotfix-batchA2-0113   # ⚠️ 批次标签，无对应任务目录——hotfix 通道（触 agate/ 协议本体与脚本，SELF-GATE 独立评审）
+closed_at: 2026-10-09
+closure_note: >-
+  关单（批 A2/RM-AG0113 复核）：机械对账已存在且默认生效（check-pruning 的
+  RECONCILE WARNING）；锚点由 check-gate 更正为 check-pruning；级别为 warning-only 系设计选择。
+
 ```
 
 ## DEBT0032
@@ -1586,7 +1601,7 @@ closure_note: >-
 id: DEBT0041
 category: protocol
 title: "agate-md-field-set 支持字段集与 check-p6-provenance.py 必备 frontmatter 字段集不同源——P3-test-cases.md 的 agent 字段落在缝里，P6→P7 被 exit 2 挡住"
-status: open
+status: closed
 priority: medium
 evidence:
   - path: agate/scripts/agate-next.py
@@ -1601,6 +1616,18 @@ evidence:
     note: "约 573 行 sys.exit(2) when warning_found——对 P3-test-cases.md 缺 agent 字段判 WARNING 并 exit 2，阻断 P6→P7"
   - ref: "RM-AG0062"
     note: "2026-09-10 会话归并入 roadmap RM-AG0062 复盘机制补强批（DEBT0037/0038/0040/0041）——一个 task 内分子批交付，P2 立项定拆法"
+  - ref: agate/scripts/check-p6-provenance.py
+    note: >-
+      **2026-10-09 实测复核（批次 hotfix-batchA2-0113）**：① `:743-752` 对**所有**
+      `P[0-8]-*.md`（含 P3）做 `agent` 存在性检查，缺失 ⇒ `warning_found=1` ⇒ 末尾
+      `sys.exit(2)`；② 但消费方 `agate-next.py` 的 `_P6_PROVENANCE_PASS = (0, 2)` ⇒
+      **不再阻断 P6→P7**（原「被挡住」已消解）；③ **判据①已满足**：实测
+      `FILE=<P3-test-cases.md> agate-md-field-set.py set agent test-designer` **rc=0 成功写入**
+      （TAG0050 批 B 已解除旧 `writable - {"agent"}` 限制——本债 evidence 里 2026-09-29 的
+      「刻意策略」更正系**当时**状态，其后已放开）；④ 判据②由新增回归用例
+      `test_agate_md_field_set.py::test_rm_ag0113_p3_agent_writable_by_tool` 锁定。
+      ⚠️ **自我更正**：本次复核初稿曾写「md-field-set 拒写 agent 是刻意策略」——与代码
+      **相反**（SELF-GATE 评审实测指出），已按实测改写。
 impact: "结构化字段写入工具与 provenance 检查器对「阶段产出必备 frontmatter 字段」认知不一致 → 主 Agent 需绕过工具手写 frontmatter（违反 RM-AG0048「同源铁律 / 消灭手写 frontmatter」初衷），且手写易漏字段再次触发 exit 2"
 recommendation: "① 把 P3-test-cases.md 的 agent 加入 agate-md-field-set 支持字段；或 ② check-p6-provenance.py 对 P3-test-cases.md 的 agent 缺失降级为 WARNING 不 exit 2（P3 是 test-designer 唯一产出，agent 恒定）；根治向：两者共读同一份「阶段产出必备 frontmatter 字段」权威表（rules/ 下），消除字段集漂移"
 closure_criteria:
@@ -1609,13 +1636,24 @@ closure_criteria:
   - "全量 pytest 全绿 + consistency 0 ERROR"
 source: retrospective
 created_at: 2026-09-10
-task_id: null   # 待立项；归属 RM-AG0065（数据契约一致性批，2026-09-16 登记）
+task_id: hotfix-batchA2-0113   # ⚠️ 批次标签，无对应任务目录——hotfix 通道（SELF-GATE 独立评审）
+closed_at: 2026-10-09
+closure_note: >-
+  关单（批 A2/RM-AG0113 一并复核）：判据①已满足（实测 P3 agent 可由 agate-md-field-set 写入）；
+  判据②由新增回归用例锁定；判据③全量 pytest 绿 + consistency 0 ERROR。原「P6→P7 被 exit 2 挡住」
+  早已由 agate-next 的 `_P6_PROVENANCE_PASS = (0, 2)` 消解。
+
 ```
 
-**【2026-09-29 独立评审更正两处错误陈述（本债仍 open，但理由须改）】**：
+**【2026-09-29 独立评审更正两处错误陈述（⚠️ 本段后经 2026-10-09 二次复核，结论已再变——见段末）】**：
 ① **「P6→P7 被 exit 2 挡住」已不成立**——`agate-next.py:258` 现为 `_P6_PROVENANCE_PASS = (0, 2)`，provenance 的 exit 2（缺 agent 属协作规范 WARNING）**现在会推进 P6→P7**。该修复是 DEBT0045 批（PR #375）做的，**与本债登记时的情形已不同**。（我在同批 CHANGELOG 里两段之外就用这个事实关闭了 DEBT0032，此处却仍写「被挡住」——**同一批内自相矛盾**，已更正。）
 ② **机制归属写错了**：不是「按 basename 的合法 key 集不含 agent」这种**字段集不同源**，而是`agate-md-field-set.py:309` 的 `writable = _writable_keys(rules_root) - {"agent"}`——**对任何 basename 都永久拒绝写 agent**（注释明写「防伪造身份，design note §7.2」）。独立评审实测：对 `P3-other.md` 同样报`非法 key 'agent'`，而 `status draft` 写 `P3-test-cases.md` 成功。⇒ 这是**刻意的全局策略**，不是漂移。
-⇒ **残留的真实摩擦**（本债仍成立的部分）：工具按策略拒写 agent ⇒ releaser 仍需手写 frontmatter（closure_criteria 第 2 条「不需手写 frontmatter」未满足）。**该残留由既有 RM-AG0065 承载**（本批不再另开 RM，见下）。
+⇒ ⚠️ **2026-10-09 二次复核（批次 hotfix-batchA2-0113）推翻本段②**：`agate-md-field-set.py`
+现**已可**为 `P3-test-cases.md` 写 `agent`（实测 `set agent test-designer` **rc=0 成功**；
+`:309` 的 `- {"agent"}` 已在 TAG0050 批 B 解除）。⇒ 本段②「对任何 basename 都永久拒绝写
+agent」**不再成立**；closure_criteria ①已满足、②由新增回归用例
+`test_agate_md_field_set.py::test_rm_ag0113_p3_agent_writable_by_tool` 锁定 ⇒ **本债已关单**
+（见上方 yaml 的 `status: closed` / `closed_at`）。本段保留为**历史留痕**。
 ## DEBT0042
 
 ```yaml

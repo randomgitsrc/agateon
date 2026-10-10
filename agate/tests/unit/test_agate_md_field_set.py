@@ -537,3 +537,23 @@ def test_bdd_19_dispatch_templates_reference_set_tool_no_copyable_fence(agate_as
 
     # 旧的"直接复制"裸 frontmatter 围栏指引必须已被替换（当前仍存在，是本 BDD 的真红灯来源）
     assert "文件必须以这段 Header 开头（直接复制" not in prompt_text
+
+
+def test_rm_ag0113_p3_agent_writable_by_tool(agate_scripts, python_exe, run_cli, tmp_path):
+    """DEBT0041 关单回归（RM-AG0113 一并复核）：`P3-test-cases.md` 的 `agent` 可由
+    `agate-md-field-set` **正常写入**——releaser 正常流程**无需手写 frontmatter**。
+
+    该债原判据①即此场景；2026-10-09 实测：`set agent` 对 P3 rc=0 成功（TAG0050 批 B 已解除
+    旧的 `writable - {"agent"}` 限制）。本用例锁定该行为，防再次回退。
+    """
+    md = tmp_path / "P3-test-cases.md"
+    md.write_text(
+        "---\nphase: P3\ntask_id: T001\ntype: test-cases\n---\n\n## 用例\n",
+        encoding="utf-8",
+    )
+    result = _run_set(agate_scripts, python_exe, run_cli, ["agent", "test-designer"], md)
+    assert result.returncode == 0, (
+        f"P3-test-cases.md 的 agent 须可由工具写入（DEBT0041）；rc={result.returncode}\n"
+        f"{result.output[-400:]}"
+    )
+    assert "agent: test-designer" in md.read_text(encoding="utf-8")
