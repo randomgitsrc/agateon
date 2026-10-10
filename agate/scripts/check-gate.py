@@ -1672,6 +1672,30 @@ def gate_p6(task_dir):
     if _check_render_blocks(p6_file) != 0:
         return 1
 
+    # RM-AG0097（2026-10-10）：P6-evidence 若被项目 .gitignore 忽略 ⇒ 「证据存在性」判据只在
+    # **作者本机**成立（他人复核 / CI / 换机时克隆里没有这些文件，`check-p6-provenance`、
+    # `check-p6-evidence` 全部失效）。此处**不阻断**（只提示）——修复在项目 .gitignore 采用协议
+    # `assets/templates/gitignore-fragment.txt` 的取反规则（`!agate-workspace/tasks/**/P6-evidence/**`
+    # 须写在 `*.log` 之类宽规则**之后**）。已入库文件 `check-ignore` 返回非 0 ⇒ 不误报。
+    _ev_dir = os.path.join(task_dir, "P6-evidence")
+    if os.path.isdir(_ev_dir):
+        _ignored = []
+        for _root, _dirs, _names in os.walk(_ev_dir):
+            for _n in _names:
+                if _n.startswith("."):
+                    continue
+                _rel = os.path.relpath(os.path.join(_root, _n), task_dir)
+                _rc, _ = _git(["check-ignore", "-q", "--", _rel], cwd=task_dir)
+                if _rc == 0:
+                    _ignored.append(_n)
+        if _ignored:
+            sys.stderr.write(
+                f"GATE P6 WARNING: P6-evidence/ 下 {len(_ignored)} 个文件被 .gitignore 忽略"
+                f"（如 {_ignored[0]}）——「证据存在性」判据只在**作者本机**成立，他人复核 / CI / "
+                "换机时会失效；请在项目 .gitignore 采用协议 `gitignore-fragment.txt` 的取反规则"
+                "（RM-AG0097，不阻断）\n"
+            )
+
     # TAG0050 批 D（设计 §5.1）：非 legacy 任务走结构化判据 D1–D10（读 `results`）。
     # GAP-1 闭合（2026-10-08）：要求项由契约单源决定（快照 requires.results: true）——
     # 非 legacy 任务未声明 `results` 时 `_gate_p6_structured` 自身报 ERROR（不再回退既有判定）。
