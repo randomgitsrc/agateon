@@ -676,6 +676,12 @@ P3 发现 P2 设计有问题，回退到 P2 → retry 又从 0 开始 → P2 可
 
 ### 回退机制（诊断→跳转→PAUSED→人工批准→修→重跑）
 
+> **工具（别手算转移表）**：`agate-advance.py [TASK_DIR] [--to <phase>] [--reason <text>]` ——
+> **人工回退/跳转的引导入口**：不传 `--to` 打印当前 phase 的 next/retreat 转移表建议；`--to` 时
+> 解析目标、按 diff 给合法性提示（**diff≥2 会提示「须先 PAUSED」**），diff=1 等价**委托**
+> `agate-retreat-to.py`（自动单步回退，逐阶独立 commit + retry 记录同步）。它**不内联回退实现**，
+> 只做解析 + 提示 + 委托；`agate-retreat-state.py` 管回退态记录。
+
 逐步是诊断过程，不是执行过程：
 
 1. **诊断**：主 Agent 分析 gate 失败原因，确定问题源头在哪一阶段，落盘 `P{N}-gate-diagnosis.md`

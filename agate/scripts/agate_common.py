@@ -1423,6 +1423,21 @@ _GATE_KEY_LINE_RE = re.compile(r"^  (\w+):\s*(.+)$", re.MULTILINE)
 _P2_FIELD_LINE_RE = re.compile(r"^(packages|domains|ui_affected|gate_commands):")
 
 
+def strip_paired_quotes(value):
+    """只剥**成对**引号（首尾为同种引号才剥除）；不成对则原样保留。
+
+    RM-AG0092 / DEBT0047：原实现 `.strip('"').strip("'")` **各自**剥首尾——值以引号结尾时被吞
+    （实测 `"pytest -k 'foo'"` → `pytest -k 'foo`，命令语法破损）。改为仅当首尾恰为同一引号
+    字符（`'` 或 `"`）时才剥除该对。
+
+    **单源**（ADR-014）：`agate-read-p5-commands.py` 与 `agate-run.py` 共用本函数——
+    二者都从 `gate_commands` 块取值，口径必须一致。
+    """
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
 def parse_gate_commands_block(text):
     """解析 gate_commands 多行块 → (has_block, [(key, value), ...])。
 

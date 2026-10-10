@@ -16,18 +16,7 @@ import re
 import sys
 
 from agate_common import is_gate_meta_key
-
-
-def _strip_paired_quotes(value):
-    """只剥**成对**引号（首尾为同种引号才剥除）；不成对则原样保留。
-
-    RM-AG0092 / DEBT0047：原实现 `.strip('"').strip("'")` **各自**剥首尾——值以
-    引号结尾时被吞（实测 `"pytest -k 'foo'"` → `pytest -k 'foo`，命令语法破损）。
-    改为仅当首尾恰为同一引号字符（`'` 或 `"`）时才剥除该对，其余原样返回。
-    """
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-        return value[1:-1]
-    return value
+from agate_common import strip_paired_quotes as _strip_paired_quotes
 
 content = open(os.environ["P2_DESIGN"], encoding="utf-8").read()
 if not content.endswith(chr(10)):

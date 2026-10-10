@@ -185,6 +185,23 @@
   RM-AG0102 **重定为「采纳驱动」**：不排期硬切——当前硬切等于逼项目创建**无人读的文件**
   （范围「不做什么 #1」）。
 
+- **命令采纳审计 + 三处接线（RM-AG0102 采纳 / 孤儿工具接线）**：对全部 **49 个 `agate-*`**
+  按**接线位置**（流程文档/卡片 · hook · 其它脚本）审计，得：真接线 47 / 仅历史提及 1 /
+  **无「可执行调用形态」提及 1**。⚠️ **审计口径自我更正**：首版按**连字符**匹配（`agate-advance`）
+  判其为「完全孤儿」——**不准确**：`CONTEXT.md:33` / `state-machine.md:339` 已有**空格简写**
+  （`agate advance`）提及（SELF-GATE r1 指出）。修正后的准确表述是：**简写提及存在，但全仓没有它的
+  真实调用形态**（读者照 `agate advance` 敲会 command not found）⇒ 本轮接线正是补这一点。据此修三处：
+  ① **`agate-run` 采纳**——新增**任务源**：`--task <TASK_DIR>` 时同时认该任务 `P2-design.md`
+  的 `gate_commands`（此前只认项目 config 的 `verify.commands` ⇒ 协议流程零入口）；
+  并把 `P5-verification.md` 的执行入口**推荐为** `agate-run --task`（**白名单 + `runs/<k>.log`
+  证据 + 账本 `cmd_run`**，使「谁跑了什么」可审计）。引号剥离口径提为
+  `agate_common.strip_paired_quotes` **单源**（`agate-read-p5-commands` 与 `agate-run` 共用，
+  ADR-014；RM-AG0092/DEBT0047 的成对引号语义不变）。
+  ② **`agate-advance` 接线**——`state-machine.md` 回退机制节点名（人工回退/跳转引导入口，
+  diff≥2 提示须先 PAUSED、diff=1 委托 `agate-retreat-to`）。
+  ③ **`agate-md-field-set-gate-commands` 接线**——P2 卡的「gate_commands 声明」节点名
+  （正文块写入工具，逐 key 与 `check-gate.py::_reconcile_p2_fields` **同一校验函数**）。
+
 ### 文档 / 登记
 
 - **R6 双向差分脚本登记为项目固定资产（RM-AG0109）**：`AGENTS.md` 工作流 0a（「差分必须在副本上跑」）
