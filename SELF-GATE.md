@@ -10,7 +10,7 @@
 
 > **CI 判据与本文件同一口径**（接受两种留痕，二者取一即可）：`self-gate-review:` 指向的路径须在该提交中**真实存在**，`self-gate-skip:` 的**理由须非空**。
 > 该口径由 `agate/tests/unit/test_tag0051_self_gate.py` 的 BDD-22 判据守护：判据**导入 hook 的正则**（`_SKIP_RE`/`_REVIEW_RE`，正则定义单源、`is` 同一对象），并以真实 hook 子进程对 **5 组代表性样例**对拍接受集。
-> （背景见 DEBT0073：判据曾只认 `self-gate-review:`，致轻量档逃生通道不可用；⚠️ 该 5 组样例之外，另有 **3 类既有留痕逻辑差异**尚未消除，见 DEBT0075。）
+> （背景：判据曾只认 `self-gate-review:`，致轻量档逃生通道不可用。）
 
 但 WARNING 不拦截——遵循 hook 鲁棒性优先原则。主 Agent 仍可忽略 WARNING 直接 commit。真正的强制力依赖主 Agent 自觉 + CI 兜底（gate-backstop job 已接入，push 后重跑 gate；self-gate 语义审查的强制力仍依赖主 Agent 自觉）。详见 issue #002。
 
