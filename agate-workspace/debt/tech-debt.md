@@ -2869,3 +2869,41 @@ source: review
 created_at: 2026-10-11
 task_id: TAG0051-release-decoupling
 ```
+
+## DEBT0069
+
+```yaml
+id: DEBT0069
+category: protocol
+title: "`agate.config.yaml` 的 `release.preset` 声明**无任何值消费方**（声明 ≠ 开关；读者易误信「已声明即已生效」）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/agate_common.py
+    note: ":919 仅出现在 `PROJECT_CONFIG_DEFAULTS`（默认值字典）；无任何代码读取其值。"
+  - ref: agate/scripts/agate-config.py
+    note: ":49 仅 `init` 生成模板时写入该键；`validate` / `explain` 均不消费其值（`explain` 的说明文本非消费逻辑）。"
+  - ref: agate/scripts/check-gate.py
+    note: >-
+      :2358-2374 的「迁移期提示块」**只检查 `agate.config.yaml` 文件是否存在**，并在**文案**里提到该 preset 名，
+      **不读其值**。P2（TAG0051）据此曾误述其为「旧**唯一消费点**」——实为**无值消费方**。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P2-review.md
+    note: >-
+      独立实测（plan-eng-review，2026-10-11）：`grep -rn preset agate/scripts/*.py` 三处命中**均非「读值」**；
+      TAG0051 新建的发布门（`agate-release.py gate`）按当前设计**亦不读**该键。
+impact: >-
+  保留一个无消费方的声明，会让读者（含未来的 agent 与项目维护者）误信「已声明 = 已生效」，从而以为
+  发布流按 semver/CHANGELOG/tag 约定在执行而实际无人读取；TAG0051 把 P8 的 version/tag 检查移入独立发布门后，
+  该差距更明显（此前的「迁移期提示」只是文案提及，移除提示块后连提及点都消失）。
+recommendation: >-
+  二选一（先定口径再改代码）：(a) 让**新发布门**显式消费该键（作为「本项目采用标准发布流」的开关，
+  据此选择检查集）；或 (b) 明确其为**信息性声明**——在 `UPGRADING.md` 与声明 schema 处写明「不作开关、
+  不驱动任何逻辑」，并修正历史文档中「消费点」的不准确表述。**TAG0051 采用 (b)**（其 BDD-19 只要求
+  声明层与新语义一致 + 无悬空提示 + consistency 0 ERROR，不要求新消费方）。
+closure_criteria:
+  - "`release.preset` 有明确消费方（给出读取点与语义），或文档明示其为信息性字段"
+  - "仓库内不再有称其为「消费点」的表述"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```
