@@ -14,8 +14,10 @@ release workflow 内零打包逻辑：全部走本 CLI，因此本地（无 CI�
                                     确定性构建 agateon-<T>.tar.gz（本体）+ 每平台 offline 包 + SHA256SUMS + notes；
                                     先在暂存目录构建、全部成功后才落到 outdir（失败不留半成品）
   gate [--task TASK_DIR] [--sha SHA] [--repo DIR] [--ci-cmd CMD] [--consistency-cmd CMD]
-                                    发布门（TAG0051 M11）：目标提交 CI success（fail-closed：非 success
-                                    含 pending/queued/missing → 非 0）+ check-protocol-consistency.py
+                                    发布门（TAG0051 M11）：目标提交 CI success——按**检查名归组**只看
+                                    **已完成结论**（该名无任何已完成结论（missing/queued/in_progress）或已有
+                                    结论含非 success → 非 0，fail-closed 不等待；并发重跑不假失败，DEBT0074）
+                                    + check-protocol-consistency.py
                                     0 ERROR +（给出 --task 时）复用 check-gate.py P8。CI/consistency
                                     查询走**可注入命令**（--ci-cmd / --consistency-cmd / 同名 env），
                                     使本地可用 fixture/mock 验证；CI 内缺省用真 `gh`（不写死分支）。
@@ -450,13 +452,30 @@ def _ci_runs(args, repo_root, sha):
 
 
 def _non_success_names(runs):
-    """check-runs 中结论 != success 的名称（含 None/缺失/pending/queued）。"""
-    bad = []
+    """按**检查名**归组解析结论，返回非 success 的检查名（fail-closed）。
+
+    为何不逐条判：同一提交上可能并存**多轮**同 name 的 check-run——推 tag 会再次触发 CI
+    （`protocol-tests.yml` 的 `on:` 含 `push` 且未过滤 tag），使该 SHA 上同时出现
+    「已完成 success」与「新一轮 in_progress」（DEBT0074 实证：发布门因此假失败）。
+
+    口径（`有已完成结论` 为准；**无时间戳依赖**）：
+      · 该 name **无任何**已完成结论（missing / queued / in_progress）⇒ 非 success（**fail-closed，不等待**）；
+      · 有已完成结论但**存在**非 success ⇒ 非 success（保守：不因后续 success 而放行）；
+      · 已完成结论全为 success ⇒ 通过。
+    """
+    if any(not isinstance(r, dict) for r in runs):
+        return [repr(r) for r in runs if not isinstance(r, dict)]
+    groups = {}
     for r in runs:
-        if not isinstance(r, dict):
-            bad.append(repr(r))
-        elif r.get("conclusion") != "success":
-            bad.append(str(r.get("name") or "<unnamed>"))
+        groups.setdefault(str(r.get("name") or "<unnamed>"), []).append(r)
+    bad = []
+    for name, rs in groups.items():
+        done = [x for x in rs if x.get("conclusion") is not None]
+        if not done:
+            status = next((x.get("status") for x in rs if x.get("status")), "unknown")
+            bad.append(f"{name}（{status}）")
+        elif any(x.get("conclusion") != "success" for x in done):
+            bad.append(name)
     return bad
 
 

@@ -3210,7 +3210,7 @@ task_id: hotfix-debt0073-0074-dogfood-findings   # 批次标签，无对应任�
 id: DEBT0074
 category: protocol
 title: "推 tag 会**重跑** CI（`on: push` 未过滤 tag）⇒ 发布门看到 required checks 处于 queued/in_progress ⇒ **fail-closed**；「tag-push 触发发布」这条主路径**必然失败**"
-status: open
+status: closed
 priority: high
 evidence:
   - ref: .github/workflows/release.yml
@@ -3233,6 +3233,19 @@ evidence:
       pytest (ubuntu-latest)`；同一门**在本地**（tag 推之前）对同一 SHA **通过**（6 项 success）⇒ 佐证是并发 run 所致。
       **绕过**：等 tag push 触发的 CI 完成后，用 `workflow_dispatch`（`gh workflow run release.yml -f tag=v0.82.0`）
       重跑 ⇒ run `38141340966` **全步骤 success**（含门、构建、发布）。
+  - ref: agate/scripts/agate-release.py
+    note: >-
+      关单证据（批次 hotfix-debt0074-gate-concurrent-runs，2026-10-11）：`_non_success_names()` 改为
+      **按检查名归组、只看已完成结论**——该名无任何已完成结论（missing/queued/in_progress）或已有结论含
+      非 success ⇒ 非 success（fail-closed、不等待）；已完成结论全 success ⇒ 通过。**不依赖时间戳**。
+      独立评审（docs/reviews/agate-alignment-review-2026-10-11-HOTFIX-DEBT0074.md）实测结论：
+      **未发现任何可掩盖真实失败的场景**（新旧实现唯一行为差 = 同名「已完成 success + 未完成新 run」
+      ⇒ 通过集 ⊆ 旧集）；SEC-01/02/07 与 ADR-014 均未动。
+  - ref: agate/tests/unit/test_release_gate.py
+    note: >-
+      同批次回归（3 条）：① 并发重跑不假失败（**先红后绿**：还原旧实现 ⇒ 该用例 FAIL，恢复 ⇒ 通过）；
+      ② 该名无已完成结论仍 fail-closed；③ 已完成结论含 failure 仍非 0（②③ 在旧实现下亦通过 ⇒
+      它们锁的是「新口径不得过宽」）。全套 `test_release_gate.py` **18 passed**。
 impact: >-
   ① **新发布流程的主路径不可用**：`push tag → 自动构建并创建 Release` 在真实并发下**必然**失败
   （门与自己的 tag push 竞争）⇒ 只能靠 `workflow_dispatch` 二次触发，**与 `release.yml` 注释所宣的
@@ -3252,5 +3265,12 @@ closure_criteria:
   - "有判别力用例覆盖「同一 SHA 上存在并发进行中 run」的场景"
 source: review
 created_at: 2026-10-11
-task_id: hotfix-debt0073-0074-dogfood-findings   # 批次标签，无对应任务目录——hotfix 通道
+task_id: hotfix-debt0074-gate-concurrent-runs   # 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-11
+closure_note: >-
+  关单：发布门改为按检查名归组、只看已完成结论 ⇒ 消除「推 tag 重跑 CI 致门假失败」；
+  fail-closed 语义保持不变（无已完成结论 ⇒ 非 0，不等待）；有判别力用例锁定「不得过宽」。
+  ⚠️ 遗留说明：本修法使 **tag-push 路径可跑通**（前提是分支 CI 已完成 ⇒ 与 runbook「main CI 绿 → 打 tag」一致），
+  但**真机 tag-push 复验要等下一次发版**（tag 已存在，无法在本批现场重放）；本批以单测覆盖该场景为准。
+  `protocol-tests.yml` 的「不改为 push 只限 main」既定口径**未动**（避免 PR #222 的自引用陷阱）。
 ```

@@ -83,7 +83,9 @@ jobs:
           "$RUNNER_TEMP/venv/bin/pip" install --quiet --only-binary=:all: "pyyaml==${PIN}"
 
       # 发布门 backstop（TAG0051 M12 / BDD-9/10/12）：tag-push 路径的 fail-closed 兜底——
-      # 目标提交 CI 非 success（含 pending/queued）或 consistency 报 ERROR ⇒ 中止，不建 Release。
+      # 目标提交 required 检查**无已完成结论**（missing/queued/in_progress）或已完成结论含非 success
+      # ⇒ 中止，不建 Release；同一 SHA 上因 tag push 并发重跑的新 run **不**致假失败（按名归组只看
+      # 已完成结论，DEBT0074）。consistency 报 ERROR 同样中止。
       # 只**调用**仓库脚本 `agate-release.py gate`，workflow 内不内联门逻辑。
       #
       # ⚠️ SEC-03（required 集合漂移）：下列 AGATE_RELEASE_REQUIRED_CHECKS 是**硬编码**的 required
