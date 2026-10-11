@@ -3159,3 +3159,98 @@ closure_note: >-
   P7: blocker_count/deviation_count/deviation_critical_count/design_gap_count/design_gap_reviewed_count/
   code_map_*），判别力回归用例覆盖。
 ```
+
+## DEBT0073
+
+```yaml
+id: DEBT0073
+category: protocol
+title: "`self-gate-skip:` 留痕口径**分叉**：`commit-msg` hook 接受它，但 BDD-22 判据只认 `self-gate-review:` ⇒ 「轻量档 + 触发面」的改动在 CI 上**必然红**（逃生通道实际不可用）"
+status: open
+priority: medium
+evidence:
+  - ref: .githooks/commit-msg-self-gate.sh
+    note: >-
+      hook 的提示文案明示两条出路：`self-gate-review: <路径>` **或** `self-gate-skip: <理由>`
+      （并声明「WARNING 不拦截」）。
+  - ref: agate/tests/unit/test_tag0051_self_gate.py
+    note: >-
+      判据 `_bdd_22_violations()`（TAG0051 交付）**只**检查 `self-gate-review:`：`if "self-gate-review:" not in msg:
+      violations.append(...)` ⇒ `self-gate-skip:` 被视为「缺留痕」。
+      **触发实证**（2026-10-11 v0.82.0 发版）：发布提交 `ccb1c20f` 用 `self-gate-skip:` 留痕，hook 通过
+      （仅 WARNING），但 **CI `pytest` 红**：`assert not ['ccb1c20f：缺 self-gate-review: 留痕']`
+      （run 38139158601）⇒ 改用 `self-gate-review:` 指向真实评审产出后转绿（`06e20339`）。
+  - ref: AGENTS.md
+    note: >-
+      约定面：`SELF-GATE.md` 的**轻量档**（纯措辞/错别字/注释，无判据语义/脚本行为/契约数据/hook 正则变化）
+      明确允许 `self-gate-skip: <理由>` 且**不派独立评审**；而触发面**包含** `agate/**/*.md`、`README.md`
+      ⇒ 一个「触发面内的纯措辞改动」两头都够格：按约定应走 skip，按判据必然红。
+impact: >-
+  ① **逃生通道不可用**：触发面内的轻量档改动（错别字、措辞、注释）**无法**只靠 `self-gate-skip:` 通过 CI
+  ⇒ 只能（i）白写一份独立评审，或（ii）绕过（改成不触面、或硬推）——**两条都在削弱机制**；
+  ② **口径分叉**：留痕规则出现**两份**（hook 一份、判据一份），违反判据单源（ADR-014 精神）——
+  是「判据与守护不同源」的又一实例；
+  ③ 本次发版实测代价：**1 个 red CI 周期** + 一次返工。
+recommendation: >-
+  **先定口径再改实现**（二选一，并**补判别力用例**锁定所选口径）：
+  (a) **让判据认 skip**：`_bdd_22_violations()` 接受 `self-gate-skip:` **且理由非空**（与 hook 同口径），
+  额外可要求「理由不得为占位文本」；(b) **明确轻量档的适用面**：若坚持「触发面内一律须真实评审」，
+  则须同步改 `SELF-GATE.md`/`AGENTS.md` 的轻量档表述（把触发面**排除**在外）与 hook 的提示文案。
+closure_criteria:
+  - "hook 与 BDD-22 判据对留痕的接受集**一致**（同一份口径，单源）"
+  - "有判别力回归用例：按所选口径，负例（无留痕/占位理由）仍被判 FAIL"
+source: review
+created_at: 2026-10-11
+task_id: hotfix-debt0073-0074-dogfood-findings   # 批次标签，无对应任务目录——hotfix 通道
+```
+
+## DEBT0074
+
+```yaml
+id: DEBT0074
+category: protocol
+title: "推 tag 会**重跑** CI（`on: push` 未过滤 tag）⇒ 发布门看到 required checks 处于 queued/in_progress ⇒ **fail-closed**；「tag-push 触发发布」这条主路径**必然失败**"
+status: open
+priority: high
+evidence:
+  - ref: .github/workflows/release.yml
+    note: >-
+      `on: push: tags: ['v*']`（自称「tag-push backstop」）+ `workflow_dispatch`；发布门步骤
+      `agate-release.py gate --sha "$GITHUB_SHA"` 要求**目标提交**的 required contexts 结论为 `success`
+      （fail-closed，显式含 pending/queued/missing）。
+  - ref: .github/workflows/protocol-tests.yml
+    note: >-
+      该 CI 的 `on: push` **未按分支过滤** ⇒ **tag push 同样触发一次新的 CI run**，使该 SHA 上的
+      required checks **被重置为 queued/in_progress**。
+  - ref: agate-release.py
+    note: >-
+      门**不轮询**（设计如此：fail-closed、不过滤 pending）⇒ 与并发新 run 竞争时**必然**判失败。
+  - ref: "CI 实证（2026-10-11，v0.82.0 首发）"
+    note: >-
+      Release run `38141030366`（tag push 触发）**失败**于「Release gate (fail-closed backstop)」：
+      `发布门失败——目标提交 CI 非 success（含 pending/queued/missing）。非 success 项：consistency,
+      gate-backstop, pytest (windows-latest), shellcheck (ubuntu-latest), shellcheck (windows-latest),
+      pytest (ubuntu-latest)`；同一门**在本地**（tag 推之前）对同一 SHA **通过**（6 项 success）⇒ 佐证是并发 run 所致。
+      **绕过**：等 tag push 触发的 CI 完成后，用 `workflow_dispatch`（`gh workflow run release.yml -f tag=v0.82.0`）
+      重跑 ⇒ run `38141340966` **全步骤 success**（含门、构建、发布）。
+impact: >-
+  ① **新发布流程的主路径不可用**：`push tag → 自动构建并创建 Release` 在真实并发下**必然**失败
+  （门与自己的 tag push 竞争）⇒ 只能靠 `workflow_dispatch` 二次触发，**与 `release.yml` 注释所宣的
+  tag-push backstop 语义不符**；
+  ② 失败是 **fail-closed 且不轮询**（有意如此，不属实现 bug），但它把「并发 run」这个正常现象
+  当成「CI 非绿」⇒ **假阴性**，会误伤每一次发布尝试；
+  ③ 首次实战即撞（正是本次 v0.82.0）⇒ 该路径此前**零实战**（TAG0051 交付时只做了注入式夹具验证）。
+recommendation: >-
+  二选一（并补夹具回归）：
+  (a) **让 CI 不因 tag 而重跑**：`protocol-tests.yml` 的 `push` 加分支过滤（`branches: [...]`，排除 tag）
+  ⇒ tag push 不再重置 required checks，门看到的仍是分支那次已完成的 success；
+  (b) **让门容忍"同 SHA 上的并发新 run"**：结论取值改为「该 SHA 上**最近一次已完成**的同类 run/check」
+  （或对 `queued/in_progress` 项给出**有限等待**再判），并把该语义写进门文档。
+  ⚠️ 无论选哪个，都须补「并发新 run 场景」的判别力用例（当前夹具未覆盖 ⇒ 这才让缺陷漏到首次真实发布）。
+closure_criteria:
+  - "tag push 触发的发布**能一次跑通**（或明示只支持 `workflow_dispatch` 并把 `release.yml` 文案改一致）"
+  - "有判别力用例覆盖「同一 SHA 上存在并发进行中 run」的场景"
+source: review
+created_at: 2026-10-11
+task_id: hotfix-debt0073-0074-dogfood-findings   # 批次标签，无对应任务目录——hotfix 通道
+```
