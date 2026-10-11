@@ -608,7 +608,7 @@ task_id: TAG0017
 id: DEBT0015
 category: protocol
 title: env_constraints 声明性字段无执行/gate 绑定（deploy 类动作只注入不强制，TQC0001 实证 dist 从未主动产出）
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/scripts/agate-extract-context.py
@@ -650,6 +650,13 @@ evidence:
       落点要机械化须先做**设计**：为「需产出构建/部署产物」的声明引入**结构化键**（如
       `artifacts: [{path, phase, required}]`）+ 在 P4/P6 gate 做**存在性**校验（含误报面设计：
       多数任务声明环境约束但无产物）。⇒ 列为**设计项**，随 TAG0038 之后的机制批处理，不占 hotfix 通道。
+  - ref: agate-workspace/roadmap/roadmap.md
+    note: >-
+      关单证据（发现任务 TAG0017；残余承接方 RM-AG0083「env_constraints 的 UI/dist 类约束无执行落点」，
+      即本债 ③ 的提升态）：closure_criteria ①② 早已满足（P2 卡与 architect 角色文件已写明声明性 vs 执行性
+      边界；P4 卡已加「UI/需构建任务 P4 后应确认 dist 类产物存在」提醒条目）；③（TQC0001 类 UI 任务在 P4 后
+      自动产出 dist、不靠用户提醒）是面向未来的行为性指标——需下一个真实 UI 任务走完 P4 才能实证，本债自身
+      无法自证 ⇒ 转 RM-AG0083 承接，不在本债内悬置。
 impact: 任何依赖 env_constraints 声明 deploy/pack/build 产物的任务，可能出现'设计说要做但流程不强制'的静默缺口；UI 任务 dist 产物、打包产物、部署产物均无 gate 检查；TQC0001（真实跨项目）已实证
 recommendation: 三改一并做——(1) 明确 env_constraints 字段语义边界（声明性 vs 执行性）：P2 卡片/architect 角色说明'执行性约束必须落到 gate_commands 或 P4/P8 明确 checklist'；(2) UI 任务 P4 后应构建 dist：P4 卡片「自查≠gate」节补'UI 任务 P4 后构建 dist（windeployqt 等）'或 P8 gate 加 dist 产物存在性检查；(3) 可选：check-gate.py 或新脚本校验 gate_commands 声明了 deploy/构建命令时 P4/P8 产出物存在
 closure_criteria:
@@ -659,7 +666,10 @@ closure_criteria:
   - 全量 pytest + consistency 0 ERROR + shellcheck 0 issue
 source: retrospective
 created_at: 2026-08-19
-task_id: TAG0017
+task_id: TAG0017   # 发现任务；残余由 RM-AG0083 承接（见 evidence/closure_note）
+closed_at: 2026-10-11
+closure_note: >-
+  **用户裁决关单**（2026-10-11）：本债属「机制已落文档、残余为面向未来的行为性指标」的情形——①② 已达、③ 需真实 UI 任务实证 ⇒ 残余转 RM-AG0083（roadmap backlog）承接，避免同一件事在债务与 roadmap 两处各记一份。
 ```
 
 ## DEBT0016
@@ -2773,7 +2783,7 @@ closure_note: >-
 id: DEBT0067
 category: protocol
 title: "`agate-md-field-set` 可写 key 白名单与 `check-frontmatter.py` 认的合法字段**分叉** ⇒ 卡片要求声明的字段无法用工具写入，只能手写（与派发纪律「不要手写 frontmatter」直接冲突）"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/scripts/agate-md-field-set.py
@@ -2824,6 +2834,16 @@ evidence:
       「仅登记 / 需 append」，`set` 拒绝属**预期**（`--list` 已**显式标注**其能力为「仅登记/需 append（不可 set）」，
       回归用例⑧锁定）。⇒ 两侧口径（工具写侧 vs schema/卡）在这些键上**已一致**，不再存在「列出却拒写」的分歧。
       **是否可据此关单由后续裁决**（本条保持 open；未覆盖三项属设计选择而非缺口，但 append 面守卫另有 DEBT0072 跟踪）。
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      关单证据（发现任务 TAG0051-release-decoupling；修复批次 hotfix/debt0067-0068-write-side，
+      PR #455 合并 1a707fc1）：可写面 = GENERIC_HEADER_KEYS ∪ phases.yaml task_fields ∪
+      _schema_legal_keys(basename)（单源派生自 check-frontmatter.py::SCHEMAS[basename]['migrated_keys']，
+      ADR-014）∪ JSON_FIELDS。7 个此前不可写的 P1 字段全部可写（override / coupling_checklist /
+      internal_only / internal_only_reason / 跳过风险 / design_trivial / follows_existing_pattern）、
+      P8 的 delivery / debt_check 可写、dispatch_plan 可写（含 batches[].output）。
+      剩余 3 个（need_confirm_resolved / suggest_resolved / scope_resolved）属设计上的 append-only：
+      --list 与「非法 key」错误信息已显式标注其能力 ⇒ 「列出却拒写」的分歧已消除（两侧口径一致）。
 impact: >-
   ① 协议自相矛盾：卡片与派发纪律要求用工具写，工具写不了 ⇒ 执行者要么违规手写、要么静默降档。
   ② **静默降档会悄悄改变仪式深度**（`full`/`thin` 影响评审触发面），而 check-routing 只校验声明值，
@@ -2838,7 +2858,10 @@ closure_criteria:
   - "有回归用例锁定该一致（对白名单做子集断言，先红后绿）"
 source: review
 created_at: 2026-10-11
-task_id: TAG0051-release-decoupling
+task_id: TAG0051-release-decoupling   # 发现任务；修复批次见 evidence
+closed_at: 2026-10-11
+closure_note: >-
+  **用户裁决关单**（2026-10-11）。理由：写入面与 schema 的口径分叉已消除——7 个此前不可写的 P1 字段已全部可写、P8 两项可写、dispatch_plan 可写；剩余 3 个字段为设计上的 append-only，工具已显式标注其能力，不再出现「列出却拒写」⇒ 债务期待的两条出路（能写 / 或明确标注能力）已一致。回归：逐键对拍「展示↔真实行为」的守护测试经变异法证实有判别力。
 ```
 
 ## DEBT0068
