@@ -306,3 +306,143 @@ def test_bdd_23_no_new_check_star_script_added(agate_scripts):
         "BDD-23：新增了 `agate/scripts/check-*.py`（落点①）——本方案应落 agate-*.py（支②）；"
         f"新增：{added}"
     )
+
+
+# ── DEBT0069：`release.preset` 成为发布门的真实消费点 ────────────────────────
+#
+# `agate.config.yaml` 的 `release.preset` 此前无值消费方；现由 `agate-release.py gate` 消费：
+#   ① 声明已知（semver-changelog-tag）⇒ 按既有检查集（行为不变）+ 回显 preset；
+#   ② 声明未知 ⇒ fail-closed 非 0（错误含 preset 名）；
+#   ③ 未声明 ⇒ 回落默认、不阻断（缺键不得 fail-closed）。
+_CONFIG_KNOWN = (
+    "schema_version: 1\n"
+    "project:\n  language: unknown\n  package_manager: unknown\n"
+    "release:\n  preset: semver-changelog-tag\n"
+)
+_CONFIG_UNKNOWN = (
+    "schema_version: 1\n"
+    "project:\n  language: unknown\n  package_manager: unknown\n"
+    "release:\n  preset: bogus-preset\n"
+)
+_CONFIG_NO_PRESET = "schema_version: 1\nproject:\n  language: unknown\n  package_manager: unknown\n"
+
+
+def _ok_extra(tmp_path, python_exe):
+    return [
+        "--ci-cmd", _ci_cmd(tmp_path, python_exe, _OK_RUNS),
+        "--consistency-cmd", _rc_cmd(tmp_path, python_exe, 0),
+    ]
+
+
+def test_debt0069_known_preset_keeps_existing_behavior(
+    git_repo, tmp_path, agate_scripts, python_exe, run_cli
+):
+    """DEBT0069①：声明已知 preset ⇒ 门行为与引入前一致（exit 0），且回显所用 preset。"""
+    repo, td = _repo_with_task(git_repo)
+    (repo / "agate.config.yaml").write_text(_CONFIG_KNOWN, encoding="utf-8")
+    result = _gate(agate_scripts, python_exe, run_cli, repo, td, _ok_extra(tmp_path, python_exe))
+    assert result.returncode == 0, (
+        "DEBT0069①：声明已知发布流 semver-changelog-tag 时门应通过（exit 0），"
+        f"实际 rc={result.returncode}\n{result.output[:500]}"
+    )
+    assert "semver-changelog-tag" in result.stderr, (
+        "DEBT0069①：门应在输出回显所用 preset（可审计）"
+    )
+
+
+def test_debt0069_unknown_preset_fails_closed(
+    git_repo, tmp_path, agate_scripts, python_exe, run_cli
+):
+    """DEBT0069②：声明未知 preset ⇒ 门 fail-closed 非 0，且错误信息含 preset 名。"""
+    repo, td = _repo_with_task(git_repo)
+    (repo / "agate.config.yaml").write_text(_CONFIG_UNKNOWN, encoding="utf-8")
+    result = _gate(agate_scripts, python_exe, run_cli, repo, td, _ok_extra(tmp_path, python_exe))
+    assert result.returncode != 0, (
+        "DEBT0069②：声明未知发布流时门须 fail-closed 非 0，"
+        f"实际 rc={result.returncode}\n{result.output[:500]}"
+    )
+    assert "bogus-preset" in result.stderr, (
+        "DEBT0069②：错误信息须含未识别的 preset 名（bogus-preset）"
+    )
+
+
+def test_debt0069_absent_preset_does_not_block(
+    git_repo, tmp_path, agate_scripts, python_exe, run_cli
+):
+    """DEBT0069③：未声明 release.preset（缺键）⇒ 门不因缺键失败，其余检查照常判定（exit 0）。"""
+    repo, td = _repo_with_task(git_repo)
+    (repo / "agate.config.yaml").write_text(_CONFIG_NO_PRESET, encoding="utf-8")
+    result = _gate(agate_scripts, python_exe, run_cli, repo, td, _ok_extra(tmp_path, python_exe))
+    assert result.returncode == 0, (
+        "DEBT0069③：缺 release.preset 时门不得 fail-closed（应回落默认），"
+        f"实际 rc={result.returncode}\n{result.output[:500]}"
+    )
+
+
+# ── DEBT0069（A3b/A7）：已知 preset 集**单源于 schema enum**（ADR-014 判据单源）──────
+_CONFIG_CUSTOM = (
+    "schema_version: 1\n"
+    "project:\n  language: unknown\n  package_manager: unknown\n"
+    "release:\n  preset: custom-flow\n"
+)
+
+
+def test_debt0069_known_presets_single_sourced_from_schema_enum(agate_scripts):
+    """DEBT0069（单源）：门的已知 preset 集 == schema 的 `release.preset.enum`（不手抄副本）。"""
+    mod = H.load_project_module(agate_scripts, "agate-release.py", "agate_release")
+    schema_file = agate_scripts.parent / "rules" / "schema" / "project-config.schema.json"
+    schema = json.loads(schema_file.read_text(encoding="utf-8"))
+    enum = schema["properties"]["release"]["properties"]["preset"]["enum"]
+    assert list(mod._known_release_presets()) == enum, (
+        "DEBT0069：门的已知 preset 集须运行时从 schema enum 派生，不得自带副本"
+        f"（schema={enum!r}）"
+    )
+
+
+def test_debt0069_gate_accepts_schema_added_preset(tmp_path, git_repo, python_exe, run_cli):
+    """DEBT0069（单源→行为联动）：隔离协议根中把 schema enum **加值** ⇒ 门随之**接受**该值。
+
+    构造：拷贝全部 `agate/scripts/*.py` 到 `<tmp>/proto/agate/scripts/`，并把
+    `<tmp>/proto/agate/rules/schema/project-config.schema.json` 的 `release.preset.enum` 加
+    一项 `custom-flow`。声明 `preset: custom-flow` ⇒ 门 rc=0 且回显——证明「已知集」是**运行时
+    从 schema 读**（若为手抄副本则会误判 fail-closed）。
+    """
+    repo = git_repo.path
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    git_repo.commit("init")
+
+    proto = tmp_path / "proto"
+    scripts = proto / "agate" / "scripts"
+    H.copy_real_scripts(scripts)
+    schema_path = proto / "agate" / "rules" / "schema" / "project-config.schema.json"
+    schema_path.parent.mkdir(parents=True, exist_ok=True)
+    real_schema_file = H.REAL_SCRIPTS.parent / "rules" / "schema" / "project-config.schema.json"
+    schema = json.loads(real_schema_file.read_text(encoding="utf-8"))
+    schema["properties"]["release"]["properties"]["preset"]["enum"] = [
+        "semver-changelog-tag",
+        "custom-flow",
+    ]
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    (repo / "agate.config.yaml").write_text(_CONFIG_CUSTOM, encoding="utf-8")
+    result = run_cli(
+        python_exe,
+        str(scripts / "agate-release.py"),
+        "gate",
+        "--sha",
+        "HEAD",
+        "--ci-cmd",
+        _ci_cmd(tmp_path, python_exe, _OK_RUNS),
+        "--consistency-cmd",
+        _rc_cmd(tmp_path, python_exe, 0),
+        "--repo",
+        str(repo),
+        cwd=str(repo),
+    )
+    assert result.returncode == 0, (
+        "DEBT0069：schema enum 新增的 preset 应被门接受（已知集运行时派生），"
+        f"实际 rc={result.returncode}\n{result.output[:600]}"
+    )
+    assert "custom-flow" in result.stderr, "DEBT0069：门应回显所用 preset=custom-flow"
+
+
