@@ -1,0 +1,15 @@
+# BDD-20 evidence — legacy 任务行为不变（R6 双向差分）
+# cwd: /home/kity/oclab/agateon  HEAD: c5bda4df  branch: task/TAG0051-release-decoupling
+$ timeout 900 bash docs/design-notes/r6-differential-prepare.sh --src . --dst /tmp/opencode/tag0051-p6-r6-corpus
+# 跑前真实仓库 git status（除本任务 P6 产出外）= 干净；跑后 = 同（见尾部核对）
+r6-differential-prepare: src=/home/kity/oclab/agateon  dst=/tmp/opencode/tag0051-p6-r6-corpus  allow_prefix=/tmp/opencode
+r6-differential-prepare: after 侧 = /home/kity/oclab/agateon/agate（真实工作树，含未提交改动；非 corpus）
+r6-differential: before=581369fc9d464b60692ebf71cdeb8605b9c3add9  after=/home/kity/oclab/agateon/agate  allow=/home/kity/oclab/agateon/docs/design-notes/r6-allowlist.yaml
+[ALLOWED] check-gate:P8 TAG0042-config-and-enforcement rc 2->2 added=1 removed=1
+[ALLOWED] check-gate:P8 TAG0050-task-data-contract rc 2->2 added=1 removed=1
+r6-differential: legacy 任务 39 个，差异 2 条，未匹配 0 条
+EXIT=0
+
+# 跑后真实仓库 git status 核对（除 P6 产出外无新增/无账本污染）：
+$ git status --porcelain -uall | grep -v P6-
+(仅 P6 产出，无其它改动)

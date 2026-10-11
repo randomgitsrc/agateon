@@ -1,0 +1,11 @@
+# BDD-5 evidence — READY 前置对「CHANGELOG [Unreleased] 缺本任务条目」判失败（BDD-4 反例）
+# 被测：agate/scripts/check-changelog.py <task_id>
+
+$ cat /tmp/opencode/tag0051-p6/work/bdd5/CHANGELOG.md
+## [Unreleased]
+- 其他任务条目
+
+$ cd /tmp/opencode/tag0051-p6/work/bdd5 && python3 /home/kity/oclab/agateon/agate/scripts/check-changelog.py TAG9001
+EXIT: 1
+
+# 判定：exit 1。

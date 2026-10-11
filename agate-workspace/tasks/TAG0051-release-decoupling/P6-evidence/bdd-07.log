@@ -1,0 +1,6 @@
+# BDD-7 evidence — P8 产出缺 bump_type 字段 ⇒ check-gate.py P8 exit 1（BDD-6 反例）
+# ⚠ AGATE_ROOT=$REPO/agate（= 本工作树协议根）已导出：被测对象是**本工作树**的 check-gate.py +
+$ cd /tmp/opencode/tag0051-p6/work/bdd67 && AGATE_ROOT=/home/kity/oclab/agateon/agate python3 /home/kity/oclab/agateon/agate/scripts/check-gate.py P8 t7
+GATE P8: P8-release.md 缺 bump_type 字段
+EXIT: 1
+# 判定：exit 1。

@@ -1,0 +1,23 @@
+# BDD-22 evidence — 改动 agate/ 协议本体/脚本的提交含独立评审留痕
+# cwd: /home/kity/oclab/agateon  范围: origin/main..HEAD
+$ git log --no-merges --format='%h %s' origin/main..HEAD
+c5bda4df wf(TAG0051-P5): 技术验证——gate_commands 全 7 条执行（仅 1 条预存环境失败）
+9771e76a wf(TAG0051-P4): 实现——发布与任务解耦（8 批 / 4 实现支 + 2 轮修复；C8 评审 + SELF-GATE 全通过）
+d4e32f4f wf(TAG0051-P3): TDD 红灯基线——36 用例（26 红灯全 B 类）/ 8 测试文件 + level-2 fixture
+8aca306f chore(registry): DEBT0069 落盘（release.preset 无值消费方）——P2 复评析出
+d0ac0124 wf(TAG0051-P2): 方案设计——发布门 = agate-release.py gate（3 候选 / 8 批）
+38016ec2 chore(registry): DEBT0067 扩面（dispatch_plan）+ 新增 DEBT0068（P2 卡 output vs MAX_DEPTH）
+1d79c488 wf(TAG0051-P1): 需求基线——23 条 BDD（RM-AG0103 任务与发布解耦）
+f8124050 chore(registry): 补登记 RM-AG0116 + DEBT0067；修 P0-brief 引用（TAG0051 P1 复核发现）
+6d0ec756 wf(TAG0051-P0): 立项重启——时效性自检 + 同类/影响面预判（旧分支 71 commit 落后，迁至新分支）
+
+$ # 对本范围每个改动 agate/ 的提交，列出其 self-gate-review 留痕
+--- 9771e76ac8aaa6a18b1d3479fb8a87215fca786e ---
+  `self-gate-review:` 留痕」，**本提交即该条件** ⇒ 提交后应转绿）；
+self-gate-review: docs/reviews/agate-alignment-review-2026-10-11-TAG0051-P4.md
+
+$ python3 -m pytest agate/tests/unit/test_tag0051_self_gate.py -q
+.                                                                        [100%]
+1 passed in 0.11s
+
+# 判定：origin/main..HEAD 中每个改动 agate/ 协议本体/脚本的提交都带可兑现 self-gate-review 留痕；测试绿。

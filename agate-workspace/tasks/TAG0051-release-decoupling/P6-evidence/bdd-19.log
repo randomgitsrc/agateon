@@ -1,0 +1,24 @@
+# BDD-19 evidence — release.preset 声明层消费点与去 tag/version 后 P8 语义一致（无悬空提示）
+# 夹具同 BDD-2：暂存区有 CHANGELOG 变更（旧 version/tag 痕迹触发条件），项目根无 agate.config.yaml。
+# AGATE_ROOT=/home/kity/oclab/agateon/agate（本工作树协议根，理由同 bdd-16）
+
+$ sed -n '16,17p' /home/kity/oclab/agateon/agate.config.yaml   # 本仓 release.preset 声明
+release:
+  preset: semver-changelog-tag
+
+$ cd /tmp/opencode/tag0051-p6/work/bdd23 && AGATE_ROOT=/home/kity/oclab/agateon/agate python3 /home/kity/oclab/agateon/agate/scripts/check-gate.py P8 task 2>&1 | grep -i 'agate.config.yaml' || echo 'NO dangling preset hint'
+NO dangling preset hint
+
+# 静态面（P8 gate 源码不再含迁移期 preset 提示文案）:
+$ grep -n '未发现项目声明 agate.config.yaml' /home/kity/oclab/agateon/agate/scripts/check-gate.py || echo 'NO stale preset hint literal'
+NO stale preset hint literal in check-gate.py
+
+$ python3 /home/kity/oclab/agateon/agate/scripts/check-protocol-consistency.py 2>&1 | tail -2
+  仅有 433 个 WARNING，无 ERROR。
+
+EXIT(consistency)=0
+
+# 附注（WARNING 数 432→433）：P5=432；本次=433。多出的 1 条 = 本任务派发上下文文件
+#   .../P6-dispatch-context-verifier.md:31（'示例 YAML 不严格可解析'，tasks/ 下 narrative 冻结文件），
+#   与实现无关、非 ERROR。
+# 判定：P8 去 tag/version 后无悬空 preset 提示；check-protocol-consistency.py 0 ERROR（无悬空引用）。

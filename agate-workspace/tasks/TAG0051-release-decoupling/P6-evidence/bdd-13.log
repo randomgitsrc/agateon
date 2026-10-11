@@ -1,0 +1,11 @@
+# BDD-13 evidence — 发布门校验 roadmap 关联 RM 条目已 done
+# 夹具：任务 TAG9100 关联的 RM-AG9100 状态为 scheduled（非 done）。
+$ grep RM-AG9100 /tmp/opencode/tag0051-p6/work/gate/agate-workspace/roadmap/roadmap.md
+| RM-AG9100 | fixture | scheduled | P0 | TAG9100 | 2026-10-11 | 2026-10-11 |
+
+$ cd /tmp/opencode/tag0051-p6/work/gate && /usr/bin/python3 /home/kity/oclab/agateon/agate/scripts/agate-release.py gate --task t13 --sha HEAD --ci-cmd "/usr/bin/python3 ci_dump.py ok.json" --consistency-cmd "/usr/bin/python3 rc.py 0"
+agate-release: 发布门失败——check-gate.py P8 rc=1（应 2）：
+GATE P8: roadmap.md 关联记录 RM-AG9100 状态为 scheduled（非 done），须先回写 done 再推进发布
+EXIT: 1
+
+# 判定：关联 RM 非 done ⇒ 门非 0（提示须先回写 done）。

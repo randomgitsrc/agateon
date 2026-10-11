@@ -1,0 +1,29 @@
+# BDD-16 evidence — delivery.method 取值域定死为有限枚举（仅对新声明生效）
+# 夹具：level-2 非 legacy 任务（账本 contract_level=2，取自
+#   agate/tests/fixtures/task-data/level-2/pass/gate-events.jsonl）；delivery.method=release-notes（枚举内合法值）。
+#
+# ⚠ 关键：AGATE_ROOT=/home/kity/oclab/agateon/agate 已导出（= 本工作树协议根）。
+#   被测对象是本工作树 check-gate.py + agate/rules/task-data/level-2.yaml（含 method_enum）。
+#   不导出 AGATE_ROOT 时 resolve_rules_root 解析到已安装稳定版 ~/.agate/v0.81.0
+#   （该版无 level-2.yaml ⇒ 枚举校验 no-op、合法/非法都 exit 2）——那不是本任务对象。
+#   实证：$ AGATE_ROOT=... python3 check-gate.py P8 t16 ; echo rc
+GATE P8: 脚本化检查通过。仍需主 Agent：① 从 P2 gate_commands 逐包读取发布检查命令 ② 重跑 P5 gate ③ 用 git log 对照 CHANGELOG 无遗漏
+EXIT: 2
+
+$ cat /tmp/opencode/tag0051-p6/work/lvl2/t16/P8-release.md | sed -n '1,7p'
+---
+bump_type: minor
+debt_check: none
+delivery:
+  method: release-notes
+  ref:
+    - CHANGELOG.md
+$ grep method_enum /home/kity/oclab/agateon/agate/rules/task-data/level-2.yaml | tail -1
+  method_enum: [release-notes, tag-release, none]
+
+# 佐证（P3 用例，conftest 以隔离 HOME 使版本链失败 → 解析到工作树，等价口径）：
+$ python3 -m pytest agate/tests/unit/test_tag0051_delivery_contract.py -q
+...                                                                      [100%]
+3 passed in 0.27s
+
+# 判定：合法枚举值 ⇒ exit 2。

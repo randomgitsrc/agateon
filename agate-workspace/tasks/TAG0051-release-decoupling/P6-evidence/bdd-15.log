@@ -1,0 +1,8 @@
+# BDD-15 evidence — 发布失败处置显式规定「先评估回退 tag/Release 重打」
+# 判定面：AGENTS.md 发布清单 / release.yml 注释 / 相关协议节
+
+$ grep -rn '回退 tag/Release\|已被外部消费\|回退 tag' AGENTS.md agate/git-integration.md .github/workflows/release.yml
+/home/kity/oclab/agateon/AGENTS.md:209:**发布失败处置**（发布后/发布中发现问题的统一口径）：**先评估「回退 tag/Release 重打」**——撤回远端 tag（`git push origin :refs/tags/vN.N.0`）、删除 GitHub Release（`gh release delete vN.N.0`），修正后按上清单重新打 tag（`git tag -f`）/重建 Release；**仅当该 tag/Release 已被外部消费**（已有人基于它构建、下载或引用）**才改用出补丁版本**（不回退已发布版本，避免破坏消费者）。**不可逆外部动作（撤/重打 tag、删/建 Release、push）须用户授权后人工执行**，不得由 agent 自动触发。
+
+$ sed -n '/发布失败处置/,/^$/p' AGENTS.md
+**发布失败处置**（发布后/发布中发现问题的统一口径）：**先评估「回退 tag/Release 重打」**——撤回远端 tag（`git push origin :refs/tags/vN.N.0`）、删除 GitHub Release（`gh release delete vN.N.0`），修正后按上清单重新打 tag（`git tag -f`）/重建 Release；**仅当该 tag/Release 已被外部消费**（已有人基于它构建、下载或引用）**才改用出补丁版本**（不回退已发布版本，避免破坏消费者）。**不可逆外部动作（撤/重打 tag、删/建 Release、push）须用户授权后人工执行**，不得由 agent 自动触发。

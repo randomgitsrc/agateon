@@ -1,0 +1,23 @@
+# BDD-14 evidence — tag 时点在发布文档中全文统一（无矛盾副本）
+# 判定面：AGENTS.md（版本发布清单 + 「release PR 必须普通 merge」条）+ agate/git-integration.md 对应条
+
+$ grep -n '先合 release PR\|合并后 main CI 绿\|后打 tag\|先 push tag' AGENTS.md
+194:4. **先合 release PR → 合并后 main CI 绿 → 再打 tag**（顺序不可颠倒；打 tag 前先过发布门）：release PR 走普通 merge（`--no-ff`，禁 squash，见下方同名条）；合并后确认 main CI 全绿、发布门（目标提交 CI success + tag↔提交一致 + `check-protocol-consistency.py` 的检查 7/13 均 0 ERROR + roadmap RM `done`）通过后，**由人工**执行 `git tag vN.N.0 && git push origin vN.N.0`——`git push` 不带 tag **默认不推送 tag**（v0.51.0 教训）；推送后 `git ls-remote --tags origin vN.N.0` 验证远端到达
+207:**release PR 必须普通 merge（`--no-ff`），禁止 squash**：发布顺序统一为「**先合 release PR → 合并后 main CI 绿 → 后打 tag → Release**」——tag 打在 main 的合并提交上，**G-5 验证**用 `git describe --tags --abbrev=0 origin/main`（须 == vN.N.0）+ `git merge-base --is-ancestor vN.N.0 origin/main` 返回 0；squash 会改写发布提交的 SHA（v0.31.0 事故：tag 与 main 分叉、describe 回退旧版），故禁止。（v0.78.2 起 CHECK 7 不再依赖 tag，该规则由 G-5 单独支撑。）若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force`。
+
+$ grep -n '先合 release PR\|合并后 main CI 绿\|后打 tag\|先 push tag' agate/git-integration.md
+185:**发布 PR 必须普通 merge（`--no-ff`），禁止 squash**：发布顺序统一为「**先合 release PR →
+186:合并后 main CI 绿 → 后打 tag → Release**」（与 `AGENTS.md` 版本发布清单一致）——tag 打在 main
+
+$ grep -n '先 push tag\|push 带 tag\|先 tag' AGENTS.md agate/git-integration.md || echo 'NO conflicting "先 push tag" wording'
+NO conflicting "先 push tag" wording
+
+$ grep -n '普通 merge\|--no-ff\|禁 squash' AGENTS.md
+194:4. **先合 release PR → 合并后 main CI 绿 → 再打 tag**（顺序不可颠倒；打 tag 前先过发布门）：release PR 走普通 merge（`--no-ff`，禁 squash，见下方同名条）；合并后确认 main CI 全绿、发布门（目标提交 CI success + tag↔提交一致 + `check-protocol-consistency.py` 的检查 7/13 均 0 ERROR + roadmap RM `done`）通过后，**由人工**执行 `git tag vN.N.0 && git push origin vN.N.0`——`git push` 不带 tag **默认不推送 tag**（v0.51.0 教训）；推送后 `git ls-remote --tags origin vN.N.0` 验证远端到达
+201:     - **失准范围（据实，勿扩大）**：**活等式判据面**上仅本条如此（本文件下方「release PR 必须普通 merge」条仍用 `--abbrev=0`）；⚠️ **v0.78.2 起 `check-protocol-consistency.py` CHECK 7 已改为 tag 无关、不再用 `git describe`**，故不再属本条失准面。但**历史任务记录里有多处同款副本**（`agate-workspace/tasks/{TAG0020,0027,0028,0029,0030}*/P8-release.md` 等 + `archived/docs-2026-08/HANDOFF-DOGFOODING-3TASKS.md`），它们是 frozen 快照、**本次不回改**，但**会被后来者照抄**——接手 G-5 时请以本条为准。另有 `docs/guides/worktree-dogfooding-guide.md` 两处用它**看输出**（非等式判据），可辩护。
+207:**release PR 必须普通 merge（`--no-ff`），禁止 squash**：发布顺序统一为「**先合 release PR → 合并后 main CI 绿 → 后打 tag → Release**」——tag 打在 main 的合并提交上，**G-5 验证**用 `git describe --tags --abbrev=0 origin/main`（须 == vN.N.0）+ `git merge-base --is-ancestor vN.N.0 origin/main` 返回 0；squash 会改写发布提交的 SHA（v0.31.0 事故：tag 与 main 分叉、describe 回退旧版），故禁止。（v0.78.2 起 CHECK 7 不再依赖 tag，该规则由 G-5 单独支撑。）若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force`。
+
+$ grep -n '普通 merge' agate/git-integration.md
+185:**发布 PR 必须普通 merge（`--no-ff`），禁止 squash**：发布顺序统一为「**先合 release PR →
+
+# 判定：三处 tag 时点一致为「先合 release PR → 合并后 main CI 绿 → 后打 tag → Release」，无「先 push tag」矛盾表述。

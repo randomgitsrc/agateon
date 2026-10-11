@@ -1,0 +1,9 @@
+# BDD-8 evidence — 发布流程提供 workflow_dispatch 人工授权入口
+$ python3 - <<'PY'  (yaml.safe_load release.yml 的 on: 触发器)
+on: keys = ['push', 'workflow_dispatch']
+workflow_dispatch, inputs = ['tag']
+push = {'tags': ['v*']}
+BDD-8 OK: workflow_dispatch 存在，且与 push:tags 并存
+EXIT: 0
+
+# 判定：on: 含 workflow_dispatch（人工授权入口），且既有 push: tags 触发器保留（tag push backstop）。

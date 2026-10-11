@@ -1,0 +1,13 @@
+# BDD-3 evidence — check-gate.py P8 不再要求 version 文件变更
+# ⚠ AGATE_ROOT=$REPO/agate（= 本工作树协议根）已导出：被测对象是**本工作树**的 check-gate.py +
+#   agate/rules/task-data/*（含本任务新增 level-2.yaml）。不导出时 resolve_rules_root 会解析到
+#   已安装稳定版 ~/.agate/v0.81.0（无 level-2.yaml ⇒ 枚举校验 no-op），非本任务对象（见 bdd-16 说明）。
+# 夹具同 BDD-2（level-1 非 legacy，未改任何 version 文件）。
+$ cd /tmp/opencode/tag0051-p6/work/bdd23 && AGATE_ROOT=/home/kity/oclab/agateon/agate python3 /home/kity/oclab/agateon/agate/scripts/check-gate.py P8 task
+GATE P8: 脚本化检查通过。仍需主 Agent：① 从 P2 gate_commands 逐包读取发布检查命令 ② 重跑 P5 gate ③ 用 git log 对照 CHANGELOG 无遗漏
+EXIT: 2
+
+$ ... 2>&1 | grep -i 'version 文件变更' || echo 'NO version-change warning'
+NO version-change warning
+
+# 判定：stderr 不含 version 变更告警；exit=2。

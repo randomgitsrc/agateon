@@ -1,0 +1,9 @@
+# BDD-10 evidence — 发布门不把「PR 口径绿」当作「合并后绿」的等价替代（TAG0050 事故回归锁）
+# 反例：提交的 push-to-main 口径 CI run 失败（conclusion=failure）⇒ 门非 0。
+# cwd(夹具仓库): /tmp/opencode/tag0051-p6/work/gate
+
+$ cd /tmp/opencode/tag0051-p6/work/gate && /usr/bin/python3 /home/kity/oclab/agateon/agate/scripts/agate-release.py gate --task t9 --sha HEAD --ci-cmd "/usr/bin/python3 ci_dump.py fail.json" --consistency-cmd "/usr/bin/python3 rc.py 0"
+agate-release: 发布门失败——目标提交 CI 非 success（fail-closed，含 pending/queued/missing）。非 success 项：pytest (ubuntu-latest)
+EXIT: 1
+
+# 判定：push 口径 CI 失败 ⇒ 判失败（非 0）；不放过 push 口径失败。

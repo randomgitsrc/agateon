@@ -1,0 +1,15 @@
+# BDD-9 evidence — 发布门机械校验「目标提交 CI 结论为 success」
+# 载体：agate/scripts/agate-release.py gate（CI 查询走可注入 --ci-cmd）
+# cwd(夹具仓库): /tmp/opencode/tag0051-p6/work/gate
+
+$ # 反例：目标提交 CI 非 success（in_progress）⇒ 门非 0
+$ cd /tmp/opencode/tag0051-p6/work/gate && /usr/bin/python3 /home/kity/oclab/agateon/agate/scripts/agate-release.py gate --task t9 --sha HEAD --ci-cmd "/usr/bin/python3 ci_dump.py pending.json" --consistency-cmd "/usr/bin/python3 rc.py 0"
+agate-release: 发布门失败——目标提交 CI 非 success（fail-closed，含 pending/queued/missing）。非 success 项：pytest (ubuntu-latest)
+EXIT: 1
+
+$ # 正例：目标提交 CI 全 success + consistency 0 ⇒ 门通过（exit 0）
+$ cd /tmp/opencode/tag0051-p6/work/gate && /usr/bin/python3 /home/kity/oclab/agateon/agate/scripts/agate-release.py gate --task t9 --sha HEAD --ci-cmd "/usr/bin/python3 ci_dump.py ok.json" --consistency-cmd "/usr/bin/python3 rc.py 0"
+agate-release: 发布门通过（sha=HEAD，CI 3 项 success）
+EXIT: 0
+
+# 判定：非 success → 非 0（指出该提交 CI 非 success）；success → 通过。
