@@ -3166,10 +3166,10 @@ closure_note: >-
 id: DEBT0073
 category: protocol
 title: "`self-gate-skip:` 留痕口径**分叉**：`commit-msg` hook 接受它，但 BDD-22 判据只认 `self-gate-review:` ⇒ 「轻量档 + 触发面」的改动在 CI 上**必然红**（逃生通道实际不可用）"
-status: open
+status: closed
 priority: medium
 evidence:
-  - ref: .githooks/commit-msg-self-gate.sh
+  - ref: agate/scripts/commit-msg-self-gate.py
     note: >-
       hook 的提示文案明示两条出路：`self-gate-review: <路径>` **或** `self-gate-skip: <理由>`
       （并声明「WARNING 不拦截」）。
@@ -3185,6 +3185,20 @@ evidence:
       约定面：`SELF-GATE.md` 的**轻量档**（纯措辞/错别字/注释，无判据语义/脚本行为/契约数据/hook 正则变化）
       明确允许 `self-gate-skip: <理由>` 且**不派独立评审**；而触发面**包含** `agate/**/*.md`、`README.md`
       ⇒ 一个「触发面内的纯措辞改动」两头都够格：按约定应走 skip，按判据必然红。
+  - ref: agate/tests/unit/test_tag0051_self_gate.py
+    note: >-
+      关单证据（批次 hotfix-debt0073-unify-trailer，2026-10-11）：判据 `_bdd_22_violations()` 改为**导入**
+      hook 的 `_REVIEW_RE` / `_SKIP_RE`（`H.load_project_module` 加载 `agate/scripts/commit-msg-self-gate.py`）
+      ⇒ 实测 `判据的 _SKIP_RE is hook._SKIP_RE` = **True**（**同一对象**，非两份写得一样），判据文件内
+      自建留痕正则字面量 = **0**。接受集对拍（5 样例：同行理由 / 冒号后空 / 冒号后纯空格 /
+      冒号后换行再接理由 / 冒号后换行接非空行）⇒ **分叉数 0**（r1 实现在后两例分叉，由主 Agent 独立验证发现，
+      r2 收口）。负例仍全部判违规，由守护用例 `test_debt0073_hook_and_judge_accept_sets_agree`
+      （**真实 hook 子进程作 oracle**、参数化 5 样例）机械锁定。`test_tag0051_self_gate.py` **15 passed**。
+  - ref: SELF-GATE.md
+    note: >-
+      最小增量补一句「**CI 判据与本文件同一口径**（两种留痕二者取一即可）：`self-gate-review:` 指向的路径须在
+      该提交中真实存在、`self-gate-skip:` 的理由须非空」，并指向本债；既有段落（`:9` 与 §轻量档）**本已正确**、
+      未重写；`AGENTS.md:134` 已正确 ⇒ **未改**。
 impact: >-
   ① **逃生通道不可用**：触发面内的轻量档改动（错别字、措辞、注释）**无法**只靠 `self-gate-skip:` 通过 CI
   ⇒ 只能（i）白写一份独立评审，或（ii）绕过（改成不触面、或硬推）——**两条都在削弱机制**；
@@ -3201,7 +3215,14 @@ closure_criteria:
   - "有判别力回归用例：按所选口径，负例（无留痕/占位理由）仍被判 FAIL"
 source: review
 created_at: 2026-10-11
-task_id: hotfix-debt0073-0074-dogfood-findings   # 批次标签，无对应任务目录——hotfix 通道
+task_id: hotfix-debt0073-unify-trailer   # 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-11
+closure_note: >-
+  关单：**正则定义**已真单源（判据导入 hook 的 `_SKIP_RE`/`_REVIEW_RE`，`is` 同一对象），
+  该 5 组代表性样例接受集一致，负例（无留痕 / `skip` 空理由 / `skip` 纯空白 / `review` 指向不存在路径）
+  **仍全部判违规**（既有行为不变）⇒ 原债的**成因**（判据只认 review 致轻量档逃生通道不可用）已消除。
+  ⚠️ **如实限定**：接受集**尚未**逐例一致——另有 **3 类既有逻辑差异**（非本批引入）已另立 **DEBT0075**，
+  「接受集一致（单源）」这一闭合判据**在逻辑层未完全达成**，本债按「成因已消除 + 残差另立」关单。
 ```
 
 ## DEBT0074
@@ -3273,4 +3294,50 @@ closure_note: >-
   ⚠️ 遗留说明：本修法使 **tag-push 路径可跑通**（前提是分支 CI 已完成 ⇒ 与 runbook「main CI 绿 → 打 tag」一致），
   但**真机 tag-push 复验要等下一次发版**（tag 已存在，无法在本批现场重放）；本批以单测覆盖该场景为准。
   `protocol-tests.yml` 的「不改为 push 只限 main」既定口径**未动**（避免 PR #222 的自引用陷阱）。
+```
+
+## DEBT0075
+
+```yaml
+id: DEBT0075
+category: protocol
+title: "BDD-22 判据与 commit-msg hook 的留痕**逻辑**差异 3 类（正则已真单源，**逻辑层**尚未单源）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/tests/unit/test_tag0051_self_gate.py
+    note: >-
+      发现于 DEBT0073 修复批（批次 hotfix-debt0073-unify-trailer，2026-10-11）：本批已把**正则定义**
+      真单源（判据 `import` hook 的 `_SKIP_RE`/`_REVIEW_RE`，`is` 同一对象），但**判定逻辑**仍是两套：
+      判据用「review 优先 ⇒ 查路径可兑现 / 否则看 skip」；hook 用「二者任一匹配即可」（见
+      `agate/scripts/commit-msg-self-gate.py::_SELF_GATE_RE`/`_REVIEW_RE`/`_SKIP_RE` 的使用处）。
+  - ref: agate/scripts/commit-msg-self-gate.py
+    note: >-
+      **复现记录（探针实测，逐例给双方结论）**：
+      ① `self-gate-review: <不存在路径>` 与 `self-gate-skip: <非空理由>` **并存** ⇒ hook **接**、判据**拒**
+      （判据更严：它先见 review、再查路径不可兑现 ⇒ 违规）；
+      ② `review` 留痕**非行首**（如前置其它字后接同一行）⇒ hook **拒**、判据**接**（hook 更严）；
+      ③ `self-gate-review: agate/scripts/does_not_exist.py`（**不存在**且**非** `reviews/` 路径）⇒
+      hook **接**、判据**拒**（判据更严）。⚠️ 对照：该路径若**真实存在**且非 `reviews/` ⇒ 双方**一致接受**
+      ⇒ 差异仅现于**不存在**的此类路径。
+      ⇒ 即：**3 类**差异（此前记录误作「2 处」，已据实更正）。
+impact: >-
+  ① **CI 与本地警告口径仍可能不一致**：同一提交，hook 只 WARNING（放行）、CI 判据可能**红**（如 ①③），
+  或反之（如 ②）⇒ 使用者会看到「hook 说没问题、CI 却红」（这正是 DEBT0073 的同类体验，虽触发条件更窄）；
+  ② 触发形式偏"不常见"（同时写两种留痕、review 不在行首、review 指向非 reviews 且不存在的路径）
+  ⇒ 现实影响面小，但**记录与事实必须一致**（本债的 3 类即由「先记 2 处、实测证伪第 3 条后更正」得到）；
+  ③ 与 DEBT0073 同族（判据与 hook 口径分叉），本债是其在**逻辑层**的残差。
+recommendation: >-
+  二选一：
+  (a) **逻辑层也单源**——让判据复用 hook 的**完整判定**（而非仅正则），例如把 hook 的留痕判定抽成一个
+  可导入的函数（`is_self_gate_ok(msg)` 之类），判据直接调用它（配合"路径可兑现"这一**判据特有**的强化
+  作为**附加**约束，须显式声明差异）；
+  (b) 明示**某一侧为权威**（如「以判据为准」）并把另一侧对齐，且把 3 类差异的期望行为写进 `SELF-GATE.md`。
+  无论选哪个，都要为上述 3 类各补**判别力用例**（当前守护用例只覆盖 skip 的 5 组样例）。
+closure_criteria:
+  - "3 类逻辑差异全部消除（或明示权威侧并把另一侧对齐，且差异在 SELF-GATE.md 有明文）"
+  - "有判别力用例覆盖这 3 类（含 ①③ 的「hook 接 / 判据拒」与 ② 的「hook 拒 / 判据接」两侧方向）"
+source: review
+created_at: 2026-10-11
+task_id: hotfix-debt0073-unify-trailer   # 批次标签，无对应任务目录——hotfix 通道
 ```
