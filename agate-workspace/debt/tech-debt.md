@@ -2766,3 +2766,56 @@ closure_note: >-
   关单：`gate_p0` 声明校验改按**任务所属项目根**（git toplevel → 含 agate-workspace 的祖先 → cwd 兜底）；判据级回归用例覆盖跨项目场景。
 
 ```
+
+## DEBT0067
+
+```yaml
+id: DEBT0067
+category: protocol
+title: "`agate-md-field-set` 可写 key 白名单与 `check-frontmatter.py` 认的合法字段**分叉** ⇒ 卡片要求声明的字段无法用工具写入，只能手写（与派发纪律「不要手写 frontmatter」直接冲突）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      `_writable_keys(rules_root)` = `GENERIC_HEADER_KEYS ∪ phases.yaml 全部 task_fields`（:84-92）。
+      2026-10-11 实算：29 个可写 key。**不在**白名单的实测清单：`ceremony` / `implicit_coupling` /
+      `change_type` / `project_phase` / `ui_render_shape` / `delivery` / `debt_check`。
+  - ref: agate/phase-cards/P1-requirements.md
+    note: >-
+      「产出规格」节要求 P1 声明 `ceremony`（且有 `coupling_checklist` / `跳过风险` 等联动判据）；
+      「产出文件字段填写」（见 dispatch-prompt 模板）同时要求用 `agate-md-field-set` 写、不要手写 frontmatter。
+  - ref: agate/phase-cards/P8-release.md
+    note: >-
+      P8 产出须声明 `delivery` / `debt_check`（对应 OBL-P8-02/03，各有行为测试
+      `test_obl_p8_02_delivery_missing_blocks` / `test_obl_p8_03_debt_check_missing_blocks`）——同源受阻。
+  - ref: agate/scripts/check-frontmatter.py
+    note: "`SCHEMAS`（:40-70）把 `ceremony` 等视为合法 P1 字段（frontmatter-only）⇒ **读侧认、写侧不认**。"
+  - ref: agate/assets/templates/dispatch-prompt.md
+    note: >-
+      「产出文件字段填写」节：「set 报错就照提示改；不要手写 frontmatter，不要复制任何示例代码块」+
+      「改不明白 → 报告主 Agent，不要绕过 set 直接手改文件」——与本缺口叠加后，执行者两难。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P1-requirements.md
+    note: >-
+      触发实证（TAG0051 P1，2026-10-11）：`ceremony full` 写入报 `ERROR: 非法 key`。按纪律**未手写**，
+      档位 fail-closed 取默认 `standard`（该任务 risk_level=high + domains 含 security，机制上未减少评审触发）。
+  - ref: agate-workspace/tasks
+    note: >-
+      九处以上先例（TAG0021/0022/0023/0024/0026/0028/0030/0032/0033/0034/0037 等）的 `P1-requirements.md`
+      确有**手写** `ceremony:` —— 说明该缺口长期靠手写绕过，未被任何 gate 捕获。
+impact: >-
+  ① 协议自相矛盾：卡片与派发纪律要求用工具写，工具写不了 ⇒ 执行者要么违规手写、要么静默降档。
+  ② **静默降档会悄悄改变仪式深度**（`full`/`thin` 影响评审触发面），而 check-routing 只校验声明值，
+  检测不到「本该 full 却因工具限制落成 standard」。③ 影响面不止 P1：P8 的 `delivery`/`debt_check` 同源受阻。
+recommendation: >-
+  **先定「单一源」口径再改代码**（口径先行类小设计）。候选 ① `_writable_keys` 并上 `check-frontmatter.py`
+  的 `SCHEMAS` 认的字段；候选 ② 把 `ceremony`/`implicit_coupling`/`delivery`/`debt_check` 等补进
+  `agate/rules/phases.yaml` 对应阶段的 `task_fields`（使白名单自然覆盖，且与「任务字段按阶段声明」的既有设计
+  一致——**倾向此方案**）。两者都须补判别力回归用例（先红后绿）并全量扫描存量 frontmatter。
+closure_criteria:
+  - "`agate-md-field-set` 能写入 `check-frontmatter.py` 视为合法的全部 P1/P8 字段（或明确缩小 SCHEMAS 并以 gate 拦截手写路径），两侧口径一致"
+  - "有回归用例锁定该一致（对白名单做子集断言，先红后绿）"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```

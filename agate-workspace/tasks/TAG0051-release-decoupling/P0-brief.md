@@ -64,7 +64,11 @@ executor_env:
 
 - `[P0_STALE: 协议版本 v0.80.2 → v0.81.0，AGATE_ROOT 路径随之变化]` → 已更新「客观查证信息」面。
 - `[P0_STALE: 本仓 2026-10-11 新落地 agate.config.yaml 并声明 release.preset: semver-changelog-tag —— 发布检查自此有 config 声明层，本任务须纳入该面（此前只有硬编码逻辑）]` → 已写入 `known_risks`/`env_constraints`。
-- `[P0_STALE: 2026-10-09..11 落地 RM-AG0116 协议分支中立（去 origin/main 硬编码 + default_branch() 单源 + pre-commit-local/pre-push-local 中立扩展点）、#445 命令采纳（agate-run --task）、#446 CLI 包装（agate-<x> 真命令形态）——与「AGENTS.md 统一 tag 时点/分支策略」相邻，须协调避免重复或冲突]` → 已写入 `known_risks`。
+- `[P0_STALE: 2026-10-09..11 落地「协议不再假设项目分支 + 项目本地 hook 扩展点」（commit `717871a9` / PR #447：去 `origin/main` 硬编码 + `default_branch()` 单源 + `pre-commit-local`/`pre-push-local` 中立扩展点）、#445 命令采纳（`agate-run --task`）、#446 CLI 包装（`agate-<x>` 真命令形态）——与「AGENTS.md 统一 tag 时点/分支策略」相邻，须协调避免重复或冲突]`
+  → 已写入 `known_risks`。**（2026-10-11 更正）**：本节初稿把该工作记为「RM-AG0116」，但该编号**在
+  roadmap 中不存在**（最大 RM-AG0115）——编号只在 `717871a9` 提交信息、`tech-debt.md` 与两份评审报告中被引用。
+  经 TAG0051 P1 analyst 复核指出（其 §0 记为 `[P0_STALE]`）。处置：**补登记 RM-AG0116 入 roadmap**（见同批
+  chore 提交），并在此改引提交号/机制名（不依赖编号可反查）。
 - `[P0_STALE: 先例设计件 docs/design-notes/design-release-order-boundary.md + docs/reviews/agate-design-review-2026-10-03-release-order.md + handoff-release-order-20261003.md 存在（10-03/04），是最近的前作，P1 必须读并判定重叠]` → 已交 P1 作为必读输入。
 
 ## 环境自检（2026-10-11）
