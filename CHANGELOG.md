@@ -48,6 +48,19 @@
   依赖「pytest 进程 cwd（= 仓库根）没有声明」。用例改为**自带项目根**（显式 `cwd`），语义回到
   「**该项目**没有声明」。⚠️ 连带登记 **DEBT0066**：`gate_p0` 的声明校验本身按**进程 cwd** 找
   `agate.config.yaml`（hook 场景 cwd=仓库恰好掩盖），从项目外调用会校验错的项目（低影响，提示级）。
+- **写侧白名单与 schema 合法字段分叉（DEBT0067）**：`agate-md-field-set.py` 的可写 key 白名单
+  原仅 = `GENERIC_HEADER_KEYS ∪ phases.yaml task_fields`，而 `check-frontmatter.py::SCHEMAS` 认的
+  合法字段（`ceremony`/`override`/`coupling_checklist`/`implicit_coupling` 等）写不进去 ⇒ 卡片要求
+  声明的字段只能手写，与派发纪律「不要手写 frontmatter」冲突；`dispatch_plan` 更被「追加/嵌套字段」
+  直接拒写。修复：白名单增**第三来源 = 该 basename 的 schema 合法字段**（`SCHEMAS.migrated_keys`
+  单源派生），并让 `dispatch_plan`/`delivery` 结构化写入（写值经 YAML 解析后落盘）；同时**解耦**
+  「可写面」与「本阶段该填/缺失面」（`task_fields` 恢复原值，可选字段不再被报成"剩余缺失"）、
+  展示面区分「可 set」与「仅登记/需 append」。
+- **P2 卡 `batches[].output` 与 checker 深度上限矛盾（DEBT0068）**：P2 卡把 `dispatch_plan.batches[].output`
+  列为**合法可选键**并承诺 checker 不受影响，但 `agate-frontmatter-check.py::MAX_DEPTH=3` 因该键
+  （嵌套深度 4）判 ERROR ⇒ 照卡示例写即 commit 失败。修复：深度校验对 `dispatch_plan` **单键豁免**
+  （其结构校验走 `agate-md-field-get dispatch_plan` + `json.loads`），P2 卡补说明；**其余字段的
+  深度/类型/必填校验一律不变**（负例锁定 `coupling_checklist` 深 4 仍 ERROR）。
 
 ## [0.81.0] - 2026-10-11
 
