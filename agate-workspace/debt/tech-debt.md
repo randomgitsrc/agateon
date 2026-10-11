@@ -2810,6 +2810,20 @@ evidence:
       `ERROR: dispatch_plan 是追加/嵌套字段，一期 set 暂不支持覆盖式之外的写入`（实测）。同一份 P2 卡同时
       给出「用工具写 frontmatter」的纪律 ⇒ 执行者只能手写该键。与本节前述各键**同簇**（工具写侧覆盖面
       与卡/schema 不一致），故并入本条而非另立新债。
+  - ref: agate/tests/unit/test_debt0067_0068_write_side.py
+    note: >-
+      **覆盖清单（批次 hotfix-debt0071-regression-and-closures 复核，2026-10-11）**——
+      **已覆盖**（写侧 `set` 可写、且与 `check-frontmatter.py` SCHEMAS 口径一致）：
+      P1 schema 合法字段 `ceremony` / `implicit_coupling` / `change_type` / `project_phase` /
+      `ui_render_shape` / `ui_ux_dimensions` / `override` / `coupling_checklist` / `internal_only` /
+      `internal_only_reason` / `跳过风险` / `design_trivial` / `follows_existing_pattern`；
+      P8 的 `delivery` / `debt_check`；P2 的 `dispatch_plan`（JSON 结构化字段，`get` 可读回合法 JSON）。
+      回归证据：①②④⑥（可写）+ ⑤（未知 key 仍拒）+ ③（depth 豁免防放宽）+ ⑦（可选字段不误报缺失）
+      + ⑨（展示分区由实际守卫派生）。
+      **未覆盖**：`need_confirm_resolved` / `suggest_resolved` / `scope_resolved`——三者**设计上**即
+      「仅登记 / 需 append」，`set` 拒绝属**预期**（`--list` 已**显式标注**其能力为「仅登记/需 append（不可 set）」，
+      回归用例⑧锁定）。⇒ 两侧口径（工具写侧 vs schema/卡）在这些键上**已一致**，不再存在「列出却拒写」的分歧。
+      **是否可据此关单由后续裁决**（本条保持 open；未覆盖三项属设计选择而非缺口，但 append 面守卫另有 DEBT0072 跟踪）。
 impact: >-
   ① 协议自相矛盾：卡片与派发纪律要求用工具写，工具写不了 ⇒ 执行者要么违规手写、要么静默降档。
   ② **静默降档会悄悄改变仪式深度**（`full`/`thin` 影响评审触发面），而 check-routing 只校验声明值，
@@ -2833,7 +2847,7 @@ task_id: TAG0051-release-decoupling
 id: DEBT0068
 category: protocol
 title: "P2 卡把 `dispatch_plan.batches[].output` 列为**合法可选键**，而 `agate-frontmatter-check.py::MAX_DEPTH = 3` 会因该键（深度 4）判 ERROR —— 卡与 checker 口径互相矛盾"
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate/phase-cards/P2-design.md
@@ -2854,6 +2868,12 @@ evidence:
       （报告 `dispatch_plan: 嵌套深度超过 3 层`）。因 `output` **无任何 gate 效力**，设计退了（省略该键、
       改以正文表格表达批产出面），**未绕过 checker**；但这意味着**照卡示例写就会 commit 失败**。
       注：`batches[].tests_filter`（字符串，不加深深度）不受影响。
+  - ref: agate/tests/unit/test_debt0067_0068_write_side.py
+    note: >-
+      闭合证据（批次 hotfix-debt0071-regression-and-closures / 发现任务 TAG0051-release-decoupling，H1 交付）：`test_debt0068_dispatch_plan_output_depth_passes`
+      **先红后绿**——豁免前含 `batches[].output`（深度 4）的 P2 frontmatter 被 `check-frontmatter.py`
+      判 ERROR（exit 1，报「嵌套深度超过 3 层」）；单键豁免后 exit 0 且「嵌套深度」告警消失。
+      同用例含**防放宽负例**：`coupling_checklist` 等其它字段深度 4 仍 ERROR（豁免仅限 `dispatch_plan`）。
 impact: >-
   任何按 P2 卡示例声明 `batches[].output` 的任务都会在 `check-frontmatter.py` 上被拦（commit 前 ERROR）。
   与 `output`「可选、无 gate 效力」的定位直接冲突：**声明该可选键反而使流程变红**，等于变相禁用。
@@ -2868,6 +2888,13 @@ closure_criteria:
 source: review
 created_at: 2026-10-11
 task_id: TAG0051-release-decoupling
+closed_at: 2026-10-11
+closure_note: >-
+  关单（批次 hotfix-debt0071-regression-and-closures）：两条闭合判据**均已达成**——判据①
+  「按 P2 卡示例声明 `batches[].output` 的任务 `check-frontmatter.py` 不再报 ERROR」由 H1 的单键深度豁免交付；
+  判据②「有回归用例（先红后绿）」由 `agate/tests/unit/test_debt0067_0068_write_side.py::test_debt0068_dispatch_plan_output_depth_passes`
+  承担（正例通过 + 防放宽负例：其它字段深度 4 仍 ERROR）。该键无 gate 效力，豁免只放宽深度校验、
+  不改变 `dispatch_plan` 其余校验语义。
 ```
 
 ## DEBT0069
@@ -2876,7 +2903,7 @@ task_id: TAG0051-release-decoupling
 id: DEBT0069
 category: protocol
 title: "`agate.config.yaml` 的 `release.preset` 声明**无任何值消费方**（声明 ≠ 开关；读者易误信「已声明即已生效」）"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/scripts/agate_common.py
@@ -2891,6 +2918,18 @@ evidence:
     note: >-
       独立实测（plan-eng-review，2026-10-11）：`grep -rn preset agate/scripts/*.py` 三处命中**均非「读值」**；
       TAG0051 新建的发布门（`agate-release.py gate`）按当前设计**亦不读**该键。
+  - ref: agate/scripts/agate-release.py
+    note: >-
+      闭合证据（批次 hotfix-debt0071-regression-and-closures / 发现任务 TAG0051-release-decoupling，H2 交付）：发布门 `gate` 现**读取并消费**
+      该键——`_project_release_preset(repo_root)` 读 `agate.config.yaml` 的 `release.preset`，
+      `_known_release_presets()` 运行时从 `agate/rules/schema/project-config.schema.json` 的
+      `release.preset.enum` **单源派生**已知集合：未知值 ⇒ 门**非 0（fail-closed）**；合法值 / 缺省 ⇒ 不阻断。
+  - ref: agate/tests/unit/test_release_gate.py
+    note: >-
+      同批次回归：`test_debt0069_known_presets_single_sourced_from_schema_enum` 断言已知集**单源**取自
+      schema enum（不手抄）；`test_debt0069_unknown_preset_fails_closed` /
+      `test_debt0069_absent_preset_does_not_block` / `test_debt0069_gate_accepts_schema_added_preset`
+      覆盖消费语义与「schema 增删值即门行为随之变化」的联动。
 impact: >-
   保留一个无消费方的声明，会让读者（含未来的 agent 与项目维护者）误信「已声明 = 已生效」，从而以为
   发布流按 semver/CHANGELOG/tag 约定在执行而实际无人读取；TAG0051 把 P8 的 version/tag 检查移入独立发布门后，
@@ -2906,6 +2945,15 @@ closure_criteria:
 source: review
 created_at: 2026-10-11
 task_id: TAG0051-release-decoupling
+closed_at: 2026-10-11
+closure_note: >-
+  关单（批次 hotfix-debt0071-regression-and-closures）：判据①「有明确消费方（读取点 + 语义）」**已达**——
+  H2 让发布门 `agate-release.py gate` 显式消费该键（读取点 `_project_release_preset` + 已知集
+  `_known_release_presets` 单源取自 `project-config.schema.json` 的 `release.preset.enum`；未知值 fail-closed）。
+  **判据②「仓库内不再有称其为『消费点』的表述」已被本改动取代**：该债原本的缺口是「被称作消费点而实无值消费方」，
+  措辞因而失准；如今它**真的是**消费点，故原文「消费点」措辞**已准确**，无需再消除——判据②的立意（消除
+  名不副实的「消费点」表述）已由「让它名副其实」满足，不再以删除措辞为准。回归锁见
+  `agate/tests/unit/test_release_gate.py` 的四个 DEBT0069 用例。
 ```
 
 ## DEBT0070
@@ -2914,7 +2962,7 @@ task_id: TAG0051-release-decoupling
 id: DEBT0070
 category: protocol
 title: "`docs/design-notes/r6-differential.sh::_error_lines` 的**实际比较口径**（所有 `GATE ` 前缀行）比其文件头自述的「(退出码, ERROR 行集合)」**更宽** ⇒ 成功提示文案的变化被报成「兼容性差异」"
-status: open
+status: closed
 priority: low
 evidence:
   - ref: docs/design-notes/r6-differential.sh
@@ -2936,6 +2984,12 @@ evidence:
     note: >-
       同一位置的**枚举缺口**：`kind` 仅有 `new_error / rc_change / ledger_event_added / ledger_bytes /
       new_warning`，**无**「GATE 行变更」这一类 ⇒ D13 只能借用 `new_error`（语义不完全贴切，已在 basis 注明）。
+  - ref: docs/design-notes/r6-differential.sh
+    note: >-
+      关单证据（批次 hotfix-debt0070-r6-kind，2026-10-11；PR #457 合并 ff9ad74a）：文件头自述改为准确描述
+      实现（_error_lines 收所有 GATE 前缀行 ∪ ERROR 行）+ 新增 kind: gate_line_changed（既有 kind 行为不变）；
+      r6-allowlist.yaml 枚举说明补该值、D13 由 new_error 改用 gate_line_changed 并更正 basis。
+      行为不变实证：--before 581369fc 复现历史基线 39/差异 2/未匹配 0；新 kind 参与判定：改 bogus 后未匹配 2。
 impact: >-
   ① 任何**成功提示文案**的正常演进都会被报成「兼容性差异」，迫使逐个登记 allowlist（噪声、且掩盖真实差异）；
   ② 登记者只能借 `new_error` 表达非 error 的变更，规则语义被稀释；
@@ -2950,7 +3004,10 @@ closure_criteria:
   - "allowlist 的 `kind` 枚举能贴切表达「GATE 行变更」（或 D13 类差异有明确归属）"
 source: review
 created_at: 2026-10-11
-task_id: TAG0051-release-decoupling
+task_id: hotfix-debt0070-r6-kind   # 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-11
+closure_note: >-
+  关单：自述口径改为准确描述既有实现、新增 gate_line_changed 使 D13 语义贴切（原借用 new_error）；判定行为未变（历史基线复现一致、既有 kind 语义未动）。
 ```
 
 ## DEBT0071
@@ -2959,7 +3016,7 @@ task_id: TAG0051-release-decoupling
 id: DEBT0071
 category: protocol
 title: "**branch 相对的测试判据在 main 上恒失败**：以 `origin/main..HEAD` 界定「本任务的提交」⇒ 合并到 main 后区间为空 ⇒ `assert prot` 恒红（**违反 RM-AG0103 的锚「PR required 绿 ⇒ 合并后绿」**）"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/tests/unit/test_tag0051_self_gate.py
@@ -2977,6 +3034,17 @@ evidence:
       甚至恒红）。
   - ref: agate-workspace/tasks/TAG0051-release-decoupling/retrospective.md
     note: "已追加进 TAG0051 复盘「发现的问题」节（本任务的自有反例）。"
+  - ref: agate/tests/unit/test_tag0051_self_gate.py
+    note: >-
+      闭合证据（批次 hotfix-debt0071-regression-and-closures，本批 ① 交付）：新增 4 个回归用例锁定两条不变量——
+      `test_debt0071_range_empty_still_selects_task_commits` / `test_debt0071_empty_range_judgement_not_red`
+      锁「区间为空（`HEAD == origin/main`）时 `_range_commits()` 仍返回非空、核心判据不判 FAIL」；
+      `test_debt0071_empty_range_still_catches_unbacked_review` / `test_debt0071_empty_range_still_catches_missing_trailer`
+      锁「判别力仍在」（触及触发面但留痕不可兑现 / 完全缺留痕 ⇒ 仍判违规）。用例经合成仓库复现
+      `refs/remotes/origin/main` 指到 HEAD 的合并后形态，并用 `rev-list --count origin/main..HEAD == 0` 自证场景。
+      **先红后绿实测**：把取法临时改回仅 `origin/main..HEAD`（移除 `--grep` 前缀回退）⇒ 4 个新用例全部 FAIL；
+      当前实现下全部 PASS。（本条目原登记批次 `hotfix-bdd22-main-stable` 交付并集修法；本次由批次
+      hotfix-debt0071-regression-and-closures 补齐回归锁并关单。）
 impact: >-
   ① **合并后 main CI 红**（本轮实际发生）——违反本任务刚刚立法的那条锚，且需额外一轮 hotfix；
   ② 更隐蔽的一面：若该类判据在 main 上**不失败而是恒通过/空验证**（如 `assert not violations` 扫空集），
@@ -2994,6 +3062,17 @@ closure_criteria:
 source: retreat
 created_at: 2026-10-11
 task_id: hotfix-bdd22-main-stable   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-11
+closure_note: >-
+  关单（批次 hotfix-debt0071-regression-and-closures）：**它曾违反 RM-AG0103 的锚「PR required 绿 ⇒
+  合并后绿」**——该测试以 `origin/main..HEAD` 界定「本任务的提交」，特性分支上区间=15 个提交 ⇒ PR CI 绿；
+  合并到 main 后 HEAD 与 `origin/main` 同一 ⇒ 区间为空 ⇒ `assert prot` 恒失败 ⇒ **真红了一次 main CI**
+  （日志：`AssertionError: BDD-22：本分支尚无改动 agate/ 协议本体/脚本的提交 … assert []`）。**修法**：
+  取法改为**并集**（`origin/main..HEAD` 区间 ∪ `log --grep=wf(TAG0051-` 前缀回退），区间为空时经前缀
+  回退仍取回本任务提交（并集是**超集**，校验面只增不减；触发面过滤仍只挑真正触及 `agate/` 的提交）；
+  同时修掉 `run_git` 默认 `check=True` 的两处误用（base 缺失 / 留痕路径探测本应容忍非零 rc）。**回归锁**：
+  本批 ①（4 个用例，先红后绿实测）。判据①「main 上仍有明确、非空的校验对象」由并集取法满足；
+  判据②「有回归用例锁定（不恒红、负例仍被抓）」由本批 ① 满足。
 ```
 
 ## DEBT0072
