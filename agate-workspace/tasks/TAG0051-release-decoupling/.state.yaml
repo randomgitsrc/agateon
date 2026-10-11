@@ -1,6 +1,11 @@
 task_id: TAG0051
-phase: P1
+phase: P2
 retries:
+  P2:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: obligations_m_count_preserve_and_p8_05_08_sync
   P1:
   - round: 1
     failure_mode: quality
