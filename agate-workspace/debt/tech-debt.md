@@ -2952,3 +2952,46 @@ source: review
 created_at: 2026-10-11
 task_id: TAG0051-release-decoupling
 ```
+
+## DEBT0071
+
+```yaml
+id: DEBT0071
+category: protocol
+title: "**branch 相对的测试判据在 main 上恒失败**：以 `origin/main..HEAD` 界定「本任务的提交」⇒ 合并到 main 后区间为空 ⇒ `assert prot` 恒红（**违反 RM-AG0103 的锚「PR required 绿 ⇒ 合并后绿」**）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/tests/unit/test_tag0051_self_gate.py
+    note: >-
+      触发实证（TAG0051，2026-10-11）：该测试用 `origin/main..HEAD` 取「本任务的协议提交」。
+      在**特性分支**上区间 = 15 个提交 ⇒ 通过（**PR CI 绿**）；合并到 main 后
+      `git rev-list --count origin/main..HEAD` = **0**（HEAD 与 `origin/main` 同一）⇒ 列表为空 ⇒
+      `assert prot` **恒失败** ⇒ **合并后 main CI 红**（CI 日志确证：
+      `AssertionError: BDD-22：本分支尚无改动 agate/ 协议本体/脚本的提交 … assert []`）。
+  - ref: docs/reviews/handoff/handoff-release-order-20261003.md
+    note: >-
+      同族先例：**RM-AG0103 的锚**即「PR required 绿 ⇒ 合并后绿」——本条目是该锚的**反例**：
+      仅把 CI job 改成跑双口径（PR/push）**不足以**保证合并后绿，**判据本身的 branch 相对性**
+      是另一条独立失效路径（测试在 PR 分支上"看起来验证了什么"，在 main 上**什么都不验证**、
+      甚至恒红）。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/retrospective.md
+    note: "已追加进 TAG0051 复盘「发现的问题」节（本任务的自有反例）。"
+impact: >-
+  ① **合并后 main CI 红**（本轮实际发生）——违反本任务刚刚立法的那条锚，且需额外一轮 hotfix；
+  ② 更隐蔽的一面：若该类判据在 main 上**不失败而是恒通过/空验证**（如 `assert not violations` 扫空集），
+  则**没有任何信号**，判据静默失效；
+  ③ 推广面：任何以「本分支 vs main」为范围的自检都会踩（SELF-GATE 的 BDD-22 型、"本批提交是否带留痕"型）。
+recommendation: >-
+  **判据不得以 branch 相对范围为唯一来源**：至少两段式——区间非空时用区间（特性分支行为不变）；
+  **区间为空（已合并）时**改按**可稳定识别的锚**取本任务提交（如提交信息前缀 `wf({task_id}-` 的
+  `--grep`，本 hotfix 采用此法并已实测在 main 上可稳定取回）。
+  建议同时在 P3 卡/测试设计约定里补一条：「凡以 `origin/main..HEAD` 或"最近 N 个提交"为范围的断言，
+  须显式说明**合并到 main 后**取何值、是否会恒真/恒假」。
+closure_criteria:
+  - "该类判据在 main（HEAD == origin/main）上仍有明确、非空的校验对象（或显式声明该场景下不适用）"
+  - "有回归用例锁定：在「区间为空」的等价场景（如 main 上）该判据不恒红、且负例仍被抓到"
+source: retreat
+created_at: 2026-10-11
+task_id: hotfix-bdd22-main-stable   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+```

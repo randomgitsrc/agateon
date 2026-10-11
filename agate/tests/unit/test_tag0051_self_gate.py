@@ -28,16 +28,39 @@ def _text(repo, *args):
 
 
 def _range_commits(repo):
-    """待校验提交：`origin/main..HEAD`；范围为空则退回 HEAD（同既有守卫取法）。"""
+    """本任务（TAG0051）待校验提交 = 下列两者的**并集**（去重，区间在前）。
+
+    1) `origin/main..HEAD`（或 `main..HEAD`）：特性分支上该区间 = 本任务提交，与既有守卫取法一致。
+    2) 提交信息前缀回退 `--grep=wf(TAG0051-`：TAG0051 本任务提交的信息统一带 `wf(TAG0051-`
+       前缀（如 `wf(TAG0051-P4)`）。
+
+    **为何取并集（两种失效场景，均实测复现过；单独任一取法都不够）**：
+    - **区间为空**：合并到 main 后 HEAD 与 `origin/main` 同一 ⇒ `git rev-list --count
+      origin/main..HEAD` = 0 ⇒ 单靠 (1) 取不到任何提交（旧版「退回单个 HEAD」同样取不到本任务
+      协议提交）⇒ `assert prot` 恒失败。
+    - **区间非空但全是非触发面提交**：如 hotfix 分支只改 `agate/tests/**` + `agate-workspace/**`
+      ⇒ 单靠 (1) 经触发面过滤后 `prot` 仍为 `[]` ⇒ 同样失败。
+
+    并集是**超集** ⇒ 校验面只增不减；触发面过滤仍只挑出真正触及 `agate/` 协议面的提交。
+    **不得**用裸 `TAG0051`（旧废弃分支的提交形如 `TAG0051 P0：…`，**不含** `wf(TAG0051-`）。
+    """
+    commits = []
+    seen = set()
+
+    def _add(items):
+        for c in items:
+            if c and c not in seen:
+                seen.add(c)
+                commits.append(c)
+
     for base in ("origin/main", "main"):
-        if H.run_git(repo, "rev-parse", "--verify", "-q", base).returncode != 0:
+        # `check=False`：探测本意就是容忍缺失（`-q` 正是为此）；`run_git` 默认 check=True 会对
+        # base 不存在 raise，而非返回 rc（CI 的 PR checkout 无本地 `main` ⇒ 本行必须容忍）。
+        if H.run_git(repo, "rev-parse", "--verify", "-q", base, check=False).returncode != 0:
             continue
-        out = _text(repo, "log", "--no-merges", "--format=%H", f"{base}..HEAD")
-        commits = [c for c in out.split() if c]
-        if commits:
-            return commits
-    head = _text(repo, "rev-parse", "HEAD").strip()
-    return [head] if head else []
+        _add(_text(repo, "log", "--no-merges", "--format=%H", f"{base}..HEAD").split())
+    _add(_text(repo, "log", "--no-merges", "--format=%H", "--grep=wf(TAG0051-").split())
+    return commits
 
 
 def _changed_files(repo, sha):
@@ -64,7 +87,9 @@ def _missing_trailer_paths(repo, sha):
             if not probe_token:
                 continue
             probe = probe_token.rstrip("/")
-            if H.run_git(repo, "cat-file", "-e", f"{sha}:{probe}").returncode != 0:
+            # `check=False`：本行本意即「探测该路径是否存在」（`-e` 正是为此）——路径不存在时须
+            # 返回非零 rc 走 `missing.append`，而非让 `run_git` 默认 check=True 抛 RuntimeError。
+            if H.run_git(repo, "cat-file", "-e", f"{sha}:{probe}", check=False).returncode != 0:
                 missing.append(probe_token)
     return missing
 
