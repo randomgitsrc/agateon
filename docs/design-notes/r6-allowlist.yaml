@@ -3,16 +3,19 @@
 # 设计依据：design-tag0050-task-data-contract.md §8（存量兼容 12 项差异）+
 #           P2-design.md §3.2/§3.3（外部专家规格）。
 #
-# 判据：对每个 legacy 任务、每个相关 gate 比较 (退出码, ERROR 行集合)；差异必须匹配
-# 本文件的某一条规则，否则 r6-differential.sh exit 1。
+# 判据：对每个 legacy 任务、每个相关 gate 比较 (退出码, `GATE …`（含 `:`）行 ∪ `ERROR` 行的
+# 集合)；差异必须匹配本文件的某一条规则，否则 r6-differential.sh exit 1。
+# (口径比「仅 ERROR」宽：成功/收尾提示文案的变化同样计入——集合定义见 r6-differential.sh
+#  的 `_error_lines`。)
 #
 # 字段：
 #   id         规则编号（D01..D12，与设计 §8 十二项一一对应）
 #   batch      该差异的归属批
 #   kind       差异类别：new_error / rc_change / ledger_event_added / ledger_bytes / new_warning
+#              / gate_line_changed（该差异是 `GATE …` 行本身的变更；匹配方式同 new_error）
 #   gate       出现在哪个 gate（匹配 gate 名子串）
 #   task_scope 适用任务面：legacy / non-legacy / any / specific:<id>
-#   match      匹配式（对 ERROR 行或结构化信号）：
+#   match      匹配式（对差异行 blob（added ∪ removed）或结构化信号）：
 #                patterns  子串列表（行内任一命中即算匹配）
 #                rc_from/rc_to  仅 rc_change：退出码变化（缺省 = 任意变化）
 #                event     仅 ledger_*：事件名
@@ -115,8 +118,8 @@ rules:
     basis: "设计 §8 第 12 项（安全门；含 F4 否定写法误拦，R6 单独统计并逐条列出）"
   - id: D13
     batch: TAG0051
-    kind: new_error
+    kind: gate_line_changed
     gate: "check-gate:P8"
     task_scope: legacy
     match: {patterns: ["④ 从 P2 packages 验证 version 文件路径"]}
-    basis: "TAG0051（RM-AG0103）P8 去 version/tag：check-gate.py P8 收尾提示删去「④ 从 P2 packages 验证 version 文件路径」；rc 2->2 不变，仅该提示文案变化（被 _error_lines 以 `GATE ` 前缀行纳入比较）。kind 取 new_error 是既有枚举内最近项——本差异实为 GATE 行文案变更，枚举无对应 kind，故不改 _rule_matches 新增 kind。"
+    basis: "TAG0051（RM-AG0103）P8 去 version/tag：check-gate.py P8 收尾提示删去「④ 从 P2 packages 验证 version 文件路径」；rc 2->2 不变，仅该提示文案变化（被 _error_lines 以 `GATE ` 前缀行纳入比较）。本差异实为 GATE 行文案变更，`gate_line_changed` 语义贴切（原借用的 new_error 已由 DEBT0070 更正）。"
