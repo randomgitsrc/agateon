@@ -1,5 +1,14 @@
 task_id: TAG0051
-phase: P0
-retries: {}
+phase: P1
+retries:
+  P1:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: expand_bdd_coverage_split_gwt
+  - round: 2
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: drop_na_verdict_merge_bdd_23_24
 judge:
   enabled: true
