@@ -20,3 +20,20 @@
 - [读] `git show --stat cd0ffd6e`（DEBT0072 收口）→ CHANGELOG.md + tech-debt.md + 脚本 + test + 两份评审报告。⇒ 债务收口 hotfix 的既有模板含 CHANGELOG 与 debt 关单。
 - [读] `grep -rn 逐条/required...` → 除本改动三处外，无其他文档描述旧「逐条 conclusion != success」口径；SEC-01 零 check-run 路径**无**单测（先存缺口，非本次回归）。
 - 结论：核心语义改动窄且保守，未发现可掩盖真实失败的场景；唯一 MISALIGNED = A5（CHANGELOG [Unreleased] 与 DEBT0074 关单未随本改动落盘）。
+
+## 增量复审（retry 1，commit 7d3cdeb7 → 已并入 main Merge 47901872）
+- [读] `git show --stat 7d3cdeb7` → 7 文件：3 实现/文档 + CHANGELOG.md + tech-debt.md + 2 报告。
+- [读] `git show 7d3cdeb7 -- CHANGELOG.md` → [Unreleased] 新增 `### 修复` 条目（15-23 行）。
+- [读] `git show 7d3cdeb7 -- agate-workspace/debt/tech-debt.md` → DEBT0074: status closed / closed_at 2026-10-11 / task_id hotfix-debt0074-gate-concurrent-runs / 两条新 evidence / closure_note（含「真机复验延后」如实登记）。
+- [读] CHANGELOG.md:11-23 → 条目逐句核：无「已线上验证」式过度声称；「并发重跑不再假失败」为机制描述。
+- [实跑] `check-debt.py agate-workspace/debt/tech-debt.md` → rc=0。
+- [实跑] `check-protocol-consistency.py --strict-errors-only` → rc=0（0 ERROR，CHECK 7/13 PASS）。
+- [实跑] `grep -c '^## DEBT'`=74 / `grep -c '^status: open'`=1 / awk open id=DEBT0073 → 「74/open 1」属实。
+- [读] `.github/workflows/protocol-tests.yml:34-37` → closure_note 所引「不改为 push 只限 main（PR #222 自引用零 run）」属实。
+- [读] `agate-debt-check.py:158-173` → closed 机械准入 = task_id 非空 + evidence 序列化文本含 task_id + closed_at ⇒ 均满足。
+- 裁决：关单**可接受**（机制层满足第一条实质意图 + 遗留如实登记 + 下次发版自动 fail-closed 复验）；A5 闭合；终态 approved。
+
+## 重写（记录对齐，非新评审）
+- 主 Agent 用 `git reset --hard origin/main` 把 retry 1 的 approved 更新冲掉 ⇒ 仓内该文件回退为 r0（needs-revision），与事实不符。
+- 本次**仅重写**本报告为自洽终态（结论 approved，保留 r0 历史 + 完整 retry 1 节），并追加本条留痕。
+- 复核实：CHANGELOG [Unreleased] 条目仍在 / DEBT0074 status=closed / check-debt rc=0 / consistency rc=0（CHECK 7/13 PASS）/ 74-open1 —— 均与 retry 1 一致。

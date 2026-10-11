@@ -222,7 +222,8 @@ def test_debt0074_concurrent_inflight_rerun_does_not_fail_gate(
     已完成结论 ⇒ 通过。
     """
     repo, td = _repo_with_task(git_repo)
-    runs = list(_OK_RUNS) + [
+    runs = [
+        *_OK_RUNS,
         {"name": "pytest (ubuntu-latest)", "status": "in_progress", "conclusion": None},
         {"name": "consistency", "status": "queued", "conclusion": None},
     ]
@@ -261,7 +262,8 @@ def test_debt0074_completed_failure_among_success_still_fails(
 ):
     """DEBT0074（判别力）：同名既有 success 又有完成态 failure ⇒ 仍非 0（不因存在 success 而放行）。"""
     repo, td = _repo_with_task(git_repo)
-    runs = list(_OK_RUNS) + [
+    runs = [
+        *_OK_RUNS,
         {"name": "pytest (ubuntu-latest)", "status": "completed", "conclusion": "failure"},
     ]
     extra = [
