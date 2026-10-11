@@ -1,0 +1,2 @@
+{"contract_level":2,"event":"task_created","prev_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","task_id":"TAG9003","ts":"2026-10-07T00:00:00.000000Z"}
+{"at_phase":"P4","event":"task_upgraded","from_level":2,"prev_hash":"6e91b1e0d1e9a9d7c8e4c6a2b6f5f0b3f3f9a1a0c1d2e3f405162738495a6b7c","to_level":0,"ts":"2026-10-07T00:00:01.000000Z"}
