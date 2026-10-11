@@ -94,6 +94,7 @@ python3 -m pytest agate/tests/unit/test_check_gate.py --collect-only -q   # 单�
 | 测试 helper（PYTHON 探测） | unit/test_helpers_python.py |
 | check-platform-assumptions.py | agate/tests/scripts/test_check_platform_assumptions.py |
 | check-mvwu.py（MVWU 观测器） | unit/test_check_mvwu.py |
+| agate-release.py gate（发布门：CI success + consistency 0 ERROR + check-gate P8，TAG0051） | unit/test_release_gate.py + unit/test_agate_release.py |
 | check-obligations.py（义务三态归宿登记校验；TAG0050 A4 机械核验） | integration/test_protocol_alignment_review.py（SG.6 登记面守护：锚点表覆盖）+ unit/test_tag0050_obligations.py + unit/test_tag0050_obligations_enforcement.py + unit/test_tag0050_obligation_behavior.py（M 义务真实行为凭证，G1-fix3 K2/K3） |
 | MVWU 协议文档断言（TAG0036） | unit/test_mvwu_protocol_docs.py |
 | 文档/CI 断言（shellcheck/ruff/matrix） | unit/test_env_adapt_docs.py |

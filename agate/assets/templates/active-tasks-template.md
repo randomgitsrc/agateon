@@ -51,7 +51,7 @@
 | P5 | P5-verification.md | 所有测试通过 |
 | P6 | P6-acceptance.md + P6-evidence/ | provenance 三道审计通过 |
 | P7 | P7-consistency.md | BLOCKER=0 + DESIGN_GAP 全配对 |
-| P8 | P8-release.md | version bump + CHANGELOG |
+| P8 | P8-release.md | `bump_type` 意图 + CHANGELOG `[Unreleased]` |
 
 > 项目可调整阶段名称（如 P1→"问题定义"），但编号 P0-P8 和门槛规则不可改。
 

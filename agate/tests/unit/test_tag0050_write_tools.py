@@ -212,11 +212,14 @@ def test_f2_system_writer_field_rejected_by_contract(
     """
     proto = tmp_path / "proto"
     td = proto / "rules" / "task-data"
-    td.mkdir(parents=True)
-    shutil.copy(
-        agate_root / "rules" / "task-data" / "LEVELS.yaml", td / "LEVELS.yaml"
-    )
-    lvl = (agate_root / "rules" / "task-data" / "level-1.yaml").read_text(encoding="utf-8")
+    # TAG0051 根因：协议当前等级抬为 2（LEVELS.yaml 登记 level-2）后，`load_contract(2)` 先读
+    # `level-2.yaml`（extends 1）再合并 level-1；此前夹具只复制 LEVELS.yaml + level-1.yaml，
+    # 缺 level-2.yaml ⇒ extends 链首步即断（chain 空）⇒ 快照整体为 {} ⇒ 注入的 results_total
+    # 根本读不到，被测拒写原因退化为「非法 key」而非契约的 `writer: system`。
+    # 修法：整目录复制 task-data（含 level-2.yaml，未来新增等级亦自动覆盖），再就地改写 level-1。
+    td.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(agate_root / "rules" / "task-data", td)
+    lvl = (td / "level-1.yaml").read_text(encoding="utf-8")
     marker = "      prod_touched: {writer: agent, required: true}\n"
     assert marker in lvl, "F-2：夹具锚点缺失（level-1.yaml 结构已变）"
     lvl2 = lvl.replace(

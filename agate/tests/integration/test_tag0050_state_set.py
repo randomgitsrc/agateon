@@ -77,7 +77,8 @@ def _seed_created_task(task, task_id, phase):
         f"task_id: {task_id}\nphase: {phase}\njudge:\n  enabled: true\nretries: {{}}\n",
         encoding="utf-8",
     )
-    h.write_ledger(task, [{"event": "task_created", "task_id": task_id, "contract_level": 1}])
+    # TAG0051：level-2 登记后协议当前等级 = 2；新建任务须登记当前等级（设计 §2.3 规则 2）。
+    h.write_ledger(task, [{"event": "task_created", "task_id": task_id, "contract_level": 2}])
 
 
 def test_gate_run_and_state_transition_committed_with_real_commit(

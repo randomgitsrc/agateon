@@ -1,0 +1,23 @@
+# level-2.yaml — 任务数据契约 第 2 级（TAG0051 批 delivery-contract）
+#
+# 快照通过 extends 链合并后自成一体；本文件 `extends: 1`（先合并 level-1 再以本级覆盖）。
+# 冻结规则（设计 §2.1）：新增或收紧要求时登记新一级（本文件），不改已冻结的 level-1.yaml，
+# 避免在途任务被追溯。本文件登记进 LEVELS.yaml（LF 归一 sha256），未登记 → consistency ERROR。
+#
+# ⚠️ 合并语义（agate_common.load_contract）：按**顶层键整体覆盖**，仅 `requires` 子键浅合并。
+# 故本级的 `delivery` 节会**整体替换** level-1 的 `delivery` 节——此处必须**重述完整规格**
+# （required / none_requires_reason / non_none_requires_ref），再**新增** `method_enum`。
+level: 2
+extends: 1
+
+# P8 交付声明契约（在 level-1 基础上**收紧**：`delivery.method` 取值域定死为有限枚举）。
+# gate（check-gate.py::gate_p8）读本节判定结构化 `delivery`：
+#   - required / none_requires_reason / non_none_requires_ref：沿用 level-1 契约（逐字重述）；
+#   - method_enum：新增枚举校验——`delivery.method` 非空且不在枚举内 → gate 判失败。
+# 生效面：仅「非 legacy 且 task_level ≥ 2」的任务（level-1 任务无 `method_enum` ⇒ no-op；
+# legacy 走子串路径，不受影响）。
+delivery:
+  required: [method]
+  none_requires_reason: true
+  non_none_requires_ref: true
+  method_enum: [release-notes, tag-release, none]

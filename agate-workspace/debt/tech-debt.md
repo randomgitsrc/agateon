@@ -2907,3 +2907,48 @@ source: review
 created_at: 2026-10-11
 task_id: TAG0051-release-decoupling
 ```
+
+## DEBT0070
+
+```yaml
+id: DEBT0070
+category: protocol
+title: "`docs/design-notes/r6-differential.sh::_error_lines` 的**实际比较口径**（所有 `GATE ` 前缀行）比其文件头自述的「(退出码, ERROR 行集合)」**更宽** ⇒ 成功提示文案的变化被报成「兼容性差异」"
+status: open
+priority: low
+evidence:
+  - ref: docs/design-notes/r6-differential.sh
+    note: >-
+      `:243-255 _error_lines()`：对 stderr 逐行，**跳过**含 `WARNING`/`SKIP`/`OK` 的行，然后
+      `if line.startswith("GATE ") and ":" in line: out.add(line)` **或** `elif "ERROR" in line: out.add(line)`
+      ⇒ **任何 `GATE <阶段>: …` 行都进入比较集**（含「脚本化检查通过。仍需主 Agent：…」这类**成功提示**）。
+  - ref: docs/design-notes/r6-differential.sh
+    note: >-
+      `:4-6` 文件头自述：「把『legacy 任务的 gate 退出码与 **ERROR 集合**不变』这一兼容承诺变成可执行判据…
+      比较 (退出码, ERROR 行集合)」——与上条实现**不一致**（自述只承诺 ERROR 集，实现还比全部 GATE 提示行）。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P4-review-cso.md
+    note: >-
+      触发实证（TAG0051 P4，2026-10-11）：R-A 修好 R6 wrapper 的「空转」后，双向差分报
+      `check-gate:P8` 两个 legacy 任务 `rc 2->2` 的 **added=1/removed=1**——差异**仅**是 P8 收尾提示
+      删去「④ 从 P2 packages 验证 version 文件路径」（P8 去 version 的**预期**结果，rc 不变）。
+      该条已按 allowlist 设计用途登记为 **D13**（`docs/design-notes/r6-allowlist.yaml`）。
+  - ref: docs/design-notes/r6-allowlist.yaml
+    note: >-
+      同一位置的**枚举缺口**：`kind` 仅有 `new_error / rc_change / ledger_event_added / ledger_bytes /
+      new_warning`，**无**「GATE 行变更」这一类 ⇒ D13 只能借用 `new_error`（语义不完全贴切，已在 basis 注明）。
+impact: >-
+  ① 任何**成功提示文案**的正常演进都会被报成「兼容性差异」，迫使逐个登记 allowlist（噪声、且掩盖真实差异）；
+  ② 登记者只能借 `new_error` 表达非 error 的变更，规则语义被稀释；
+  ③ 自述口径与实现口径不一致，使「ERROR 集合不变」这一承诺的**边界不可自证**。
+recommendation: >-
+  **先定口径再改代码**：二选一——(a) 收紧 `_error_lines` 使其与自述一致（只收**失败信号**行：
+  含 `ERROR` 的行，或 `GATE …` 中明确表示不通过的形态），并在文件头写明精确判据；
+  (b) 若保留宽口径（更保守、能抓更多），则**改写自述口径**为「(退出码, GATE/ERROR 行集合)」，
+  并新增 `kind: gate_line_changed` 使规则语义贴切。**倾向 (b)**（宽口径更安全，问题在表述与枚举）。
+closure_criteria:
+  - "`r6-differential.sh` 的自述比较口径与其 `_error_lines` 实现一致（或反之，实现按自述收紧）"
+  - "allowlist 的 `kind` 枚举能贴切表达「GATE 行变更」（或 D13 类差异有明确归属）"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```

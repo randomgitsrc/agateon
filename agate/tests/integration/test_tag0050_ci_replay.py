@@ -48,7 +48,8 @@ def _task_commit_repo(git_repo, task_id="TAG0001", phase="P5", legacy=False):
             f"task_id: {task_id}\nphase: {phase}\nretries: {{}}\n",
             encoding="utf-8",
         )
-        h.write_ledger(task, [{"event": "task_created", "task_id": task_id, "contract_level": 1}])
+        # TAG0051：level-2 登记后协议当前等级 = 2；新建任务须登记当前等级（设计 §2.3 规则 2）。
+        h.write_ledger(task, [{"event": "task_created", "task_id": task_id, "contract_level": 2}])
     git_repo.commit("task commit")
     return repo, base
 

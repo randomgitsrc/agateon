@@ -46,6 +46,7 @@ dispatch_plan:
     complexity: low
   - id: r6-harness
     complexity: low
+    tests_filter: bash docs/design-notes/r6-differential-prepare.sh --src . --dst /tmp/opencode/tag0051-r6-corpus
 prod_touched: false
 ---
 

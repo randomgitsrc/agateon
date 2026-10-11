@@ -164,9 +164,10 @@ phases:
       - {file: P8-release.md, required: true}
     gates:
       - {check: "check-gate.py P8 + gate_commands 逐包 exit 0"}
-      - {check: "check-gate.py P8 $TASK_DIR：delivery/bump_type/debt_check 字段 + version/CHANGELOG/tag 检查"}
+      - {check: "check-gate.py P8 $TASK_DIR：bump_type / debt_check 字段 + 结构化 delivery（method 枚举校验）+ roadmap 关联条目反查"}
+      - {check: "check-changelog.py <task_id>：CHANGELOG `[Unreleased]` 含本任务 task_id（READY 前置载体）"}
+      - {check: "check-protocol-consistency.py：0 ERROR（打 tag 前重跑；CHECK 7 = README badge ↔ CHANGELOG 最新已发布版本，tag 无关）"}
       - {check: "check-p6-provenance.py --audit7-only $TASK_DIR 判定 P5 证据复用；gate_commands.P5 逐包 exit 0 + failed==0"}
-      - {check: "gate_commands.P5 链路含 check-protocol-consistency.py 时先 tag 后重跑（DEBT0013）"}
     retry_cap: 2
     task_fields: [bump_type]
     next: null

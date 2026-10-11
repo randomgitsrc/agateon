@@ -50,8 +50,8 @@ P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8 → READY → DONE
 - DESIGN_GAP 全部配对 REVIEWED
 
 ### P8 → READY
-- 各 package 发布检查 exit 0 + version bump 确认 + CHANGELOG 非空
-- READY 收尾检查：测试环境清理 / 开发环境还原 / git tag 创建
+- 交付物齐备 + CHANGELOG `[Unreleased]` 含 task_id + `bump_type` 意图 + 交付收尾 + 各 package 发布检查 exit 0
+- READY 收尾检查：测试环境清理 / 开发环境还原
 
 ## 重试上限
 

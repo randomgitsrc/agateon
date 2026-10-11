@@ -13,14 +13,32 @@ release workflow 内零打包逻辑：全部走本 CLI，因此本地（无 CI�
   build --tag T --repo R --outdir D --notes-out F [--expect-sha SHA] [--platforms p1,p2] [--skip-offline]
                                     确定性构建 agateon-<T>.tar.gz（本体）+ 每平台 offline 包 + SHA256SUMS + notes；
                                     先在暂存目录构建、全部成功后才落到 outdir（失败不留半成品）
+  gate [--task TASK_DIR] [--sha SHA] [--repo DIR] [--ci-cmd CMD] [--consistency-cmd CMD]
+                                    发布门（TAG0051 M11）：目标提交 CI success（fail-closed：非 success
+                                    含 pending/queued/missing → 非 0）+ check-protocol-consistency.py
+                                    0 ERROR +（给出 --task 时）复用 check-gate.py P8。CI/consistency
+                                    查询走**可注入命令**（--ci-cmd / --consistency-cmd / 同名 env），
+                                    使本地可用 fixture/mock 验证；CI 内缺省用真 `gh`（不写死分支）
+
+发布门 fail-closed 契约（TAG0051 P4 修复轮 SEC-01 / SEC-09）：
+  * required 检查列表解析为空（env `AGATE_RELEASE_REQUIRED_CHECKS` 未设**且**读不到分支保护）
+    **且**目标提交零 check-run ⇒ 门**非 0**（无可校验收敛即视为未通过），并给出可操作提示——
+    禁止「required 空 + 零 check-run = 静默放行」的 fail-open。
+  * `--sha ""` **显式拒绝**（非 0），不得静默回退 `HEAD`（SEC-09）。
+  * required 校验**信任前提**（SEC-02）：门按 check-run 的 `name` 与 required 比对，并过滤上报 App
+    （缺省仅认 `github-actions`）——第三方具 `checks:write` 的已安装 App 不得以同名 check-run 冒充。
+  * RM-AG0043 反查（roadmap `done`）仅在给出 `--task` 时生效：本地 runbook 门会执行；
+    `release.yml` 的 backstop 步**未传** `--task` ⇒ 该反查在 CI backstop 不生效（SEC-07，见 workflow 注释）。
 
 契约：Python 3.8+；stdlib-only（agate_common 仅在 build 内延迟导入）；文本 I/O 显式 UTF-8；
 SHA256SUMS 只防下载损坏、不认证发布者（notes 头部如实标注）。
 """
 
 import argparse
+import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -274,6 +292,255 @@ def build(tag, repo, outdir, notes_out, expect_sha=None, platforms=DEFAULT_PLATF
 
 
 # ---------------------------------------------------------------------------
+# gate（发布门，TAG0051 M11）
+# ---------------------------------------------------------------------------
+
+
+def _run_cmd(cmd, cwd, timeout=300):
+    """按 `shlex.split` 执行命令（**无 shell**，便于注入 mock）；返回 CompletedProcess。"""
+    argv = shlex.split(cmd)
+    if not argv:
+        raise ReleaseError("命令为空")
+    try:
+        return subprocess.run(
+            argv, cwd=str(cwd), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ReleaseError(f"命令执行失败（{cmd!r}）: {exc}") from exc
+
+
+def _git_toplevel(cwd):
+    proc = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], cwd=str(cwd),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if proc.returncode != 0:
+        raise ReleaseError("无法确定仓库根（git rev-parse --show-toplevel 失败）")
+    return proc.stdout.strip()
+
+
+def _gh_json(sub_args, cwd):
+    """`gh <args>` 输出解析为 JSON；gh 不可用 / 非 0 → ReleaseError。"""
+    try:
+        proc = subprocess.run(
+            ["gh", *sub_args], cwd=str(cwd), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ReleaseError(f"gh 执行失败（{' '.join(sub_args)}）: {exc}") from exc
+    if proc.returncode != 0:
+        raise ReleaseError(f"gh {' '.join(sub_args)} 失败: {proc.stderr.strip()}")
+    try:
+        return json.loads(proc.stdout or "null")
+    except ValueError as exc:
+        raise ReleaseError(f"gh {' '.join(sub_args)} 输出非 JSON: {exc}") from exc
+
+
+def _repo_slug(repo_root):
+    """仓库 owner/name——经 `gh` 解析（不写死仓库 / 分支，RM-AG0116）；gh 不可用回退 origin URL。"""
+    try:
+        data = _gh_json(["repo", "view", "--json", "nameWithOwner"], repo_root)
+        name = data.get("nameWithOwner") if isinstance(data, dict) else None
+        if isinstance(name, str) and "/" in name:
+            return name
+    except ReleaseError:
+        pass
+    proc = subprocess.run(
+        ["git", "remote", "get-url", "origin"], cwd=str(repo_root),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$", (proc.stdout or "").strip())
+    if not m:
+        raise ReleaseError(f"无法解析仓库 owner/name（origin={(proc.stdout or '').strip()!r}）")
+    return m.group(1)
+
+
+def _required_checks(repo_root, repo):
+    """required 检查名列表：env `AGATE_RELEASE_REQUIRED_CHECKS`（逗号分隔）优先，
+    否则 best-effort 读分支保护（`GITHUB_TOKEN` 无 admin 权限时静默回退 `[]`，即不过滤）。
+
+    信任前提（SEC-02）：本函数只取**名字**（`contexts`），不取上报 App；调用方 `_gh_check_runs`
+    据此进一步按上报 App 过滤（缺省仅认 `github-actions`），以免第三方 App 冒名。
+    漂移风险（SEC-03）：`release.yml` 内 required 列表是**硬编码**的、与分支保护可能漂移
+    （新增 required 未同步 ⇒ 门不校验该项）；workflow 注释已声明「新增 required 须同步该列表」。
+    """
+    env_list = os.environ.get("AGATE_RELEASE_REQUIRED_CHECKS", "")
+    if env_list.strip():
+        return [c.strip() for c in env_list.split(",") if c.strip()]
+    try:
+        from agate_common import default_branch
+
+        branch = default_branch(repo_root)
+        data = _gh_json(["api", f"repos/{repo}/branches/{branch}/protection"], repo_root)
+    except (ReleaseError, ValueError, ImportError, OSError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    ctxs = ((data.get("required_status_checks") or {}).get("contexts")) or []
+    return [c for c in ctxs if isinstance(c, str)]
+
+
+def _gh_check_runs(repo_root, sha):
+    """缺省 CI 查询：目标提交的 check-runs（过滤 required；缺失 required ⇒ 合成非 success 项）。
+
+    信任边界（SEC-02）：只认**可信上报 App**（缺省 `github-actions`，可经 env
+    `AGATE_RELEASE_TRUSTED_APPS` 覆盖为逗号分隔列表）——GitHub 分支保护按「name + app」判定 required，
+    门若只按 name 匹配，则任意具 `checks:write` 的已安装 App 可上报同名 check-run 冒充。
+    被过滤掉的上报者若其 name 恰为 required，按「缺失」合成非 success 项（fail-closed）。
+
+    排除**当前 release run 自身**的 check-run（其 `details_url` 含 `GITHUB_RUN_ID`）——避免
+    「release 作业仍在 in_progress」自指致假失败。全部结论由调用方 fail-closed 判定。
+    """
+    repo = _repo_slug(repo_root)
+    required = _required_checks(repo_root, repo)
+    data = _gh_json(["api", f"repos/{repo}/commits/{sha}/check-runs"], repo_root)
+    raw = data.get("check_runs", []) if isinstance(data, dict) else []
+    self_run = os.environ.get("GITHUB_RUN_ID", "")
+    trusted = {
+        a.strip()
+        for a in os.environ.get("AGATE_RELEASE_TRUSTED_APPS", "github-actions").split(",")
+        if a.strip()
+    }
+    out = []
+    for r in raw:
+        if not isinstance(r, dict):
+            continue
+        name = r.get("name")
+        if required and name not in required:
+            continue
+        app_slug = (r.get("app") or {}).get("slug") if isinstance(r.get("app"), dict) else None
+        if trusted and app_slug not in trusted:
+            continue  # SEC-02：不认非可信 App 上报的 check-run（避免同名冒充）
+        if self_run and f"/runs/{self_run}/" in str(r.get("details_url", "")):
+            continue
+        out.append({"name": name, "status": r.get("status"), "conclusion": r.get("conclusion")})
+    if required:
+        present = {r["name"] for r in out}
+        for ctx in required:  # 缺失的 required 检查 ⇒ 视为非 success（fail-closed）
+            if ctx not in present:
+                out.append({"name": ctx, "status": "missing", "conclusion": None})
+    return out
+
+
+def _ci_runs(args, repo_root, sha):
+    """目标提交待校验的 check-runs（list[{name,status,conclusion}]）。注入命令优先，缺省查 GitHub。"""
+    cmd = args.ci_cmd or os.environ.get("AGATE_RELEASE_CI_CMD")
+    if cmd:
+        proc = _run_cmd(cmd, repo_root)
+        if proc.returncode != 0:
+            raise ReleaseError(f"CI 查询命令失败（rc={proc.returncode}）: {proc.stderr.strip()}")
+        try:
+            runs = json.loads(proc.stdout or "[]")
+        except ValueError as exc:
+            raise ReleaseError(f"CI 查询命令输出非 JSON: {exc}") from exc
+        if not isinstance(runs, list):
+            raise ReleaseError("CI 查询命令输出应为 JSON 数组（check-runs：[{name,status,conclusion}]）")
+        return runs
+    return _gh_check_runs(repo_root, sha)
+
+
+def _non_success_names(runs):
+    """check-runs 中结论 != success 的名称（含 None/缺失/pending/queued）。"""
+    bad = []
+    for r in runs:
+        if not isinstance(r, dict):
+            bad.append(repr(r))
+        elif r.get("conclusion") != "success":
+            bad.append(str(r.get("name") or "<unnamed>"))
+    return bad
+
+
+def _cmd_gate(args):
+    """发布门：① check-gate.py P8（给出 --task 时）② consistency 0 ERROR ③ 目标提交 CI success。
+
+    fail-closed 不变量（SEC-01 / SEC-09）：
+      * `--sha` 为**空串** ⇒ 显式非 0（不得 `args.sha or "HEAD"` 静默回退）；
+      * 目标提交**零 check-run**（含 required 解析为空 + 无任何 check-run）⇒ 显式非 0，
+        禁止「required 空 + 零 check-run = 静默放行」。
+    """
+    # SEC-09：显式拒绝空 sha（argparse 缺省为 HEAD，但它不是空串）
+    sha = args.sha
+    if sha is None or not sha.strip():
+        sys.stderr.write(
+            "agate-release: 发布门失败——--sha 不得为空串（显式拒绝，不回退 HEAD；"
+            "请传入目标提交 SHA / HEAD）\n"
+        )
+        return 1
+
+    cwd = args.repo or os.getcwd()
+    try:
+        repo_root = _git_toplevel(cwd)
+    except ReleaseError as exc:
+        sys.stderr.write(f"agate-release: {exc}\n")
+        return 1
+
+    scripts_dir = os.path.dirname(os.path.abspath(__file__))
+    # ① check-gate.py P8（RM done / delivery / bump_type；判据单源）
+    if args.task:
+        proc = subprocess.run(
+            [sys.executable, "-B", os.path.join(scripts_dir, "check-gate.py"), "P8", args.task],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=120,
+        )
+        if proc.returncode != 2:
+            sys.stderr.write(
+                f"agate-release: 发布门失败——check-gate.py P8 rc={proc.returncode}（应 2）：\n"
+                f"{proc.stderr.strip()}\n"
+            )
+            return 1
+
+    # ② check-protocol-consistency.py 0 ERROR（CHECK 7/13）
+    try:
+        ccmd = args.consistency_cmd or os.environ.get("AGATE_RELEASE_CONSISTENCY_CMD")
+        if ccmd:
+            cproc = _run_cmd(ccmd, repo_root)
+        else:
+            cproc = subprocess.run(
+                [sys.executable, "-B", os.path.join(scripts_dir, "check-protocol-consistency.py")],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=_PACK_TIMEOUT,
+            )
+    except ReleaseError as exc:
+        sys.stderr.write(f"agate-release: 发布门失败——{exc}\n")
+        return 1
+    if cproc.returncode != 0:
+        sys.stderr.write(
+            f"agate-release: 发布门失败——check-protocol-consistency.py rc={cproc.returncode}（应 0）\n"
+        )
+        sys.stderr.write((cproc.stderr or cproc.stdout or "")[-2000:] + "\n")
+        return 1
+
+    # ③ 目标提交 CI success（fail-closed：任一 required 非 success → 非 0）
+    try:
+        runs = _ci_runs(args, repo_root, sha)
+    except ReleaseError as exc:
+        sys.stderr.write(f"agate-release: 发布门失败——{exc}\n")
+        return 1
+    if not runs:
+        # SEC-01：无可校验收敛即未通过。两种成因都不放行：
+        #   (a) required 解析为空（env 未设 + 读不到分支保护）且目标提交零 check-run；
+        #   (a') 注入的 --ci-cmd 返回空数组。
+        sys.stderr.write(
+            f"agate-release: 发布门失败——目标提交 {sha} 无任何可校验的 check-run（fail-closed）。\n"
+            "  成因：required 检查列表解析为空（env AGATE_RELEASE_REQUIRED_CHECKS 未设，且当前令牌\n"
+            "  读不到分支保护），且该提交/注入结果不含任何 check-run。\n"
+            "  处理：① 确认该提交的 CI 已运行并产生 check-runs 后重跑；或\n"
+            "        ② 无法读分支保护时，显式设置 AGATE_RELEASE_REQUIRED_CHECKS=<逗号分隔检查名> 后重跑。\n"
+        )
+        return 1
+    bad = _non_success_names(runs)
+    if bad:
+        sys.stderr.write(
+            "agate-release: 发布门失败——目标提交 CI 非 success（fail-closed，"
+            f"含 pending/queued/missing）。非 success 项：{', '.join(bad)}\n"
+        )
+        return 1
+    sys.stderr.write(f"agate-release: 发布门通过（sha={sha}，CI {len(runs)} 项 success）\n")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -346,6 +613,12 @@ def main(argv=None):
     p_build.add_argument("--expect-sha", default=None)
     p_build.add_argument("--platforms", default=None)
     p_build.add_argument("--skip-offline", action="store_true")
+    p_gate = sub.add_parser("gate", help="发布门：CI success + consistency 0 ERROR + check-gate P8")
+    p_gate.add_argument("--task", default=None, help="待发布任务目录（给出时复用 check-gate.py P8 判据）")
+    p_gate.add_argument("--sha", default="HEAD", help="目标提交（默认 HEAD）")
+    p_gate.add_argument("--repo", default=None, help="仓库根目录（默认当前工作目录）")
+    p_gate.add_argument("--ci-cmd", default=None, help="注入的 CI 查询命令（stdout=check-runs JSON 数组）；缺省查 GitHub")
+    p_gate.add_argument("--consistency-cmd", default=None, help="注入的 consistency 命令（退出码即结论）；缺省跑 check-protocol-consistency.py")
     args = parser.parse_args(argv)
 
     if args.cmd == "boundary":
@@ -358,6 +631,8 @@ def main(argv=None):
         return _cmd_notes(args)
     if args.cmd == "is-prerelease":
         return _cmd_is_prerelease(args)
+    if args.cmd == "gate":
+        return _cmd_gate(args)
     return _cmd_build(args)
 
 

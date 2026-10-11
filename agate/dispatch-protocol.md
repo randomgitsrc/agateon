@@ -484,7 +484,7 @@ trigger: gate_fail
 ```
 
 各阶段特定追加节（评审角色专属指令 / P2 最小验证 / P3 自检 / refactor 任务回归口径 / P4 上下文控制
-/ P5-P6 BDD 规则与证据要求 / 证据日志格式约定 / 回退诊断 / READY 收尾检查 / 版本 bump 判定 /
+/ P5-P6 BDD 规则与证据要求 / 证据日志格式约定 / 回退诊断 / READY 收尾检查 / `bump_type` 意图判定（不执行 bump；对外发布由独立流程负责） /
 项目占位符映射 / 返回前自检等）均已合并进 `assets/templates/dispatch-prompt.md`，本文件不重复维护。
 
 **命令超时兜底（层级 4，所有 bash 命令强制）**：取值 = 该命令预期耗时 ×1.5，完整规则与分层关系见
@@ -501,7 +501,7 @@ trigger: gate_fail
 | P5 首跑 | 必然 | 每个任务到达 P5 阶段必然执行一次 `gate_commands.P5` | 不可替代——首次验证无前序证据可引用 |
 | P5 失败后重跑 | 条件 | 仅当首跑失败、修复后重新验证时发生（T027 教训：必须全量重跑，不能只测修复项） | 不可替代——重跑本身就是"确认修复且无新回归"的必要动作 |
 | P6 refactor 独立 regression.log | 条件 | 仅 `change_type: refactor` 任务，且当前口径要求独立跑一次全量回归 | **本任务后可替代**——BDD-12 无改动校验成立时，P6 可引用 P5-test-results/ 而非独立重跑 |
-| P8 bump-version 后重跑 `gate_commands.P5` | 必然（发布前最后一道防线，不可移除，见 P1 BDD-14）| 每个走到 P8 的任务，bump-version 后需确认测试仍全绿 | **范围/方式可被简化**——主 Agent 跑 `python3 agate/scripts/check-p6-provenance.py --audit7-only $TASK_DIR`，读 stdout 的 `AUDIT7_RESULT:` 行：`reuse_allowed` → 复用同一份 `P5-test-results/`（不重新执行命令）；`reuse_blocked` / `no_reuse_claim_possible` → 仍需完整重跑 `gate_commands.P5` |
+| P8 交付收尾后重跑 `gate_commands.P5` | 必然（发布前最后一道防线，不可移除，见 P1 BDD-14）| 每个走到 P8 的任务，交付收尾后需确认测试仍全绿 | **范围/方式可被简化**——主 Agent 跑 `python3 agate/scripts/check-p6-provenance.py --audit7-only $TASK_DIR`，读 stdout 的 `AUDIT7_RESULT:` 行：`reuse_allowed` → 复用同一份 `P5-test-results/`（不重新执行命令）；`reuse_blocked` / `no_reuse_claim_possible` → 仍需完整重跑 `gate_commands.P5` |
 
 ---
 
@@ -878,7 +878,7 @@ setTimeout(() => {
 | P5→P6 | 技术验证通过 | 从 P2-design.md `gate_commands.P5` 读取命令执行 → exit 0 AND failed==0 + N5 最小校验（grep -cE '^(PASSED|FAILED|passed|failed|ok|not ok)' P5-test-results/unit.md → 计数 >0）+ 行首锚点扫描（主 Agent 参照 pre-commit 三步逻辑手动判断：正向→PAUSED / 不合规→修正 / 缺失→静默通过）+ 若 ui_affected：从 gate_commands.P5 读取 E2E 命令执行 → exit 0 |
 | P6→P7 | BDD 验收通过 ⚠️ self-authored（降级缓解：provenance 审计 + R1a 截图实质检查，根治待 Phase 3） | `scripts/check-gate.py P6` → exit 2（FAIL=0/NC=0/证据非空已验）+ `scripts/check-p6-evidence.py` UI 截图 > 1KB（R1a 客观证据 barrier）+ `scripts/check-p6-provenance.py` → exit 0/2（2 = 协作规范 WARNING［缺 agent 字段］，不阻塞；证据-结论对应 + dispatch-context 审计 + BDD 总数对照由审计 3 自动执行，P1 `#### BDD-NN` 标题数与 P6 `grep -cE '^\s*- (PASS|FAIL)'` 结果数不符时 exit 1 硬阻 + UI vision YAML 审计 [R1b hook 化]）（UI 条件须截图 + vision-analyst YAML 引用 + `summary.blocker_count → =0`）。**截图质量标准**：操作类 BDD 截图必须互不相同（md5 去重，hook 强制），查询类 BDD 可不截图但须有断言记录文件（response.json / assert.log 等，hook 强制）。任何 BDD 标 FAIL → gate 不通过 → 回 P4 |
 | P7→P8 | 一致性通过（consistency-reviewer subagent 产出） | `grep -E '^\s*-?\s*\[BLOCKER\]' P7-consistency.md | grep -cvE '\[BLOCKER\][:：]?\s*\d+\s*条?\s*$'` → =0 + 同理 `[DEVIATION-CRITICAL]` → =0（声明行如 `[BLOCKER]: 0 条` 被排除，不计为实际 BLOCKER）（已知限制：定性分析，P5 回归测试兜底）|
-| P8→READY | 交付收尾完成（bump-version + commit + tag 由主 Agent 在 gate 验证后亲自执行） | `scripts/check-gate.py P8` → 脚本化部分通过（exit 2）+ 从 P2-design.md `gate_commands` 逐包读取发布检查命令执行 → 全部 exit 0 + bump-version 后重跑 P5 gate（`gate_commands.P5` exit 0 AND failed==0）+ `git log v{prev_version}..HEAD --oneline` 对照 CHANGELOG 条目 → 无遗漏 + 从 P2 `packages` 验证 version 文件路径变更 + `grep -q 'bump_type:' P8-release.md` → 命中 + version 文件双路径检查（暂存区或最近 5 commit，WARNING 级）+ CHANGELOG 双路径检查（`git diff --cached` + `git diff HEAD~5..HEAD`，WARNING 级，`CHANGELOG_FILE` 环境变量可覆盖默认 CHANGELOG.md）|
+| P8→READY | 交付收尾完成（**READY 前置 = 交付物 + CHANGELOG `[Unreleased]` 含 task_id + `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）；不含 version bump / tag**；commit 由主 Agent 在 gate 验证后亲自执行） | `scripts/check-gate.py P8` → 脚本化部分通过（exit 2）+ 从 P2-design.md `gate_commands` 逐包读取发布检查命令执行 → 全部 exit 0 + 交付收尾后重跑 P5 gate（`gate_commands.P5` exit 0 AND failed==0）+ `grep -q 'bump_type:' P8-release.md` → 命中 + CHANGELOG `[Unreleased]` 含本任务 task_id（载体 `check-changelog.py <task_id>`）|
 
 **反例（禁止用作门槛）：**
 - ❌ "unit.md 里 failed: 0"（信 subagent 写的数字）

@@ -58,6 +58,10 @@ def test_r5_1_p8_cached_version_changelog_exit_2(
 def test_r5_2_p8_cached_no_version_warning_exit_2(
     git_repo, task_dir, agate_scripts, python_exe, run_cli
 ):
+    """BDD-3（TAG0051 决策 5 正向口径）：未改 version 文件 → gate_p8 不再告警 version。
+
+    与 `test_check_gate.py::test_g8_2` 同源（本文件是 v060-p8-cached.bats 迁移的回归面）。
+    """
     td = task_dir()
     (td / "P8-release.md").write_text(_P8_RELEASE, encoding="utf-8")
     repo = _init_p8_repo(
@@ -68,17 +72,31 @@ def test_r5_2_p8_cached_no_version_warning_exit_2(
 
     result = _run_gate_p8(agate_scripts, python_exe, run_cli, repo)
     assert result.returncode == 2
-    assert "WARNING" in result.output
-    assert "version" in result.output
+    # 正向口径：version 检查已移除（BDD-3）
+    assert "WARNING" not in result.output
+    assert "version" not in result.output
 
 
 def test_r5_3_p8_cached_version_no_changelog_warning_exit_2(
     git_repo, task_dir, agate_scripts, python_exe, run_cli
 ):
+    """TAG0051 决策 5：gate_p8 不再承载 CHANGELOG 检查（载体 → `check-changelog.py <task_id>`）。
+
+    与 `test_check_gate.py::test_g8_3` 同源的失真修正：旧断言 `"CHANGELOG" in output` 现仅命中
+    gate_p8 收尾文案，不再验证 CHANGELOG 检查。改为正向口径：gate_p8 不再告警 WARNING；
+    并由新载体 `check-changelog.py <task_id>` 对未记录的 task 判 FAIL（exit 1）。
+    """
     td = task_dir()
     (td / "P8-release.md").write_text(_P8_RELEASE, encoding="utf-8")
-    repo = _init_p8_repo(git_repo, td, files={"package.json": "v0.1.0\n"})
+    repo = _init_p8_repo(
+        git_repo, td, files={"package.json": "v0.1.0\n", "CHANGELOG.md": _P8_UNRELEASED}
+    )
 
     result = _run_gate_p8(agate_scripts, python_exe, run_cli, repo)
     assert result.returncode == 2
-    assert "CHANGELOG" in result.output
+    assert "WARNING" not in result.output
+    # 新载体：task_dir fixture 的 task_id 固定为 T001
+    cc = run_cli(
+        python_exe, str(agate_scripts / "check-changelog.py"), "T001", cwd=str(repo)
+    )
+    assert cc.returncode == 1, f"check-changelog.py 对未记录的 task 须判 FAIL，实际 {cc.output!r}"

@@ -35,7 +35,7 @@ agent: {main|analyst|architect|reviewer|test-designer|implementer|verifier|visio
 | P5 | P5-test-results/e2e.md | UI 任务必须：Playwright 实跑结果 + 截图路径。须含 `status: passed` 字段（hook 检查） |
 | P6 | P6-acceptance.md | P1 每条 BDD 有实跑结果（**只允许 PASS 或 FAIL，不允许中间态**）；UI 条件含截图 |
 | P7 | P7-consistency.md | 无 `[BLOCKER]` 标记（门槛）|
-| P8 | P8-release.md | 每个 package 的版本 bump + CHANGELOG + 临时资源清单 |
+| P8 | P8-release.md | 每个 package 的 `bump_type` 意图 + CHANGELOG `[Unreleased]` 条目 + 临时资源清单 |
 
 ### 辅助文件（非阶段产出，由主 Agent 或 subagent 过程产出）
 

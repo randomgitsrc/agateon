@@ -42,11 +42,11 @@ agent: implementer
 
 ## 输出
 - P4：{AGATE_WORKSPACE}/tasks/{Txxx}/P4-implementation/（代码文件或改动清单）+ 实际代码改动
-- P8：{AGATE_WORKSPACE}/tasks/{Txxx}/P8-release.md（发布记录：**每个包**的版本、变更、commit）
+- P8：{AGATE_WORKSPACE}/tasks/{Txxx}/P8-release.md（交付收尾记录：**每个包**的 `bump_type` 意图、CHANGELOG `[Unreleased]` 条目、交付检查结果、commit）
 
 ## 质量门槛
 - P4：P3 的测试从红灯变绿灯（**不修改 P3 测试本身**；**仓库既有其它测试**因设计要求转红时须更新，见下节）
-- P8：**P2 声明的每个 package 都要** CHANGELOG 更新 + 版本 bump；commit message 列出变动文件
+- P8：**P2 声明的每个 package 都要** `bump_type` 意图声明 + CHANGELOG `[Unreleased]` 含 task_id 条目 + 交付检查（P2 `gate_commands` 逐包 exit 0）；commit message 列出变动文件
 
 ## 写类代码与测试的仓库隔离（DEBT0040 教训）
 
@@ -87,18 +87,18 @@ agent: implementer
 - 改常量值（timeout、selector、URL）= 最小修复，主 Agent 可做
 - 改控制流（if/else 结构、循环逻辑、数据处理）= 重写，回 subagent
 
-## P8 多包发布（T005 教训：漏 bump MCP 版本）
+## P8 多包交付收尾（T005 教训：漏处理 MCP 包）
 
 P8 不假设"一个任务一个包"。读 P2 的 `packages:` 声明，**逐个**处理：
-- 单包（如 `[pkg-a]`）：按项目约定 bump 版本 + CHANGELOG + 跑发布检查命令
+- 单包（如 `[pkg-a]`）：按项目约定声明 `bump_type` 意图 + 更新 CHANGELOG `[Unreleased]` 条目 + 跑交付检查命令（P2 `gate_commands` 对应项）
 - 多包（如 `[pkg-a, pkg-b]`）：
-  - 每个包独立 bump 版本 + 更新各自 CHANGELOG
-  - 各包跑各自的发布检查命令（从 P2 的 `packages:` 和 `gate_commands:` 读取）
-- P8-release.md 为每个包列出：包名 / 旧版本 → 新版本 / 验证命令 / 结果
+  - 每个包独立声明 `bump_type` 意图 + 更新各自 CHANGELOG `[Unreleased]` 条目
+  - 各包跑各自的交付检查命令（从 P2 的 `packages:` 和 `gate_commands:` 读取）→ 全部 exit 0
+- P8-release.md 为每个包列出：包名 / `bump_type` 意图 / 交付检查命令与结果
 
 漏掉 P2 声明的任一包 = P8 门槛不通过。
 
-- **P8 模式禁止执行 git commit / git tag**——由主 Agent 在 gate 验证后统一执行
+- **P8 不含 version bump / tag**（交付收尾 ≠ 发布；发布为独立流程 + 人工授权入口）；**P8 模式禁止执行 `git commit`**——由主 Agent 在 gate 验证后统一执行（**READY 前置 = 交付物 + CHANGELOG `[Unreleased]` 含 task_id + `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）；不含 version bump / tag**）
 
 ## SCOPE_GAP 检查（T005 教训：主 Agent 的 prompt 漏了 P2 已声明的改动）
 

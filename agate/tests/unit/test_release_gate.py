@@ -31,6 +31,7 @@ import json
 
 import yaml
 
+import helpers_tag0050 as H5
 import helpers_tag_repo as H
 
 _RELEASE_YML = ".github/workflows/release.yml"
@@ -120,7 +121,7 @@ def _ledger(task_id, level):
         "event": "task_created",
         "task_id": task_id,
         "contract_level": level,
-        "prev_hash": H.GENESIS_HASH,
+        "prev_hash": H5.GENESIS_HASH,
         "ts": "2026-10-07T00:00:00.000000Z",
     }
     return json.dumps(ev, sort_keys=True, separators=(",", ":")) + "\n"

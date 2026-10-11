@@ -16,3 +16,14 @@
 - [self-check ②] 8 新文件自跑 → 26 failed / 10 passed（exit=1）；A类 token（Traceback/SyntaxError/ImportError/ModuleNotFoundError）命中 0 → 红灯均 B 类。
 - [self-check ③] BDD-1..23 每条均有测试名引用该编号（23/23）。
 - [status] 产出：P3-test-cases.md（test_code_dir=agate/tests/unit/）+ 8 测试文件 + level-2 黄金 fixture。git status 仅新增测试/夹具/任务文档，未改任何协议/脚本/CI 文件。[PROD_NOT_TOUCHED]
+
+## P3 test-designer 修复轮（retry 1，修测试自身 bug）
+- [read] 角色定义 + P3-dispatch-context-test-designer-retry1.md。定位 2 处测试代码缺陷（非实现缺口）：
+  ① `test_tag0051_obligations_sync.py::_obligations()` 顶层按列表假设 ⇒ 恒 0 条（实为 dict，列表在 `data["obligations"]`，
+     与 check-obligations.py:258 同源口径）；② `test_release_gate.py` 用 `H.GENESIS_HASH`（helpers_tag_repo 无此常量，在 helpers_tag0050）。
+- [fix] ① 取 `data["obligations"]`（最小改，仅列表来源）；② 增 `import helpers_tag0050 as H5` 并把该处 `H.GENESIS_HASH` → `H5.GENESIS_HASH`。未改任何断言语义、未改实现、未改 P1/P2 基线。
+- [self-check ①] 8 文件自跑 → **1 failed / 35 passed**（修复前 8F/28P）。唯一红 = `test_tag0051_self_gate.py::test_bdd_22_protocol_commits_carry_falsifiable_self_gate_review`：
+  归因为「**实现缺口 / 设计性必红**」——BDD-22 要求改 `agate/` 的提交带 `self-gate-review:` 留痕，而该提交（P4 产出）尚未发生，断言 `prot == []` 成立即红。非测试 bug。
+- [self-check ② 同类扫描] H/H5 全部属性引用已核对：`H.REPO_ROOT`/`H.run_git`（helpers_tag_repo 均导出）、`H5.GENESIS_HASH`（helpers_tag0050 导出）——无引用不存在的 helper。唯一 `parents[2]`（obligations_sync）解析到 `agate/`，层级正确；yaml.safe_load 另一处在 release_gate（release.yml 顶层映射，配合 `doc.get(True, doc.get("on"))` 处理 YAML1.1 `on`→True，语义正确）。无其它同族缺陷。
+- [self-check ③] check-platform-assumptions.py agate/tests/unit/ → exit 0（0 命中）；ruff 两文件 → All checks passed。
+- [status] 改动面：仅 2 文件（test_tag0051_obligations_sync.py +8/-1、test_release_gate.py +3/-1）。[PROD_NOT_TOUCHED]

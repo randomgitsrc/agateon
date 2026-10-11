@@ -274,7 +274,8 @@ criteria_total + criteria_passed + verdict_evidence [JSON 列表]（+ partial �
 P8 gate 通过后，主 Agent 会执行收尾检查（停止调试服务、清理临时数据、还原开发环境、确认生产无残留）。
 你在 P8 产出中应列出：启动了哪些临时服务/进程、创建了哪些临时数据、做了哪些开发安装，供主 Agent 清理。
 
-## 版本 bump 判定
+## `bump_type` 意图判定（不执行 bump；对外发布由独立流程负责）
+P8 只声明 `bump_type` **意图**（写进 P8-release.md），不执行 bump、不打 tag。
 - 公共 API 行为变化 / 破坏性变更 → major
 - 加功能 / 内部重构改 API（向后兼容）→ minor
 - 修 bug / 不改 API 行为 → patch

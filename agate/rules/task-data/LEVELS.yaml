@@ -7,3 +7,6 @@
 - level: 1
   file: level-1.yaml
   sha256: "6ace03c98a074a623e33a4d7127e1f782b4d001df41fe6b0741350185183fc96"
+- level: 2
+  file: level-2.yaml
+  sha256: "741afaf7ef2e33436573b67139f959e8cdf75ae5d36f1dc31c6c354f0bbb2b34"

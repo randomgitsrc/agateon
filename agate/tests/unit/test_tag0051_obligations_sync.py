@@ -26,8 +26,14 @@ _FORBIDDEN_TOKENS = ("版本号", "tag", "version", "双路径", "最近 5 commi
 
 
 def _obligations():
+    # 顶层是映射（`schema_version` / `baseline` / `obligations`），条目列表在 `obligations` 键下
+    # ——按 check-obligations.py 的同源口径取（:258 `data.get("obligations")`），不遍历顶层猜。
     data = yaml.safe_load(_OBLIGATIONS.read_text(encoding="utf-8"))
-    return [o for o in data if isinstance(o, dict) and str(o.get("id", "")).startswith("OBL-P8-")]
+    return [
+        o
+        for o in data["obligations"]
+        if isinstance(o, dict) and str(o.get("id", "")).startswith("OBL-P8-")
+    ]
 
 
 def _by_id(items, obl_id):
