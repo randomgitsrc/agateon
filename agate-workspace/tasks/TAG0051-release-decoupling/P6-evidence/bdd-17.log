@@ -1,0 +1,24 @@
+# BDD-17 evidence — delivery.method 取枚举外非空值时判失败（BDD-16 反例）
+# 夹具：level-2 非 legacy 任务；delivery.method=definitely-not-in-enum（枚举外非空）。
+# ⚠ AGATE_ROOT=/home/kity/oclab/agateon/agate（本工作树协议根）已导出（理由同 bdd-16）。
+
+$ cat /tmp/opencode/tag0051-p6/work/lvl2/t17/P8-release.md | sed -n '1,7p'
+---
+bump_type: minor
+debt_check: none
+delivery:
+  method: definitely-not-in-enum
+  ref:
+    - CHANGELOG.md
+
+$ cd /tmp/opencode/tag0051-p6/work/lvl2 && AGATE_ROOT=/home/kity/oclab/agateon/agate python3 /home/kity/oclab/agateon/agate/scripts/check-gate.py P8 t17
+GATE P8: delivery.method='definitely-not-in-enum' 不在快照 delivery.method_enum=['release-notes', 'tag-release', 'none'] 内（P8 为交付收尾，交付方式须为已声明的有限枚举）
+EXIT: 1
+
+# 对照：同一夹具在不设 AGATE_ROOT（解析到稳定版 v0.81.0、无 level-2.yaml）时 rc=2——说明
+#   枚举校验确受理本工作树 level-2.yaml 驱动（非真空）。
+$ cd /tmp/opencode/tag0051-p6/work/lvl2 && python3 /home/kity/oclab/agateon/agate/scripts/check-gate.py P8 t17   # 不设 AGATE_ROOT
+GATE P8: 脚本化检查通过。仍需主 Agent：① 从 P2 gate_commands 逐包读取发布检查命令 ② 重跑 P5 gate ③ 用 git log 对照 CHANGELOG 无遗漏
+EXIT: 2
+
+# 判定：枚举外非空值 ⇒ exit 1（本工作树协议口径）。

@@ -162,19 +162,21 @@ P7 --[grep -E '^\s*-?\s*\[BLOCKER\]' P7-consistency.md | grep -cvE '\[BLOCKER\][
     （⑨ P7 subagent 化：consistency-reviewer subagent 执行交叉检查，N3⑨ 实质锚点校验）
 P7 --[retry>=MAX]--> PAUSED（正确路由：上游问题需人工介入，非 agent 失败）
 
-P8 --[每个声明的 package 的发布检查命令 exit 0 + 主 Agent 亲自执行 bump-version 后重跑 P5 gate（gate_commands.P5 exit 0 AND failed==0）+ 主 Agent 亲自执行 git commit + git tag + P8-release.md 含 bump_type: 字段 + version 文件双路径检查（暂存区或最近 5 commit，WARNING）+ CHANGELOG 双路径检查（暂存区或最近 5 commit，WARNING）+ git tag -l "${VERSION_TAG_PREFIX}{version}" 存在（推荐，不阻断）+ 若 roadmap.md 有关联 RM 条目须已回写 done（RM-AG0043，check-gate.py P8 反查）]--> READY
+P8 --[每个声明的 package 的发布检查命令 exit 0 + 交付收尾后重跑 P5 gate（gate_commands.P5 exit 0 AND failed==0）+ 主 Agent 亲自执行 git commit + P8-release.md 含 bump_type: 字段 + CHANGELOG `[Unreleased]` 含 task_id（载体 check-changelog.py）+ 若 roadmap.md 有关联 RM 条目须已回写 done（RM-AG0043，check-gate.py P8 反查）]--> READY
       （gate 命令集由 P2-design.md 的 packages + gate_commands 字段动态生成，不同项目不同命令，agate 不硬编码。规则见 dispatch-protocol.md「packages 动态注入（B4/B6）」节）
-     （⑨ P8 subagent 化：releaser subagent 执行交付收尾（产出文件 + 验证命令），主 Agent 亲自执行 bump-version + commit + tag + READY 收尾）
+     （⑨ P8 subagent 化：releaser subagent 执行交付收尾（产出文件 + 验证命令），主 Agent 亲自执行 commit + READY 收尾——**不含 version bump / tag**）
+     （**READY 前置 = 交付物 + CHANGELOG `[Unreleased]` 含 task_id + `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）；不含 version bump / tag。**
+      发布（tag → GitHub Release）**不在任务状态机内**——它是**独立流程 + 人工授权入口**（当前实现为 `.github/workflows/release.yml` 的 `workflow_dispatch`），由人工触发一次，任务**止于 READY**；
+      该授权**不新引入**与既有 `PAUSED` / `[NEED_CONFIRM]` 并行的第二套阻塞确认语义——发布不经任务状态机，故无新增阻塞标记。）
 
 ### READY 收尾检查（P8 gate 通过后、标记 READY 前）
 
 P8 gate 通过 ≠ 直接标记 READY。主 Agent 必须逐项检查：
 
-**状态与版本：**
+**状态：**
 - [ ] .state.yaml phase == READY
 - [ ] active-tasks.md 任务行状态已更新
 - [ ] git 工作区干净（git status 无 untracked）
-- [ ] git tag 已创建
 
 **测试环境已清理：**
 - [ ] 调试服务/进程已停止（启动的 debug server、临时 daemon）
@@ -318,14 +320,14 @@ PAUSED 恢复协议：
 
 **P8 与 READY 的说明**：
 
-P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READY 状态——表示每个受影响包的版本 bump、CHANGELOG 更新、测试全通过，**已准备好发布**。实际的 `make publish`（上传到 PyPI）由人手动触发。
+P8 是**「交付收尾」**，不是「发布」。P8 gate 通过后进入 READY 状态——表示交付物齐全、CHANGELOG `[Unreleased]` 含 task_id、`bump_type` 意图已声明、测试全通过，**已准备好发布**。实际的对外发布（tag → GitHub Release / `make publish` 上传制品）是**独立流程 + 人工授权入口**，不在任务状态机内。
 
 | 概念 | 含义 | 谁执行 |
 |------|------|--------|
-| 交付收尾 (READY) | 各包 version bump + CHANGELOG + lint + test 全通过 | Subagent + 主 Agent 验证 |
-| 发布 (DONE) | 上传到 PyPI | 人手动触发 |
+| 交付收尾 (READY) | 交付物 + CHANGELOG `[Unreleased]` 含 task_id + `bump_type` 意图 + lint + test 全通过 | Subagent + 主 Agent 验证 |
+| 发布 | 对外发布（tag → GitHub Release / 上传制品）——**独立流程**，非任务状态机阶段 | 人手动触发（人工授权入口） |
 
-**多包发布**：一个任务可能涉及多个独立版本的包（如 backend + mcp-server）。P8 必须为 P2 声明的**每一个** package 执行 version bump 和发布检查，gate 命令由 packages 列表动态生成。漏 bump 某个包 = gate 不通过。
+**多包交付**：一个任务可能涉及多个独立的包（如 backend + mcp-server）。P8 必须为 P2 声明的**每一个** package 执行**交付检查**（P2 `gate_commands` 逐包 exit 0），gate 命令由 packages 列表动态生成。漏检某个包 = gate 不通过。（P8 **不执行 version bump**——对外发布由独立流程负责，见 P8→READY 转移行。）
 
 ---
 
@@ -398,12 +400,10 @@ function 执行一步(task_id):
         - P8: scripts/check-gate.py P8 → 脚本化部分通过（exit 2）;
               从 P2-design.md gate_commands 逐包读取发布检查命令执行 → 全部 exit 0;
               从 P2-design.md gate_commands.P5 重跑 P5 命令 → exit 0 AND failed==0;
-              git log v{prev_version}..HEAD --oneline 对照 CHANGELOG 条目 → 无遗漏;
-              从 P2-design.md packages 验证 version 文件路径变更;
-              grep -q 'bump_type:' {task}/P8-release.md → 命中;
-               git diff --cached --stat → 含 version 文件变更;
-               git diff --cached -- ${CHANGELOG_FILE:-CHANGELOG.md} → 非空
-               （CHANGELOG 是项目根文件，默认 CHANGELOG.md；项目可用 CHANGELOG_FILE 环境变量覆盖路径）
+              CHANGELOG `[Unreleased]` 含 task_id（载体 check-changelog.py <task_id>）;
+              grep -q 'bump_type:' {task}/P8-release.md → 命中（**意图**声明，非执行 bump）;
+              若 roadmap.md 有关联 RM 条目（按 task_id 反查「关联任务」列）→ 须已回写「状态」为 done（RM-AG0043，check-gate.py P8 反查）
+              （**不含** version bump / tag——对外发布（tag → Release）为独立流程 + 人工授权入口，不在任务状态机内）
         **若 gate 不通过**：追加至少一行到 orchestrator-log.md（记录 gate 失败阶段+原因）
      6. 计算下一状态（按转移规则）
        **回退跳变检测**（T019 教训：P5→P2 跨 3 阶段回退未 PAUSED）：

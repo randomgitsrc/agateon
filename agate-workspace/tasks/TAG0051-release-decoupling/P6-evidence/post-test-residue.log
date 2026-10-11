@@ -1,0 +1,95 @@
+# post-test 环境残留检查（强制步骤）
+# cwd: /home/kity/oclab/agateon  branch: task/TAG0051-release-decoupling  HEAD: c5bda4df
+# 记录时刻: 2026-10-11T06:11:04Z
+
+## 1) 快照比对：验收前 vs 验收后
+# 验收开始时（本 subagent 启动前，主 Agent 已建 P6-dispatch-context-verifier.md，无其它未跟踪项）：
+    ?? agate-workspace/tasks/TAG0051-release-decoupling/P6-dispatch-context-verifier.md
+# 验收结束时（当前 —— 新增项仅 P6-evidence/* 与 P6-progress-verifier.md）：
+$ git status --porcelain -uall
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-dispatch-context-verifier.md
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-01.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-02.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-03.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-04.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-05.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-06.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-07.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-08.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-09.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-10.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-11.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-12.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-13.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-14.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-15.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-16.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-17.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-18.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-19.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-20.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-21.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-22.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/bdd-23.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-evidence/post-test-residue.log
+?? agate-workspace/tasks/TAG0051-release-decoupling/P6-progress-verifier.md
+
+## 2) 已跟踪文件是否被改（应为空 —— 只读验证）
+$ git diff --stat; git diff --cached --stat
+(以上为空 = 无已跟踪文件改动 / 无暂存改动)
+
+## 3) 账本未被手写
+$ git status --porcelain -- agate-workspace/tasks/TAG0051-release-decoupling/gate-events.jsonl
+(空 = 账本无改动)
+# 本 subagent 全程只读（check-gate.py 无 append 逻辑；agate-release.py gate 只读；pytest 在 tmp_path）。
+
+## 4) 无新增长驻进程（只统计 python 进程，排除本检查自身的 shell）
+$ ps -eo pid,args | grep -E 'agate-release\.py|check-gate\.py|r6-differential' | grep -E 'python' | grep -v grep || echo '(no lingering python processes)'
+(no lingering python processes)
+
+## 5) 一次性临时目录（/tmp/opencode scratch 根下，工具自管/本 subagent 夹具）
+$ ls -d /tmp/opencode/tag0051-p6* 2>/dev/null
+/tmp/opencode/tag0051-p6
+/tmp/opencode/tag0051-p6-r6-corpus
+# /tmp/opencode/tag0051-p6-r6-corpus 由 r6-differential-prepare.sh 每次 rm -rf 重建（工具自管）；
+# /tmp/opencode/tag0051-p6/work = 本 subagent 夹具。均在仓库外，不被提交。
+
+## 6) 结论
+无残留：① 无已跟踪文件改动/暂存改动；② 账本未被手写；③ 无长驻 python 进程；
+④ 新增项仅 P6 验收产出（P6-evidence/*、P6-progress-verifier.md）+ 主 Agent 的 dispatch 文件，
+   全在 agate-workspace/tasks/TAG0051-release-decoupling/ 下，非代码/测试/协议文件。
+
+## 7) 最终再核（产出落盘后：P6-acceptance.md 亦已写入）
+$ git status --porcelain -uall | sed 's#agate-workspace/tasks/TAG0051-release-decoupling/##'
+?? P6-acceptance.md
+?? P6-dispatch-context-verifier.md
+?? P6-evidence/bdd-01.log
+?? P6-evidence/bdd-02.log
+?? P6-evidence/bdd-03.log
+?? P6-evidence/bdd-04.log
+?? P6-evidence/bdd-05.log
+?? P6-evidence/bdd-06.log
+?? P6-evidence/bdd-07.log
+?? P6-evidence/bdd-08.log
+?? P6-evidence/bdd-09.log
+?? P6-evidence/bdd-10.log
+?? P6-evidence/bdd-11.log
+?? P6-evidence/bdd-12.log
+?? P6-evidence/bdd-13.log
+?? P6-evidence/bdd-14.log
+?? P6-evidence/bdd-15.log
+?? P6-evidence/bdd-16.log
+?? P6-evidence/bdd-17.log
+?? P6-evidence/bdd-18.log
+?? P6-evidence/bdd-19.log
+?? P6-evidence/bdd-20.log
+?? P6-evidence/bdd-21.log
+?? P6-evidence/bdd-22.log
+?? P6-evidence/bdd-23.log
+?? P6-evidence/post-test-residue.log
+?? P6-progress-verifier.md
+
+$ git diff --stat | tail -1 ; git diff --cached --stat | tail -1
+(空 = 无已跟踪/暂存改动)
+# 结论不变：新增项仅为任务目录内 P6 产出（P6-acceptance.md / P6-evidence/* / P6-progress-verifier.md），
+#   无已跟踪文件改动、账本未被手写、无长驻进程。

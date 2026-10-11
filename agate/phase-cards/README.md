@@ -15,7 +15,7 @@
 | P6 | [P6-acceptance.md](P6-acceptance.md) | 验收：BDD 对照 / vision-helper 绑定 |
 | P6.5 | （无独立卡片，见 P6 卡「judge 复核」节）| 独立 Judge 复核：fresh context 逐条重验全部 BDD；`.state.yaml` phase 保持 P6 直至 P7 |
 | P7 | [P7-consistency.md](P7-consistency.md) | 一致性：DESIGN_GAP / SCOPE+ 闭环 |
-| P8 | [P8-release.md](P8-release.md) | 发布：bump / CHANGELOG / 收尾清理 |
+| P8 | [P8-release.md](P8-release.md) | 交付收尾：`bump_type` 意图 / CHANGELOG `[Unreleased]` / 收尾清理 |
 
 ## 跨阶段规则（按需查阅）
 

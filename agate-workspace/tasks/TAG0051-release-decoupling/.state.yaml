@@ -1,0 +1,34 @@
+task_id: TAG0051
+phase: DONE
+p5_pass_commit: 9771e76ac8aaa6a18b1d3479fb8a87215fca786e
+retries:
+  P4:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: selfgate_misaligned_6_fix_54_regressions_docs_propagation
+  - round: 2
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: reverse_propagation_residue_doc_family_not_literal_grep
+  P3:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: false
+    adjustment: fix_test_fixture_defects_not_impl_gaps
+  P2:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: obligations_m_count_preserve_and_p8_05_08_sync
+  P1:
+  - round: 1
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: expand_bdd_coverage_split_gwt
+  - round: 2
+    failure_mode: quality
+    prompt_changed: true
+    adjustment: drop_na_verdict_merge_bdd_23_24
+judge:
+  enabled: true

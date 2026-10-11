@@ -185,14 +185,16 @@
 
 ## 版本发布清单（教训浓缩）
 
+> **发布不在任务状态机内**：任务止于 READY（**READY 前置 = 交付物 + CHANGELOG `[Unreleased]` 含 task_id + `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）；不含 version bump / tag**）。发布（打 tag → 建 Release）是**独立流程**，由**人工授权**触发（当前实现 = `.github/workflows/release.yml` 的 `workflow_dispatch`）；**不可逆外部动作（push / PR / merge / tag / Release / 改分支保护）须用户授权，不得由 agent 自动执行**。
+
 1. pytest 全绿 + 0 consistency ERROR + 0 shellcheck error（用例数以 `count-tests.sh` 为准）
 2. 更新 `README.md` version badge + `CHANGELOG.md` [Unreleased] → 新版本号
 3. **更新 `agate/UPGRADING.md` 新增本版本章节**——无破坏性变更也写"（无破坏性变更）"（v0.62.0 教训：漏写章节）
 3a. **公告约束（RM-AG0108 / DEBT0051）**：**不得预告「未排期能力」的实施版本号**——`UPGRADING`/`CHANGELOG`/`README` 里写「到截止版本 vN 改 exit 1」「vN 将硬切」这类承诺前，**必须**在同一提交登记 **RM 或 DEBT（给 owner）** 并在 `roadmap` 可见（否则公告发出即无主、到期无人兑现——TAG0042 公告 v0.80.0 硬切、TAG0050 P8 撞上该版本号才暴露，见 RM-AG0102）。**确需预告时**：写清 owner 条目 id，并接受「到期未兑现即欠账」。
-4. `git tag vN.N.0 && git push origin vN.N.0`——`git push` 不带 tag **默认不推送 tag**（v0.51.0 教训）；推送后 `git ls-remote --tags origin vN.N.0` 验证远端到达
+4. **先合 release PR → 合并后 main CI 绿 → 再打 tag**（顺序不可颠倒；打 tag 前先过发布门）：release PR 走普通 merge（`--no-ff`，禁 squash，见下方同名条）；合并后确认 main CI 全绿、发布门（目标提交 CI success + tag↔提交一致 + `check-protocol-consistency.py` 的检查 7/13 均 0 ERROR + roadmap RM `done`）通过后，**由人工**执行 `git tag vN.N.0 && git push origin vN.N.0`——`git push` 不带 tag **默认不推送 tag**（v0.51.0 教训）；推送后 `git ls-remote --tags origin vN.N.0` 验证远端到达
 5. CHECK 7（version badge vs **CHANGELOG 最新已发布版本**，v0.78.2 起**不再依赖 git tag**）自动通过；CI ruff job 绿（`ruff==0.16.4`，与本地 `~/.venvs/agate-dev/bin/ruff` 对齐，RM-AG0037 required check）
 5a. **Release 校验（tag 与 Release 双轨，TAG0037）**：推送 `vN.N.0` 后 `.github/workflows/release.yml` 自动构建并创建 GitHub Release；`gh release view vN.N.0` 须存在，且资产至少含 3 个 tarball——本体 `agateon-vN.N.0.tar.gz` 与两平台 offline 包（`agateon-vN.N.0-offline-linux-x86_64.tar.gz`、`agateon-vN.N.0-offline-windows-x86_64.tar.gz`），另有 `SHA256SUMS`（仅防下载损坏，不认证发布者）。
-   - **补救（tag 已推而 Release 缺失）**：release workflow 没有 `workflow_dispatch`，无法手动重跑——本地用同一打包脚本重建：`python3 agate/scripts/agate-release.py build --tag vN.N.0 --repo . --outdir <dist> --notes-out <notes.md> --expect-sha <tag 提交 SHA>`，再 `gh release create vN.N.0 <dist>/* --verify-tag --title vN.N.0 --notes-file <notes.md>`。Release 已存在时重跑会失败，须先确认其属本次创建再 `gh release delete`。
+   - **补救（tag 已推而 Release 缺失）**：release workflow 已支持 `workflow_dispatch`（人工授权入口），可人工重跑；若仍失败，本地用同一打包脚本重建：`python3 agate/scripts/agate-release.py build --tag vN.N.0 --repo . --outdir <dist> --notes-out <notes.md> --expect-sha <tag 提交 SHA>`，再 `gh release create vN.N.0 <dist>/* --verify-tag --title vN.N.0 --notes-file <notes.md>`。Release 已存在时重跑会失败，须先确认其属本次创建再 `gh release delete`。
    - **建议（非代码项）**：为 `v*` tag 启用 GitHub tag Ruleset / tag 保护，只允许维护者创建 tag（release workflow 以 tag push 为唯一触发器）。
 6. **release PR 合并后最终验证（G-5）**：`git fetch origin && git describe --tags --abbrev=0 origin/main` == vN.N.0；`git merge-base --is-ancestor vN.N.0 origin/main` 返回 0；合并后 push 的 CI 全绿；`gh release view vN.N.0` 显示 Release 存在且含上述资产
    - ⚠️ **`--abbrev=0` 不可省**（2026-10-02 实测更正）：不带它时 `git describe` 会返回 `vN.N.0-<n>-g<sha>`（tag 之后每多一个 commit 就变一次），**该判据恒不成立**——v0.77.0 实测得到 `v0.77.0-3-gd666d4b`。
@@ -202,4 +204,6 @@
 
 **CI 一致性失败诊断（E-3，v0.51.0 教训）**：本地绿 CI 红 → 先拉 CI job 完整日志（`gh api repos/{owner}/{repo}/actions/jobs/{id}/logs`）看真实 FAIL 的 `CHECK N` 归属，**禁止臆测根因**；（v0.78.2 起 CHECK 7 为 badge↔CHANGELOG，不再查 tag——tag 指向问题改由 `release.yml` 的「Verify tag points to matching commit」步拦）。
 
-**release PR 必须普通 merge（`--no-ff`），禁止 squash**：**G-5 验证**用 `git describe --tags --abbrev=0` 取最新 tag；squash 生成内容相同但 SHA 不同的新提交，tag 与 main 分叉、describe 回退旧版（v0.31.0 事故）。（v0.78.2 起 CHECK 7 不再依赖 tag，该规则由 G-5 单独支撑。）若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force`。
+**release PR 必须普通 merge（`--no-ff`），禁止 squash**：发布顺序统一为「**先合 release PR → 合并后 main CI 绿 → 后打 tag → Release**」——tag 打在 main 的合并提交上，**G-5 验证**用 `git describe --tags --abbrev=0 origin/main`（须 == vN.N.0）+ `git merge-base --is-ancestor vN.N.0 origin/main` 返回 0；squash 会改写发布提交的 SHA（v0.31.0 事故：tag 与 main 分叉、describe 回退旧版），故禁止。（v0.78.2 起 CHECK 7 不再依赖 tag，该规则由 G-5 单独支撑。）若确实用了 squash：`git tag -f vN.N.0 <main-commit> && git push origin vN.N.0 --force`。
+
+**发布失败处置**（发布后/发布中发现问题的统一口径）：**先评估「回退 tag/Release 重打」**——撤回远端 tag（`git push origin :refs/tags/vN.N.0`）、删除 GitHub Release（`gh release delete vN.N.0`），修正后按上清单重新打 tag（`git tag -f`）/重建 Release；**仅当该 tag/Release 已被外部消费**（已有人基于它构建、下载或引用）**才改用出补丁版本**（不回退已发布版本，避免破坏消费者）。**不可逆外部动作（撤/重打 tag、删/建 Release、push）须用户授权后人工执行**，不得由 agent 自动触发。

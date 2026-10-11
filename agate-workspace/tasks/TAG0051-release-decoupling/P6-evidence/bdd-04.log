@@ -1,0 +1,11 @@
+# BDD-4 evidence — READY 前置保留「CHANGELOG [Unreleased] 含本任务条目」（回归锁）
+# 被测：agate/scripts/check-changelog.py <task_id>（cwd 含 CHANGELOG.md）
+
+$ cat /tmp/opencode/tag0051-p6/work/bdd4/CHANGELOG.md
+## [Unreleased]
+- TAG9001 任务完成
+
+$ cd /tmp/opencode/tag0051-p6/work/bdd4 && python3 /home/kity/oclab/agateon/agate/scripts/check-changelog.py TAG9001
+EXIT: 0
+
+# 判定：exit 0。

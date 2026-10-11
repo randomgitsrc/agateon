@@ -57,12 +57,16 @@ def _init_commit(run_cli, agate_root, git_repo, repo):
     return _git_commit(run_cli, agate_root, repo, "-q", "-m", "init")
 
 
-def _seed_task_created(task_dir, task_id="T001", contract_level=1):
+def _seed_task_created(task_dir, task_id="T001", contract_level=2):
     """TAG0050 A1（设计 §2.3 规则 1）：为新任务目录写 task_created 首行账本。
 
     规则 1 要求新建任务目录的账本第 1 行为 task_created。既有"新建任务目录并提交"
     用例（设计 §8 允许改用 init_task 的同类）经本 helper 满足该规则；已存在账本时不覆盖
     （保持"只追加"）。
+
+    默认等级 = **2**（TAG0051：`level-2.yaml` 登记后协议当前等级由 1 抬为 2；`pre-commit-gate.py`
+    设计 §2.3 规则 2 要求新任务等级 == 当前等级，否则整批"新建任务目录 + commit"用例被
+    抬升后的当前等级拒之门外）。需要**低等级**语义的负例用例请显式传 `contract_level`。
     """
     import hashlib
     import json

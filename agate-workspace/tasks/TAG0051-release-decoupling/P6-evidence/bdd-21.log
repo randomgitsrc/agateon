@@ -1,0 +1,22 @@
+# BDD-21 evidence — 改 P8 语义时 obligations / anchor / 测试三者同步
+$ python3 agate/scripts/check-obligations.py
+M 类占比: 56/121 = 0.4628（基线 56/121 = 0.4628）
+归宿分布: M=56 C=35 R=30（M=脚本执行 / C=命令生成 / R=强制评审）
+CHECK-OBLIGATIONS: OK（无「无归宿」项 + 无 ERROR + M 类占比不低于基线）
+EXIT=0
+
+$ python3 - <<'PY'  # OBL-P8-04 仍为 M 且含 method_enum（就地重挂 gate_p8）
+OBL-P8 条目数: 14
+OBL-P8-04 disposition: M
+OBL-P8-04 enforced_at: {'file': 'agate/scripts/check-gate.py', 'function': 'gate_p8'}
+OBL-P8-04 statement 含 method_enum: True
+
+$ python3 -m pytest agate/tests/unit/test_tag0051_obligations_sync.py -q
+...                                                                      [100%]
+3 passed in 0.16s
+
+$ python3 -m pytest agate/tests/unit/test_tag0050_obligations_enforcement.py agate/tests/unit/test_tag0050_obligation_behavior.py -q
+....................................................................     [100%]
+68 passed in 0.57s
+
+# 判定：obligations anchor 无悬空（CHECK-OBLIGATIONS OK）+ M 计数 56/121 不降 + OBL-P8-04 仍为 M 且含 method_enum + 挂靠 P8 的 enforcement/behavior 测试全绿。

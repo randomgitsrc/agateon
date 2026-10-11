@@ -1,0 +1,18 @@
+# BDD-1 evidence — P8/READY 语料面内 tag 条件零残留
+# cwd: /home/kity/oclab/agateon  branch: task/TAG0051-release-decoupling  HEAD: c5bda4df
+# 判定面 = 6 处语料；检索字面：git tag / tag 已创建 / tag 检查 / 先 tag / tag 创建
+
+$ grep -nE 'git tag|tag 已创建|tag 检查|先 tag|tag 创建' agate/state-machine.md agate/phase-cards/P8-release.md agate/rules/state-transitions.md agate/rules/phases.yaml agate/dispatch-protocol.md agate/assets/execution-roles/implementer.md
+
+grep exit=1  (1 = 零命中)
+
+$ grep -ncE 'git tag|tag 已创建|tag 检查|先 tag|tag 创建' agate/state-machine.md agate/phase-cards/P8-release.md agate/rules/state-transitions.md agate/rules/phases.yaml agate/dispatch-protocol.md agate/assets/execution-roles/implementer.md   # 逐文件命中计数
+agate/state-machine.md:0
+agate/phase-cards/P8-release.md:0
+agate/rules/state-transitions.md:0
+agate/rules/phases.yaml:0
+agate/dispatch-protocol.md:0
+agate/assets/execution-roles/implementer.md:0
+
+# 结论：6 处语料对 tag 作为 P8 条件/动作的字面零命中（exit 1）。
+# 残余 'tag' 仅出现于：(a) 任务号 TAG0001/TAGxxxx；(b) P8-release.md :99-103 发布流程顺序/CHECK 7 时序说明（BDD-1 显式排除项）；(c) 'P8 不含 version bump / tag' 的目标语义表述（tag 已移出）。

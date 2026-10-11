@@ -1431,6 +1431,11 @@ def test_g8_1_missing_bump_type_exit_1(
 def test_g8_2_no_version_change_warning_exit_2(
     git_repo, task_dir, agate_scripts, python_exe, run_cli
 ):
+    """BDD-3（TAG0051 决策 5 正向口径）：未改动任何 version 文件 → gate_p8 **不再**告警 version。
+
+    TAG0051 移除了 gate_p8 的 version 双路径 WARNING（READY/P8 不再要求 bump 版本）。
+    本用例锁定正向口径：rc=2（P8 通过码）且 stderr **无** version 变更相关告警。
+    """
     td = task_dir()
     _write_p8_release(td, _P8_COMPLIANT)
     repo = _init_p8_repo(
@@ -1441,22 +1446,44 @@ def test_g8_2_no_version_change_warning_exit_2(
 
     result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
     assert result.returncode == 2
-    assert "WARNING" in result.output
-    assert "version" in result.output
+    # 正向口径：version 检查已移除 ⇒ 不再出现 WARNING / version 告警（BDD-3）
+    assert "WARNING" not in result.output
+    assert "version" not in result.output
 
 
 def test_g8_3_version_changed_no_changelog_exit_2(
     git_repo, task_dir, agate_scripts, python_exe, run_cli
 ):
+    """TAG0051 决策 5：gate_p8 不再承载 version/CHANGELOG 检查，载体改为 `check-changelog.py`。
+
+    旧断言 `"CHANGELOG" in output` 已失真——它现仅命中 gate_p8 收尾文案「用 git log 对照
+    CHANGELOG 无遗漏」，不再验证任何 CHANGELOG 检查。本用例改为锁定两点：
+    ① gate_p8 对「改了 version 文件但 CHANGELOG 未记录该任务」**不再**告警（无 WARNING）；
+    ② 新载体 `check-changelog.py <task_id>` 在 [Unreleased] 未记录该任务时判 FAIL（exit 1）
+       ——这正是「判据强度不降、载体迁移」的证据（原 gate_p8 WARNING → 必经路径上的硬判据）。
+    """
     td = task_dir()
     _write_p8_release(td, _P8_COMPLIANT)
     repo = _init_p8_repo(
-        git_repo, td, files={"package.json": "v0.1.0\n"}
-    )  # CHANGELOG 没改 → WARNING
+        git_repo, td, files={"package.json": "v0.1.0\n", "CHANGELOG.md": _P8_UNRELEASED}
+    )
 
     result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
     assert result.returncode == 2
-    assert "CHANGELOG" in result.output
+    # ① gate_p8 不再对 version/CHANGELOG 告警（BDD-2/3 正向口径）
+    assert "WARNING" not in result.output
+
+    # ② 新载体：check-changelog.py <task_id> 对 [Unreleased] 未记录的任务判 FAIL（exit 1）。
+    #    task_dir fixture 的 .state.yaml 固定 task_id: T001（create_task_dir）。
+    cc = run_cli(
+        python_exe,
+        str(agate_scripts / "check-changelog.py"),
+        "T001",
+        cwd=str(repo),
+    )
+    assert cc.returncode == 1, (
+        f"check-changelog.py 对未记录的 task 须判 FAIL（判据载体迁移后强度不降），实际 {cc.output!r}"
+    )
 
 
 def test_g8_4_full_compliance_exit_2(
@@ -1507,6 +1534,11 @@ def test_g8_6_changelog_file_env_override(
 def test_g8_7_tag_missing_warning_exit_2(
     git_repo, task_dir, agate_scripts, python_exe, run_cli
 ):
+    """BDD-2（TAG0051 决策 5 正向口径）：本地无对应版本 tag → gate_p8 **不再**告警或拦截。
+
+    TAG0051 移除了 gate_p8 的 tag 存在性 WARNING（tag/Release 移出任务状态机，发布为独立流程）。
+    本用例锁定正向口径：rc=2（P8 通过码）且 stderr **无** tag 相关告警。
+    """
     td = task_dir()
     _write_p8_release(td, _P8_COMPLIANT)
     repo = _init_p8_repo(
@@ -1517,7 +1549,9 @@ def test_g8_7_tag_missing_warning_exit_2(
 
     result = _run_gate(agate_scripts, python_exe, run_cli, "P8", "task", cwd=str(repo))
     assert result.returncode == 2
-    assert "tag v0.2.0 不存在" in result.output
+    # 正向口径：tag 检查已移除 ⇒ 不再出现 tag 缺失告警（BDD-2）
+    assert "tag v0.2.0 不存在" not in result.output
+    assert "WARNING" not in result.output
 
 
 def test_g8_8_tag_exists_no_warning(

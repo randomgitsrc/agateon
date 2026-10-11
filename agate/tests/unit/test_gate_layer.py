@@ -191,17 +191,15 @@ def test_bdd_21_upgrading_documents_preset_migration_and_cutoff(agate_root):
 def test_bdd_21_missing_declaration_with_release_traces_warns(
     git_repo, task_dir, agate_scripts, python_exe, run_cli
 ):
-    """BDD-21：声明文件缺失但仓库有发版痕迹时，给**显眼 WARNING**（不静默失去保护）。
+    """BDD-21（TAG0051 决策 5 收敛）：声明缺失不再给迁移期 WARNING——正向口径。
 
     Given 一个 git 仓库有发版痕迹（CHANGELOG.md / 版本文件），但**无** `agate.config.yaml`
     When 运行 P8 gate（发版相关判定路径）
-    Then 输出含指向声明缺失 / preset 迁移的显眼 WARNING（不静默通过）。
+    Then **不再**输出指向声明缺失 / preset 迁移的迁移期 WARNING，且照常通过（exit 2）。
 
-    现行为：P8 gate 只对 version/CHANGELOG/tag 出 WARNING，无声明/preset 迁移提示 ⇒ 红灯（行为未改）。
-
-    [DESIGN_GAP]：WARNING 的具体消费入口（gate_p8 / agate-config validate / 专门检查脚本）与
-    措辞由 P4 按 BDD 落定；本用例断言输出**可观察到**该 WARNING 主题（semver-changelog-tag /
-    release.preset / agate.config.yaml），不绑定具体命令或精确句子。
+    TAG0051 把 gate_p8 的迁移期 `agate.config.yaml` / `release.preset` 提示 WARNING 随
+    version/tag/CHANGELOG 双路径一并移除（BDD-1/2/3 语料面 + check-gate P8）。本用例锁定
+    正向口径：该 WARNING 不再出现（保留「P8 通过」核心断言）。
     """
     td = task_dir()
     (td / "P8-release.md").write_text(
@@ -221,9 +219,11 @@ def test_bdd_21_missing_declaration_with_release_traces_warns(
     result = run_cli(
         python_exe, str(agate_scripts / "check-gate.py"), "P8", "task", cwd=str(repo)
     )
-    assert re.search(
+    assert result.returncode == 2, f"BDD-21：P8 gate 须照常通过（exit 2），实际 {result.output[:400]!r}"
+    assert "脚本化检查通过" in result.output
+    assert not re.search(
         r"semver-changelog-tag|release\.preset|agate\.config\.yaml", result.output
     ), (
-        "BDD-21：声明文件缺失而存在发版痕迹时，须给指向声明/preset 迁移的显眼 WARNING"
-        f"（不静默）；实际输出 {result.output[:400]!r}"
+        "BDD-21（TAG0051 收敛）：声明缺失的迁移期 WARNING 已被有意移除，不应再出现；"
+        f"实际输出 {result.output[:400]!r}"
     )

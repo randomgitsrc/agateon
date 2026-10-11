@@ -283,6 +283,31 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### 未发布 — TAG0051 任务与发布解耦：`delivery.method` 收紧 + P8 去 tag/version（**面向新任务的准入行为变化**）
+
+> 本批把**交付边界**（任务终态 READY）与**对外发布边界**（Release）解耦。对 **legacy 任务**
+> （账本无创建/迁入事件）**退出码与 ERROR 集合不变**；**既有任务与存量数据不受影响**。
+>
+> ⚠️ **破坏半径（面向新任务的准入行为变化）**：本批登记 `rules/task-data/level-2.yaml` 后，协议
+> **当前契约等级由 1 抬升为 2**（`LEVELS.yaml` 的**最大已登记等级**）。而 `pre-commit-gate.py` 强制
+> 「**新任务必须登记当前等级**」（`agate-task-init.py` 默认按当前等级建任务）⇒ **升级后，所有非
+> legacy 新任务均须为等级 2**；`delivery.method` 枚举收紧随之对**所有项目的新任务**生效（`method`
+> 由「任意非空」收为三值枚举，可能拦下原本合法的取值）。**这不是「无破坏性变更」**，而是**面向新
+> 任务的准入行为变化**——本次升级因此**不再标注「无破坏性变更」**。版本号与 CHANGELOG 条目在 P8 统一落。
+
+- **`delivery.method` 取值域定死为有限枚举**：新增契约快照 `rules/task-data/level-2.yaml`
+  （`extends: 1`，**不改**已冻结的 `level-1.yaml`），把 `delivery.method` 收紧为
+  `release-notes` / `tag-release` / `none` 三值枚举——`method` 非空但不在枚举内 ⇒
+  `check-gate.py P8` 判失败。**只对非 legacy 且等级 ≥ 2 的任务生效**（level-1 任务无
+  `method_enum` ⇒ no-op；legacy 走子串路径，行为不变）。该快照已登记进 `LEVELS.yaml`
+  （LF 归一 sha256 冻结）。
+- **P8 去 tag/version（任务终态 = READY）**：任务 P8 收尾**不再要求** version 文件 bump、
+  CHANGELOG 切版本节、`git tag` 已创建；READY 前置 = 交付物 + CHANGELOG `[Unreleased]` 含
+  task_id + `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）。对外发布（tag → GitHub Release）
+  改为**独立流程**，由人工授权入口（`workflow_dispatch`）触发，并在创建 tag/Release 前过一道
+  机械发布门。既有的 tag/version/CHANGELOG 检查原为 **WARNING 不阻断** ⇒ 移除后 legacy
+  `(rc, ERROR 集合)` 不变。
+
 ### v0.81.0 — `agate-*` 成为真命令 + 协议不再假设项目分支（**无破坏性变更**）
 
 > 一批判据/安装器/文档修正的汇总；无破坏性变更，但有一条**升级后需知**（见 ⚠️）。

@@ -1,0 +1,6 @@
+# cmd: $HOME/.venvs/agate-dev/bin/ruff check agate/
+# cwd: /home/kity/oclab/agateon
+# git_head: 9771e76ac8aaa6a18b1d3479fb8a87215fca786e
+# started: 2026-10-11T05:58:46Z
+All checks passed!
+EXIT_CODE: 0

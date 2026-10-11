@@ -1,0 +1,15 @@
+# BDD-12 evidence — 发布门校验 CHECK 7 与 CHECK 13 均 0 ERROR
+# (a) 反例：consistency 非 0（含 CHECK 7/13 ERROR）⇒ 门非 0
+$ cd /tmp/opencode/tag0051-p6/work/gate && /usr/bin/python3 /home/kity/oclab/agateon/agate/scripts/agate-release.py gate --task t9 --sha HEAD --ci-cmd "/usr/bin/python3 ci_dump.py ok.json" --consistency-cmd "/usr/bin/python3 rc.py 1"
+agate-release: 发布门失败——check-protocol-consistency.py rc=1（应 0）
+
+EXIT: 1
+
+# (b) 真跑 check-protocol-consistency.py（本仓）看 CHECK 7/13 结果
+$ python3 /home/kity/oclab/agateon/agate/scripts/check-protocol-consistency.py 2>&1 | grep -E 'CHECK (7|13)'
+  ✅ PASS  CHECK 7  version badge 与 CHANGELOG 已发布版本
+  ✅ PASS  CHECK 13 CHANGELOG↔UPGRADING 章节对应
+$ python3 /home/kity/oclab/agateon/agate/scripts/check-protocol-consistency.py >/dev/null 2>&1; echo rc=$?
+rc=0
+
+# 判定：CHECK 7 与 CHECK 13 均 PASS（0 ERROR），且 consistency rc=0 ⇒ 正例通过；反例（rc=1）门非 0。

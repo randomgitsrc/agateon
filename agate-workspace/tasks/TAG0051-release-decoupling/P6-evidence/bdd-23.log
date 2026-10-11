@@ -1,0 +1,24 @@
+# BDD-23 evidence — 发布门三种落点（穷尽互斥）下 SG.6 与 CHECK9-coverage 判定正确
+# 本任务实际落点 = 支②（既存 agate-*.py：agate-release.py gate 子命令），非 ①（新增 check-*.py）也非 ③（release.yml 内联步）。
+
+$ # 支② 判据①：发布门确实是 agate-release.py 的 gate 子命令
+$ python3 agate/scripts/agate-release.py gate --help 2>&1 | head -3
+usage: agate-release gate [-h] [--task TASK] [--sha SHA] [--repo REPO]
+                          [--ci-cmd CI_CMD]
+                          [--consistency-cmd CONSISTENCY_CMD]
+gate --help EXIT=0
+
+$ # 支① 排除：origin/main 的 agate/scripts/check-*.py 集合 vs 本工作树——无新增
+$ diff <(git ls-tree -r --name-only origin/main -- agate/scripts | grep -E 'check-.*\.py$') <(ls agate/scripts/check-*.py)
+NO NEW check-*.py (支① 未采用)
+
+$ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q   # SG.6
+..............                                                           [100%]
+14 passed in 0.07s
+
+$ python3 agate/scripts/check-protocol-consistency.py 2>&1 | grep -E 'CHECK (9|10)'; echo rc=$?
+  ✅ PASS  CHECK 9  协议-脚本结构对齐
+  ⚠️  WARN  CHECK 10 协议文档脚本名引用漂移
+consistency rc=0
+
+# 判定（支②）：SG.6 不红（14 passed）+ CHECK9-coverage 无 ERROR + 无新增 agate/scripts/ 文件 ⇒ 零触发，PASS。

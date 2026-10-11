@@ -657,3 +657,62 @@ agate_common.py (CODE_MAP_*)  ^\s*-?\s*
 - 本 ADR 是对 ADR-014 的**补充而非放松**：ADR-014 说"判据必须单源"（手段 ①/②），
   本 ADR 说"**不要用手段 ③ 去管非实质的事**"。
 - 关联：ADR-002（可判定性）、ADR-014（判据单一权威源）、`docs/guides/doc-freshness-guide.md` §2.1。
+
+---
+
+## ADR-016: 发布与任务解耦——任务止于 READY，Release 为独立流程 + 人工授权入口
+
+### 状态
+
+已接受（2026-10-11，TAG0051）
+
+### 语境
+
+历史上任务状态机的 P8 把两件不同性质的事混在一起：**交付收尾**（产出交付物、CHANGELOG、测试全通过）
+与**对外发布**（version bump、`git tag`、GitHub Release / 上传制品）。TAG0051 之前，`check-gate.py P8`
+内置了 version 双路径 / CHANGELOG 暂存区 diff / tag 存在性等检查，`state-machine.md` / `WORKFLOW.md`
+据此把「各包 version bump + tag」写成 P8 的通过条件。
+
+问题有两层：
+
+- **不可逆对外动作被编进了可重试的任务状态机**。`tag → Release`、上传 PyPI 等是**不可逆**的对外动作，
+  一旦进入任务 gate，就与「gate exit 2 可重试 / 回退 / 重派」的机制冲突——重试语义对不可逆动作没有意义，
+  且会把「谁授权了这次发布」这一人工判断隐含地交由 agent 流程执行。
+- **交付边界与发布边界未分离**，导致任务终态含糊：一个「已交付、已验收」的任务之所以不能收尾，可能只是
+  因为还没打 tag——而这已超出任务本身的范围。
+
+### 决策
+
+**① 发布移出任务状态机。** 任务终态 = **READY**：`READY 前置 = 交付物 + CHANGELOG \`[Unreleased]\` 含
+task_id + \`bump_type\` 意图 + 交付收尾 + CI 全绿（含 push 口径）；不含 version bump / tag。` P8 只做
+**交付收尾**（含 `bump_type` **意图**声明），不执行 `version bump`、不打 `tag`。
+
+**② 发布 = 独立流程 + 人工授权入口。** 对外发布（`tag → GitHub Release` / 上传制品）由**独立于任务
+状态机**的流程负责，经**人工授权入口**触发（当前实现 = `.github/workflows/release.yml` 的
+`workflow_dispatch`），并在创建 tag / Release 前过一道**机械发布门**（可注入命令、fail-closed）。
+
+**③ 不引入第二套阻塞语义。** 该授权**不新增**与既有 `PAUSED` / `[NEED_CONFIRM]` 并行的阻塞确认机制——
+发布不经任务状态机，故不需要新的阻塞标记；任务侧的既有阻塞语义保持不变。
+
+### 理由
+
+- **与 ADR-002（可判定性）一致**：不可逆对外动作不应由「可重试的 gate 流程」裁决；把它移出状态机后，
+  任务侧的判据仍是机器可判定的 exit code，发布侧则由机械发布门 + 人工授权双重把关。
+- **与 ADR-001（隔离性）/ ADR-013（gate 生产者无关性）一致**：人（而非 agent 编排流程）是发布授权主体；
+  发布门只认命令 exit code，不认谁触发。
+- **消除「交付 vs 发布」的边界含糊**：任务止于 READY 使「已交付」有明确机械定义，发布成为**可选后续**，
+  不再让一个已验收任务因未打 tag 而卡在 P8。
+- **避免语义增殖**：以「发布不经状态机」实现解耦，**不**新增第二套阻塞标记——符合 ADR-015「不要为
+  非实质面增设规则 / 手段」。
+
+### 后果
+
+- `state-machine.md` / `WORKFLOW.md` / `agate/rules/phases.yaml` 的 P8 判据统一为 canonical 口径（交付物 +
+  CHANGELOG `[Unreleased]` 含 task_id（载体 `check-changelog.py`）+ `bump_type` 意图 + P5 证据复用/重跑 +
+  roadmap RM 反查），**不再含 version bump / tag**。
+- 发布流程由 `docs`（发布清单）与 `.github/workflows/release.yml` 承载；发布失败处置 / tag 与 main 一致性
+  校验在发布侧完成，不再作为任务 gate 的失败路径。
+- **破坏半径**：登记 `level-2.yaml` 使协议 `current_level` 由 1→2，叠加「新任务必须登记当前等级」⇒ 升级后
+  所有非 legacy 新任务须为等级 2（详见 `UPGRADING.md` 对应节，**如实框定为面向新任务的准入行为变化**）。
+- 关联：ADR-002（可判定性）、ADR-013（gate 生产者无关性）、ADR-015（实质 / 非实质）、
+  `agate/UPGRADING.md`（TAG0051 节）、`agate/state-machine.md` P8→READY 转移行。

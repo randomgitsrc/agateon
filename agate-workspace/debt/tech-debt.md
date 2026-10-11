@@ -2766,3 +2766,189 @@ closure_note: >-
   关单：`gate_p0` 声明校验改按**任务所属项目根**（git toplevel → 含 agate-workspace 的祖先 → cwd 兜底）；判据级回归用例覆盖跨项目场景。
 
 ```
+
+## DEBT0067
+
+```yaml
+id: DEBT0067
+category: protocol
+title: "`agate-md-field-set` 可写 key 白名单与 `check-frontmatter.py` 认的合法字段**分叉** ⇒ 卡片要求声明的字段无法用工具写入，只能手写（与派发纪律「不要手写 frontmatter」直接冲突）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      `_writable_keys(rules_root)` = `GENERIC_HEADER_KEYS ∪ phases.yaml 全部 task_fields`（:84-92）。
+      2026-10-11 实算：29 个可写 key。**不在**白名单的实测清单：`ceremony` / `implicit_coupling` /
+      `change_type` / `project_phase` / `ui_render_shape` / `delivery` / `debt_check`。
+  - ref: agate/phase-cards/P1-requirements.md
+    note: >-
+      「产出规格」节要求 P1 声明 `ceremony`（且有 `coupling_checklist` / `跳过风险` 等联动判据）；
+      「产出文件字段填写」（见 dispatch-prompt 模板）同时要求用 `agate-md-field-set` 写、不要手写 frontmatter。
+  - ref: agate/phase-cards/P8-release.md
+    note: >-
+      P8 产出须声明 `delivery` / `debt_check`（对应 OBL-P8-02/03，各有行为测试
+      `test_obl_p8_02_delivery_missing_blocks` / `test_obl_p8_03_debt_check_missing_blocks`）——同源受阻。
+  - ref: agate/scripts/check-frontmatter.py
+    note: "`SCHEMAS`（:40-70）把 `ceremony` 等视为合法 P1 字段（frontmatter-only）⇒ **读侧认、写侧不认**。"
+  - ref: agate/assets/templates/dispatch-prompt.md
+    note: >-
+      「产出文件字段填写」节：「set 报错就照提示改；不要手写 frontmatter，不要复制任何示例代码块」+
+      「改不明白 → 报告主 Agent，不要绕过 set 直接手改文件」——与本缺口叠加后，执行者两难。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P1-requirements.md
+    note: >-
+      触发实证（TAG0051 P1，2026-10-11）：`ceremony full` 写入报 `ERROR: 非法 key`。按纪律**未手写**，
+      档位 fail-closed 取默认 `standard`（该任务 risk_level=high + domains 含 security，机制上未减少评审触发）。
+  - ref: agate-workspace/tasks
+    note: >-
+      九处以上先例（TAG0021/0022/0023/0024/0026/0028/0030/0032/0033/0034/0037 等）的 `P1-requirements.md`
+      确有**手写** `ceremony:` —— 说明该缺口长期靠手写绕过，未被任何 gate 捕获。
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      **面扩大（TAG0051 P2，2026-10-11）**：不止「读侧认写侧不认」——`dispatch_plan` 属**卡明确要求声明**的
+      P2 frontmatter 字段（P2 卡「dispatch_plan 机器字段」节），但 set 工具**直接拒写**：
+      `ERROR: dispatch_plan 是追加/嵌套字段，一期 set 暂不支持覆盖式之外的写入`（实测）。同一份 P2 卡同时
+      给出「用工具写 frontmatter」的纪律 ⇒ 执行者只能手写该键。与本节前述各键**同簇**（工具写侧覆盖面
+      与卡/schema 不一致），故并入本条而非另立新债。
+impact: >-
+  ① 协议自相矛盾：卡片与派发纪律要求用工具写，工具写不了 ⇒ 执行者要么违规手写、要么静默降档。
+  ② **静默降档会悄悄改变仪式深度**（`full`/`thin` 影响评审触发面），而 check-routing 只校验声明值，
+  检测不到「本该 full 却因工具限制落成 standard」。③ 影响面不止 P1：P8 的 `delivery`/`debt_check` 同源受阻。
+recommendation: >-
+  **先定「单一源」口径再改代码**（口径先行类小设计）。候选 ① `_writable_keys` 并上 `check-frontmatter.py`
+  的 `SCHEMAS` 认的字段；候选 ② 把 `ceremony`/`implicit_coupling`/`delivery`/`debt_check` 等补进
+  `agate/rules/phases.yaml` 对应阶段的 `task_fields`（使白名单自然覆盖，且与「任务字段按阶段声明」的既有设计
+  一致——**倾向此方案**）。两者都须补判别力回归用例（先红后绿）并全量扫描存量 frontmatter。
+closure_criteria:
+  - "`agate-md-field-set` 能写入 `check-frontmatter.py` 视为合法的全部 P1/P8 字段（或明确缩小 SCHEMAS 并以 gate 拦截手写路径），两侧口径一致"
+  - "有回归用例锁定该一致（对白名单做子集断言，先红后绿）"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```
+
+## DEBT0068
+
+```yaml
+id: DEBT0068
+category: protocol
+title: "P2 卡把 `dispatch_plan.batches[].output` 列为**合法可选键**，而 `agate-frontmatter-check.py::MAX_DEPTH = 3` 会因该键（深度 4）判 ERROR —— 卡与 checker 口径互相矛盾"
+status: open
+priority: low
+evidence:
+  - ref: agate/phase-cards/P2-design.md
+    note: >-
+      「batches[] 可选键：tests_filter / output 与批切分判据」节把 **`output`（可选）** 定义为合法：
+      「该批预期改动的文件路径列表……」并给出示例 `batches: [{id: ..., output: [src/..., src/...]}]`，
+      且明言「`output` 仅供 `check-mvwu.py --observe` 读取，**不新增 gate 校验**；缺省、写错都不影响任何阶段 gate」。
+      **决定性**：同节末句还**明文断言**「`agate-frontmatter-check.py` 与 `check-structure-consistency.py`
+      **均不因这两个键而改动**（嵌套键，不触碰顶层白名单）」——即卡**明确承诺** checker 不会因此报错，
+      与实测直接相悖（见下条）。
+  - ref: agate/scripts/agate-frontmatter-check.py
+    note: >-
+      `MAX_DEPTH = 3`（:126）；`_max_depth(value) > MAX_DEPTH` → 追加错误
+      「{basename}:{field}: 嵌套深度超过 3 层」（:253-254），对**所有** frontmatter 字段生效。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P2-design.md
+    note: >-
+      触发实证（2026-10-11）：按 P2 卡示例声明 `batches[].output` ⇒ `check-frontmatter.py` exit 1
+      （报告 `dispatch_plan: 嵌套深度超过 3 层`）。因 `output` **无任何 gate 效力**，设计退了（省略该键、
+      改以正文表格表达批产出面），**未绕过 checker**；但这意味着**照卡示例写就会 commit 失败**。
+      注：`batches[].tests_filter`（字符串，不加深深度）不受影响。
+impact: >-
+  任何按 P2 卡示例声明 `batches[].output` 的任务都会在 `check-frontmatter.py` 上被拦（commit 前 ERROR）。
+  与 `output`「可选、无 gate 效力」的定位直接冲突：**声明该可选键反而使流程变红**，等于变相禁用。
+recommendation: >-
+  先定口径再改代码（二选一）：① 让深度校验**豁免 `dispatch_plan`**（或将其视为**非 schema 字段**、
+  走 `agate-md-field-get` + `json.loads` 的既有校验路径——P2 gate 已是这么做的）；② 或修订 P2 卡，
+  把 `output` 从「合法可选键」降级/移除，并把批产出面统一以正文表格表达。**倾向 ①**——卡与 gate 都已
+  承认 `dispatch_plan` 是「不入 frontmatter-check schema」的机器字段，深度校验不该对它生效。
+closure_criteria:
+  - "按 P2 卡示例声明 `batches[].output` 的任务，`check-frontmatter.py` 不再报 ERROR（且 `dispatch_plan` 其余校验语义不变）"
+  - "有回归用例锁定（先红后绿）：含 `dispatch_plan.batches[].output` 的 frontmatter 通过校验"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```
+
+## DEBT0069
+
+```yaml
+id: DEBT0069
+category: protocol
+title: "`agate.config.yaml` 的 `release.preset` 声明**无任何值消费方**（声明 ≠ 开关；读者易误信「已声明即已生效」）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/agate_common.py
+    note: ":919 仅出现在 `PROJECT_CONFIG_DEFAULTS`（默认值字典）；无任何代码读取其值。"
+  - ref: agate/scripts/agate-config.py
+    note: ":49 仅 `init` 生成模板时写入该键；`validate` / `explain` 均不消费其值（`explain` 的说明文本非消费逻辑）。"
+  - ref: agate/scripts/check-gate.py
+    note: >-
+      :2358-2374 的「迁移期提示块」**只检查 `agate.config.yaml` 文件是否存在**，并在**文案**里提到该 preset 名，
+      **不读其值**。P2（TAG0051）据此曾误述其为「旧**唯一消费点**」——实为**无值消费方**。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P2-review.md
+    note: >-
+      独立实测（plan-eng-review，2026-10-11）：`grep -rn preset agate/scripts/*.py` 三处命中**均非「读值」**；
+      TAG0051 新建的发布门（`agate-release.py gate`）按当前设计**亦不读**该键。
+impact: >-
+  保留一个无消费方的声明，会让读者（含未来的 agent 与项目维护者）误信「已声明 = 已生效」，从而以为
+  发布流按 semver/CHANGELOG/tag 约定在执行而实际无人读取；TAG0051 把 P8 的 version/tag 检查移入独立发布门后，
+  该差距更明显（此前的「迁移期提示」只是文案提及，移除提示块后连提及点都消失）。
+recommendation: >-
+  二选一（先定口径再改代码）：(a) 让**新发布门**显式消费该键（作为「本项目采用标准发布流」的开关，
+  据此选择检查集）；或 (b) 明确其为**信息性声明**——在 `UPGRADING.md` 与声明 schema 处写明「不作开关、
+  不驱动任何逻辑」，并修正历史文档中「消费点」的不准确表述。**TAG0051 采用 (b)**（其 BDD-19 只要求
+  声明层与新语义一致 + 无悬空提示 + consistency 0 ERROR，不要求新消费方）。
+closure_criteria:
+  - "`release.preset` 有明确消费方（给出读取点与语义），或文档明示其为信息性字段"
+  - "仓库内不再有称其为「消费点」的表述"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```
+
+## DEBT0070
+
+```yaml
+id: DEBT0070
+category: protocol
+title: "`docs/design-notes/r6-differential.sh::_error_lines` 的**实际比较口径**（所有 `GATE ` 前缀行）比其文件头自述的「(退出码, ERROR 行集合)」**更宽** ⇒ 成功提示文案的变化被报成「兼容性差异」"
+status: open
+priority: low
+evidence:
+  - ref: docs/design-notes/r6-differential.sh
+    note: >-
+      `:243-255 _error_lines()`：对 stderr 逐行，**跳过**含 `WARNING`/`SKIP`/`OK` 的行，然后
+      `if line.startswith("GATE ") and ":" in line: out.add(line)` **或** `elif "ERROR" in line: out.add(line)`
+      ⇒ **任何 `GATE <阶段>: …` 行都进入比较集**（含「脚本化检查通过。仍需主 Agent：…」这类**成功提示**）。
+  - ref: docs/design-notes/r6-differential.sh
+    note: >-
+      `:4-6` 文件头自述：「把『legacy 任务的 gate 退出码与 **ERROR 集合**不变』这一兼容承诺变成可执行判据…
+      比较 (退出码, ERROR 行集合)」——与上条实现**不一致**（自述只承诺 ERROR 集，实现还比全部 GATE 提示行）。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P4-review-cso.md
+    note: >-
+      触发实证（TAG0051 P4，2026-10-11）：R-A 修好 R6 wrapper 的「空转」后，双向差分报
+      `check-gate:P8` 两个 legacy 任务 `rc 2->2` 的 **added=1/removed=1**——差异**仅**是 P8 收尾提示
+      删去「④ 从 P2 packages 验证 version 文件路径」（P8 去 version 的**预期**结果，rc 不变）。
+      该条已按 allowlist 设计用途登记为 **D13**（`docs/design-notes/r6-allowlist.yaml`）。
+  - ref: docs/design-notes/r6-allowlist.yaml
+    note: >-
+      同一位置的**枚举缺口**：`kind` 仅有 `new_error / rc_change / ledger_event_added / ledger_bytes /
+      new_warning`，**无**「GATE 行变更」这一类 ⇒ D13 只能借用 `new_error`（语义不完全贴切，已在 basis 注明）。
+impact: >-
+  ① 任何**成功提示文案**的正常演进都会被报成「兼容性差异」，迫使逐个登记 allowlist（噪声、且掩盖真实差异）；
+  ② 登记者只能借 `new_error` 表达非 error 的变更，规则语义被稀释；
+  ③ 自述口径与实现口径不一致，使「ERROR 集合不变」这一承诺的**边界不可自证**。
+recommendation: >-
+  **先定口径再改代码**：二选一——(a) 收紧 `_error_lines` 使其与自述一致（只收**失败信号**行：
+  含 `ERROR` 的行，或 `GATE …` 中明确表示不通过的形态），并在文件头写明精确判据；
+  (b) 若保留宽口径（更保守、能抓更多），则**改写自述口径**为「(退出码, GATE/ERROR 行集合)」，
+  并新增 `kind: gate_line_changed` 使规则语义贴切。**倾向 (b)**（宽口径更安全，问题在表述与枚举）。
+closure_criteria:
+  - "`r6-differential.sh` 的自述比较口径与其 `_error_lines` 实现一致（或反之，实现按自述收紧）"
+  - "allowlist 的 `kind` 枚举能贴切表达「GATE 行变更」（或 D13 类差异有明确归属）"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```

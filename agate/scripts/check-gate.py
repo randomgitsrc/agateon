@@ -22,7 +22,7 @@ P0-P8 全部分支均已实现（2f-2 补齐 P5-P8），与 sh 版 check-gate.sh
       pre-commit-gate.sh 单独调用 check-p6-provenance，不在本
       分支内执行——与 sh 版一致，sh check-gate.sh P6 同样不调）
   P7: BLOCKER/DEVIATION-CRITICAL + DESIGN_GAP 配对 + P4/P7 转抄交叉核对
-  P8: P8-release.md bump_type/debt_check + version/CHANGELOG/tag 检查
+  P8: P8-release.md bump_type/debt_check + 结构化 delivery（method 枚举校验） + roadmap RM 反查
 
 本脚本的判定逻辑与 state-machine.md 步骤 5 保持同步。
 步骤 5 变更时必须同步更新本脚本。一致性检查脚本覆盖本文件。
@@ -2234,8 +2234,8 @@ def _check_roadmap_done(task_id, roadmap_path):
 
 
 def gate_p8(task_dir):
-    # P8 部分检查可脚本化，其余需主 Agent 自判。
-    # version 文件路径和 CHANGELOG 文件名因项目而异，主 Agent 从 P2-design.md packages 读取。
+    # P8：本函数只做**脚本化可判**的部分——`bump_type` / `debt_check` / 结构化 `delivery`
+    # （含 `method` 枚举）/ roadmap RM 反查；其余（如交付物就位、CI 全绿）需主 Agent 自判。
     # 用 git diff --cached（暂存区），不用 HEAD~1——pre-commit 时本次变更还没进 HEAD
     # （与 P4/P7 同款修复，v0.6 hardening R4 chicken-and-egg 教训）。
     p8_file = os.path.join(task_dir, "P8-release.md")
@@ -2283,6 +2283,17 @@ def gate_p8(task_dir):
                     "GATE P8: delivery.method≠none 但 ref 为空（须至少 1 项交付物引用）\n"
                 )
                 return 1
+        # TAG0051（M1，BDD-16/17）：`delivery.method` **枚举校验**——读契约快照的
+        # `delivery.method_enum`（single source：level-2.yaml）。快照无该键（如 level-1）
+        # → **no-op**（向后兼容）；legacy 任务走下方子串路径，完全不进本分支。
+        # 枚举外**非空**值 → exit 1。
+        _enum = _dspec.get("method_enum")
+        if isinstance(_enum, list) and _enum and _method not in _enum:
+            sys.stderr.write(
+                f"GATE P8: delivery.method={_method!r} 不在快照 delivery.method_enum="
+                f"{_enum} 内（P8 为交付收尾，交付方式须为已声明的有限枚举）\n"
+            )
+            return 1
     # legacy 任务保留子串判定（§8 兼容）。⚠️ 该字面行是 OBL-P8-02 的负向控制变异锚点
     # （test_tag0050_obligations.py::test_bdd_42），**不得改缩进或措辞**。
     if "delivery:" not in p8_text:
@@ -2314,79 +2325,10 @@ def gate_p8(task_dir):
         )
         return 1
 
-    # 检查 version 文件变更（路径 A: 暂存区 + 路径 B: 最近 commit）
-    version_pattern = os.environ.get(
-        "AGATE_VERSION_FILES",
-        "version|__version__|package.json|Cargo.toml|pyproject.toml|go.mod|pom.xml|gemspec|csproj",
-    )
-    version_re = re.compile(version_pattern, re.IGNORECASE)
-    cached_version = False
-    rc, stat_out = _git(["diff", "--cached", "--stat"])
-    if rc == 0 and version_re.search(stat_out or ""):
-        cached_version = True
-    recent_version = False
-    if not cached_version:
-        lookback = os.environ.get("AGATE_P8_LOOKBACK", "5")
-        lookback_num = _to_int(lookback, 5)
-        rc, _ = _git(["rev-parse", f"HEAD~{lookback_num}"])
-        if rc == 0:
-            rc, stat_out = _git(["diff", f"HEAD~{lookback_num}..HEAD", "--stat"])
-            if rc == 0 and version_re.search(stat_out or ""):
-                recent_version = True
-    if not cached_version and not recent_version:
-        sys.stderr.write(f"GATE P8 WARNING: 暂存区和最近 {lookback_num} 个 commit 均无 version 文件变更\n")
-
-    # 检查 CHANGELOG 变更（双路径，降级为 WARNING）
-    changelog_file = os.environ.get("CHANGELOG_FILE", "CHANGELOG.md")
-    cached_changelog = False
-    rc, diff_out = _git(["diff", "--cached", "--", changelog_file])
-    if rc == 0 and any(line for line in (diff_out or "").splitlines()):
-        cached_changelog = True
-    recent_changelog = False
-    if not cached_changelog:
-        lookback_num = _to_int(os.environ.get("AGATE_P8_LOOKBACK", "5"), 5)
-        rc, _ = _git(["rev-parse", f"HEAD~{lookback_num}"])
-        if rc == 0:
-            rc, diff_out = _git(["diff", f"HEAD~{lookback_num}..HEAD", "--", changelog_file])
-            if rc == 0 and any(line for line in (diff_out or "").splitlines()):
-                recent_changelog = True
-    if not cached_changelog and not recent_changelog:
-        sys.stderr.write(
-            f"GATE P8 WARNING: 暂存区和最近 {lookback_num} 个 commit 均无 {changelog_file} 变更\n"
-        )
-
-    # BDD-21（TAG0042 批 4）：声明文件缺失 + 有发版痕迹 → 显眼 WARNING（不静默失去保护）。
-    # 迁移期：项目未采纳 agate.config.yaml 时，既有发版检查（version/CHANGELOG/tag）仍生效，
-    # 但提示可迁移到等价物 `release.preset: semver-changelog-tag`（一行声明即保持现状）。
-    # 仓库定位以 **task_dir** 为基准（与上方 DEBT0020 / RM-AG0075 同取向）。
-    if cached_version or recent_version or cached_changelog or recent_changelog:
-        rc_cfg, cfg_root = _git(["rev-parse", "--show-toplevel"], cwd=task_dir)
-        cfg_root_out = (cfg_root or "").strip()
-        if (
-            rc_cfg == 0
-            and cfg_root_out
-            and not os.path.isfile(os.path.join(cfg_root_out, "agate.config.yaml"))
-        ):
-            sys.stderr.write(
-                "GATE P8 WARNING: 未发现项目声明 agate.config.yaml——发版检查（version/"
-                "CHANGELOG/tag）仍按既有逻辑执行；建议迁移为一行声明 "
-                "`release.preset: semver-changelog-tag`（等价物，保持现状），详见 UPGRADING.md\n"
-            )
-
-    # 检查 tag 存在性（WARNING，不阻断——tag 通常在 gate 通过后才打）
-    version_tag_prefix = os.environ.get("VERSION_TAG_PREFIX", "v")
-    tag_version = ""
-    rc, changelog_diff = _git(["diff", "--cached", "--", changelog_file])
-    if rc == 0:
-        m = re.search(r"\[[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.-]*\]", changelog_diff or "")
-        if m:
-            tag_version = m.group(0).lstrip("[").rstrip("]")
-    if tag_version:
-        rc, tag_out = _git(["tag", "-l", version_tag_prefix + tag_version])
-        if rc == 0 and not any(line for line in (tag_out or "").splitlines()):
-            sys.stderr.write(
-                f"GATE P8 WARNING: tag {version_tag_prefix}{tag_version} 不存在。打 tag 后再推进到 READY。若 tag 前缀非 v，设置 VERSION_TAG_PREFIX 环境变量。\n"
-            )
+    # TAG0051（M1 / 决策 5）：删除 version 双路径 / CHANGELOG 暂存区 diff / 迁移期
+    # `agate.config.yaml` 提示 / tag 存在性四个 WARNING 块——READY/P8 不再要求 version 或 tag。
+    # 保留 CHANGELOG 要求，其载体改为 `check-changelog.py <task_id>`（已在 P8 必经路径
+    # `pre-commit-gate.py` 内被调用，判据强度不降）。
 
     # RM-AG0075（TAG0041）：canonical 临时产物目录的两条卫生告警——均 WARNING，不阻断。
     # 触发条件是「项目根**存在**该目录」，故仅对采纳约定的项目生效，不误报存量项目；
@@ -2448,7 +2390,8 @@ def gate_p8(task_dir):
             )
 
     sys.stderr.write(
-        "GATE P8: 脚本化检查通过。仍需主 Agent：① 从 P2 gate_commands 逐包读取发布检查命令 ② 重跑 P5 gate ③ 用 git log 对照 CHANGELOG 无遗漏 ④ 从 P2 packages 验证 version 文件路径\n"
+        "GATE P8: 脚本化检查通过。仍需主 Agent：① 从 P2 gate_commands 逐包读取发布检查命令 "
+        "② 重跑 P5 gate ③ 用 git log 对照 CHANGELOG 无遗漏\n"
     )
     return 2
 

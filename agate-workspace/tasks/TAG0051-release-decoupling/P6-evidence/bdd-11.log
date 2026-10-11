@@ -1,0 +1,25 @@
+# BDD-11 evidence — 发布门校验「tag↔提交一致」（badge / CHANGELOG 版本节）
+# RM-AG0098 已落为 release.yml「Verify tag points to matching commit」步；本 BDD 要求其在独立发布流程中继续生效。
+
+$ python3 - <<'PY'  (解析 release.yml，确认该步存在且 fail-closed)
+步骤数: 1
+校验 README badge/version: True
+校验 CHANGELOG 版本节: True
+fail-closed exit 1 次数: 2
+BDD-11 静态 OK
+EXIT: 0
+
+# ── 经验性复核：把 release.yml 的该步 run 体抽出，注入反例/正例实跑 ──
+$ # 反例：TAG=v9.9.9 但 README badge 是 v1.2.3（tag 打错位置）
+$ cat /tmp/opencode/tag0051-p6/work/tagverify_mismatch/README.md | grep badge
+[![version](https://img.shields.io/badge/version-v1.2.3-blue)](x)
+$ cd /tmp/opencode/tag0051-p6/work/tagverify_mismatch && TAG=v9.9.9 bash /tmp/opencode/tag0051-p6/work/verify_tag.sh
+::error::tag v9.9.9 指向的提交 README badge 是 v1.2.3（应等于 tag 版本 v9.9.9）——tag 打错位置？
+EXIT: 1
+
+$ # 正例：TAG=v9.9.9 且 README badge == v9.9.9 + CHANGELOG 版本节非空
+$ cd /tmp/opencode/tag0051-p6/work/tagverify_match && TAG=v9.9.9 bash /tmp/opencode/tag0051-p6/work/verify_tag.sh
+OK: tag 9.9.9 ↔ README badge 一致，CHANGELOG 版本节非空
+EXIT: 0
+
+# 判定：反例 exit 1（fail-closed），正例 exit 0。该 tag↔提交一致校验在独立发布流程中生效。

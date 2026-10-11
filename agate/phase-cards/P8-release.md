@@ -8,8 +8,9 @@
 
 1. 主 Agent 派发 releaser subagent（implementer P8 模式）执行交付收尾
    1.1 写 P8-dispatch-context-implementer.md（派发指引：目标/约束/上游关联/输入文件 + 客观查证信息）
-2. releaser subagent 产出 P8-release.md，**不执行 git commit/tag**
-3. 主 Agent 执行 gate 验证 → 通过后执行 bump-version + CHANGELOG 更新 → 同一 commit + tag
+2. releaser subagent 产出 P8-release.md，**不执行 git commit**
+3. 主 Agent 执行 gate 验证 → 通过后同一 commit 提交交付收尾（CHANGELOG `[Unreleased]` 写本任务条目）——**不 bump version、不 tag**
+   > **READY 前置 = 交付物 + CHANGELOG `[Unreleased]` 含 task_id + `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）；不含 version bump / tag。**
 4. 主 Agent 执行 READY 收尾检查（参考 P8-release.md 临时资源清单）——**含 canonical 临时产物目录 `<项目根>/.agate-tmp/`**（受限 harness 下的探针/一次性脚本；其四项约定与「存在却未被忽略」的 P8 告警见 `platform-notes.md`「受限 harness 通用约束」，忽略片段见 `assets/templates/gitignore-fragment.txt`）
 5. git add {AGATE_WORKSPACE}/tasks/{Txxx}/（含 .state.yaml + P8-release.md，若 .gitignore 忽略需 git add -f）
    ⚠️ **本次 commit 的 .state.yaml 须写 `phase: P8`**（phase = 本 commit 的产出阶段）——
@@ -28,13 +29,13 @@
 
 releaser subagent（implementer P8 模式）执行以下交付收尾步骤：
 
-1. 读取 P2-design.md packages 声明，确定需 bump 的包
+1. 读取 P2-design.md packages 声明，确定各包的 `bump_type` 意图（major/minor/patch）
 2. 为每个 package 执行发布检查命令
-3. 更新 CHANGELOG [Unreleased] → 版本号
+3. 更新 CHANGELOG `[Unreleased]` 写本任务条目（含 task_id）
 4. 确认债务清单：读 `{AGATE_WORKSPACE}/debt/tech-debt.md`（若存在），在 P8-release.md 写入 `debt_check:` 字段（TAG0001 Phase 3）
-5. 产出 P8-release.md（含 bump_type、版本号变更确认、CHANGELOG 更新确认、debt_check 字段、临时资源清单）
+5. 产出 P8-release.md（含 bump_type、CHANGELOG `[Unreleased]` 条目确认、debt_check 字段、临时资源清单）
 
-> **注意**：releaser subagent 不执行 bump-version / git commit / git tag，这些由主 Agent 在 gate 验证通过后亲自执行。
+> **注意**：releaser subagent 不执行 git commit，由主 Agent 在 gate 验证通过后亲自执行；**P8 不 bump version、不 tag**（发布由独立流程 + 人工授权入口触发，见 `state-machine.md` 发布授权说明）。
 
 ## 多包发布拆批（模式 2/3，条件触发）
 
@@ -44,10 +45,10 @@ releaser subagent（implementer P8 模式）执行以下交付收尾步骤：
 多包发布时 P8 可拆批并行（模式 2 静态拆批 / 模式 3 并行）：
 
 1. 每个 package 派一个 releaser subagent（implementer P8 模式），各写 `P8-release-{pkg}.md`
-2. 各 releaser 只处理自己包的交付收尾（版本 bump 建议 + CHANGELOG 更新 + 发布检查命令）
+2. 各 releaser 只处理自己包的交付收尾（`bump_type` 意图 + CHANGELOG 更新 + 发布检查命令）
 3. 所有 releaser 返回后，主 Agent 派合并 subagent 整合唯一 P8-release.md
 4. 合并 subagent 需交叉核对：各包版本号不冲突、bump_type 汇总一致、CHANGELOG 变更合并无遗漏
-5. 主 Agent 在 gate 验证通过后统一执行 bump-version / git commit / git tag
+5. 主 Agent 在 gate 验证通过后统一执行交付收尾 commit（**不 bump version、不 tag**）
 
 **合并机制**：单包时 releaser 直接产出 P8-release.md（不走合并）；多包时各 releaser 产 P8-release-{pkg}.md，合并 subagent 整合唯一 P8-release.md 供 gate 检查。
 
@@ -61,18 +62,17 @@ P8-release.md 中的**临时资源清单**是 releaser→主 Agent 的交接文�
 ## 前置条件
 
 - [ ] P7-consistency.md 通过（无 BLOCKER / DESIGN_GAP 已配对）
-- [ ] P2-design.md packages 声明（决定哪些包需要 bump）
+- [ ] P2-design.md packages 声明（决定哪些包需要交付收尾检查）
 
 ## 产出规格
 
 P8-release.md 必须包含：
-- `bump_type: major / minor / patch`
+- `bump_type: major / minor / patch`（**意图声明**——P8 不执行 version bump，发布由独立流程负责）
 - `delivery` 字段——交付方式声明（P8 为**交付收尾**，须声明交付方式；缺失 → `check-gate.py P8` exit 1）。
   **非 legacy 任务**（TAG0050 批 F / F12）为**结构化** `delivery: {method, ref, reason}`：`method`
   非空；`method: none` 时 `reason` 必填；`method ≠ none` 时 `ref` 至少 1 项。legacy 任务保留子串判定
 - `debt_check: none / reviewed`——债务清单确认留痕（TAG0001 Phase 3）：`none` = 本次无关注项（合法选项，不视为失败）；`reviewed` = 已核对，建议正文附条目 id 清单。只查留痕存在，不查内容达标、不阻断发布
-- 版本号变更确认（version 文件已修改）
-- CHANGELOG [Unreleased] → 新版本号
+- CHANGELOG `[Unreleased]` 写本任务条目（含 task_id；载体 `check-changelog.py <task_id>`）
 - 临时资源清单：本任务启动的临时服务/进程/数据/开发安装
 
 ## gate 规则
@@ -84,8 +84,7 @@ check-gate.py P8 $TASK_DIR
 - bump_type 字段存在
 - `delivery` 字段存在（缺失 → exit 1；交付收尾须声明交付方式）
 - `debt_check` 字段存在（缺失 → exit 1；内容任意，含 `none` / 未关闭债务 → 不阻断，BDD-17）
-- 暂存区有 version 文件变更
-- 暂存区 CHANGELOG 有变更
+- CHANGELOG `[Unreleased]` 含本任务 task_id——载体 `check-changelog.py <task_id>`
 - 若任务在 `agate-workspace/roadmap/roadmap.md` 有关联 RM 条目（按 `task_id` 反查「关联任务」列），须先回写「状态」列为 `done`，否则阻断（RM-AG0043）
 
 主 Agent **必须亲自执行**以下验证（不可跳过、不可委托 subagent）：
@@ -97,12 +96,11 @@ check-gate.py P8 $TASK_DIR
   - `AUDIT7_RESULT: reuse_blocked`（exit 1）或 `AUDIT7_RESULT: no_reuse_claim_possible`
     （exit 0 但结果非 reuse_allowed）→ 完整重跑 `gate_commands.P5`（exit 0 + failed==0）
    - **⚠️ 时序说明（原 DEBT0013，v0.78.2 起已消解）**：`check-protocol-consistency.py` 的 CHECK 7 已改为
-     README badge ↔ **CHANGELOG 最新已发布版本**（**tag 无关**），故 bump 版本文件后、tag 创建前
-     重跑不再报错——"发布进行中"（版本尚无对应 tag）判 **PASS + 提示**。
-     ⇒ release PR **先合 PR、后打 tag**；tag 指向校验由 `.github/workflows/release.yml`
-     的「Verify tag points to matching commit」步承担（tag 名须等于 tag 所指提交的 badge 版本）。
-- `git log v{prev_version}..HEAD --oneline` 对照 CHANGELOG 无遗漏
-- 从 P2 packages 验证 version 文件路径
+     README badge ↔ **CHANGELOG 最新已发布版本**（**tag 无关**），故 release 流程中版本节/badge 更新后、
+     打 tag 之前重跑不再报错——"发布进行中"（版本尚无对应 tag）判 **PASS + 提示**。
+     ⇒ 发布顺序为 **先合 release PR → 合并后 main CI 绿 → 后打 tag → Release**；tag 指向校验由
+     `.github/workflows/release.yml` 的「Verify tag points to matching commit」步承担
+     （tag 名须等于 tag 所指提交的 badge 版本）。
 
 ## READY 收尾检查（P8 gate 通过后）— 主 Agent 亲自执行（不派发 subagent）
 
@@ -115,11 +113,10 @@ check-gate.py P8 $TASK_DIR
     **凭证入 git 历史不可逆**。协议侧无法改项目命令，故把这一步作为**提交前的显式检查**。
   - 若发现非预期路径：先补 `.gitignore`（片段见 `assets/templates/gitignore-fragment.txt`）再 `git reset` 重来，**不要**带着它们提交
 
-**状态与版本**：
+**状态**：
 - [ ] .state.yaml phase == READY
 - [ ] {AGATE_WORKSPACE}/tasks/active-tasks.md 任务行状态已更新
 - [ ] git 工作区干净
-- [ ] git tag 已创建
 - [ ] 若本任务触发复盘（异常模式 / 发现机制缺口 / 高价值任务），复盘产出
   `tasks/{Txxx}/retrospective.md` 基于 `agate/assets/templates/retrospective-template.md`
   模板撰写
@@ -151,15 +148,13 @@ check-gate.py P8 $TASK_DIR
 
 ## 推进条件（全部满足才写 phase: READY）
 
-- [ ] bump-version 完成 + P5 验证全绿（重跑或复用 `P5-test-results/`，见上方「gate 规则」条件化表述）
-- [ ] CHANGELOG 已更新
-- [ ] git tag 已创建
+- [ ] 交付收尾完成（`bump_type` 意图 + CHANGELOG `[Unreleased]` 含 task_id）+ P5 验证全绿（重跑或复用 `P5-test-results/`，见上方「gate 规则」条件化表述）
 - [ ] READY 收尾检查全部通过
 
 ## 常见错误
 
-1. **不重跑 P5 gate**：bump-version 后直接 tag，不确认测试仍全绿
-2. **CHANGELOG [Unreleased] 留在模板状态**：版本 bump 完但 CHANGELOG 没更新
+1. **不重跑 P5 gate**：交付收尾后直接推进 READY，不确认测试仍全绿
+2. **CHANGELOG [Unreleased] 留在模板状态**：未在 `[Unreleased]` 写本任务条目
 3. **忘记清理测试环境**：debug server 还在跑、临时数据没删 → READY 不干净
 4. **临时资源清单遗漏**：P4/P5 阶段启动的服务/安装的包没记录 → 清理时遗漏
 5. **gate 不过 ≠ 你失败了**：红灯指向工作/设计的问题，不指向你。正确动作是诊断→退回/重试/PAUSED，不是修改产出让它变绿。

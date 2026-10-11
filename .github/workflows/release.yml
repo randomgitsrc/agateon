@@ -1,12 +1,21 @@
 name: Release
 
-# 仅 v* tag 推送触发；构建逻辑全在仓库脚本 agate/scripts/agate-release.py，本文件只做编排。
+# v* tag 推送触发（tag-push backstop）；另提供 workflow_dispatch 人工授权入口
+# （TAG0051 BDD-8：发布 = 独立流程 + 人工授权一次；发布不再只能由 tag push 被动触发）。
+# 构建逻辑全在仓库脚本 agate/scripts/agate-release.py，本文件只做编排（不内联逻辑）。
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '待发布的 tag（须已存在，如 v0.82.0）'
+        required: true
+        type: string
 
 permissions:
   contents: write
+  checks: read
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -17,7 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      TAG: ${{ github.ref_name }}
+      # push：ref_name 即 tag；workflow_dispatch：取人工输入的 tag（唯一授权入口，见 on:）
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       # 无第三方 action、无令牌；私有仓库时需另加 http.extraheader
       - name: Clone tag
@@ -71,6 +81,28 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/venv"
           PIN="$(python3 -B agate/scripts/agate-release.py pyyaml-pin)"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet --only-binary=:all: "pyyaml==${PIN}"
+
+      # 发布门 backstop（TAG0051 M12 / BDD-9/10/12）：tag-push 路径的 fail-closed 兜底——
+      # 目标提交 CI 非 success（含 pending/queued）或 consistency 报 ERROR ⇒ 中止，不建 Release。
+      # 只**调用**仓库脚本 `agate-release.py gate`，workflow 内不内联门逻辑。
+      #
+      # ⚠️ SEC-03（required 集合漂移）：下列 AGATE_RELEASE_REQUIRED_CHECKS 是**硬编码**的 required
+      #    contexts 列表，与仓库**分支保护**是两份数据，可能漂移——**分支保护每新增一项 required，
+      #   必须同步增补到本列表**（否则门不校验该项 = 保护更强、门更弱）。改名/删除同理。
+      #   为何硬编码：Actions 的 GITHUB_TOKEN 无 admin 权限、读不到 branch protection。
+      #
+      # ⚠️ SEC-07（RM-AG0043 反查落点）：本步**未传 `--task`** ⇒ `check-gate.py P8` 的 roadmap RM
+      #   `done` 反查**在此 CI backstop 不生效**（该反查仅在本地 runbook 门、即带 `--task` 时执行）。
+      #   这是有意的：CI 内无「待发布任务目录」的稳定语义，不硬塞语义不明的 task id。
+      #   完整口径以本地发布门（`agate-release.py gate --task <TASK_DIR>`）为准。
+      - name: Release gate (fail-closed backstop)
+        working-directory: src
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGATE_RELEASE_REQUIRED_CHECKS: "shellcheck (ubuntu-latest),shellcheck (windows-latest),pytest (ubuntu-latest),pytest (windows-latest),consistency,gate-backstop"
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" -B agate/scripts/agate-release.py gate --sha "$GITHUB_SHA"
 
       # 只调用仓库脚本；workflow 内零打包逻辑；本步骤不持有令牌
       - name: Build assets

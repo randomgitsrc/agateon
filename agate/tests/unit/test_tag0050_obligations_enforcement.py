@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 _OBLIGATIONS = Path(__file__).resolve().parents[2] / "rules" / "obligations.yaml"
 
@@ -96,3 +97,48 @@ def test_obligation_enforced(obl_id):
     assert m is not None, f"{obl_id} 未在 obligations.yaml 登记"
     block = m.group(1)
     assert "enforced_at" in block, f"{obl_id} 缺 enforced_at 机械落点（删掉落点本节点应转红）"
+
+
+# ── BDD-21（TAG0051）：`OBL-P8-*` 十四条「去 tag/version 语义」机械断言 ───────────────
+#
+# 把 BDD-21 的「OBL-P8 语义一致」降为 P5/P6 可机械判定。判别力（NB-6）说明：
+# 不用固定 5-token 黑名单（可被「CHANGELOG 写入版本号」「打 tag 前置校验」「执行 bump」
+# 绕过），改用**词根 + 词界**正则——只拦真正的 version/tag/bump 词根，放行 `bump_type`
+# （`_` 是词字符，`\bbump\b` 不匹配 `bump_type`）。已对十四条全量扫描确认零误伤。
+_FORBIDDEN_PATTERNS = [
+    (re.compile(r"版本号"), "版本号"),
+    (re.compile(r"\bbump\b", re.IGNORECASE), "bump（版本 bump 期词根；bump_type 除外）"),
+    (re.compile(r"\btag\b", re.IGNORECASE), "tag（tag 期词根）"),
+    (re.compile(r"双路径"), "双路径"),
+    (re.compile(r"version\s*文件"), "version 文件"),
+]
+
+
+def _load_obligations():
+    return yaml.safe_load(_OBLIGATIONS.read_text(encoding="utf-8"))
+
+
+def _obl_p8_items():
+    data = _load_obligations()
+    return [o for o in data["obligations"] if str(o.get("id", "")).startswith("OBL-P8-")]
+
+
+def test_bdd_21_obl_p8_statements_have_no_version_tag_residue():
+    """BDD-21：OBL-P8-* 十四条 statement 无 version/tag 期残留（词根 + 词界，防绕过）。"""
+    items = _obl_p8_items()
+    assert len(items) == 14, f"OBL-P8-* 应为 14 条，实测 {len(items)}"
+    violations = []
+    for o in items:
+        stmt = str(o.get("statement") or "")
+        for pat, label in _FORBIDDEN_PATTERNS:
+            if pat.search(stmt):
+                violations.append(f"{o['id']}: 命中「{label}」——{stmt!r}")
+    assert not violations, "OBL-P8-* statement 存在 version/tag 期残留：\n" + "\n".join(violations)
+
+
+def test_bdd_21_obl_p8_04_rehomed_to_method_enum():
+    """BDD-21：OBL-P8-04 就地重挂为 delivery.method 枚举校验（disposition 保持 M）。"""
+    item = next(o for o in _obl_p8_items() if o.get("id") == "OBL-P8-04")
+    assert item["disposition"] == "M", "OBL-P8-04 重挂后 disposition 须保持 M（M 计数棘轮）"
+    assert "method_enum" in str(item.get("statement") or ""), "OBL-P8-04 statement 须含 method_enum"
+    assert item.get("enforced_at", {}).get("function") == "gate_p8"

@@ -1,0 +1,7 @@
+command: bash docs/design-notes/r6-differential-prepare.sh --src . --dst /tmp/opencode/tag0051-r6-corpus
+exit_code: 0
+git_head: d4e32f4fbcefe7ef7d4910f7a770928c99588f1c
+timestamp: 2026-10-11T11:26:47+08:00
+expected_red: []
+duration_seconds: 41
+failed_tests: []

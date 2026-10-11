@@ -37,23 +37,35 @@ def _publish_step(doc):
 
 @pytest.mark.windows_smoke
 def test_bdd_13_1_trigger_is_only_push_tags_v_star():
-    """BDD-13 ①：触发器仅 push.tags 匹配 v*；无 branches / pull_request* / workflow_dispatch / workflow_run / schedule。"""
+    """BDD-8（TAG0051）：触发面 = `push: tags: ['v*']` **与** `workflow_dispatch` 并存。
+
+    TAG0051 把发布改为「独立流程 + 人工授权一次」：保留 v* tag push 作为 backstop，另加
+    `workflow_dispatch` 人工授权入口（BDD-8）。仍**不得**有 branches / pull_request* /
+    workflow_run / schedule（不得退化为被动/自动触发）。
+    """
     doc, _ = _load()
     trig = doc.get(True, doc.get("on"))
     assert isinstance(trig, dict), f"on 应为映射，实际 {trig!r}"
-    assert set(trig) == {"push"}, set(trig)
+    assert set(trig) == {"push", "workflow_dispatch"}, set(trig)
     push = trig["push"]
     assert isinstance(push, dict) and set(push) == {"tags"}, push
     assert push["tags"] == ["v*"]
+    # workflow_dispatch 须带 tag 输入（人工授权入口；release.yml 的 TAG 取自该输入）
+    wd = trig["workflow_dispatch"]
+    assert isinstance(wd, dict) and "tag" in (wd.get("inputs") or {}), wd
 
 
 def test_bdd_13_2_permissions_only_contents_write():
-    """BDD-13 ②：permissions 为 contents: write 且仅此一项；任何 job 级 permissions 也不得超出。"""
+    """BDD-13 ② / BDD-9：permissions = contents: write + checks: read（Release gate 读 CI 结论）。
+
+    TAG0051 新增 `Release gate` 步（fail-closed backstop）需读 GitHub Checks API 判定目标提交
+    CI success ⇒ permissions 增补 `checks: read`。任何 job 级 permissions 也不得超出此集。
+    """
     doc, _ = _load()
-    assert doc["permissions"] == {"contents": "write"}
+    assert doc["permissions"] == {"contents": "write", "checks": "read"}
     for name, job in doc["jobs"].items():
         if "permissions" in job:
-            assert job["permissions"] == {"contents": "write"}, name
+            assert job["permissions"] == {"contents": "write", "checks": "read"}, name
 
 
 def test_bdd_13_3_no_secrets_reference_only_github_token():
@@ -93,13 +105,23 @@ def test_t8_no_expression_interpolation_in_run_scripts():
 
 
 def test_t8_gh_token_only_in_publish_step_env():
-    """T-8 / cso F-2：GH_TOKEN 只出现在 Publish 步骤的 env（其它步骤、job 级、顶层均不持有令牌）。"""
+    """T-8 / cso F-2 / TAG0051 SEC-05：GH_TOKEN 只出现在**需持有令牌的步骤** env。
+
+    TAG0051 新增 `Release gate (fail-closed backstop)` 步——它调 `agate-release.py gate`，
+    需 gh 读目标提交的 check runs ⇒ **有意**在该步也注入 `github.token`（见 P4-review-cso SEC-05）。
+    故令牌持有面 = {Release gate, Publish}，二步各自显式注入；其它步骤、job 级、顶层仍不得持有。
+    """
     doc, text = _load()
     publish = _publish_step(doc)
     assert "GH_TOKEN" in publish.get("env", {})
     assert str(publish["env"]["GH_TOKEN"]).replace(" ", "") == "${{github.token}}"
+    gate_steps = [s for s in _steps(doc) if "agate-release.py gate" in str(s.get("run", ""))]
+    assert len(gate_steps) == 1, f"应恰有 1 个 `agate-release.py gate` 步骤，实际 {len(gate_steps)}"
+    gate = gate_steps[0]
     holders = [s for s in _steps(doc) if "GH_TOKEN" in str(s) or "GITHUB_TOKEN" in str(s)]
-    assert holders == [publish]
+    assert holders == [gate, publish], [s.get("name") for s in holders]
+    for s in holders:
+        assert str(s.get("env", {}).get("GH_TOKEN", "")).replace(" ", "") == "${{github.token}}"
     assert "GH_TOKEN" not in yaml.safe_dump({k: v for k, v in doc.items() if k != "jobs"})
     for job in doc["jobs"].values():
         assert "GH_TOKEN" not in yaml.safe_dump(job.get("env", {}))

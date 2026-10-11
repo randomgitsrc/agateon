@@ -26,7 +26,7 @@ version: 1
 #    `gate: check-obligations`（D09）**不在 A1 的 R6 覆盖内**——`required_ids` 只校验规则
 #    存在于 YAML，不校验可达。设计 §8 第 12 项（新增 PROD_TOUCHED ERROR 单独统计）由
 #    批 A2 的 CI 逐提交回放承担（见设计 §8 与 P4-implementation.md 的 G2 声明）。
-required_ids: [D01, D02, D03, D04, D05, D06, D07, D08, D09, D10, D11, D12]
+required_ids: [D01, D02, D03, D04, D05, D06, D07, D08, D09, D10, D11, D12, D13]
 
 rules:
   - id: D01
@@ -113,3 +113,10 @@ rules:
     task_scope: legacy
     match: {patterns: ["PROD_TOUCHED"]}
     basis: "设计 §8 第 12 项（安全门；含 F4 否定写法误拦，R6 单独统计并逐条列出）"
+  - id: D13
+    batch: TAG0051
+    kind: new_error
+    gate: "check-gate:P8"
+    task_scope: legacy
+    match: {patterns: ["④ 从 P2 packages 验证 version 文件路径"]}
+    basis: "TAG0051（RM-AG0103）P8 去 version/tag：check-gate.py P8 收尾提示删去「④ 从 P2 packages 验证 version 文件路径」；rc 2->2 不变，仅该提示文案变化（被 _error_lines 以 `GATE ` 前缀行纳入比较）。kind 取 new_error 是既有枚举内最近项——本差异实为 GATE 行文案变更，枚举无对应 kind，故不改 _rule_matches 新增 kind。"

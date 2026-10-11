@@ -19,6 +19,20 @@
   按时长列出「任务 / 耗时(h) / 派发份数 / 上下文(KiB)」——如 `TAG0050 56.3h / 75 份 / 1346 KiB`、
   `TAG0042 48.0h / 50 份`。⚠️ **token / 步数不可得**（harness 不报）⇒ 明确标注、不猜。
   （RM-AG0074 的 ② M3 指标提取方、③ judge 预算实测仍待做。）
+### 变更
+
+- **TAG0051 任务与发布解耦（任务止于 READY；Release 独立流程 + 发布门）**：把**不可逆的对外发布动作**
+  （tag → GitHub Release）从任务 P8 **结构性移出**——① 任务终态 = **READY**（交付物 + `CHANGELOG [Unreleased]`
+  含 task_id + `bump_type` **意图** + 交付收尾 + CI 全绿含 push 口径；**不落 tag / 不 bump version 文件**）；
+  ② **Release = 独立流程**：`release.yml` 新增 `workflow_dispatch` 人工授权入口，并在创建 tag/Release 前过一道
+  机械发布门（目标提交 CI success + tag↔提交一致 + `check-protocol-consistency.py` CHECK 7/13 0 ERROR +
+  roadmap RM `done`；由 `agate-release.py` 新增 `gate` 子命令承载，`release.yml` 调用它做 fail-closed backstop）。
+  ③ 配套：`delivery.method` 收紧为三值枚举（新增契约级快照 `rules/task-data/level-2.yaml`，`extends: 1`，
+  `method ∈ {release-notes, tag-release, none}`，**只对非 legacy 且等级 ≥ 2 任务生效**）；`state-machine.md`
+  显式发布授权转移（复用既有 PAUSED/NEED_CONFIRM 语义、**不引第二套阻塞**）；`AGENTS.md`/`git-integration.md`
+  统一 tag 时点（先合 release PR → main CI 绿 → 后打 tag → Release）；新增 R6 差分 wrapper
+  `docs/design-notes/r6-differential-prepare.sh`。**面向新任务的准入行为变化**（非「无破坏性变更」，详见
+  `agate/UPGRADING.md`）；**legacy 任务退出码与 ERROR 集合不变**（R6 双向差分未匹配 0 条）。
 ### 修复
 
 - **默认分支解析单源收敛（DEBT0065）**：`check-mvwu.py::_default_branch_base` 原本自建

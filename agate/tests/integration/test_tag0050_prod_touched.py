@@ -23,7 +23,8 @@ def _seed_nonlegacy_task(repo, phase, main_output, main_text):
         f"task_id: TAG0001\nphase: {phase}\nretries: {{}}\n", encoding="utf-8"
     )
     h.write_ledger(
-        task, [{"event": "task_created", "task_id": "TAG0001", "contract_level": 1}]
+        # TAG0051：level-2 登记后协议当前等级 = 2；新建任务须登记当前等级（设计 §2.3 规则 2）。
+        task, [{"event": "task_created", "task_id": "TAG0001", "contract_level": 2}]
     )
     (task / main_output).write_text(main_text, encoding="utf-8")
     return task

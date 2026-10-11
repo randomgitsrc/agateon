@@ -743,16 +743,16 @@ obligations:
     evidence: ""
   - id: OBL-P8-04
     phase: P8
-    statement: "version 文件变更（暂存区 / 最近 5 commit，双路径）"
+    statement: "delivery.method 枚举校验（读快照 delivery.method_enum，缺省 no-op）"
     anchor: "agate/phase-cards/P8-release.md#gate 规则"
     disposition: M
     script: "agate/scripts/check-gate.py"
-    enforced_at: {file: agate/scripts/check-gate.py, function: main}
+    enforced_at: {file: agate/scripts/check-gate.py, function: gate_p8}
     test: agate/tests/unit/test_tag0050_obligations_enforcement.py::test_obligation_enforced[OBL-P8-04]
     evidence: ""
   - id: OBL-P8-05
     phase: P8
-    statement: "CHANGELOG [Unreleased] → 新版本号（含 task_id）"
+    statement: "CHANGELOG [Unreleased] 含 task_id（载体 check-changelog.py）"
     anchor: "agate/phase-cards/P8-release.md#gate 规则"
     disposition: M
     script: "agate/scripts/check-changelog.py"
@@ -777,7 +777,7 @@ obligations:
     evidence: "T005：P8 subagent 把 1 failed 标 ✅"
   - id: OBL-P8-08
     phase: P8
-    statement: "bump 后重跑 P5（或审计 7 复用判定）"
+    statement: "交付收尾后审计 7 复用/重跑判定"
     anchor: "agate/phase-cards/P8-release.md#gate 规则"
     disposition: C
     script: "agate/scripts/check-p6-provenance.py"
@@ -812,7 +812,7 @@ obligations:
     evidence: ""
   - id: OBL-P8-13
     phase: P8
-    statement: "releaser subagent 不执行 git commit / git tag"
+    statement: "releaser subagent 不执行 git commit"
     anchor: "agate/phase-cards/P8-release.md#如果是首次进入本阶段"
     disposition: R
     script: ""
