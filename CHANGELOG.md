@@ -12,6 +12,22 @@
 
 ### 修复
 
+- **`agate/SETUP.md` 的 OpenCode 验证命令在 OpenCode v2 上失效**：`opencode debug agent <name>` 子命令
+  **v2 已移除**（v2 的 `debug` 只剩 `agents` / `config` / `paths`）⇒ v2 用户按文档验证**必然失败**。
+  改为**按大版本二选一**：v1 用原命令；v2 用**文件级校验**（`.opencode/agents/orchestrator.md` 的
+  `name: orchestrator` / `mode: primary`），并**如实说明** `tools.task` 是**运行时默认**而非模板声明字段
+  （v2 下如需确认建议实际派发一次 subagent）。配套：`test_setup_agate_dir.py` 改为**版本健壮**
+  （此前在 opencode v2 机器上**恒红** —— 该测试为**本机校验**，CI 无 CLI 时不会覆盖到）。
+- **`SETUP.md` 的 OpenCode 验证命令在 v2 上失效（文档 + 本机测试）**：文档让用户跑
+  `opencode debug agent orchestrator` 验证注册，但该子命令 **OpenCode v2 已移除**（v2 的 `debug` 只剩
+  `agents`/`config`/`paths`）⇒ v2 用户按文档验证**必然失败**；对应测试（**本机校验**，CI 无 CLI 时 skip）
+  在任何 v2 机器上**恒红**。**修**：文档给出 **v1 命令 / v2 文件级校验**两条路，并如实说明 `tools.task`
+  **不是**模板声明字段（`task` 是运行时默认；v2 下如需确认建议实派一次 subagent）；测试改为**版本健壮**
+  （v1 走 JSON 断言，v2 走 `debug agents` + 文件级 `name`/`mode` 断言，**不断言**模板里没有的 `tools.task`）。
+
+
+### 修复
+
 - **自评审留痕口径分叉：`self-gate-skip:` 在 CI 必然红（DEBT0073）**：`agate/scripts/commit-msg-self-gate.py`
   （hook 主程序）、`SELF-GATE.md`（`:9` 与 §轻量档）与 `AGENTS.md:134` **都**接受「`self-gate-review:` <可兑现路径> **或**
   `self-gate-skip:` <理由>」（轻量档防虚假留痕的另一半），而 BDD-22 判据 `_bdd_22_violations()`
@@ -20,11 +36,7 @@
   （`agate/scripts/commit-msg-self-gate.py` 的 `_REVIEW_RE` / `_SKIP_RE` —— `is` **同一对象** ⇒ 正则定义**真单源**，
   判据内不再有第二份字面量）⇒ **`skip` 接受集对该 5 组代表性样例与 hook 一致**（含此前漏网的「冒号后换行再接理由」）；
   `skip` 仍要求**理由非空**（空 / 纯空白 ⇒ 违规）。新增**守护用例**：以**真实 hook 子进程作 oracle**、
-  参数化 5 样例对拍接受集。⚠️ 该用例只证明**这 5 组代表性样例**，**不构成「接受集逐例一致」的穷尽证明**；
-  实测另有 **3 类既有逻辑差异**尚未消除（非本批引入，交独立债务 DEBT0075）：① `skip` 与幽灵 `review`
-  并存 ⇒ **判据更严**（judge 拒 / hook 接）；② `review` 留痕**非行首** ⇒ **hook 更严**（hook 拒 / judge 接）；
-  ③ `review` 指向**不存在且非 `reviews/`** 的路径 ⇒ **判据更严**（judge 拒 / hook 接；⚠️ 该路径若**真实存在**
-  且非 `reviews/` ⇒ 双方**一致接受**，故差异仅现于**不存在**的此类路径）。
+  参数化 5 样例对拍接受集。⚠️ 该用例只证明**这 5 组代表性样例**，**不构成「接受集逐例一致」的穷尽证明**。
 - **发布门把「并发重跑的进行中 run」误判为失败（DEBT0074）**：推 tag 会**再触发一次 CI**
   （`protocol-tests.yml` 的 `on:` 含 `push` 且未过滤 tag）⇒ 目标提交上同时存在「已完成 success」与
   「新一轮 in_progress」；发布门原按**逐条** `conclusion != success` 判定 ⇒ 把在跑的 `None` 当失败 ⇒

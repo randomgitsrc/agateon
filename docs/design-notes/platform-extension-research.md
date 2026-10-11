@@ -1,6 +1,6 @@
-# 主流 AI-agent CLI 运行时平台能力调研（RM-AG0034 立项素材）
+# 主流 AI-agent CLI 运行时平台能力调研（第四运行时扩展素材）
 
-> 调研目标：为 agate 协议扩展第四运行时（roadmap 条目 RM-AG0034）提供立项素材。
+> 调研目标：为 agate 协议扩展第四运行时提供素材。**未排期**（无当前需求驱动；仅当出现真实需求 / 首个用例时再评估）。
 > 调研范围：Codex CLI（OpenAI）、Cursor（CLI / Agent）、Gemini CLI（Google）为主，Aider / Cline / Windsurf（Cascade）/ Goose 作候选评估。
 > 资料来源：各平台官方文档线上版本（抓取于本次调研会话；平台迭代快，接入前请复核）。不确定项均标注「待官方确认」，未编造 API / 命令名。
 
@@ -87,9 +87,9 @@ agate 现有运行时：OpenCode、Claude Code、DSH（deepseek-harness）。aga
 
 **关键差异总结（调研维度 5）**
 
-1. **session hooks vs git hooks**：四个候选（Codex / Cursor / Gemini / Windsurf）**全部支持 session 级拦截**（工具调用前 / 后、subagent 生命周期、模型调用前后等），且全部是 JSON-over-stdin + exit code 契约（Claude Code hooks 系风格，Gemini 明确「mirrors Claude Code 契约」）。agate 目前只用 git hooks 做 gate——这不是平台限制（Claude Code / DSH 本就支持 session hooks），而是 agate 选择了「git 协议级、平台无关」的统一载体。**对 RM-AG0034 的含义**：接入第四平台时 git-hook gate 零改动可用；session hooks 可作为后续增强（例如把「危险命令拦截」从 commit 时前置到工具执行时），但那是架构级扩展，建议单独立项，不塞进 RM-AG0034。唯一需注意的反例是 Aider（默认 `--no-verify` 绕过 pre-commit，直接冲突）。
+1. **session hooks vs git hooks**：四个候选（Codex / Cursor / Gemini / Windsurf）**全部支持 session 级拦截**（工具调用前 / 后、subagent 生命周期、模型调用前后等），且全部是 JSON-over-stdin + exit code 契约（Claude Code hooks 系风格，Gemini 明确「mirrors Claude Code 契约」）。agate 目前只用 git hooks 做 gate——这不是平台限制（Claude Code / DSH 本就支持 session hooks），而是 agate 选择了「git 协议级、平台无关」的统一载体。**对该扩展的含义**：接入第四平台时 git-hook gate 零改动可用；session hooks 可作为后续增强（例如把「危险命令拦截」从 commit 时前置到工具执行时），但那是架构级扩展，建议单独立项，不塞进本次扩展。唯一需注意的反例是 Aider（默认 `--no-verify` 绕过 pre-commit，直接冲突）。
 2. **沙箱语义差异**：Codex 与 Gemini 是「强沙箱 + 可编程授权」派（Codex 三级模式 + 权限 profile；Gemini 多后端 + expansion），Cursor 是「简单开关」派（二态）。对 agate 的影响集中在自动化参数上：`codex exec` 默认 read-only，必须显式 `--sandbox workspace-write` 让 subagent 能写工作区；Gemini 沙箱默认关闭、`--sandbox` 需显式开启（开启后跑测试命令的行为待实机验证）；Cursor `--force` 才是允许改文件的开关。这些都要写进各自 SETUP.md 的「自动化环境」小节。
-3. **身份 / agent 配置机制差异**：主流收敛到「markdown + frontmatter」——Claude Code（`.claude/agents/*.md`）、Gemini（`.gemini/agents/*.md`）、Cursor（`.cursor/agents/*.md` 且**向下兼容 `.claude/` 与 `.codex/` 格式**）；Codex 特立独行用 TOML（`.codex/agents/*.toml`，`developer_instructions` 字段承载指令）。DSH 的 agent-preset（YAML）是另一极。**对 RM-AG0034 的含义**：Cursor 接入几乎零模板成本；Codex / Gemini 各需新增一种身份模板（分别 TOML / markdown-frontmatter），模板内指令文本仍可复用 `orchestrator-template.md`（软链 / 拷贝引用的方式按各平台要求落位）。
+3. **身份 / agent 配置机制差异**：主流收敛到「markdown + frontmatter」——Claude Code（`.claude/agents/*.md`）、Gemini（`.gemini/agents/*.md`）、Cursor（`.cursor/agents/*.md` 且**向下兼容 `.claude/` 与 `.codex/` 格式**）；Codex 特立独行用 TOML（`.codex/agents/*.toml`，`developer_instructions` 字段承载指令）。DSH 的 agent-preset（YAML）是另一极。**对该扩展的含义**：Cursor 接入几乎零模板成本；Codex / Gemini 各需新增一种身份模板（分别 TOML / markdown-frontmatter），模板内指令文本仍可复用 `orchestrator-template.md`（软链 / 拷贝引用的方式按各平台要求落位）。
 
 ---
 
@@ -112,7 +112,7 @@ agate 现有运行时：OpenCode、Claude Code、DSH（deepseek-harness）。aga
 - **Cursor 第二的理由**：① 接入成本全场最低——官方文档明确 subagent 兼容 `.claude/agents/`（以及 `.codex/agents/`），agate 现有的 orchestrator 软链模板可直接复用，`assets/templates/` 几乎零新增；② hooks 事件覆盖完整（含 subagentStart / subagentStop、beforeShellExecution）；③ 无头模式成熟（`agent -p` + `--force`，有 `--output-format`）。**扣分项**：闭源 + 订阅制（CI 落地受 API key / 账号约束）、沙箱粒度粗（二态）、Cloud Agent 交接（`&`）引入云执行边界，需在 SETUP 中写明数据边界。
 - **Gemini 第三的理由**：① 全开源 + 社区热度最高（Apache-2.0，10.7 万 stars），符合「开源优先」的 agate 生态取向；② hooks v1 已发布且契约与 Claude Code 同源（迁移成本低）；③ subagent 的递归保护与工具隔离对 agate「角色文件隔离」是正向强化；④ 沙箱后端最丰富。**扣分项**：hooks 发布仅数月，生态与踩坑记录少；无头输出单对象 JSON 对回归断言稍弱（streaming JSONL 可补）；认证链路（Google OAuth / Vertex AI）在 CI 里比 API key 更重。
 
-### 4.3 对 RM-AG0034 交付物的落点建议
+### 4.3 对本扩展交付物的落点建议
 
 按任务给定的交付物拆解（每平台 = 身份模板 + SETUP.md 步骤 + platform-notes.md 条目 + 回归测试）：
 
@@ -123,7 +123,7 @@ agate 现有运行时：OpenCode、Claude Code、DSH（deepseek-harness）。aga
 | platform-notes.md 条目 | 重写「Codex」段（subagent workflows 现状、sandbox_mode、hooks 信任机制）；复核并更新旧 max_depth 记录 | 新增「Cursor」段（`.claude/agents` 兼容、`--force` 语义、二态沙箱、订阅制约束）| 新增「Gemini CLI」段（hooks v1 契约、settings.json 分层、沙箱后端、递归保护）|
 | 回归测试 | `codex exec --json` 事件流断言（gate 触发、文件产出、exit code）| `agent -p --force` + 产物文件断言 | `gemini -p --output-format json` 单对象 / streaming JSONL 断言 |
 
-> 补充建议：无论先接哪个，建议在 RM-AG0034 内先做一轮「三平台无头冒烟」POC（各平台各跑一个最小 agate 任务，验证 git-hook gate 在无头模式下确实触发），用结果决定最终接入顺序——本调研的优先级排序基于文档能力，实机冒烟可能修正（尤其是 Codex max_depth 与 Gemini 沙箱默认行为两项）。
+> 补充建议：无论先接哪个，建议在本扩展内先做一轮「三平台无头冒烟」POC（各平台各跑一个最小 agate 任务，验证 git-hook gate 在无头模式下确实触发），用结果决定最终接入顺序——本调研的优先级排序基于文档能力，实机冒烟可能修正（尤其是 Codex max_depth 与 Gemini 沙箱默认行为两项）。
 
 ---
 

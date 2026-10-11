@@ -14,12 +14,12 @@
 | `design-risk-routing.md` | 风险分路由（ceremony routing）设计：客观信号算分，analyst 只解释不决定 | 已落地（TAG0019，v0.58.0）|
 | `design-independent-judge.md` | 独立 Judge 机制设计（P6.5 信息隔离 + 三层防造假 + 事件账本） | 已落地（TAG0020，v0.59.0）|
 | `260903-design-subagent-liveness-and-self-dispatch/` | subagent 存活可观测性（命令流日志机制：三平台数据源适配器 + 冻结/空转检测 + 截断排除）+ 受控自主再派发 | 已落地（TAG0028，v0.67.0，RM-AG0055）|
-| `dsh-integration.md` | DSH 深度集成扩展点清单（cordis 插件 / session hooks / workflow 派发） | 待立项（RM-AG0033）|
-| `platform-extension-research.md` | 第四平台扩展调研（Codex/Cursor/Gemini CLI 能力对照 + 优先级建议） | 调研完成（RM-AG0034 素材）|
+| `dsh-integration.md` | DSH 深度集成扩展点清单（cordis 插件 / session hooks / workflow 派发） | 未排期（无当前驱动）|
+| `platform-extension-research.md` | 第四平台扩展调研（Codex/Cursor/Gemini CLI 能力对照 + 优先级建议） | 调研完成（素材）|
 | `agateon-trademark-research.md` | Agateon 商标四辖区调研 + 注册建议 | 调研完成（RM-AG0035 前置）|
 | `rename-recommendation.md` | 品牌改名决策记录（gatewise/agaton/turngate 淘汰原因 → 拍板 Agateon） | 已决策（RM-AG0035 转执行型）|
 | `design-rename-execution.md` | Agateon 改名执行设计（三层解耦：品牌名/仓库名/目录名 + 分层迁移 + 基础设施层兼容策略） | 设计草案（RM-AG0035 执行地基）|
-| `design-agateon-portal.md` | Agateon 门户设计（git 之于 GitHub：数据面/控制面分离 + 可验证性三层同构） | 待立项（后续，RM-AG0047）|
+| `design-agateon-portal.md` | Agateon 门户设计（git 之于 GitHub：数据面/控制面分离 + 可验证性三层同构） | 未排期（后续，无当前驱动）|
 | `design-maintainability-gate.md` | 维护性反模式 gate 设计（模式层/检测器层分离，协议定义反模式语义） | 已落地（TAG0026，v0.65.0）|
 | `rm-ag0046-maintainability-gate-plan.md` | RM-AG0046 落地计划 v3（G0 优先 diff 驱动：god-file 跨越 + fuzzy-boundary，P4 挂载 + 登记/P4 评审三重门槛） | 已落地（TAG0026，v0.65.0）|
 | `design-md-field-set.md` | 结构化字段写入工具设计（agate-md-field-set：写入即校验 + 自描述 + 权限引导，消灭手写 frontmatter 摩擦） | RM-AG0048 一期已落地（TAG0024，v0.63.0）；二期 backlog |
