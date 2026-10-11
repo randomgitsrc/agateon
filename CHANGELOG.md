@@ -10,6 +10,18 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **发布门把「并发重跑的进行中 run」误判为失败（DEBT0074）**：推 tag 会**再触发一次 CI**
+  （`protocol-tests.yml` 的 `on:` 含 `push` 且未过滤 tag）⇒ 目标提交上同时存在「已完成 success」与
+  「新一轮 in_progress」；发布门原按**逐条** `conclusion != success` 判定 ⇒ 把在跑的 `None` 当失败 ⇒
+  **假失败**（v0.82.0 首发实证：Release run **38141030366** 失败并报 6 项 required 非 success，
+  而**同一门在本地**对同一 SHA 通过；绕过方式为 `workflow_dispatch` 二次触发 **38141340966** 成功）。
+  **修复**：改为**按检查名归组、只看已完成结论**——该名**无任何**已完成结论（missing/queued/in_progress）
+  或已有结论含非 success ⇒ 仍 **fail-closed 非 0**（**不等待**）；已完成结论全 success ⇒ 通过
+  （并发重跑不再假失败）。**不依赖时间戳**；SEC-01（required 空 + 零 check-run）、SEC-02（可信上报 App）、
+  SEC-07（`--task` 反查）**均未改动**。
+
 ## [0.82.0] - 2026-10-11
 
 ### 新增

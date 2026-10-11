@@ -20,7 +20,9 @@
 #     agate-release.py gate --task <TASK_DIR> --sha <COMMITISH>
 #                          [--ci-cmd <CMD>] [--consistency-cmd <CMD>]
 #   * `--ci-cmd`   stdout = JSON 数组 `[{"name","status","conclusion"}]`（目标提交的 check-runs）；
-#                  缺省 = 查 GitHub；任一 required 检查 `conclusion != success`（含 in_progress/queued）→ 非 0。
+#                  缺省 = 查 GitHub。**按检查名归组、只看已完成结论**：该名无任何已完成结论
+#                  （missing/queued/in_progress）或已有结论含非 success → 非 0（fail-closed、不等待；
+#                  并发重跑不假失败——DEBT0074）。
 #   * `--consistency-cmd` 退出码即 consistency 结论（缺省 = 真跑 check-protocol-consistency.py）；非 0 → 门非 0。
 #   命令经 `shlex.split` 后直接执行（无 shell）。
 #
@@ -206,6 +208,69 @@ def test_bdd_9_gate_fails_when_ci_not_success(
     result = _gate(agate_scripts, python_exe, run_cli, repo, td, extra)
     assert result.returncode != 0, (
         f"BDD-9：CI 非 success（pending）时发布门须非 0（fail-closed），实际 rc={result.returncode}"
+    )
+
+
+def test_debt0074_concurrent_inflight_rerun_does_not_fail_gate(
+    git_repo, tmp_path, agate_scripts, python_exe, run_cli
+):
+    """DEBT0074：同一 SHA 上并存**新一轮进行中**的 run ⇒ 不得把已完成的 success 判成失败。
+
+    成因实测（2026-10-11 v0.82.0 首发）：推 tag 会再触发一次 CI（`protocol-tests.yml` 的 `on:`
+    含 `push` 且未过滤 tag）⇒ 该 SHA 上同时有「已完成 success」与「in_progress」；旧实现**逐条**
+    判 `conclusion != success` ⇒ 发布门假失败（Release run 38141030366）。新口径按名归组、只看
+    已完成结论 ⇒ 通过。
+    """
+    repo, td = _repo_with_task(git_repo)
+    runs = list(_OK_RUNS) + [
+        {"name": "pytest (ubuntu-latest)", "status": "in_progress", "conclusion": None},
+        {"name": "consistency", "status": "queued", "conclusion": None},
+    ]
+    extra = [
+        "--ci-cmd", _ci_cmd(tmp_path, python_exe, runs),
+        "--consistency-cmd", _rc_cmd(tmp_path, python_exe, 0),
+    ]
+    result = _gate(agate_scripts, python_exe, run_cli, repo, td, extra)
+    assert result.returncode == 0, (
+        f"DEBT0074：并发新一轮进行中 run 不应致门失败（已完成结论全 success），实际 rc={result.returncode}"
+    )
+
+
+def test_debt0074_only_inflight_still_fails_closed(
+    git_repo, tmp_path, agate_scripts, python_exe, run_cli
+):
+    """DEBT0074（判别力）：该名**无任何已完成结论** ⇒ 仍 fail-closed（新口径不得放行未验证提交）。"""
+    repo, td = _repo_with_task(git_repo)
+    runs = [
+        {"name": "pytest (ubuntu-latest)", "status": "in_progress", "conclusion": None},
+        {"name": "consistency", "status": "completed", "conclusion": "success"},
+        {"name": "gate-backstop", "status": "completed", "conclusion": "success"},
+    ]
+    extra = [
+        "--ci-cmd", _ci_cmd(tmp_path, python_exe, runs),
+        "--consistency-cmd", _rc_cmd(tmp_path, python_exe, 0),
+    ]
+    result = _gate(agate_scripts, python_exe, run_cli, repo, td, extra)
+    assert result.returncode != 0, (
+        f"DEBT0074：该名无已完成结论时须 fail-closed（不得等待、不得放行），实际 rc={result.returncode}"
+    )
+
+
+def test_debt0074_completed_failure_among_success_still_fails(
+    git_repo, tmp_path, agate_scripts, python_exe, run_cli
+):
+    """DEBT0074（判别力）：同名既有 success 又有完成态 failure ⇒ 仍非 0（不因存在 success 而放行）。"""
+    repo, td = _repo_with_task(git_repo)
+    runs = list(_OK_RUNS) + [
+        {"name": "pytest (ubuntu-latest)", "status": "completed", "conclusion": "failure"},
+    ]
+    extra = [
+        "--ci-cmd", _ci_cmd(tmp_path, python_exe, runs),
+        "--consistency-cmd", _rc_cmd(tmp_path, python_exe, 0),
+    ]
+    result = _gate(agate_scripts, python_exe, run_cli, repo, td, extra)
+    assert result.returncode != 0, (
+        f"DEBT0074：已完成结论含 failure 时须非 0（保守口径），实际 rc={result.returncode}"
     )
 
 
