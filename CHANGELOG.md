@@ -67,6 +67,16 @@
   的 `release.preset.enum`，不手抄副本）按既有检查集执行并**回显所用 preset**；**未知** ⇒ 门非 0；
   **未声明** ⇒ 回落默认、**不阻断**。声明本身未删（schema 仍视其为合法键）。**无面向既有合法项目的
   破坏性变更**（未知值本就 schema 非法：`agate-config.py validate` 早已 rc=1）。
+- **`agate-md-field-set.py append` 路径缺「系统/证据字段」守卫（DEBT0072）**：`append` 此前对「由脚本/
+  角色产出」字段无守卫——实测 `append pass`/`append fail` 可写入（`OK: pass 追加一项 …`），与 `set` 侧
+  及 `--list` 展示「由脚本产出、不可 set」的声明**矛盾**，且可污染 P6 判据的输入面。修复：`append`
+  （及同族 `upsert`/`remove`）在列表写入唯一入口复用 **`set` 的同一判据**（`_key_capability == "script"`
+  ——契约 `writer: system` ∪ 证据字段表，**单源**、ADR-014）→ 对这类字段一律拒绝；契约外字段维持既有
+  拒绝文案不变。**面穷尽**：逐 basename 核对 `SCHEMAS` 四个条目 + 契约 files 节——P6 `pass`/`fail`/
+  `regression_pass`，P7 `blocker_count`/`deviation_count`/`deviation_critical_count`/`design_gap_count`/
+  `design_gap_reviewed_count`/`code_map_new_files_count`/`code_map_reviewed_count`（含评审点名的
+  `blocker_count`）。**合法 append 目标不受影响**（`scope_resolved`/`need_confirm`/`results` 仍可追加）；
+  回归用例 `test_debt0072_append_guard.py` 覆盖上述面。
 
 ## [0.81.0] - 2026-10-11
 

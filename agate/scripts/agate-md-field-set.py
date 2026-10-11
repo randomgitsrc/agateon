@@ -15,7 +15,9 @@ key 白名单（BDD-17，DEBT0067 r2 解耦）：`GENERIC_HEADER_KEYS ∪ phases
 的 `migrated_keys`，单源派生）**∪ JSON 结构化字段**（`dispatch_plan`，其结构校验走 get + json.loads）。
 `task_fields` 只表达「本阶段该填/缺失」（§5.3），**不等于**可写面，故另设第三来源，避免把可选字段
 塞进 task_fields 而报假"剩余缺失"。证据字段（BDD-9）/仅登记-需 append 字段（BDD-18）一期明确拒绝
-写入。status 字段按 basename 分派固定枚举 + 角色白名单（BDD-3/4，UX 引导，非安全边界，见
+**set** 写入；DEBT0072 起「由脚本/角色产出」字段（= `_key_capability == "script"`）对
+**append/upsert/remove** 亦同判据拒绝（此前 append 侧无守卫，可把 `pass`/`fail` 等系统字段写坏）。
+status 字段按 basename 分派固定枚举 + 角色白名单（BDD-3/4，UX 引导，非安全边界，见
 design-md-field-set.md §7.1）。
 
 原子写（BDD-10）：tempfile.mkstemp 同目录 + os.replace，写入中断不落盘半截内容。
@@ -742,6 +744,24 @@ def _load_fm_body(file_path):
     return (fm if isinstance(fm, dict) else {}), body, (fm is None)
 
 
+def _script_field_error(file_path, key, get_mod):
+    """「由脚本/角色产出」字段的追加侧守卫（DEBT0072）。
+
+    与 `set` 侧、展示面（`--list`）**同一判据单源**（ADR-014）：直接复用
+    `_key_capability(...) == "script"`（= 契约 `writer: system` 或证据字段表成员）。
+    返回错误信息字符串（应拒）或 None（可写）。
+
+    只在字段**确为本文件合法列表目标**（`_require_list_field` 已解析出 spec）时调用——
+    契约外字段仍走既有「不在本文件契约字段中」拒绝，不改动其错误语义。
+    """
+    if _key_capability(file_path, key, get_mod) != "script":
+        return None
+    return (
+        f"ERROR: {key} 是由脚本/角色产出的系统/证据字段（见 --list『由脚本/角色产出』分组），"
+        f"由 `results` 等结构现算，不可手动追加/写入（append/upsert/remove 均被拒）\n"
+    )
+
+
 def _require_list_field(file_path, key):
     spec = _field_spec(file_path, key)
     if spec is None:
@@ -752,6 +772,13 @@ def _require_list_field(file_path, key):
         sys.stderr.write(
             f"ERROR: {key!r} 不在本文件契约字段中（见快照 files / declaration_fields 节；用 explain 查看可用字段）\n"
         )
+        return None
+    # DEBT0072（append 侧守卫）：系统/证据字段（`pass`/`fail`/`blocker_count` 等）本应由
+    # 脚本从 `results` / `findings` 现算，此前 `append`/`upsert`/`remove` 可把其结构写坏，
+    # 污染 P6/P7 判据的输入面。守卫与 `set` 侧同一判据（`_key_capability == "script"`）。
+    err = _script_field_error(file_path, key, _fm_get())
+    if err:
+        sys.stderr.write(err)
         return None
     return spec
 
