@@ -1301,7 +1301,10 @@ def default_branch(repo_root=None, script_path=None):
 
     rc, out = _git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], repo_root)
     if rc == 0 and out:
-        return out.split("/")[-1]
+        # ⚠️ 只剥**第一个** `/` 前缀（`origin/`）——用 `split("/")[-1]` 会把**分支名里含 `/`** 的
+        # 情形截断（实测 `origin/feature/foo` → `foo` ⇒ 后续 `origin/foo` 不存在 ⇒ 解析成 `None`；
+        # 该截断同时影响 `agate-ci-verify` / `agate-changes`）。SELF-GATE r1 抓出。
+        return out.split("/", 1)[-1]
     for name in ("main", "master"):
         rc2, out2 = _git(["rev-parse", "--verify", f"origin/{name}"], repo_root)
         if rc2 == 0 and out2:

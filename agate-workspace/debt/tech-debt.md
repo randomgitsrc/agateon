@@ -2686,7 +2686,7 @@ closure_note: >-
 id: DEBT0065
 category: protocol
 title: "`check-mvwu.py::_default_branch_base` 是默认分支解析的**第三份实现**（口径与 `agate_common.default_branch` 不同）"
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate/scripts/check-mvwu.py
@@ -2697,6 +2697,14 @@ evidence:
       （RM-AG0116：协议不假设项目分支）**未合并**，仅登记。
   - ref: docs/reviews/agate-alignment-review-2026-10-10-BRANCH-NEUTRAL.md
     note: "SELF-GATE r1 全仓扫描发现（同类越界第三处；`--observe` 口径、不阻断）。"
+  - ref: agate/scripts/check-mvwu.py
+    note: >-
+      **关单证据（批次 hotfix-debt-0065-0066，2026-10-11）**：`_default_branch_base` 不再自建
+      `symbolic-ref origin/HEAD` 候选表，改为**复用单源** `agate_common.default_branch()` 取
+      **分支名**，再转候选 ref（`refs/remotes/origin/<name>` 优先 → `refs/heads/<name>` 回退 →
+      `main`/`master` 兜底）——既收敛实现，又**保留纯本地仓库可用**（修前只有本地 ref 形式）。
+      守护用例：`test_check_mvwu.py::test_debt0065_default_branch_is_single_source`
+      （断言源码内无 `symbolic-ref` 且引用单源）。
 impact: >-
   同一「默认分支」概念三处实现（`agate_common` / `check-mvwu` / 测试基线），后续调整口径需改多处
   （ADR-014 判据单源）。
@@ -2707,7 +2715,11 @@ closure_criteria:
   - "默认分支解析收敛到单一实现（或差异被显式命名 + 有等价守护用例）；全仓无第三份副本"
 source: review
 created_at: 2026-10-10
-task_id: null   # 待立项；由 RM-AG0116 批次登记
+task_id: hotfix-debt-0065-0066   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-11
+closure_note: >-
+  关单：默认分支解析收敛到 `agate_common.default_branch`（差异以「远端优先 → 本地回退」显式化 + 守护用例）。
+
 ```
 
 ## DEBT0066
@@ -2716,7 +2728,7 @@ task_id: null   # 待立项；由 RM-AG0116 批次登记
 id: DEBT0066
 category: protocol
 title: "`gate_p0` 的声明校验按**进程 cwd** 找 `agate.config.yaml`——从项目外调用会校验错的项目（低影响：hook 里 cwd=仓库恰好掩盖）"
-status: open
+status: closed
 priority: low
 evidence:
   - ref: agate/scripts/check-gate.py
@@ -2729,6 +2741,14 @@ evidence:
       而仓库此时**有**声明。用例已改为**自带项目根**（显式 cwd）；本缺陷本身未修。
   - ref: agate/scripts/agate-config.py
     note: "`validate` 子命令按 cwd 解析声明（`read_project_config(project_root)` 的 project_root 取 cwd）。"
+  - ref: agate/scripts/check-gate.py
+    note: >-
+      **关单证据（批次 hotfix-debt-0065-0066，2026-10-11）**：`gate_p0` 的声明校验改为**按 task_dir
+      推项目根**再传 `cwd=`：① `run_git(["rev-parse","--show-toplevel"], cwd=task_dir)`；② 退化为
+      「最近一个含 `agate-workspace` 的祖先目录」；③ 都拿不到 ⇒ 保持旧行为（cwd），不改变既有语义。
+      回归用例按本债判据构造：**任务在项目 A（无声明）、调用方 cwd 在 B（有声明）⇒ 须按 A 判定并出
+      WARNING**（`test_agate_config.py::test_debt0066_gate_p0_uses_task_project_root_not_cwd`）——
+      修前 B 的声明会掩盖 A 的缺失（漏报）。
 impact: >-
   从项目外调用 gate（CI 脚本 / 手工诊断 / 多项目并存）时，声明缺失/非法的 WARNING 可能**指向错的项目**
   （漏报或误报）。当前均为**提示级**（不阻断），故影响低。
@@ -2740,5 +2760,9 @@ closure_criteria:
   - "`gate_p0` 的声明校验以**目标任务所属项目根**为基准（有回归用例：任务在 A 项目、调用方 cwd 在 B 项目时，按 A 判定）"
 source: review
 created_at: 2026-10-11
-task_id: null   # 待立项；由 v0.81.0 发版期实测登记
+task_id: hotfix-debt-0065-0066   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-11
+closure_note: >-
+  关单：`gate_p0` 声明校验改按**任务所属项目根**（git toplevel → 含 agate-workspace 的祖先 → cwd 兜底）；判据级回归用例覆盖跨项目场景。
+
 ```

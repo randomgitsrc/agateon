@@ -9,9 +9,16 @@
 ---
 
 ## [Unreleased]
-
 ### 修复
 
+- **默认分支解析单源收敛（DEBT0065）**：`check-mvwu.py::_default_branch_base` 原本自建
+  `symbolic-ref origin/HEAD` 候选表（全仓**第三份**实现、口径还不同）⇒ 改为复用
+  `agate_common.default_branch()` 取**分支名**，再转候选 ref（`refs/remotes/origin/<name>` 优先
+  → `refs/heads/<name>` 回退 → `main`/`master` 兜底），**纯本地仓库仍可用**；守护用例锁源码面。
+- **`gate_p0` 的声明校验按任务所属项目根（DEBT0066）**：原先 `agate-config.py validate` **按进程
+  cwd** 找 `agate.config.yaml` ⇒ 从项目外调用会校验**错的项目**（hook 里 cwd=仓库恰好掩盖）。
+  现按 `task_dir` 推项目根（git toplevel → 含 `agate-workspace` 的最近祖先 → cwd 兜底）再传 `cwd=`；
+  回归用例覆盖**跨项目**场景（任务在 A、调用方 cwd 在 B ⇒ 按 A 判定）。
 - **`gate_p0` 声明校验的测试脆弱性 + 本仓补 `agate.config.yaml`（v0.81.0 发版期）**：本仓加入
   自己的项目声明后，CI 里两条 BDD-8（断言「项目无声明 ⇒ gate_p0 出 WARNING」）转红——因为它们
   依赖「pytest 进程 cwd（= 仓库根）没有声明」。用例改为**自带项目根**（显式 `cwd`），语义回到

@@ -295,12 +295,26 @@ def render_contract(bid, verdict, reason):
 
 
 def _default_branch_base(cwd):
-    """口径 E：返回 (base_sha, None) 或 (None, 原因)。"""
+    """口径 E：返回 (base_sha, None) 或 (None, 原因)。
+
+    **默认分支名走单源**（DEBT0065 / ADR-014）：`agate_common.default_branch`（`origin/HEAD` →
+    `origin/main` → `origin/master` → 兜底），本函数只把它**转成候选 ref**——
+    `refs/remotes/origin/<name>`（远端跟踪，较新）优先，再回**本地** `refs/heads/<name>`
+    （无 origin 的纯本地仓库仍可用）。此前这里自建候选表 ⇒ 全仓第三份默认分支解析（口径还不同）。
+    """
     cands = []
-    rc, out = run_git(["symbolic-ref", "-q", "refs/remotes/origin/HEAD"], cwd=cwd)
-    if rc == 0 and out.strip():
-        cands.append(out.strip())
-    cands += ["refs/heads/main", "refs/heads/master"]
+    _name = None
+    try:
+        from agate_common import default_branch as _db
+        _name = _db(cwd)
+    except Exception:
+        _name = None
+    if _name:
+        cands += [f"refs/remotes/origin/{_name}", f"refs/heads/{_name}"]
+    for _fallback in ("main", "master"):
+        cands.append(f"refs/heads/{_fallback}")
+    seen = set()
+    cands = [c for c in cands if not (c in seen or seen.add(c))]
     for ref in cands:
         rc, _ = run_git(["rev-parse", "--verify", "-q", ref + "^{commit}"], cwd=cwd)
         if rc != 0:
