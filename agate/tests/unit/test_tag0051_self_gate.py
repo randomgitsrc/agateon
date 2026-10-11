@@ -2,7 +2,8 @@
 #
 # 覆盖 BDD（P1-requirements.md）：22。
 #   * BDD-22：本任务**每个改动 `agate/` 协议本体/脚本的提交**，commit message 须含
-#     `self-gate-review:` 且其后路径**真实存在**（磁盘或 index）。
+#     `self-gate-review:` 且其后路径**真实存在**（磁盘或 index），**或** `self-gate-skip:`
+#     且理由非空（DEBT0073：与 commit-msg hook / `SELF-GATE.md` 轻量档同一口径——二者皆接受）。
 #
 # 现行为（改动前）：本分支（`origin/main..HEAD`）尚无改动 `agate/` 协议本体/脚本的提交
 #   ——断言「至少一条协议提交存在」（本任务 M1-M16 **必然**改协议本体/脚本）⇒ 失败 = B 类红灯。
@@ -11,7 +12,13 @@
 #
 # 平台无关：只读 git 事实 + helpers_tag_repo；不裸 python3；不写字面系统临时目录。
 
+import os
 import re
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
 
 import helpers_tag_repo as H
 
@@ -20,7 +27,19 @@ _TRIGGER_RE = re.compile(
     r"^(agate/scripts/.*\.(sh|py)|agate/[^/]+\.md|agate/.+/.*\.md"
     r"|agate/rules/[^/]+\.ya?ml|SELF-GATE\.md|README\.md|AGENTS\.md)$"
 )
-_REVIEW_RE = re.compile(r"^self-gate-review:[ \t]*(.+)$", re.MULTILINE)
+
+# 留痕正则的**唯一定义处 = hook**（DEBT0073「口径单源」）：`SELF-GATE.md` 明写
+# 「权威源 = hook 实现」，故判据**导入** hook 的 `_REVIEW_RE` / `_SKIP_RE`，不再各自写字面量。
+# 两份字面量即便「现在写得一样」也是分叉隐患——正是 DEBT0073 的成因：hook 用
+# `^self-gate-skip:\s*\S+`（`\s` **含换行**），判据曾用只含空格/制表的写法 ⇒ 对
+# 「`self-gate-skip:` 后换行再接理由」hook 接受、判据拒绝。**正则定义单源**后（`_SKIP_RE is
+# hook._SKIP_RE`），该类**正则字面量**分叉结构上不可能；但**另有一层**既有逻辑差异（判据用
+# 子串判在否、hook 用 `_REVIEW_RE.search`，以及 `skip` 优先与否），**不在本批**消除——见守护用例边界注。
+_HOOK_FILENAME = "commit-msg-self-gate.py"
+_HOOK = H.load_project_module(H.REAL_SCRIPTS, _HOOK_FILENAME, "commit_msg_self_gate_hook")
+_HOOK_PATH = H.REAL_SCRIPTS / _HOOK_FILENAME
+_REVIEW_RE = _HOOK._REVIEW_RE
+_SKIP_RE = _HOOK._SKIP_RE
 
 
 def _text(repo, *args):
@@ -99,19 +118,27 @@ def _bdd_22_violations(repo):
 
     返回 `(prot, violations)`：
       * `prot` = 本任务改动 `agate/` 触发面的协议提交（空 = 本任务尚无协议提交）；
-      * `violations` = 违规清单（协议提交缺 `self-gate-review:` 留痕，或留痕指向的路径
-        在该提交中不存在）。
+      * `violations` = 违规清单。
+
+    留痕接受集（DEBT0073：**与 `commit-msg-self-gate.py` / `SELF-GATE.md` 轻量档同口径**）：
+      1. `self-gate-review:` 在场 ⇒ 其后路径须在该提交中**真实存在**（既有行为，不变）；
+      2. 否则 `self-gate-skip:` **理由非空**（strip 后 ≥1 字符）⇒ 正当留痕（轻量档）；
+      3. 二者皆无（或 skip 理由空 / 纯空白）⇒ 违规。
     """
     prot = _protocol_commits(repo)
     violations = []
     for sha in prot:
         msg = _text(repo, "log", "-1", "--format=%B", sha)
-        if "self-gate-review:" not in msg:
-            violations.append(f"{sha[:8]}：缺 `self-gate-review:` 留痕")
+        if "self-gate-review:" in msg:
+            missing = _missing_trailer_paths(repo, sha)
+            if missing:
+                violations.append(f"{sha[:8]}：`self-gate-review:` 指向不存在的路径 {missing}")
             continue
-        missing = _missing_trailer_paths(repo, sha)
-        if missing:
-            violations.append(f"{sha[:8]}：`self-gate-review:` 指向不存在的路径 {missing}")
+        if _SKIP_RE.search(msg):
+            continue
+        violations.append(
+            f"{sha[:8]}：缺可兑现的 `self-gate-review:` 路径或 `self-gate-skip:` 理由留痕"
+        )
     return prot, violations
 
 
@@ -231,3 +258,150 @@ def test_debt0071_empty_range_still_catches_missing_trailer(git_repo):
     prot, violations = _bdd_22_violations(repo)
     assert sha in prot, "DEBT0071：判别力用例须先取到该协议提交"
     assert violations, "DEBT0071：缺留痕的协议提交须仍被判违规（判别力不得丢失）"
+
+
+# ---------------------------------------------------------------------------
+# DEBT0073 回归锁（留痕接受集单源：hook ↔ BDD-22 判据）
+#
+# 背景：`agate/scripts/commit-msg-self-gate.py`（hook）与 `SELF-GATE.md` 都接受
+# 「`self-gate-review:` **或** `self-gate-skip:` 理由」，但 BDD-22 判据曾只认前者 ⇒
+# 「轻量档 + 触发面」的改动（如发布提交 `ccb1c20f`）在 CI 上**必然红**（逃生通道不可用）。
+# 修法：判据对齐约定（非反方向）——四条用例逐条锁定接受集与判别力。
+# 合成仓库（`git_repo` + 合成提交）不依赖当前分支真实历史。
+# ---------------------------------------------------------------------------
+
+
+def test_debt0073_skip_with_reason_is_not_violation(git_repo):
+    """① `self-gate-skip:` **理由非空** ⇒ 正当留痕，不违规（改前红、改后绿）。"""
+    repo = git_repo.path
+    _seed_baseline(git_repo)
+    sha = _commit_protocol(
+        git_repo,
+        "agate/scripts/probe_skip_ok.py",
+        "wf(TAG0051-P4): 改协议脚本（纯措辞）\n\nself-gate-skip: 纯措辞修正，无判据语义变化",
+    )
+
+    prot, violations = _bdd_22_violations(repo)
+    assert sha in prot, "DEBT0073：判别力用例须先取到该协议提交"
+    assert not violations, f"DEBT0073：带非空理由的 self-gate-skip: 应视为正当留痕，实际 {violations}"
+
+
+@pytest.mark.parametrize("skip_line", ["self-gate-skip:", "self-gate-skip:   "])
+def test_debt0073_skip_empty_reason_is_violation(git_repo, skip_line):
+    """② `self-gate-skip:` 理由为空 / 纯空白 ⇒ 违规（判别力：防『有 key 就行』）。"""
+    repo = git_repo.path
+    _seed_baseline(git_repo)
+    sha = _commit_protocol(
+        git_repo,
+        "agate/scripts/probe_skip_empty.py",
+        f"wf(TAG0051-P4): 改协议脚本\n\n{skip_line}",
+    )
+
+    prot, violations = _bdd_22_violations(repo)
+    assert sha in prot, "DEBT0073：判别力用例须先取到该协议提交"
+    assert violations, f"DEBT0073：skip 理由为空（{skip_line!r}）须判违规"
+
+
+def test_debt0073_review_missing_path_is_violation(git_repo):
+    """③ `self-gate-review:` 指向**不存在**路径 ⇒ 违规（既有行为，不得回归）。"""
+    repo = git_repo.path
+    _seed_baseline(git_repo)
+    sha = _commit_protocol(
+        git_repo,
+        "agate/scripts/probe_review_ghost.py",
+        "wf(TAG0051-P4): 改协议脚本\n\nself-gate-review: agate/scripts/ghost_report.py",
+    )
+
+    prot, violations = _bdd_22_violations(repo)
+    assert sha in prot, "DEBT0073：判别力用例须先取到该协议提交"
+    assert violations, "DEBT0073：指向不存在路径的 review 留痕须仍被判违规"
+    assert "ghost_report.py" in " ".join(violations), (
+        f"DEBT0073：违规须点名不可兑现的路径，实际 {violations}"
+    )
+
+
+def test_debt0073_no_trailer_is_violation(git_repo):
+    """④ 二者皆无 ⇒ 违规（既有行为，不得回归；与 DEBT0071 同名用例同口径）。"""
+    repo = git_repo.path
+    _seed_baseline(git_repo)
+    sha = _commit_protocol(git_repo, "agate/scripts/probe_no_trailer_0073.py", "wf(TAG0051-P4): 改协议脚本")
+
+    prot, violations = _bdd_22_violations(repo)
+    assert sha in prot, "DEBT0073：判别力用例须先取到该协议提交"
+    assert violations, "DEBT0073：既无 review 也无 skip 留痕的协议提交须仍被判违规"
+
+
+# ---------------------------------------------------------------------------
+# DEBT0073 口径单源守护（`skip` 正则定义真单源 + 5 组代表性样例对拍）
+#
+# 判据经 `_bdd_22_violations()` **端到端**跑（它消费 hook 导入的 `_SKIP_RE`，`is` 同一对象）；
+# hook 侧经**真实子进程**跑 `commit-msg-self-gate.py`（触发面已 stage）——两侧取自不同执行路径。
+# 若判据日后又写回本地字面量（如只含空格的写法），样例 ④/⑤ 立即分叉 ⇒ 本用例红。
+#
+# **边界（如实标注）**：本用例只证明下列 **5 组代表性样例**的 `skip` 接受集与 hook 一致，
+# **不构成「接受集逐例一致」或「分叉结构上不可能」的穷尽证明**。实测另有 **3 类既有逻辑差异**
+# 未消除（非本批引入，交独立债务 DEBT0075）：
+#   ① `skip` + 幽灵 `review` 并存 ⇒ 判据更严（judge 拒 / hook 接受）；
+#   ② `review` 留痕**非行首** ⇒ hook 更严（hook 拒 / judge 接受）；
+#   ③ `review` 指向**不存在且非 `reviews/`** 的路径 ⇒ 判据更严（judge 拒 / hook 接受；
+#      该路径若**真实存在**且非 `reviews/` ⇒ 双方一致接受）。
+# ---------------------------------------------------------------------------
+
+# 覆盖 ① 同行理由 / ② 冒号后空 / ③ 冒号后纯空格 / ④ 冒号后换行再接理由（本次分叉例）/ ⑤ 冒号后换行接非空行
+_HOOK_AGREEMENT_SAMPLES = [
+    "self-gate-skip: 同行理由",
+    "self-gate-skip:",
+    "self-gate-skip:   ",
+    "self-gate-skip:\n\n理由在这里",
+    "self-gate-skip:\n下一行是理由",
+]
+
+
+def _stage_trigger(git_repo):
+    """在 repo 里 stage 一个**未提交**的触发面文件——使 hook 进入「已触发」分支。"""
+    path = git_repo.path / "agate" / "scripts" / "staged_probe.py"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# staged probe\n", encoding="utf-8")
+    git_repo.stage("agate/scripts/staged_probe.py")
+
+
+def _hook_accepts(repo, message):
+    """真实 hook（子进程）对 message 的接受集：stderr 无 `GATE SELF-GATE:` 告警行 = 接受。
+
+    走子进程而非直接调 hook 函数——那才是「hook 的真实口径」这一 oracle 的来源。
+    """
+    msg_file = Path(repo) / "_commit_msg.txt"
+    msg_file.write_text(message, encoding="utf-8")
+    env = dict(os.environ)
+    proc = subprocess.run(
+        [sys.executable, str(_HOOK_PATH), str(msg_file)],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        env=env,
+    )
+    return "GATE SELF-GATE:" not in proc.stderr
+
+
+@pytest.mark.parametrize("trailer", _HOOK_AGREEMENT_SAMPLES)
+def test_debt0073_hook_and_judge_accept_sets_agree(git_repo, trailer):
+    """`skip` 接受集对**下列 5 组代表性样例**与 hook 逐个相等（DEBT0073：正则定义单源的守护）。"""
+    repo = git_repo.path
+    _seed_baseline(git_repo)
+    sha = _commit_protocol(
+        git_repo,
+        "agate/scripts/probe_agree.py",
+        f"wf(TAG0051-P4): 改协议脚本\n\n{trailer}\n",
+    )
+    message = _text(repo, "log", "-1", "--format=%B", sha)
+    _stage_trigger(git_repo)
+
+    judge_accepts = not _bdd_22_violations(repo)[1]
+    hook_accepts = _hook_accepts(repo, message)
+    assert judge_accepts == hook_accepts, (
+        f"DEBT0073：hook 与判据接受集**分叉**！样例 {trailer!r}\n"
+        f"  hook_accepts={hook_accepts} / judge_accepts={judge_accepts}\n  message={message!r}"
+    )
