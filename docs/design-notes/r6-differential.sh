@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # r6-differential.sh — R6 双向差分（TAG0050 批 A1，设计 §8 / P2-design §3.2）
 #
-# 用途：把「legacy 任务的 gate 退出码与 ERROR 集合不变」这一兼容承诺变成**可执行判据**。
+# 用途：把「legacy 任务的 gate 退出码与输出行集合不变」这一兼容承诺变成**可执行判据**。
 # 对每个 legacy 任务、其所在阶段的 gate，分别在 **before 协议** 与 **after 协议** 下运行，
-# 比较 (退出码, ERROR 行集合)；差异必须匹配 docs/design-notes/r6-allowlist.yaml 的某条规则，
-# 否则 exit 1。
+# 比较 (退出码, `GATE …`（含 `:`）行 ∪ `ERROR` 行的集合)——集合定义见 `_error_lines`；
+# 差异必须匹配 docs/design-notes/r6-allowlist.yaml 的某条规则，否则 exit 1。
+#
+# 口径为何比「仅 ERROR」更宽（`_error_lines` 的实际实现）：除 `ERROR` 行外，**所有**以
+# `GATE ` 开头且含 `:` 的行都计入比较——其中包含成功/收尾提示文案。这是**保守**取向：
+# 成功提示文案的正常演进（如删去某条收尾提示）也会被算作差异，宁可多报，交由
+# r6-allowlist.yaml 逐条裁定（例：D13 的 `gate_line_changed`）。
 #
 # 接口：
 #   bash r6-differential.sh [--before <rev>] [--after <dir>] [--corpus <repo>]... [--allow <file>]
@@ -304,7 +309,11 @@ def _rule_matches(rule, diff):
             blob = "\n".join(sorted(diff["added"] | diff["removed"]))
             return any(p in blob for p in patterns)
         return True
-    if kind in ("new_error", "new_warning", "ledger_event_added", "ledger_bytes"):
+    # gate_line_changed：该差异是 `GATE …` 行本身的变更（`_error_lines` 除 ERROR 行外，
+    # 还收所有以 `GATE ` 开头且含 `:` 的行，见文件头自述）。匹配方式与 new_error 相同：
+    # 对 added ∪ removed 的行 blob 做 patterns 子串匹配。
+    if kind in ("new_error", "new_warning", "ledger_event_added", "ledger_bytes",
+                "gate_line_changed"):
         blob = "\n".join(sorted(diff["added"] | diff["removed"]))
         if patterns and not any(p in blob for p in patterns):
             return False
