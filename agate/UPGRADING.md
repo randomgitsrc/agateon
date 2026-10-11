@@ -283,7 +283,10 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
-### 未发布 — TAG0051 任务与发布解耦：`delivery.method` 收紧 + P8 去 tag/version（**面向新任务的准入行为变化**）
+### v0.82.0 — 任务与发布解耦 + 债务清欠批（**含面向新任务的准入行为变化**）
+
+来源：`RM-AG0103`（TAG0051「任务与发布解耦」）+ DEBT0065/0066（缺陷修复）+ DEBT0067/0068/0069/0070/0071/0072
+（登记债清欠批）+ `RM-AG0074 ①` / `RM-AG0095 ①`（效率度量进 summary）。
 
 > 本批把**交付边界**（任务终态 READY）与**对外发布边界**（Release）解耦。对 **legacy 任务**
 > （账本无创建/迁入事件）**退出码与 ERROR 集合不变**；**既有任务与存量数据不受影响**。
@@ -293,28 +296,49 @@ git commit
 > 「**新任务必须登记当前等级**」（`agate-task-init.py` 默认按当前等级建任务）⇒ **升级后，所有非
 > legacy 新任务均须为等级 2**；`delivery.method` 枚举收紧随之对**所有项目的新任务**生效（`method`
 > 由「任意非空」收为三值枚举，可能拦下原本合法的取值）。**这不是「无破坏性变更」**，而是**面向新
-> 任务的准入行为变化**——本次升级因此**不再标注「无破坏性变更」**。版本号与 CHANGELOG 条目在 P8 统一落。
+> 任务的准入行为变化**。
 
+- **任务终态 = `READY`（P8 去 tag/version）**：任务 P8 收尾**不再要求** version 文件 bump、
+  CHANGELOG 切版本节、`git tag` 已创建；READY 前置 = 交付物 + `CHANGELOG [Unreleased]` 含 task_id +
+  `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）。既有的 tag/version/CHANGELOG 检查原为
+  **WARNING 不阻断** ⇒ 移除后 legacy `(rc, ERROR 集合)` 不变。
+- **Release = 独立流程 + 人工授权**：对外发布（tag → GitHub Release）改由 `.github/workflows/release.yml`
+  承担（`push` 上的 `tags: v*` 触发，另有 `workflow_dispatch` 人工授权入口）。该流程分三步：
+  ① **tag↔提交一致自检**（tag 名须等于 tag 所指提交 README badge 的版本，且该提交的 CHANGELOG 版本节
+  正文非空）；② 跑**发布门** `agate-release.py gate`（fail-closed）校验**目标提交 CI success** 与
+  `check-protocol-consistency.py` 0 ERROR；③ 构建资产并创建 Release。
+  ⚠️ **roadmap 关联 RM `done` 的反查只在本地门**（`agate-release.py gate --task <TASK>`）生效——CI 侧
+  backstop **不传 `--task`**，该项不参与（CI 内无「待发布任务目录」的稳定语义）。
 - **`delivery.method` 取值域定死为有限枚举**：新增契约快照 `rules/task-data/level-2.yaml`
-  （`extends: 1`，**不改**已冻结的 `level-1.yaml`），把 `delivery.method` 收紧为
-  `release-notes` / `tag-release` / `none` 三值枚举——`method` 非空但不在枚举内 ⇒
-  `check-gate.py P8` 判失败。**只对非 legacy 且等级 ≥ 2 的任务生效**（level-1 任务无
-  `method_enum` ⇒ no-op；legacy 走子串路径，行为不变）。该快照已登记进 `LEVELS.yaml`
+  （`extends: 1`，**不改**已冻结的 `level-1.yaml`），收紧为 `release-notes` / `tag-release` / `none`
+  三值——`method` 非空但不在枚举内 ⇒ `check-gate.py P8` 判失败。**只对非 legacy 且等级 ≥ 2 的任务生效**
+  （level-1 任务无 `method_enum` ⇒ no-op；legacy 走子串路径，行为不变）。该快照已登记进 `LEVELS.yaml`
   （LF 归一 sha256 冻结）。
-- **P8 去 tag/version（任务终态 = READY）**：任务 P8 收尾**不再要求** version 文件 bump、
-  CHANGELOG 切版本节、`git tag` 已创建；READY 前置 = 交付物 + CHANGELOG `[Unreleased]` 含
-  task_id + `bump_type` 意图 + 交付收尾 + CI 全绿（含 push 口径）。对外发布（tag → GitHub Release）
-  改为**独立流程**，由人工授权入口（`workflow_dispatch`）触发，并在创建 tag/Release 前过一道
-  机械发布门。既有的 tag/version/CHANGELOG 检查原为 **WARNING 不阻断** ⇒ 移除后 legacy
-  `(rc, ERROR 集合)` 不变。
-- **`release.preset` 成为发布门的真实消费点（DEBT0069）**：`agate.config.yaml` 的 `release.preset`
-  此前**无任何值消费方**（既有引用分别只是默认值字典 / `init` 模板 / 迁移期提示文案，均不读其值）。
-  现由发布门 `agate-release.py gate` **消费**：① 声明**已知**发布流（当前已知 = `semver-changelog-tag`）
-  ⇒ 门按该发布流的既有检查集执行（行为与引入前一致），并在输出**回显所用 preset**（可审计）；
-  ② 声明**未知**发布流 ⇒ 门 **fail-closed 非 0**（错误信息含 preset 名）；
-  ③ **未声明** ⇒ 回落默认发布流（已知）、**不阻断**（缺该键不得 fail-closed，避免打断未声明它的项目）。
-  ⚠️ **声明本身未删**：`project-config.schema.json` 仍接受 `release.preset`（其 `additionalProperties:
-  false`，删键会让已声明它的项目 `agate-config.py validate` 报「未知字段」——破坏性）。
+- **写工具可写面扩大（DEBT0067/0068）**：`agate-md-field-set.py` 的可写面 = `GENERIC_HEADER_KEYS` ∪
+  `phases.yaml` 的 `task_fields` ∪ `check-frontmatter.py` 的 `SCHEMAS[basename].migrated_keys`
+  （**单源派生**，ADR-014）∪ 结构化机器字段；此前拒写的 P1 字段（`override`/`coupling_checklist`/
+  `internal_only`/`internal_only_reason`/`跳过风险`/`design_trivial`/`follows_existing_pattern`）与
+  `dispatch_plan`/`delivery`/`debt_check` 现均可写。`--list` 与错误信息里的能力标注**由实际守卫派生**。
+  另：`agate-frontmatter-check.py` 的嵌套深度上限对 `dispatch_plan` **单键豁免**（其结构校验走 get + JSON）。
+- **`append` 同族写入施加守卫（DEBT0072）**：`append`（及 `upsert` / `remove`）对「由脚本/角色产出」的
+  系统字段（P6 `pass`/`fail`、P7 `blocker_count` 等）**不再可写**（此前可写入，与 `set` 侧声明矛盾）。
+- **`release.preset` 成为真消费点（DEBT0069）**：`agate.config.yaml` 的 `release.preset` 此前无任何值
+  消费方（既有引用只是默认值字典 / `init` 模板 / 迁移期提示文案）。现由发布门消费：① 声明**已知**发布流
+  （当前已知 = `semver-changelog-tag`）⇒ 按该发布流的既有检查集执行（行为与引入前一致）并**回显**所用
+  preset；② 声明**未知**发布流 ⇒ **fail-closed 非 0**；③ **未声明** ⇒ 回落默认（已知）、**不阻断**。
+  ⚠️ **声明本身未删**：`project-config.schema.json` 仍接受该键（`additionalProperties: false`，删键会让
+  已声明它的项目 `agate-config.py validate` 报「未知字段」——破坏性）；该 schema 对其取值本就**枚举约束**，
+  故「未知值 fail-closed」与既有契约一致。
+- **其它修复**：DEBT0065（默认分支解析单源收敛）、DEBT0066（`gate_p0` 声明校验按任务所属项目根）、
+  DEBT0070（R6 差分自述口径 + `kind: gate_line_changed`）、DEBT0071（BDD-22 判据去 branch 相对 + 回归锁）、
+  `RM-AG0074 ①` / `RM-AG0095 ①`（效率度量进 summary）。
+
+**兼容性**
+
+- **legacy 任务不受影响**：R6 双向差分（39 个 legacy 任务）**退出码与输出行集合差异 2 条、未匹配 0 条**
+  （差异均为已裁定项，见 `docs/design-notes/r6-allowlist.yaml`）。
+- 旧任务数据（`active-tasks.md` / `.state.yaml` / 任务编号）**无需迁移**。
+- 既有 `agate.config.yaml` 中的 `release.preset` 声明**仍然合法**（`validate` 不报「未知字段」）。
 
 ### v0.81.0 — `agate-*` 成为真命令 + 协议不再假设项目分支（**无破坏性变更**）
 
