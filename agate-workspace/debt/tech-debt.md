@@ -2803,6 +2803,13 @@ evidence:
     note: >-
       九处以上先例（TAG0021/0022/0023/0024/0026/0028/0030/0032/0033/0034/0037 等）的 `P1-requirements.md`
       确有**手写** `ceremony:` —— 说明该缺口长期靠手写绕过，未被任何 gate 捕获。
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      **面扩大（TAG0051 P2，2026-10-11）**：不止「读侧认写侧不认」——`dispatch_plan` 属**卡明确要求声明**的
+      P2 frontmatter 字段（P2 卡「dispatch_plan 机器字段」节），但 set 工具**直接拒写**：
+      `ERROR: dispatch_plan 是追加/嵌套字段，一期 set 暂不支持覆盖式之外的写入`（实测）。同一份 P2 卡同时
+      给出「用工具写 frontmatter」的纪律 ⇒ 执行者只能手写该键。与本节前述各键**同簇**（工具写侧覆盖面
+      与卡/schema 不一致），故并入本条而非另立新债。
 impact: >-
   ① 协议自相矛盾：卡片与派发纪律要求用工具写，工具写不了 ⇒ 执行者要么违规手写、要么静默降档。
   ② **静默降档会悄悄改变仪式深度**（`full`/`thin` 影响评审触发面），而 check-routing 只校验声明值，
@@ -2815,6 +2822,49 @@ recommendation: >-
 closure_criteria:
   - "`agate-md-field-set` 能写入 `check-frontmatter.py` 视为合法的全部 P1/P8 字段（或明确缩小 SCHEMAS 并以 gate 拦截手写路径），两侧口径一致"
   - "有回归用例锁定该一致（对白名单做子集断言，先红后绿）"
+source: review
+created_at: 2026-10-11
+task_id: TAG0051-release-decoupling
+```
+
+## DEBT0068
+
+```yaml
+id: DEBT0068
+category: protocol
+title: "P2 卡把 `dispatch_plan.batches[].output` 列为**合法可选键**，而 `agate-frontmatter-check.py::MAX_DEPTH = 3` 会因该键（深度 4）判 ERROR —— 卡与 checker 口径互相矛盾"
+status: open
+priority: low
+evidence:
+  - ref: agate/phase-cards/P2-design.md
+    note: >-
+      「batches[] 可选键：tests_filter / output 与批切分判据」节把 **`output`（可选）** 定义为合法：
+      「该批预期改动的文件路径列表……」并给出示例 `batches: [{id: ..., output: [src/..., src/...]}]`，
+      且明言「`output` 仅供 `check-mvwu.py --observe` 读取，**不新增 gate 校验**；缺省、写错都不影响任何阶段 gate」。
+      **决定性**：同节末句还**明文断言**「`agate-frontmatter-check.py` 与 `check-structure-consistency.py`
+      **均不因这两个键而改动**（嵌套键，不触碰顶层白名单）」——即卡**明确承诺** checker 不会因此报错，
+      与实测直接相悖（见下条）。
+  - ref: agate/scripts/agate-frontmatter-check.py
+    note: >-
+      `MAX_DEPTH = 3`（:126）；`_max_depth(value) > MAX_DEPTH` → 追加错误
+      「{basename}:{field}: 嵌套深度超过 3 层」（:253-254），对**所有** frontmatter 字段生效。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/P2-design.md
+    note: >-
+      触发实证（2026-10-11）：按 P2 卡示例声明 `batches[].output` ⇒ `check-frontmatter.py` exit 1
+      （报告 `dispatch_plan: 嵌套深度超过 3 层`）。因 `output` **无任何 gate 效力**，设计退了（省略该键、
+      改以正文表格表达批产出面），**未绕过 checker**；但这意味着**照卡示例写就会 commit 失败**。
+      注：`batches[].tests_filter`（字符串，不加深深度）不受影响。
+impact: >-
+  任何按 P2 卡示例声明 `batches[].output` 的任务都会在 `check-frontmatter.py` 上被拦（commit 前 ERROR）。
+  与 `output`「可选、无 gate 效力」的定位直接冲突：**声明该可选键反而使流程变红**，等于变相禁用。
+recommendation: >-
+  先定口径再改代码（二选一）：① 让深度校验**豁免 `dispatch_plan`**（或将其视为**非 schema 字段**、
+  走 `agate-md-field-get` + `json.loads` 的既有校验路径——P2 gate 已是这么做的）；② 或修订 P2 卡，
+  把 `output` 从「合法可选键」降级/移除，并把批产出面统一以正文表格表达。**倾向 ①**——卡与 gate 都已
+  承认 `dispatch_plan` 是「不入 frontmatter-check schema」的机器字段，深度校验不该对它生效。
+closure_criteria:
+  - "按 P2 卡示例声明 `batches[].output` 的任务，`check-frontmatter.py` 不再报 ERROR（且 `dispatch_plan` 其余校验语义不变）"
+  - "有回归用例锁定（先红后绿）：含 `dispatch_plan.batches[].output` 的 frontmatter 通过校验"
 source: review
 created_at: 2026-10-11
 task_id: TAG0051-release-decoupling
