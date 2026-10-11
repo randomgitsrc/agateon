@@ -2995,3 +2995,47 @@ source: retreat
 created_at: 2026-10-11
 task_id: hotfix-bdd22-main-stable   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
 ```
+
+## DEBT0072
+
+```yaml
+id: DEBT0072
+category: protocol
+title: "`agate-md-field-set.py append` 对**系统/证据字段**（`pass`/`fail`）无守卫 ⇒ 可把系统字段写成任意结构（本应由脚本从 `results` 现算）"
+status: open
+priority: medium
+evidence:
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      触发实证（TAG0051 hotfix H1-r3 过程中发现，2026-10-11）：对 `P6-acceptance.md` 执行
+      `append pass text=probe` ⇒ **`OK: pass 追加一项 {'text': 'probe'}`**；`append fail` 同样成功。
+      而 `pass`/`fail` 是**系统字段**（`check-gate.py` 的 P6 判据与 `--list` 均声明「由脚本/角色产出，
+      不可 set」）⇒ `set` 侧有守卫、`append` 侧**没有** ⇒ 语义不自洽。
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      对照：`append regression_pass` 被拒（`不在本文件契约字段中`）⇒ 说明 append 路径**有**契约字段检查，
+      但**未**覆盖"系统/证据字段"这一类；`pass`/`fail` 恰在可写面（`SCHEMAS[P6-acceptance.md].migrated_keys`）
+      内 ⇒ 通过了该检查。
+  - ref: agate-workspace/tasks/TAG0051-release-decoupling/retrospective.md
+    note: >-
+      同族观察（供交叉参考）：H1-r3 的 `--list` 展示已把 `pass`/`fail` 标成「由脚本/角色产出，
+      不可 set」——**展示正确**，但 **append 仍能写入** ⇒ 展示与实际**只在 append 维度**不一致
+      （本债只覆盖 append 面）。
+impact: >-
+  ① **系统字段可被伪造**：`pass`/`fail` 由 `results` 现算（`check-gate.py::_gate_p6_structured` D1/D2 的
+  D1 即比 `results` 集合），若 append 能写坏其结构，**P6 判据的输入面被污染**；
+  ② 同类字段（其它 basename 的系统字段：`criteria_passed`/`blocker_count`/`design_gap_count` 等
+  「由脚本产出」者）预计同缺口，面未穷尽；
+  ③ 与 DEBT0067 同族（写侧能力与 schema/契约不一致），但**本次 H1 只改展示与 set 面**，未动 append 行为
+  （保持最小面是 H1-r3 的既定约束）。
+recommendation: >-
+  把「系统/证据字段」的守卫**同时**施加于 `append` 路径（与 `set` 共用同一判据函数——H1-r3 已抽出
+  `_key_capability`/`_evidence_fields` 等，**扩展即复用**）；并补回归用例（展示说"不可 set"的键，
+  `append` 也应被拒）。**面穷尽**：对每个 basename 的「由脚本产出」字段集做一次全量扫描后再启用。
+closure_criteria:
+  - "`append` 对全部「系统/证据字段」被拒（与 `set` 侧同一判据单源）"
+  - "有判别力回归用例：展示标为「由脚本/角色产出」的键，`set` 与 `append` 均被拒"
+source: review
+created_at: 2026-10-11
+task_id: DEBT0067+DEBT0068   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+```

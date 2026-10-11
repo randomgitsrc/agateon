@@ -10,9 +10,13 @@ agate-frontmatter-check.py 的 SCHEMAS/_check()、agate-md-field-get.py 的字�
 check-judge-verdict.py 的 _VALID_STATUS——逐字节复用，不复制、不重写。仿
 check-routing.py._load_script（第 41-52 行）的加载 + 模块级缓存模式。
 
-key 白名单（BDD-17）：GENERIC_HEADER_KEYS ∪ phases.yaml 全部 task_fields（运行时并集计算，
-不手抄）。证据字段（BDD-9）/追加-嵌套字段（BDD-18）一期明确拒绝写入。status 字段按 basename
-分派固定枚举 + 角色白名单（BDD-3/4，UX 引导，非安全边界，见 design-md-field-set.md §7.1）。
+key 白名单（BDD-17，DEBT0067 r2 解耦）：`GENERIC_HEADER_KEYS ∪ phases.yaml 全部 task_fields`
+（运行时并集计算，不手抄）**∪ 本 basename 的 schema 合法字段**（`check-frontmatter.py::SCHEMAS`
+的 `migrated_keys`，单源派生）**∪ JSON 结构化字段**（`dispatch_plan`，其结构校验走 get + json.loads）。
+`task_fields` 只表达「本阶段该填/缺失」（§5.3），**不等于**可写面，故另设第三来源，避免把可选字段
+塞进 task_fields 而报假"剩余缺失"。证据字段（BDD-9）/仅登记-需 append 字段（BDD-18）一期明确拒绝
+写入。status 字段按 basename 分派固定枚举 + 角色白名单（BDD-3/4，UX 引导，非安全边界，见
+design-md-field-set.md §7.1）。
 
 原子写（BDD-10）：tempfile.mkstemp 同目录 + os.replace，写入中断不落盘半截内容。
 """
@@ -39,6 +43,38 @@ except ImportError:
 
 # 渲染块标记（TAG0050 批 B，BDD-48）。生成/校验的形态单源在 agate_schema。
 RENDER_MARKER = "AGATE:RENDER"
+
+# 写入能力 → 展示标签（DEBT0067 r3）。展示面宣称的行为必须等于 set/append 的真实行为。
+_CAPABILITY_LABELS = {
+    "set": "可 set",
+    "script": "由脚本/角色产出，不可 set",
+    "append": "不可 set；需 append",
+    "none": "仅登记，不可写入",
+}
+# --list 里「schema 合法但非 task_fields」字段的分组标题。
+_LIST_GROUP_LABELS = {
+    "set": "其它可 set 的 schema 合法字段",
+    "append": "仅登记/需 append（不可 set）",
+    "script": "由脚本/角色产出（不可 set）",
+    "none": "仅登记，不可写入",
+}
+# 「非法 key」错误里相关字段的分组标题（只列本文件相关字段，避免全 phase 并集噪声）。
+_ERROR_GROUP_LABELS = {
+    "append": "（下列字段仅登记/需 append，可 append 但不可 set）",
+    "script": "（下列字段由脚本/角色产出，不可 set）",
+    "none": "（下列字段仅登记，不可写入）",
+}
+
+# 结构化（YAML/JSON）字段写侧单源（DEBT0067）。这些字段的值经 yaml.safe_load 解析后落盘
+# （flow YAML 与 JSON 都是 YAML 子集），避免把结构化值写成被引号包裹的字符串——那样读侧
+# `agate-md-field-get` 的 json.dumps / derive / P8 gate 会拿到 str 而非 dict。
+#   - `dispatch_plan`（get 侧 JSON_FIELDS）：P2 frontmatter 机器字段，须为**映射**，
+#     结构校验走 `agate-md-field-get` + `json.loads`（P2 gate），故也并入可写面
+#     （它不在任何 phases.yaml task_fields / level contract files 节里）。
+#   - `delivery`（P8 卡）：非 legacy 任务为结构化 `{method, ref, reason}`；legacy 可为标量，
+#     故解析结果不限类型。
+_STRUCTURED_SET_KEYS = frozenset({"dispatch_plan", "delivery"})
+_STRUCTURED_MAPPING_KEYS = frozenset({"dispatch_plan"})
 
 
 # ---------- importlib 动态加载（同源铁律，仿 check-routing.py:41-52 _load_script） ----------
@@ -84,12 +120,88 @@ GENERIC_HEADER_KEYS = frozenset({
 def _writable_keys(rules_root):
     """GENERIC_HEADER_KEYS ∪ phases.yaml 全部 task_fields（机械并集，含 agent——排除 agent
     是调用方的责任，见 §3.1"排除"节；本函数本身只做纯并集计算，BDD-17 白盒断言的正是这一点）。
+
+    ⚠️ DEBT0067（r2 解耦）：`task_fields` 只表达「本阶段该填/本阶段缺失」（§5.3），**不等于**
+    完整可写面——该 basename 的 schema 合法字段（`_schema_legal_keys`）与结构化机器字段经
+    `_cmd_set` 另行并入白名单。本函数保持「纯 task_fields 并集」语义不变（BDD-17 契约）。
     """
     phases = agate_common.read_rules_yaml(rules_root, "phases") or {}
     task_field_union = set()
     for p in phases.get("phases", []) or []:
         task_field_union.update(p.get("task_fields", []) or [])
     return set(GENERIC_HEADER_KEYS) | task_field_union
+
+
+def _schema_legal_keys(basename):
+    """该 basename 在 `agate-frontmatter-check.py::SCHEMAS` 认可的 frontmatter 字段集
+    （`migrated_keys`，单源派生、不手抄；无对应 schema → 空集）。
+
+    DEBT0067（r2）：读侧认的字段，写侧也必须能写——否则「读侧认、写侧不认」分叉。
+    它**不**并入 task_fields（后者只表达「本阶段该填/缺失」），避免把可选字段报成"剩余缺失"。
+    """
+    schema = _fm_check().SCHEMAS.get(basename)
+    if not isinstance(schema, dict):
+        return set()
+    keys = schema.get("migrated_keys")
+    return set(keys) if keys else set()
+
+
+# ---------- 写入能力（展示面单源派生，DEBT0067 r3）----------
+# 展示面（--list 分区 / 「非法 key」错误的分组）**不得**手维名单——必须由 `set` / `append`
+# 路径**实际使用的同一判据**派生（ADR-014 单源）。否则「展示宣称」会与「实际行为」漂移：
+# r2 曾把证据字段误标为「可 set」（实际被证据守卫拒绝）、把多数 append-only 字段标为「需 append」
+# （实际只有真能 append 的才成立）。
+# 四种能力，均派生自真实守卫：
+#   "set"    —— `set` 接受（未被任一守卫拒绝，且在可写面内）
+#   "script" —— 证据字段 / 契约 writer:system 字段：由脚本或角色产出，`set` 拒绝
+#   "append" —— `set` 拒但 `append` 接受（有契约 / declaration_fields 登记）
+#   "none"   —— 两者皆拒（仅登记在 schema / task_fields 里，本工具不可写）
+
+
+def _evidence_fields(get_mod):
+    """证据字段（BDD-9）：由验证脚本产出，`set` 拒绝。单源取自 get 侧分类常量。"""
+    return get_mod.NO_FALLBACK_INT_FIELDS | frozenset({"regression_pass"})
+
+
+def _append_only_fields(get_mod):
+    """仅登记/需 append 的字段（BDD-18）：`set` 拒绝。单源取自 get 侧分类常量。"""
+    return (get_mod.NO_FALLBACK_LIST_FIELDS | get_mod.JSON_FIELDS) - _STRUCTURED_SET_KEYS
+
+
+def _writable_set(file_path, basename, get_mod):
+    """`set` 的可写面（DEBT0067 r2 解耦）：phases.yaml task_fields ∪ 通用 Header ∪
+    本 basename 的 schema 合法字段 ∪ 本文件契约字段 ∪ 声明安全字段 ∪ 结构化机器字段。"""
+    return (_writable_keys(agate_common.resolve_rules_root(__file__))
+            | _schema_legal_keys(basename)
+            | set(_contract_fields(file_path).keys())
+            | _declared_safety_keys(file_path)
+            | set(get_mod.JSON_FIELDS))
+
+
+def _is_script_field(file_path, key):
+    """由脚本/契约现算产出、`set` 必拒的字段：证据字段（BDD-9）或契约 writer:system。"""
+    spec = _field_spec(file_path, key)
+    return isinstance(spec, dict) and spec.get("writer") == "system"
+
+
+def _append_spec(file_path, key):
+    """`append` 能接受的字段 spec（与 `_cmd_append` → `_require_list_field` 同源）；无 → None。"""
+    spec = _field_spec(file_path, key)
+    if spec is None:
+        spec = _declaration_fields(file_path).get(key)
+    return spec
+
+
+def _key_capability(file_path, key, get_mod):
+    """key 的写入能力（展示面据此派生，与 `set`/`append` 真实行为一致）。"""
+    basename = os.path.basename(file_path)
+    if _is_script_field(file_path, key) or key in _evidence_fields(get_mod):
+        return "script"
+    if key in _append_only_fields(get_mod):
+        return "append" if _append_spec(file_path, key) is not None else "none"
+    if key in _writable_set(file_path, basename, get_mod):
+        return "set"
+    return "append" if _append_spec(file_path, key) is not None else "none"
 
 
 # ---------- status / agent 角色权限（P2-design.md §3.4，BDD-3/4） ----------
@@ -176,6 +288,17 @@ def _coerce_value(key, raw, schema, get_mod):
     """
     if schema and key in schema.get("types", {}):
         return _coerce_typed(raw, schema["types"][key], key)
+    # 结构化字段（DEBT0067）：dispatch_plan / delivery —— 写值按 YAML 解析后落盘。
+    if key in _STRUCTURED_SET_KEYS:
+        try:
+            parsed = yaml.safe_load(raw)
+        except yaml.YAMLError as e:
+            raise ValueError(f"{key} 须为合法 YAML/JSON（当前: {raw!r}）：{e}") from e
+        if parsed is None or (key in _STRUCTURED_MAPPING_KEYS and not isinstance(parsed, dict)):
+            raise ValueError(
+                f"{key} 须为映射（如 {{mode: single}}），当前解析为 {type(parsed).__name__}"
+            )
+        return parsed
     # 快照声明的主产出安全字段（设计 §4）：prod_touched 为 bool、prod_touched_detail 为 str。
     if key == "prod_touched":
         return _coerce_typed(raw, bool, key)
@@ -223,6 +346,21 @@ def _phase_for_basename(phases_data, basename):
             if isinstance(outp, dict) and outp.get("file") == basename:
                 return p
     return None
+
+
+def _relevant_keys(file_path, basename):
+    """本文件「相关」字段（供「非法 key」错误分组，避免全 phase 并集的噪声）：
+    schema 合法字段 ∪ 本阶段 task_fields ∪ 本文件契约字段 ∪ 声明安全字段。"""
+    phases_data = agate_common.read_rules_yaml(
+        agate_common.resolve_rules_root(__file__), "phases"
+    ) or {}
+    phase = _phase_for_basename(phases_data, basename)
+    relevant = (_schema_legal_keys(basename)
+                | set(_contract_fields(file_path).keys())
+                | _declared_safety_keys(file_path))
+    if phase:
+        relevant |= set(phase.get("task_fields", []) or [])
+    return relevant
 
 
 def _remaining_missing(basename, phases_data, new_fm, body):
@@ -430,6 +568,7 @@ def _cmd_list(file_path):
     rules_root = agate_common.resolve_rules_root(__file__)
     phases_data = agate_common.read_rules_yaml(rules_root, "phases") or {}
     phase = _phase_for_basename(phases_data, basename)
+    get_mod = _fm_get()
 
     lines = []
     if phase is None:
@@ -446,12 +585,23 @@ def _cmd_list(file_path):
             else:
                 v = fm.get(f)
                 cur = "未设置" if v is None else repr(v)
-            lines.append(f"  - {f}: 当前值 = {cur}")
+            cap = _CAPABILITY_LABELS[_key_capability(file_path, f, get_mod)]
+            lines.append(f"  - {f}: 当前值 = {cur}（{cap}）")
 
     missing = _remaining_missing(basename, phases_data, fm, body) if phase else []
     report = _missing_report(missing)
     if report:
         lines.append(report)
+
+    # DEBT0067（r3）：schema 合法但不在 task_fields 里的字段单列，且**按实际写入能力分组**
+    # ——能力由 `set`/`append` 的真实守卫派生（`_key_capability`），不再手维二分，杜绝
+    # 「证据字段被标可 set」「无 append 能力的字段被标需 append」这类假宣称。
+    task_fields = set(phase.get("task_fields", []) or []) if phase else set()
+    extra_keys = sorted(_schema_legal_keys(basename) - task_fields - set(GENERIC_HEADER_KEYS))
+    for cap in ("set", "append", "script", "none"):
+        group = [k for k in extra_keys if _key_capability(file_path, k, get_mod) == cap]
+        if group:
+            lines.append(f"{_LIST_GROUP_LABELS[cap]}: " + ", ".join(group))
 
     print("\n".join(lines))
     return 0
@@ -479,31 +629,42 @@ def _cmd_set(file_path, key, value):
 
     # 证据字段一期拒绝（BDD-9）：get 工具.NO_FALLBACK_INT_FIELDS | {"regression_pass"}，
     # 动态取值不手抄 9+1 个字段名。
-    evidence_fields = get_mod.NO_FALLBACK_INT_FIELDS | frozenset({"regression_pass"})
-    if key in evidence_fields:
+    if key in _evidence_fields(get_mod):
         sys.stderr.write(f"ERROR: {key} 是证据字段，由验证脚本产出，不可手动填写\n")
         return 1
 
     # 追加/嵌套字段一期拒绝（BDD-18）：NO_FALLBACK_LIST_FIELDS | JSON_FIELDS，动态取值。
-    append_only_fields = get_mod.NO_FALLBACK_LIST_FIELDS | get_mod.JSON_FIELDS
-    if key in append_only_fields:
+    # DEBT0067：`dispatch_plan`（JSON_FIELDS 成员）经本次修复**可写**（写值走 YAML 解析），
+    # 故从拒绝面剔除；其余追加/嵌套字段（resolved 三标记等）语义不变、仍拒绝。
+    if key in _append_only_fields(get_mod):
         sys.stderr.write(
-            f"ERROR: {key} 是追加/嵌套字段，一期 set 暂不支持覆盖式之外的写入\n"
+            f"ERROR: {key} 是仅登记/需 append 的字段（追加/嵌套语义），一期 set 不支持覆盖式写入；"
+            f"请改用 append 子命令\n"
         )
         return 1
 
     rules_root = agate_common.resolve_rules_root(__file__)
-    # 可写面 = phases.yaml task_fields ∪ 通用 Header ∪ 本文件契约（快照 files 节）字段
-    #        ∪ 快照声明的主产出安全字段（prod_touched / prod_touched_detail，设计 §4）。
+    # 可写面 = phases.yaml task_fields ∪ 通用 Header ∪ **本 basename 的 schema 合法字段**
+    #        （DEBT0067 r2 解耦：task_fields 只管「该填/缺失」，schema 合法字段另行并入）
+    #        ∪ 本文件契约（快照 files 节）字段
+    #        ∪ 快照声明的主产出安全字段（prod_touched / prod_touched_detail，设计 §4）
+    #        ∪ 结构化机器字段（JSON_FIELDS，DEBT0067：dispatch_plan 不落 task_fields/契约，
+    #          只能在此并入；其结构校验走 get + json.loads）。
     # ⚠️ TAG0050 批 B：解除旧的「agent 永久拒写」——七操作规格（P2 §3.1）要求 agent 可写，
     #    且新的 7 操作往返用例显式执行 `set agent`（见 P4-implementation-G2.md [DESIGN_GAP]）。
-    writable = (_writable_keys(rules_root)
-                | set(_contract_fields(file_path).keys())
-                | _declared_safety_keys(file_path))
+    writable = _writable_set(file_path, basename, get_mod)
     if key not in writable:
+        # 展示面（DEBT0067 r3）：合法清单只列**真能 set** 的 key；其余按**实际写入能力**分组
+        # （派生自 set/append 的真实守卫，`_key_capability`），不再手维二分、不再有假宣称。
+        settable = sorted(k for k in writable if _key_capability(file_path, k, get_mod) == "set")
         sys.stderr.write(
-            "ERROR: 非法 key {!r}，合法 key 清单: {}\n".format(key, ", ".join(sorted(writable)))
+            "ERROR: 非法 key {!r}，合法 key 清单: {}\n".format(key, ", ".join(settable))
         )
+        relevant = _relevant_keys(file_path, basename)
+        for cap in ("append", "script", "none"):
+            group = sorted(k for k in relevant if _key_capability(file_path, k, get_mod) == cap)
+            if group:
+                sys.stderr.write(f"{_ERROR_GROUP_LABELS[cap]}: {', '.join(group)}\n")
         return 1
 
     if key == "status":
@@ -734,7 +895,9 @@ def _cmd_explain(file_path, key):
             print(f"来源: 快照 files.{owner}.fields（{basename} 非其登记文件）")
     if spec is None:
         writable = _writable_keys(agate_common.resolve_rules_root(__file__))
-        if key in writable:
+        if key in _schema_legal_keys(basename):
+            print(f"来源: check-frontmatter.py SCHEMAS[{basename}].migrated_keys（schema 合法字段）")
+        elif key in writable:
             print("来源: phases.yaml task_fields / 通用 Header（frontmatter 标量字段）")
         else:
             print("来源: 未在契约字段或可写字段中找到")

@@ -169,7 +169,7 @@ phases:
       - {check: "check-protocol-consistency.py：0 ERROR（打 tag 前重跑；CHECK 7 = README badge ↔ CHANGELOG 最新已发布版本，tag 无关）"}
       - {check: "check-p6-provenance.py --audit7-only $TASK_DIR 判定 P5 证据复用；gate_commands.P5 逐包 exit 0 + failed==0"}
     retry_cap: 2
-    task_fields: [bump_type]
+    task_fields: [bump_type, delivery, debt_check]
     next: null
     retreat: null
     gate_pass_exit: 2

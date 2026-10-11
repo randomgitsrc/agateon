@@ -125,6 +125,13 @@ SCHEMAS = {
 
 MAX_DEPTH = 3
 
+# 深度校验豁免字段（DEBT0068）：`dispatch_plan` 是 **不入 frontmatter-check schema** 的机器字段
+# （其结构校验走 `agate-md-field-get dispatch_plan` + `json.loads`，P2 gate 已是这么做的）。
+# P2 卡把 `batches[].output`（深度 4）列为**合法可选键**并明文承诺 checker 不受影响——深度校验
+# 对 dispatch_plan 生效会使「照卡示例写」即 commit 失败。故仅对**这一个键**豁免深度上限，
+# 其余字段（含 schema 内/外的）深度/类型/必填校验一律不变。
+_DEPTH_EXEMPT_FIELDS = frozenset({"dispatch_plan"})
+
 
 _PY_TYPE_TO_JSON = {
     bool: "boolean",
@@ -250,6 +257,8 @@ def _check(basename, schema, data):
             errors.append(f"{basename}:{field}: 值 {value} 小于最小值 {min_v}")
 
     for field, value in data.items():
+        if field in _DEPTH_EXEMPT_FIELDS:
+            continue  # DEBT0068：dispatch_plan 深度不受限（结构校验走 get + json.loads）
         if _max_depth(value) > MAX_DEPTH:
             errors.append(f"{basename}:{field}: 嵌套深度超过 {MAX_DEPTH} 层")
 

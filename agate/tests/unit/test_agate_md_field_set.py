@@ -504,13 +504,15 @@ def test_bdd_17_writable_keys_is_mechanical_union(agate_scripts):
 
 # ================= BDD-18: 追加/自由格式字段一期明确拒绝 =================
 
+# DEBT0067：`dispatch_plan` 原在此负例清单中（set 直接拒写），本次修复后**可写**
+# （写值走 YAML 解析、结构校验走 get + json.loads），故移出本清单——正例见
+# test_debt0067_0068_write_side.py。其余追加/嵌套字段语义不变。
 _APPEND_ONLY_TARGETS = {
     "need_confirm_resolved": "P1-requirements.md",
     "suggest_resolved": "P1-requirements.md",
     "scope_resolved": "P1-requirements.md",
     "mechanism_issues": "retrospective.md",
     "execution_issues": "retrospective.md",
-    "dispatch_plan": "P2-design.md",
 }
 
 
@@ -519,7 +521,7 @@ def test_bdd_18_append_only_fields_rejected(agate_scripts, python_exe, run_cli, 
     basename = _APPEND_ONLY_TARGETS[field]
     md_file = tmp_path / basename
     md_file.write_text("---\nagent: test\n---\nbody\n", encoding="utf-8")
-    value = '{"mode": "single"}' if field == "dispatch_plan" else "描述文本"
+    value = "描述文本"
     result = _run_set(agate_scripts, python_exe, run_cli, [field, value], md_file)
     assert result.returncode != 0
     assert re.search(r"追加|嵌套|暂不支持", result.output)

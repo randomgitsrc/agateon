@@ -58,6 +58,10 @@
 set 的 **key 白名单、value 校验值域、frontmatter 格式**必须与 gate 读取端**同源**：
 
 - key 白名单 ← `rules/phases.yaml` 的 `task_fields` ∪ `task-files.md` 通用 Header
+  **∪ 该 basename 的 schema 合法字段**（`check-frontmatter.py::SCHEMAS.migrated_keys`，单源派生）
+  **∪ 结构化机器字段**（`dispatch_plan`，其结构校验走 get + `json.loads`）。
+  ⚠️ **DEBT0067（r2 解耦）**：`task_fields` 只表达「本阶段该填/缺失」，**不等于**完整可写面；
+  把**可选**字段塞进 `task_fields` 会报假"剩余缺失"（见 §5.3），故 schema 合法字段经**独立来源**并入白名单。
 - value 校验 ← 复用 `check-gate.py` / `agate_common` 的判定逻辑（不重写）
 - 格式 ← 同一 YAML 序列化/解析约定
 
@@ -95,7 +99,7 @@ subagent 不会主动发现工具（它不看 agate/scripts/）。使用指令�
 
 | 层 | 定义 | 谁决定 | 例子 |
 |----|------|--------|------|
-| **全局 schema 层** | 哪些 key 合法 + 值合法域（工具内置，随协议版本）| `rules/phases.yaml` task_fields + task-files 通用 Header | `status ∈ approved/rejected/draft`；`risk_level ∈ low/medium/high` |
+| **全局 schema 层** | 哪些 key 合法 + 值合法域（工具内置，随协议版本）| `rules/phases.yaml` task_fields + task-files 通用 Header + **该 basename 的 `SCHEMAS.migrated_keys`**（DEBT0067 r2）| `status ∈ approved/rejected/draft`；`risk_level ∈ low/medium/high` |
 | **任务/阶段层** | 本阶段**该填哪些**（阶段 schema 工具可知；任务语义不可知）| 阶段 schema ← phases.yaml task_fields；任务语义 ← dispatch-context | P2 阶段 schema 要求四字段齐全；"本任务 UI 是否受影响"是任务语义 |
 | **文件/角色层** | 谁能 set 哪个文件的哪个字段 | 权限模型（§7）| review 角色才能 set P1-review.md status=approved |
 
@@ -157,6 +161,10 @@ OK: ui_affected=true 已写入 P2-design.md
 
 **为什么必须报告缺失**：subagent 在派发上下文里**看不到 gate 结果**（gate 是主 Agent commit 时跑的）。若 set 只报"写成功"，subagent 以为完成，主 Agent commit 时 gate 说"缺三字段"，又回到"来回改"——**正是要消灭的摩擦，绝不能以新形式复活**。
 
+> **DEBT0067（r2）语义边界**：剩余缺失只按 `phases.yaml task_fields`（= 本阶段该填集）报告，**不**把「该 basename 的 schema 合法字段」全算进来——后者多数是**可选**字段（如 P1 的 `ceremony`/`override`/`coupling_checklist`），列进缺失面会报假"剩余缺失"。可选/仅登记字段在 `--list` 的**独立行**展示，与「剩余缺失」区分。
+
+> **DEBT0067（r3）展示由实际守卫派生**：`--list` 的每个字段（及「非法 key」错误）标注的写入能力（可 set / 需 append / 由脚本产出 / 仅登记）**不得**手维——必须由 `set`/`append` 路径**实际使用的同一判据**（`_key_capability` 派生自证据/系统字段守卫、append-only 守卫、可写面、`_require_list_field`）算出，保证「展示宣称 == 真实行为」；并有守护测试逐键对拍。
+
 ### 5.4 一致性类失败的预检（边界声明）
 
 跨文件一致性（如 P1 ui_render_shape 与 P2 形态一致性）单文件 set 无法预检。诚实声明边界：
@@ -216,7 +224,9 @@ set 只改工作区文件，**不自动 stage**（`git add` 是主 Agent / subag
 
 `agate-md-field-set` ↔ `agate-md-field-get`（同一字段类型语义、同一 FILE 环境变量惯例、同一 agate_common 读取器）。
 
-**精确化"set 的 key 白名单"**：不是 get 全部 ~40 个 op 的可写化——get 的 op 集含**读取专用**字段（如 `dispatch_plan` JSON、`mechanism_issues`/`execution_issues` 换行 list 等），set 只需覆盖**可写声明字段**子集。一期 set 白名单 = `task-files.md` 通用 Header（phase/task_id/type/parent/trace_id/status/created/agent）+ phases.yaml 各阶段 `task_fields`（risk_level/candidate_count/packages/domains/ui_affected/...）。类型语义与 get 对称（BOOL_FIELDS/LIST_FIELDS/INT_FIELDS/NO_FALLBACK_* 同源），保证"set 写的、get 读的、gate 判的"三者一致。
+**精确化"set 的 key 白名单"**：不是 get 全部 ~40 个 op 的可写化——get 的 op 集含**读取专用**字段（如 `mechanism_issues`/`execution_issues` 换行 list 等），set 只需覆盖**可写声明字段**子集。**现行 set 白名单**（DEBT0067 r2 解耦后）= `task-files.md` 通用 Header（phase/task_id/type/parent/trace_id/status/created/agent）+ phases.yaml 各阶段 `task_fields`（risk_level/candidate_count/packages/domains/ui_affected/...）+ **该 basename 的 `check-frontmatter.py::SCHEMAS.migrated_keys`**（读侧认的合法字段，写侧同步可写：[^1]）+ **结构化机器字段 `dispatch_plan`**（JSON_FIELDS，写值经 YAML 解析，结构校验走 get + `json.loads`）。其中「仅登记/需 append」字段（`need_confirm_resolved`/`suggest_resolved`/`scope_resolved` 等）**不可 `set`**，展示面单列。类型语义与 get 对称（BOOL_FIELDS/LIST_FIELDS/INT_FIELDS/NO_FALLBACK_* 同源），保证"set 写的、get 读的、gate 判的"三者一致。
+
+[^1]: **为什么白名单要含 `SCHEMAS.migrated_keys` 而不并进 `task_fields`**：`task_fields` 同时驱动「可写面」与「剩余缺失」（§5.3）；把**可选**字段塞进它会把可选字段误报为"剩余缺失"（DEBT0067 根因）。故**解耦**——`task_fields` 只表达「本阶段该填/缺失」，schema 合法字段另经独立来源并入白名单。
 
 ### 6.2 与 check-gate 同源
 
