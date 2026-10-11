@@ -182,12 +182,24 @@ ln -sf "$AGATE_DIR/orchestrator-template.md" .opencode/agents/orchestrator.md
 
 > ⚠️ **副作用**：创建 `.opencode/` 目录后，OpenCode 会把它当作插件目录，自动初始化 `@opencode-ai/plugin` 依赖（生成 `package.json`/`package-lock.json`/`node_modules`）。这是 OpenCode 平台行为，无害，但 `.opencode/node_modules` 里的 `.md` 文件可能被 Agateon 的一致性检查（`check-protocol-consistency.py`）误扫——已从扫描范围排除 `.opencode`/`.claude`/`node_modules`，无需处理。
 
-验证：
+验证（按 OpenCode 大版本二选一；v1 用命令、v2 用下方文件校验）：
 ```bash
+# OpenCode v1
 opencode debug agent orchestrator
 ```
 应该能看到 `"mode": "primary"`、`"tools": {..., "task": true, ...}` 这些字段——重点看 `task` 是不是 `true`（这是 orchestrator 派发 subagent 要用的工具，早期 OpenCode 版本有过一个已知 bug 会让自定义 agent 拿不到这个工具，[issue #14308](https://github.com/anomalyco/opencode/issues/14308)，当前主流版本已修复，但升级/降级 OpenCode 后建议重新跑一次这条命令确认）。
-`opencode agent list` 不会列出这个自定义 agent（那个命令只列内置 agent），看不到不代表没装上，以 `opencode debug agent orchestrator` 的结果为准。
+⚠️ **OpenCode v2 起 `debug agent <name>` 已移除**（v2 的 `debug` 子命令只剩 `agents`/`config`/`paths`），
+且 `opencode debug agents` 不保证列出项目级自定义 agent ⇒ v2 下**以文件为准**：
+
+```bash
+ls -l .opencode/agents/orchestrator.md      # 应为指向协议 orchestrator-template.md 的符号链接
+grep -E '^(name|mode):' .opencode/agents/orchestrator.md   # 应见 name: orchestrator 与 mode: primary
+```
+
+⚠️ `tools.task` **不是**模板声明的字段（`task` 是 OpenCode 的**运行时**默认；v1 从命令 JSON 里看得到，
+v2 无对应空跑校验）——如需确认 v2 下 `task` 可用，最可靠的方式是**实际派发一次 subagent**。
+
+`opencode agent list` 同样不会列出这个自定义 agent（那个命令只列内置 agent），看不到不代表没装上。
 
 ### 步骤 2-DSH：deepseek-harness（DSH）接入
 

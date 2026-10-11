@@ -285,7 +285,11 @@ def test_bdd_43_opencode_registration_and_debug_agent(bash, layout, project, rea
     opencode 不在 PATH → FAIL（GitHub Actions 除外，见文件头）。HOME 保持真实仅供 opencode 读自身配置；AGATE_HOME 指隔离布局。"""
     opencode = _cli_or_fail("opencode")
     sec = _setup_section(r"^OpenCode", 3)
-    assert "opencode debug agent orchestrator" in sec, "SETUP「OpenCode」节应含验证命令 opencode debug agent orchestrator"
+    # SETUP 必须给出**可执行**的验证路径：v1 命令，或 v2 的文件级校验（DEBT 范围之外的真问题：
+    # opencode v2 移除了 `debug agent <name>`，旧文档会让 v2 用户按文档验证却失败）。
+    has_v1 = "opencode debug agent orchestrator" in sec
+    has_v2 = "opencode debug agents" in sec or ".opencode/agents/orchestrator.md" in sec
+    assert has_v1 or has_v2, "SETUP「OpenCode」节应给出验证路径（v1 命令 `opencode debug agent orchestrator` 或 v2 的文件级校验）"
     agate_dir, proc = _eval_agate_dir(bash, layout.home, project)
     assert agate_dir == layout.expected_dir, proc.stderr
     run = _run_bash(bash, _runnable_lines(_bash_blocks(sec)[0]), layout.home, project, extra={"AGATE_DIR": agate_dir})
@@ -295,21 +299,40 @@ def test_bdd_43_opencode_registration_and_debug_agent(bash, layout, project, rea
     for key in ("AGATE_ROOT", "AGATE_DIR"):
         env.pop(key, None)
     env["AGATE_HOME"] = str(layout.root)  # 真实 HOME 不变；协议根指隔离布局
-    out = subprocess.run(
-        [opencode, "debug", "agent", "orchestrator"],
-        cwd=str(project),
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=180,
-    )
-    assert out.returncode == 0, f"rc={out.returncode}\nstdout={out.stdout[-500:]}\nstderr={out.stderr[-500:]}"
-    body = out.stdout[out.stdout.index("{"):] if "{" in out.stdout else out.stdout
-    info = json.loads(body)
-    assert info.get("mode") == "primary", info.get("mode")
-    assert (info.get("tools") or {}).get("task") is True, info.get("tools")
+    def _run_cli(*args):
+        return subprocess.run(
+            [opencode, *args],
+            cwd=str(project),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+
+    out = _run_cli("debug", "agent", "orchestrator")
+    if out.returncode == 0:
+        # OpenCode v1：命令可用 ⇒ 继续断言 JSON 内容（最直接的验证）
+        body = out.stdout[out.stdout.index("{"):] if "{" in out.stdout else out.stdout
+        info = json.loads(body)
+        assert info.get("mode") == "primary", info.get("mode")
+        assert (info.get("tools") or {}).get("task") is True, info.get("tools")
+    else:
+        # OpenCode v2：`debug agent <name>` 已移除 ⇒ 退化为 `debug agents`（证明 CLI 可用），
+        # 并按 SETUP 的 v2 路径做**文件级**校验（自定义 agent 不保证出现在列表里）。
+        probe = _run_cli("debug", "agents")
+        assert probe.returncode == 0, (
+            f"opencode 既无 `debug agent <name>`（v1）也跑不通 `debug agents`（v2）：\n"
+            f"v1 rc={out.returncode} stderr={out.stderr[-300:]}\n"
+            f"v2 rc={probe.returncode} stderr={probe.stderr[-300:]}"
+        )
+        agent_md = project / ".opencode" / "agents" / "orchestrator.md"
+        text = agent_md.read_text(encoding="utf-8")
+        assert "name: orchestrator" in text, "orchestrator.md frontmatter 应含 name: orchestrator"
+        assert "mode: primary" in text, "orchestrator.md frontmatter 应含 mode: primary"
+        # 注：v1 的 `debug agent` 回报的是**平台解析后**的生效 tools（如 `task: true`，来自平台默认值），
+        # 而模板文件本身**不含** `tools:` 块 ⇒ v2 只能做**文件级**断言，不对平台解析结果过度声称。
 
 
 # ---------------------------------------------------------------------------
