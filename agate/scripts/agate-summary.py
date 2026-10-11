@@ -358,6 +358,66 @@ def _dsh_declarative_missing():
     return _dsh_declarative_state([])[0] == "missing"
 
 
+def _load_dispatch_cost(script_dir):
+    """按路径加载 `agate-dispatch-cost.py`（文件名含 `-`，不能直接 import）。**单源**：口径不重写。"""
+    import importlib.util
+
+    path = os.path.join(script_dir, "agate-dispatch-cost.py")
+    if not os.path.isfile(path):
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("_agate_dispatch_cost", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        return None
+
+
+def _efficiency_lines(script_dir, limit=10):
+    """**效率度量**节（RM-AG0074 ① / RM-AG0095 ①）：阶段耗时 + 派发成本，按耗时取前 N。
+
+    **覆盖如实标注**：耗时优先来自账本 `state_transition` 事件（随 git 版本化 + 哈希链）；
+    本仓 2026-10-11 实测 22/43 个任务有该事件，其余（尤其 TAG0050 之前的）不可算 ⇒ **不编造**。
+    ⚠️ **token / 步数不可得**：harness 不报，本工具不猜（RM-AG0074 锚的 token 面须平台支持）。
+    """
+    tasks_root = os.path.join(os.getcwd(), "agate-workspace", "tasks")
+    if not os.path.isdir(tasks_root):
+        return []
+    mod = _load_dispatch_cost(script_dir)
+    if mod is None:
+        return []
+    from pathlib import Path as _P
+
+    rows = []
+    for name in sorted(os.listdir(tasks_root)):
+        td = _P(tasks_root) / name
+        if not td.is_dir():
+            continue
+        try:
+            m = mod.measure(td)
+        except Exception:
+            continue
+        if m.get("duration_available"):
+            rows.append((name, m.get("contexts", 0), m.get("total_bytes", 0),
+                         m.get("duration_seconds", 0), m.get("duration_source", "?")))
+    lines = ["=== 效率度量（RM-AG0074 ① / RM-AG0095 ①：阶段耗时 + 派发成本）===", ""]
+    if not rows:
+        lines.append("（无可算耗时的任务——账本缺 `state_transition` 事件；不编造）")
+    else:
+        total_tasks = len([n for n in os.listdir(tasks_root)
+                           if os.path.isdir(os.path.join(tasks_root, n))])
+        lines.append(f"可算耗时 {len(rows)}/{total_tasks} 个任务（其余账本无 `state_transition`，不计）")
+        lines.append("")
+        lines.append(f"{'任务':<44}{'耗时(h)':>9}{'派发份数':>9}{'上下文(KiB)':>12}  来源")
+        for name, ctx, nbytes, secs, src in sorted(rows, key=lambda r: -r[3])[:limit]:
+            lines.append(f"{name:<44}{secs / 3600:>9.1f}{ctx:>9}{nbytes / 1024:>12.0f}  {src}")
+    lines.append("")
+    lines.append("⚠️ token / 步数**不可得**（harness 不报）——本工具不猜、不编造。")
+    lines.append("")
+    return lines
+
+
 def main():
     script_real = os.path.realpath(__file__)
     script_dir = os.path.dirname(script_real)
@@ -415,6 +475,8 @@ def main():
         f"3. 读 {changelog_hint}（了解自上次会话以来发生了什么）",
         "4. 按 orchestrator-template.md mapping 表读当前阶段卡片，按需查阅 Fallback reference 节",
         "",
+        # 效率度量放**最后**：上面的「1. 第一行：上面这一段」指版本/防护块，不能被本节插断
+        *_efficiency_lines(script_dir),
     ]
     out = "\n".join(lines) + "\n"
     sys.stdout.buffer.write(out.encode("utf-8"))

@@ -241,3 +241,74 @@ def test_dc_11_p6_5_artifacts_map_to_p6_not_silently_ignored(
     assert "P6" in (data.get("duration_reason") or ""), (
         f"不可算原因应点名 P6（P6.5 归 P6）：{data.get('duration_reason')}"
     )
+
+
+def test_rm_ag0074_duration_from_ledger_preferred(tmp_path):
+    """RM-AG0074 ①：耗时**优先取自账本** `state_transition`（可靠 + 防改写），
+    且**在 `.state.yaml::history` 缺失时仍可算**（旧口径会报「不可算」）。
+
+    实测背景：RM 原注称「须先让账本记全阶段 entry/exit」——该工作已由 TAG0050 A3 落地
+    （hook 2h.1c 每次 phase 变更写 `state_transition`，含 PAUSED/READY/DONE）；
+    本仓 22/43 个任务有该事件，而 history 口径只有 9/79。本条剩的是「**读它**」。
+    """
+    import importlib.util
+    import json
+    import sys as _sys
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "_dc_dur", Path(__file__).resolve().parents[2] / "scripts" / "agate-dispatch-cost.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    _sys.modules["_dc_dur"] = mod
+    spec.loader.exec_module(mod)
+
+    task = tmp_path / "T001"
+    task.mkdir()
+    # 只有账本、**没有** .state.yaml ⇒ 旧口径必报不可算
+    events = [
+        {"event": "state_transition", "from": "P0", "to": "P1", "phase": "P1",
+         "ts": "2026-10-11T00:00:00.000000Z"},
+        {"event": "state_transition", "from": "P1", "to": "P2", "phase": "P2",
+         "ts": "2026-10-11T01:30:00.000000Z"},
+    ]
+    (task / "gate-events.jsonl").write_text(
+        "\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8"
+    )
+    m = mod.measure_duration(task)
+    assert m["duration_available"] is True, m
+    assert m["duration_seconds"] == 5400, m          # 1.5h
+    assert m["duration_source"] == "ledger", m
+    assert m["phase_spans"] == [("P1", 5400)], m     # 逐阶段：P1 段 1.5h
+
+    # 对照：事件 <2 条 ⇒ 不算（回退 history，此处 history 也不存在 ⇒ 如实报不可算）
+    (task / "gate-events.jsonl").write_text(json.dumps(events[0]) + "\n", encoding="utf-8")
+    m2 = mod.measure_duration(task)
+    assert m2["duration_available"] is False and m2["duration_seconds"] is None, m2
+
+
+def test_rm_ag0074_summary_reports_efficiency_section(tmp_path, agate_scripts, python_exe, run_cli):
+    """RM-AG0074 ① / RM-AG0095 ①：`agate-summary.py` 须输出**效率度量节**
+    （阶段耗时 + 派发份数），并**如实标注 token 不可得**（不编造）。"""
+    import json
+
+    proj = tmp_path / "proj"
+    task = proj / "agate-workspace" / "tasks" / "T001"
+    task.mkdir(parents=True)
+    (task / "gate-events.jsonl").write_text(
+        "\n".join(json.dumps(e) for e in [
+            {"event": "state_transition", "from": "P0", "to": "P1", "phase": "P1",
+             "ts": "2026-10-11T00:00:00.000000Z"},
+            {"event": "state_transition", "from": "P1", "to": "P2", "phase": "P2",
+             "ts": "2026-10-11T02:00:00.000000Z"},
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    r = run_cli(python_exe, str(agate_scripts / "agate-summary.py"), cwd=str(proj))
+    assert "效率度量" in r.output, r.output[-500:]
+    assert "T001" in r.output and "2.0" in r.output, (
+        f"须给出该任务的耗时（2.0h）；实际 {r.output[-600:]!r}"
+    )
+    assert "token" in r.output and "不可得" in r.output, (
+        "须如实标注 token 不可得（不编造）"
+    )

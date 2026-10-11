@@ -11,8 +11,11 @@
 
 设计原则（两条都由实测驱动，勿随手改）：
   1. **只测可测的**——`*dispatch-context*.md` 是客观产物，计数与字节可信。
-  2. **拒绝编造**——阶段耗时**不可靠可算**：`.state.yaml` 的 `history` 实测只有 7 条、
-     缺 P3/P4/P5/P6/P7（TPV0099）。故当 `history` 的 `completed` 条目**未覆盖**任务实际出现的
+  2. **拒绝编造 + 优先可靠源**——阶段耗时**优先取自账本** `state_transition` 事件
+     （`pre-commit-gate.py` 2h.1c 每次 phase 变更写入，随 git 版本化 + 哈希链防改写；
+     2026-10-11 实测本仓 22/43 个任务有该事件）。**回退**才是 `.state.yaml::history`——
+     后者实测**不可靠**：TPV0099 的 history 只有 7 条、缺 P3/P4/P5/P6/P7；**本仓 43 个任务
+     无一有 `history` 键**（0/43）。故当来源的 `completed` 条目**未覆盖**任务实际出现的
      阶段时，本工具报 `duration_available: false` 且**不给数值**——把不可判定伪装成可判定
      （TAG0030 教训）比不给答案更糟。
 
@@ -78,8 +81,69 @@ def _observed_phases(task_dir: Path) -> set[str]:
     return out
 
 
+def _duration_from_ledger(task_dir: Path) -> dict | None:
+    """**从账本**（`gate-events.jsonl` 的 `state_transition`）算阶段耗时 / 逐阶段明细。
+
+    **为什么优先于 `.state.yaml::history`**（RM-AG0074 ① 的实质工作，2026-10-11 实测修正该条前提）：
+    账本随 git 版本化 + 哈希链防改写，且 hook 在**每次 phase 变更**时写入
+    （`pre-commit-gate.py` 2h.1c，含进入 PAUSED/READY/DONE）⇒ 覆盖远好于**手写**的 history
+    （实测本仓：账本 **22/43** 个任务有事件、**18/43 可算**；而 history 口径在本仓 **0/43**——43 个任务无一有 `history` 键。RM-AG0074 原记的 9/79 系**两仓**实测，口径不同勿混）。RM 原注「须先让账本记全
+    阶段 entry/exit」**已由 TAG0050 A3 落地**——本条剩的是「**读它**」。
+    事件不足 2 条 / 时间戳不可解析 → `None`（交回 history 口径，继续如实报不可算）。
+    """
+    import json
+
+    ledger = task_dir / "gate-events.jsonl"
+    if not ledger.is_file():
+        return None
+    events = []
+    try:
+        for raw_line in ledger.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            try:
+                ev = json.loads(stripped)
+            except ValueError:
+                continue
+            if isinstance(ev, dict) and ev.get("event") == "state_transition" and ev.get("ts"):
+                events.append(ev)
+    except OSError:
+        return None
+    if len(events) < 2:
+        return None
+    from datetime import datetime
+
+    def _parse(s):
+        try:
+            return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    stamped = [(_parse(e["ts"]), e) for e in events]
+    stamped = [(d, e) for d, e in stamped if d is not None]
+    if len(stamped) < 2:
+        return None
+    stamped.sort(key=lambda x: x[0])
+    spans = []
+    for (d0, e0), (d1, _e1) in zip(stamped, stamped[1:]):
+        spans.append((str(e0.get("to") or e0.get("phase") or "?"), int((d1 - d0).total_seconds())))
+    total = int((stamped[-1][0] - stamped[0][0]).total_seconds())
+    return {
+        "duration_available": True,
+        "duration_seconds": total,
+        "duration_reason": "",
+        "duration_source": "ledger",
+        "phase_spans": spans,
+    }
+
+
 def measure_duration(task_dir: Path) -> dict:
-    """阶段耗时——**仅在账本覆盖完整时**给出；否则明说不可算。"""
+    """阶段耗时——**优先账本**（`state_transition` 事件，可靠且防改写）；账本不足时回退
+    `.state.yaml::history`；两者都不可用 → 明说不可算（**不编造**）。"""
+    from_ledger = _duration_from_ledger(task_dir)
+    if from_ledger is not None:
+        return from_ledger
     state = task_dir / ".state.yaml"
     if not state.is_file():
         return {"duration_available": False, "duration_seconds": None,
@@ -147,6 +211,8 @@ def measure_duration(task_dir: Path) -> dict:
         "duration_available": True,
         "duration_seconds": int((max(parsed) - min(parsed)).total_seconds()),
         "duration_reason": "",
+        "duration_source": "history",
+        "phase_spans": [],
     }
 
 

@@ -9,6 +9,16 @@
 ---
 
 ## [Unreleased]
+
+### 新增
+
+- **效率度量进 summary（RM-AG0074 ① / RM-AG0095 ① 的 summary 面）**：
+  ① `agate-dispatch-cost.py::measure_duration` **优先从账本** `state_transition` 事件算阶段耗时——
+  账本随 git 版本化 + 哈希链防改写，远优于**手写**的 `.state.yaml::history`（本仓实测：账本 **22/43** 个任务有事件、**18/43 可算**；history 口径在本仓 **0/43**——43 个任务无一有 `history` 键）；账本不足时仍回退 history，两者都不可用
+  **如实报不可算**（不编造）。② `agate-summary.py` 新增**效率度量节**：本仓实测可算 18/43，
+  按时长列出「任务 / 耗时(h) / 派发份数 / 上下文(KiB)」——如 `TAG0050 56.3h / 75 份 / 1346 KiB`、
+  `TAG0042 48.0h / 50 份`。⚠️ **token / 步数不可得**（harness 不报）⇒ 明确标注、不猜。
+  （RM-AG0074 的 ② M3 指标提取方、③ judge 预算实测仍待做。）
 ### 修复
 
 - **默认分支解析单源收敛（DEBT0065）**：`check-mvwu.py::_default_branch_base` 原本自建
