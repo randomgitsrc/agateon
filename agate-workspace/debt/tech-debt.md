@@ -3081,7 +3081,7 @@ closure_note: >-
 id: DEBT0072
 category: protocol
 title: "`agate-md-field-set.py append` 对**系统/证据字段**（`pass`/`fail`）无守卫 ⇒ 可把系统字段写成任意结构（本应由脚本从 `results` 现算）"
-status: open
+status: closed
 priority: medium
 evidence:
   - ref: agate/scripts/agate-md-field-set.py
@@ -3100,6 +3100,17 @@ evidence:
       同族观察（供交叉参考）：H1-r3 的 `--list` 展示已把 `pass`/`fail` 标成「由脚本/角色产出，
       不可 set」——**展示正确**，但 **append 仍能写入** ⇒ 展示与实际**只在 append 维度**不一致
       （本债只覆盖 append 面）。
+  - ref: agate/scripts/agate-md-field-set.py
+    note: >-
+      **关单证据（批次 hotfix-debt0072-append-guard，2026-10-11）**：在列表写入族唯一入口
+      `_require_list_field`（append/upsert/remove 共用，**不被 set 使用**）中，spec 解析成功后
+      调用新守卫 `_script_field_error`——**复用** `_key_capability(...) == "script"`
+      （= 契约 `writer: system` ∪ `_evidence_fields`），与 `set`/`--list` **同一判据单源**（ADR-014）。
+      改前 `append pass|fail|blocker_count|deviation_critical_count`、`upsert pass`、`remove pass`
+      均可写（rc=0）；改后均 `rc=1`（错误信息含字段名）。契约外字段仍走既有「不在本文件契约字段中」
+      拒绝（错误语义不变）。回归用例：`test_debt0072_append_guard.py`（① 面穷尽逐 basename、
+      ② `--list` 标「由脚本/角色产出」的键 set 与 append 均被拒、白盒表≡判据、③ scope_resolved/
+      need_confirm/results 的 append 仍成功）。
 impact: >-
   ① **系统字段可被伪造**：`pass`/`fail` 由 `results` 现算（`check-gate.py::_gate_p6_structured` D1/D2 的
   D1 即比 `results` 集合），若 append 能写坏其结构，**P6 判据的输入面被污染**；
@@ -3116,5 +3127,12 @@ closure_criteria:
   - "有判别力回归用例：展示标为「由脚本/角色产出」的键，`set` 与 `append` 均被拒"
 source: review
 created_at: 2026-10-11
-task_id: DEBT0067+DEBT0068   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+task_id: hotfix-debt0072-append-guard   # ⚠️ 批次标签，无对应任务目录——hotfix 通道
+closed_at: 2026-10-11
+closure_note: >-
+  关单（批次 hotfix-debt0072-append-guard）：列表写入族（append/upsert/remove）对「由脚本/角色产出」
+  字段（= `_key_capability == "script"`，契约 `writer: system` ∪ 证据字段表）施加与 `set` 同一判据守卫
+  （单源复用，ADR-014）；面穷尽核对 `SCHEMAS` 四条目 + 契约 files 节（P6: pass/fail/regression_pass；
+  P7: blocker_count/deviation_count/deviation_critical_count/design_gap_count/design_gap_reviewed_count/
+  code_map_*），判别力回归用例覆盖。
 ```
