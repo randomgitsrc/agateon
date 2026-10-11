@@ -307,6 +307,14 @@ git commit
   改为**独立流程**，由人工授权入口（`workflow_dispatch`）触发，并在创建 tag/Release 前过一道
   机械发布门。既有的 tag/version/CHANGELOG 检查原为 **WARNING 不阻断** ⇒ 移除后 legacy
   `(rc, ERROR 集合)` 不变。
+- **`release.preset` 成为发布门的真实消费点（DEBT0069）**：`agate.config.yaml` 的 `release.preset`
+  此前**无任何值消费方**（既有引用分别只是默认值字典 / `init` 模板 / 迁移期提示文案，均不读其值）。
+  现由发布门 `agate-release.py gate` **消费**：① 声明**已知**发布流（当前已知 = `semver-changelog-tag`）
+  ⇒ 门按该发布流的既有检查集执行（行为与引入前一致），并在输出**回显所用 preset**（可审计）；
+  ② 声明**未知**发布流 ⇒ 门 **fail-closed 非 0**（错误信息含 preset 名）；
+  ③ **未声明** ⇒ 回落默认发布流（已知）、**不阻断**（缺该键不得 fail-closed，避免打断未声明它的项目）。
+  ⚠️ **声明本身未删**：`project-config.schema.json` 仍接受 `release.preset`（其 `additionalProperties:
+  false`，删键会让已声明它的项目 `agate-config.py validate` 报「未知字段」——破坏性）。
 
 ### v0.81.0 — `agate-*` 成为真命令 + 协议不再假设项目分支（**无破坏性变更**）
 

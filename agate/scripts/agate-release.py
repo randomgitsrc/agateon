@@ -18,7 +18,10 @@ release workflow 内零打包逻辑：全部走本 CLI，因此本地（无 CI�
                                     含 pending/queued/missing → 非 0）+ check-protocol-consistency.py
                                     0 ERROR +（给出 --task 时）复用 check-gate.py P8。CI/consistency
                                     查询走**可注入命令**（--ci-cmd / --consistency-cmd / 同名 env），
-                                    使本地可用 fixture/mock 验证；CI 内缺省用真 `gh`（不写死分支）
+                                    使本地可用 fixture/mock 验证；CI 内缺省用真 `gh`（不写死分支）。
+                                    发布流由项目 `agate.config.yaml` 的 `release.preset` 决定（DEBT0069
+                                    的真实消费点）：声明已知流（**单源于 schema enum**，当前 =
+                                    `semver-changelog-tag`）⇒ 按既有检查集；未声明 ⇒ 回落默认（不阻断）；声明未知流 ⇒ fail-closed 非 0。
 
 发布门 fail-closed 契约（TAG0051 P4 修复轮 SEC-01 / SEC-09）：
   * required 检查列表解析为空（env `AGATE_RELEASE_REQUIRED_CHECKS` 未设**且**读不到分支保护）
@@ -29,8 +32,10 @@ release workflow 内零打包逻辑：全部走本 CLI，因此本地（无 CI�
     （缺省仅认 `github-actions`）——第三方具 `checks:write` 的已安装 App 不得以同名 check-run 冒充。
   * RM-AG0043 反查（roadmap `done`）仅在给出 `--task` 时生效：本地 runbook 门会执行；
     `release.yml` 的 backstop 步**未传** `--task` ⇒ 该反查在 CI backstop 不生效（SEC-07，见 workflow 注释）。
+  * 项目声明的 `release.preset` 未知（不在已知发布流内）⇒ 门**非 0**（DEBT0069）；
+    未声明则回落默认已知流、不阻断（缺该键不得 fail-closed）。
 
-契约：Python 3.8+；stdlib-only（agate_common 仅在 build 内延迟导入）；文本 I/O 显式 UTF-8；
+契约：Python 3.8+；stdlib-only（agate_common 仅在 build / gate 内延迟导入）；文本 I/O 显式 UTF-8；
 SHA256SUMS 只防下载损坏、不认证发布者（notes 头部如实标注）。
 """
 
@@ -55,6 +60,10 @@ _PACK_TIMEOUT = 900
 _SECTION_HEAD_RE = re.compile(r"^## \[([^\]]+)\]")
 _LINK_DEF_RE = re.compile(r"^\[[^\]]+\]:\s*\S")
 _SHA_RE = re.compile(r"[0-9a-fA-F]{7,64}")
+
+# 发布门的已知发布流 preset **不在本文件手抄**——运行时从 schema 的
+# `release.preset.enum` **单源派生**（ADR-014 判据单源；见 `_known_release_presets`）。
+# schema 是「哪些 preset 有效」的权威源；DEBT0069 只把该权威值消费进发布门，不新增副本。
 
 
 class ReleaseError(RuntimeError):
@@ -451,8 +460,78 @@ def _non_success_names(runs):
     return bad
 
 
+def _schema_path():
+    """项目声明 schema 的绝对路径（`agate/rules/schema/project-config.schema.json`）。"""
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        os.pardir,
+        "rules",
+        "schema",
+        "project-config.schema.json",
+    )
+
+
+def _known_release_presets():
+    """已知发布流集合——运行时从 schema 的 `release.preset.enum` **单源派生**（ADR-014 判据单源）。
+
+    「哪些 preset 有效」的**权威源** = `agate/rules/schema/project-config.schema.json` 的
+    `release.preset.enum`；本函数**不手抄任何 preset 值**，故 schema 增删值即门行为随之变化，
+    令二者**结构上不可能分叉**。schema 缺失 / 结构异常 ⇒ `ReleaseError`（fail-closed，不得
+    静默回退到空集或自带副本——那会重现「无消费方 / 判据分叉」）。
+    """
+    path = _schema_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            schema = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise ReleaseError(f"无法读取发布流 schema（{path}）: {exc}") from exc
+    node = schema
+    for key in ("properties", "release", "properties", "preset", "enum"):
+        if not isinstance(node, dict):
+            node = None
+            break
+        node = node.get(key)
+    if not isinstance(node, list) or not node or not all(isinstance(v, str) for v in node):
+        raise ReleaseError(f"发布流 schema 的 release.preset.enum 非法（应为非空字符串数组）: {node!r}")
+    return tuple(node)
+
+
+def _project_release_preset(repo_root):
+    """解析项目声明的发布流 `release.preset`（DEBT0069：该键的真实消费点）。
+
+    消费语义：
+      * 声明**已知**发布流（`_known_release_presets()`，单源于 schema enum）⇒ 返回之，门按其检查集执行；
+      * 声明**未知**发布流 ⇒ `ReleaseError`（fail-closed，错误信息含 preset 名）；
+      * **未声明** ⇒ 回落声明层默认（`PROJECT_CONFIG_DEFAULTS`）⇒ **不阻断**、保持现行为
+        （缺键不得 fail-closed）。
+
+    解析只经 `agate_common.read_project_config`（BDD-6 唯一读取函数），不另写旁路 YAML 解析；
+    「已知集」经 `_known_release_presets()` 从 schema enum 单源取（ADR-014），本处不手抄副本。
+    """
+    from agate_common import PROJECT_CONFIG_DEFAULTS, read_project_config  # 延迟导入：本脚本顶层 stdlib-only
+
+    cfg = read_project_config(repo_root)
+    release = cfg.get("release")
+    raw = release.get("preset") if isinstance(release, dict) else None
+    declared = raw is not None
+    if declared:
+        known = _known_release_presets()
+        if not isinstance(raw, str) or raw not in known:
+            raise ReleaseError(f"未知发布流（release.preset={raw!r}）；已知：{', '.join(known)}")
+        preset = raw
+    else:
+        # 未声明（或显式 null）⇒ 回落声明层默认、不阻断（缺键不得 fail-closed）。
+        preset = PROJECT_CONFIG_DEFAULTS["release"]["preset"]
+    note = "" if declared else "（未声明，按默认）"
+    sys.stderr.write(f"agate-release: 发布门发布流 preset={preset}{note}\n")
+    return preset
+
+
 def _cmd_gate(args):
     """发布门：① check-gate.py P8（给出 --task 时）② consistency 0 ERROR ③ 目标提交 CI success。
+
+    ⓪ 先解析项目 `release.preset`（DEBT0069）：未知发布流 ⇒ 立即 fail-closed；已声明已知 /
+    未声明（回落默认）⇒ 按既有检查集执行（并在 stderr 回显所用 preset，可审计）。
 
     fail-closed 不变量（SEC-01 / SEC-09）：
       * `--sha` 为**空串** ⇒ 显式非 0（不得 `args.sha or "HEAD"` 静默回退）；
@@ -476,6 +555,14 @@ def _cmd_gate(args):
         return 1
 
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
+    # ⓪ 发布流 preset（DEBT0069：`release.preset` 的真实消费点）——未知 ⇒ fail-closed；
+    #    已声明已知 / 未声明（回落默认）⇒ 按既有检查集执行。
+    try:
+        preset = _project_release_preset(repo_root)
+    except ReleaseError as exc:
+        sys.stderr.write(f"agate-release: 发布门失败——{exc}\n")
+        return 1
+
     # ① check-gate.py P8（RM done / delivery / bump_type；判据单源）
     if args.task:
         proc = subprocess.run(
@@ -536,7 +623,7 @@ def _cmd_gate(args):
             f"含 pending/queued/missing）。非 success 项：{', '.join(bad)}\n"
         )
         return 1
-    sys.stderr.write(f"agate-release: 发布门通过（sha={sha}，CI {len(runs)} 项 success）\n")
+    sys.stderr.write(f"agate-release: 发布门通过（sha={sha}，preset={preset}，CI {len(runs)} 项 success）\n")
     return 0
 
 
@@ -613,7 +700,7 @@ def main(argv=None):
     p_build.add_argument("--expect-sha", default=None)
     p_build.add_argument("--platforms", default=None)
     p_build.add_argument("--skip-offline", action="store_true")
-    p_gate = sub.add_parser("gate", help="发布门：CI success + consistency 0 ERROR + check-gate P8")
+    p_gate = sub.add_parser("gate", help="发布门：release.preset + CI success + consistency 0 ERROR + check-gate P8")
     p_gate.add_argument("--task", default=None, help="待发布任务目录（给出时复用 check-gate.py P8 判据）")
     p_gate.add_argument("--sha", default="HEAD", help="目标提交（默认 HEAD）")
     p_gate.add_argument("--repo", default=None, help="仓库根目录（默认当前工作目录）")

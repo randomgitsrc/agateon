@@ -61,6 +61,12 @@
   （嵌套深度 4）判 ERROR ⇒ 照卡示例写即 commit 失败。修复：深度校验对 `dispatch_plan` **单键豁免**
   （其结构校验走 `agate-md-field-get dispatch_plan` + `json.loads`），P2 卡补说明；**其余字段的
   深度/类型/必填校验一律不变**（负例锁定 `coupling_checklist` 深 4 仍 ERROR）。
+- **`release.preset` 无值消费方（DEBT0069）**：`agate.config.yaml` 的 `release.preset` 此前
+  **无任何值消费方**（既有引用仅默认值字典 / `init` 模板 / 迁移期提示文案，均不读其值）。现由发布门
+  `agate-release.py gate` **消费**：已知发布流（**运行时单源于** `rules/schema/project-config.schema.json`
+  的 `release.preset.enum`，不手抄副本）按既有检查集执行并**回显所用 preset**；**未知** ⇒ 门非 0；
+  **未声明** ⇒ 回落默认、**不阻断**。声明本身未删（schema 仍视其为合法键）。**无面向既有合法项目的
+  破坏性变更**（未知值本就 schema 非法：`agate-config.py validate` 早已 rc=1）。
 
 ## [0.81.0] - 2026-10-11
 

@@ -462,3 +462,25 @@ def test_debt0066_gate_p0_uses_task_project_root_not_cwd(
         "DEBT0066：须按**任务所属项目（A，无声明）**判定并出 WARNING；"
         f"不得被调用方 cwd（B，有声明）掩盖\n{result.output[:600]}"
     )
+
+
+def test_debt0069_validate_accepts_release_preset(tmp_path, agate_scripts, python_exe, run_cli):
+    """DEBT0069④（非破坏性）：仍声明 `release.preset` 的声明跑 `validate` ⇒ 无「未知字段」错误。
+
+    证明"不删声明、改为给它真实消费点"这条路可行——`release.preset` 是 schema 允许的键；
+    （删键才会让已声明它的项目 validate 报「未知字段」——破坏性，故不采用。）
+    """
+    _write_config(tmp_path, {
+        "schema_version": 1,
+        "project": {"language": "go", "package_manager": "go-mod"},
+        "release": {"preset": "semver-changelog-tag"},
+    })
+    result = _run_config(agate_scripts, python_exe, run_cli, "validate", cwd=tmp_path)
+    assert result.returncode == 0, (
+        f"DEBT0069④：声明 release.preset 的配置 validate 应通过（rc=0）；rc={result.returncode}\n"
+        f"{result.output[:400]}"
+    )
+    assert "未知字段" not in result.output, (
+        "DEBT0069④：声明 release.preset 不应被判「未知字段」（该键是 schema 允许的；声明未删）\n"
+        f"{result.output[:400]}"
+    )
