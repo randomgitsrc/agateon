@@ -1,0 +1,165 @@
+# cmd: python3 -m pytest agate/tests/ -q -n auto
+# cwd: /home/kity/oclab/agateon
+# git_head: 9771e76ac8aaa6a18b1d3479fb8a87215fca786e
+# started: 2026-10-11T05:55:24Z
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+.................s...............s...................................... [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 63%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 85%]
+..........................................................F............. [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 97%]
+........................................................F............... [ 99%]
+.........                                                                [100%]
+=================================== FAILURES ===================================
+______________ test_bdd_43_opencode_registration_and_debug_agent _______________
+[gw6] linux -- Python 3.12.3 /usr/bin/python3
+
+bash = 'bash'
+layout = namespace(home=PosixPath('/tmp/pytest-of-kity/pytest-4310/popen-gw6/setup_layout_home0'), root=PosixPath('/tmp/pytest-...agate/v9.9.9/agate'), expected_dir='/tmp/pytest-of-kity/pytest-4310/popen-gw6/setup_layout_home0/.agate/current/agate')
+project = PosixPath('/tmp/pytest-of-kity/pytest-4310/popen-gw6/test_bdd_43_opencode_registrat0/project')
+real_agate_canary = None
+
+    def test_bdd_43_opencode_registration_and_debug_agent(bash, layout, project, real_agate_canary):
+        """BDD-43：按 SETUP「OpenCode」节命令建 .opencode/agents/orchestrator.md 链接，再在项目目录跑
+        `opencode debug agent orchestrator`——exit 0，输出可解析为 JSON，mode == primary 且 tools.task == true。
+        opencode 不在 PATH → FAIL（GitHub Actions 除外，见文件头）。HOME 保持真实仅供 opencode 读自身配置；AGATE_HOME 指隔离布局。"""
+        opencode = _cli_or_fail("opencode")
+        sec = _setup_section(r"^OpenCode", 3)
+        assert "opencode debug agent orchestrator" in sec, "SETUP「OpenCode」节应含验证命令 opencode debug agent orchestrator"
+        agate_dir, proc = _eval_agate_dir(bash, layout.home, project)
+        assert agate_dir == layout.expected_dir, proc.stderr
+        run = _run_bash(bash, _runnable_lines(_bash_blocks(sec)[0]), layout.home, project, extra={"AGATE_DIR": agate_dir})
+        assert run.returncode == 0, run.stderr
+        assert (project / ".opencode" / "agents" / "orchestrator.md").is_symlink()
+        env = dict(os.environ)
+        for key in ("AGATE_ROOT", "AGATE_DIR"):
+            env.pop(key, None)
+        env["AGATE_HOME"] = str(layout.root)  # 真实 HOME 不变；协议根指隔离布局
+        out = subprocess.run(
+            [opencode, "debug", "agent", "orchestrator"],
+            cwd=str(project),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert out.returncode == 0, f"rc={out.returncode}\nstdout={out.stdout[-500:]}\nstderr={out.stderr[-500:]}"
+E       AssertionError: rc=1
+E         stdout=       Print shell completion script (choices: bash, zsh, fish, sh)
+E           --log-level <all|trace|debug|info|warn|warning|error|fatal|none>    Sets the minimum log level (choices: all, trace, debug, info, warn, warning, error, fatal, none)
+E           --print-logs                                                        Print logs to stderr (server logs require --standalone)
+E         
+E         SUBCOMMANDS
+E           agents    List all agents
+E           config    List configuration sources
+E           paths     Show global paths (data, config, cache, state)
+E         
+E         stderr=
+E         ERROR
+E           Unknown subcommand "agent" for "opencode debug"
+E         
+E           Did you mean this?
+E             agents
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/kity/.opencode/bin/opencode', 'debug', 'agent', 'orchestrator'], returncode=1, stdout='D..., state)\n', stderr='\nERROR\n  Unknown subcommand "agent" for "opencode debug"\n\n  Did you mean this?\n    agents\n').returncode
+
+agate/tests/unit/test_setup_agate_dir.py:308: AssertionError
+____________________ test_m1_forward_jump_p2_to_p5_blocked _____________________
+[gw0] linux -- Python 3.12.3 /usr/bin/python3
+
+git_repo = <conftest.GitRepo object at 0x7096bc6a2720>
+agate_root = PosixPath('/home/kity/oclab/agateon/agate')
+agate_scripts = PosixPath('/home/kity/oclab/agateon/agate/scripts')
+python_exe = '/usr/bin/python3'
+run_cli = <function _run_cli_impl at 0x7096be319bc0>
+
+    def test_m1_forward_jump_p2_to_p5_blocked(
+        git_repo, agate_root, agate_scripts, python_exe, run_cli
+    ):
+        """M-1 负向③：非 legacy 任务 P2 → P5（P4 已声明未裁剪）应被拦截。"""
+        repo = git_repo.path
+        _install_pre_commit_hook(repo, agate_scripts)
+        _init_commit(run_cli, agate_root, git_repo, repo)
+    
+        task_dir = repo / "agate-workspace" / "tasks" / "T001"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        _write_state_yaml(task_dir, "TXX0001", "P2")
+        (task_dir / "P1-requirements.md").write_text(
+            _m1_p1_requirements_low(), encoding="utf-8"
+        )
+        (task_dir / "P2-design.md").write_text(
+            "---\nagent: test\nphase: P2\ntask_id: TXX0001\ntype: design\n"
+            "parent: P1-requirements.md\ntrace_id: T001-P2-20260708\n"
+            "status: approved\ncreated: 2026-07-08\nprod_touched: false\n---\n"
+            "### 候选方案 A：方案一\n### 候选方案 B：方案二\n## 权衡\nA 简单 B 稳健\n"
+            "candidate_count: 2\npackages: [pkg-a]\ndomains: [backend]\n"
+            "ui_affected: false\ngate_commands: {}\n",
+            encoding="utf-8",
+        )
+        (task_dir / "P2-review.md").write_text(
+            "---\nstatus: approved\nagent: reviewer-subagent\n---\nP2 review approved.\n",
+            encoding="utf-8",
+        )
+        git_repo.stage("agate-workspace/tasks/T001/")
+        _write_min_valid_dispatch_context(
+            run_cli, python_exe, agate_scripts, agate_root, task_dir, "P2", "architect"
+        )
+        git_repo.stage("agate-workspace/tasks/T001/P2-dispatch-context-architect.md")
+        _git_commit(run_cli, agate_root, repo, "-q", "-m", "T001 P2")
+    
+        _write_state_yaml(task_dir, "TXX0001", "P5")
+        (task_dir / "P5-verification.md").write_text(
+            "---\nagent: test\n---\n", encoding="utf-8"
+        )
+        git_repo.stage("agate-workspace/tasks/T001/")
+        _staged = git_repo.staged_files()
+>       assert ".state.yaml" in _staged, f"jump 前 .state.yaml 须已暂存；实际 {_staged!r}"
+E       AssertionError: jump 前 .state.yaml 须已暂存；实际 'agate-workspace/tasks/T001/P5-verification.md\n'
+E       assert '.state.yaml' in 'agate-workspace/tasks/T001/P5-verification.md\n'
+
+agate/tests/integration/test_pre_commit_hook.py:1050: AssertionError
+=========================== short test summary info ============================
+FAILED agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent
+FAILED agate/tests/integration/test_pre_commit_hook.py::test_m1_forward_jump_p2_to_p5_blocked
+2 failed, 2957 passed, 2 skipped in 128.40s (0:02:08)
+EXIT_CODE: 1

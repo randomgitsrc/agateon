@@ -1,0 +1,110 @@
+# cmd: python3 -m pytest agate/tests/ -q -n auto
+# cwd: /home/kity/oclab/agateon
+# git_head: 9771e76ac8aaa6a18b1d3479fb8a87215fca786e
+# started: 2026-10-11T05:58:04Z
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+.........................................s...........s.................. [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 63%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+.....................................................F.................. [ 85%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+.........                                                                [100%]
+=================================== FAILURES ===================================
+______________ test_bdd_43_opencode_registration_and_debug_agent _______________
+[gw7] linux -- Python 3.12.3 /usr/bin/python3
+
+bash = 'bash'
+layout = namespace(home=PosixPath('/tmp/pytest-of-kity/pytest-4325/popen-gw7/setup_layout_home0'), root=PosixPath('/tmp/pytest-...agate/v9.9.9/agate'), expected_dir='/tmp/pytest-of-kity/pytest-4325/popen-gw7/setup_layout_home0/.agate/current/agate')
+project = PosixPath('/tmp/pytest-of-kity/pytest-4325/popen-gw7/test_bdd_43_opencode_registrat0/project')
+real_agate_canary = None
+
+    def test_bdd_43_opencode_registration_and_debug_agent(bash, layout, project, real_agate_canary):
+        """BDD-43：按 SETUP「OpenCode」节命令建 .opencode/agents/orchestrator.md 链接，再在项目目录跑
+        `opencode debug agent orchestrator`——exit 0，输出可解析为 JSON，mode == primary 且 tools.task == true。
+        opencode 不在 PATH → FAIL（GitHub Actions 除外，见文件头）。HOME 保持真实仅供 opencode 读自身配置；AGATE_HOME 指隔离布局。"""
+        opencode = _cli_or_fail("opencode")
+        sec = _setup_section(r"^OpenCode", 3)
+        assert "opencode debug agent orchestrator" in sec, "SETUP「OpenCode」节应含验证命令 opencode debug agent orchestrator"
+        agate_dir, proc = _eval_agate_dir(bash, layout.home, project)
+        assert agate_dir == layout.expected_dir, proc.stderr
+        run = _run_bash(bash, _runnable_lines(_bash_blocks(sec)[0]), layout.home, project, extra={"AGATE_DIR": agate_dir})
+        assert run.returncode == 0, run.stderr
+        assert (project / ".opencode" / "agents" / "orchestrator.md").is_symlink()
+        env = dict(os.environ)
+        for key in ("AGATE_ROOT", "AGATE_DIR"):
+            env.pop(key, None)
+        env["AGATE_HOME"] = str(layout.root)  # 真实 HOME 不变；协议根指隔离布局
+        out = subprocess.run(
+            [opencode, "debug", "agent", "orchestrator"],
+            cwd=str(project),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+>       assert out.returncode == 0, f"rc={out.returncode}\nstdout={out.stdout[-500:]}\nstderr={out.stderr[-500:]}"
+E       AssertionError: rc=1
+E         stdout=       Print shell completion script (choices: bash, zsh, fish, sh)
+E           --log-level <all|trace|debug|info|warn|warning|error|fatal|none>    Sets the minimum log level (choices: all, trace, debug, info, warn, warning, error, fatal, none)
+E           --print-logs                                                        Print logs to stderr (server logs require --standalone)
+E         
+E         SUBCOMMANDS
+E           agents    List all agents
+E           config    List configuration sources
+E           paths     Show global paths (data, config, cache, state)
+E         
+E         stderr=
+E         ERROR
+E           Unknown subcommand "agent" for "opencode debug"
+E         
+E           Did you mean this?
+E             agents
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/kity/.opencode/bin/opencode', 'debug', 'agent', 'orchestrator'], returncode=1, stdout='D..., state)\n', stderr='\nERROR\n  Unknown subcommand "agent" for "opencode debug"\n\n  Did you mean this?\n    agents\n').returncode
+
+agate/tests/unit/test_setup_agate_dir.py:308: AssertionError
+=========================== short test summary info ============================
+FAILED agate/tests/unit/test_setup_agate_dir.py::test_bdd_43_opencode_registration_and_debug_agent
+1 failed, 2958 passed, 2 skipped in 139.05s (0:02:19)
+EXIT_CODE: 1
