@@ -164,19 +164,22 @@
     - id: tool-subagent-list-agents
       name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 
+    # ⚠️ 不要再加 `backgroundMode: continuable`：DSH 0.2.1-alpha.1 已移除该键
+    # （连同 enableRunInBackground 与 run_in_background 参数）——委派改为
+    # activation-only，后台语义由运行时统一保证。留着是死键（schemastery 非
+    # strict ⇒ 静默忽略、不报错），且违反上游迁移指南的显式删除要求。
+    # 见 DSH docs/upgrade-guide/v0.2.1-alpha.1/subagent-activations/。
     - id: tool-subagent
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: spawn
         toolName: subagent
-        backgroundMode: continuable
 
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: fork
         toolName: subagent_fork
-        backgroundMode: continuable
 
     - id: workflow-worker-thread
       name: '@deepseek-ai/dsh-workflow-worker-thread'

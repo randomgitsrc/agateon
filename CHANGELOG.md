@@ -10,6 +10,26 @@
 
 ## [Unreleased]
 
+## [0.83.1] - 2026-10-15
+
+### 修复
+
+- **DSH preset 模板含上游已移除的死键 `backgroundMode`（走 hotfix 通道，不立项）**：
+  `assets/templates/dsh/agent.cordis.yml` 的 `tool-subagent` / `tool-subagent-fork` 两行
+  自 v0.75.0 起带 `backgroundMode: continuable`，而 DSH **0.2.1-alpha.1 已移除该键**
+  （连同 `enableRunInBackground` 与模型参数 `run_in_background`；移除于 `3d852a1cea`）——
+  委派改为 activation-only，后台语义由运行时统一保证。**为什么长期无人发现**：schemastery
+  非 strict（`vendor/schemastery/src/index.ts` 默认 `strict=false`）⇒ 未知键被 merge 后忽略，
+  既不导致挂载失败、也不触发任何断言（实测 `~standard.validate` 对多余键返回无 issues）；
+  而本仓 BDD-18 的 required-key 契约方向相反（断言"必填键**在**"），覆盖不到"已移除键**不在**"。
+  **修复**：删两处死键 + 新增反向契约 `DSH_PACKAGE_REMOVED_KEYS` 与守护用例，
+  防其静默长回；模板注释写明出处，避免后人照抄旧版本又加回去。
+  **副作用（如实记录）**：该键在 DSH **< 0.2.1-alpha.1** 上**是生效的**（旧 schema 为
+  `z.union(['one-shot','continuable']).default('one-shot')`），作用是"省略 `run_in_background`
+  时默认走后台"。删除后，0.1.7-alpha.1 ～ 0.2.0-rc.2 的用户会退回默认前台委派（逐次阻塞等待）。
+  选择直接删（而非保留兼容键）的理由：模板的职责是跟踪**当前** DSH，上游迁移指南明文要求
+  Remove，且留着在未来上游若转向 strict 校验时会从"静默"升级为"挂载失败"。
+
 ## [0.83.0] - 2026-10-12
 
 ### 修复

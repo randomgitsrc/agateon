@@ -21,6 +21,8 @@
 #   - BDD-15 本文件 ≥5 用例（8 用例），pytest 全绿由 P4 落位后 P5 验证
 #   - BDD-16 平台无关：只读仓库内文件，四条禁止项见下方"平台无关原则"
 #   - BDD-17 用例 2 红/绿双态可复现（缺配置 FAIL / 在位 PASS）
+#   - （2026-10-15 追加，非 TAG0018 需求）BDD-18 反向契约：模板不得含上游**已移除**的
+#     DSH 包 config key——死键不报错，靠人工比对才发现，故必须显式守护
 #
 # 平台无关原则（BDD-16，agate 测试核心约束）：
 #   1. 不写系统临时目录 —— 只读仓库内文件，无临时文件
@@ -199,6 +201,81 @@ DSH_PACKAGE_REQUIRED_KEYS = {
     "@deepseek-ai/dsh-tool-fs-search": ("sampleOverCapGlobResults",),
     "@deepseek-ai/dsh-tool-todo": ("allowParallelInProgress",),
 }
+
+# ── DSH 包 **已移除** key 契约（反向：断言这些键**不得出现**）───────────────
+#
+# 与上面 required-key 契约同构，方向相反。为什么需要（2026-10-15）：
+#   `backgroundMode` 在 DSH 0.2.1-alpha.1 被移除，但**模板未跟进**——留了两处
+#   死键（v0.75.0 起每个版本都在）。它与上面两类故障的关键差别是**不报错**：
+#   tool-subagent 的 schemastery 非 strict ⇒ 未知键被 merge 后忽略、preset 照常挂载
+#   （实测 ~standard.validate 对多余键返回无 issues）⇒ 既没有挂载失败，也没有任何
+#   测试变红，纯靠人工比对才被发现。
+#   ⇒ 所以这条必须**显式**守护：它无法被"挂载失败"或"required-key 缺失"间接覆盖。
+#
+# 维护方式：某键被上游移除时，把它从模板删掉并登记到这里。语义 = 「该键已死」，
+#   不是「该键有害」——重新加回来会让模板与上游 schema 漂移（未来上游若转向
+#   strict 校验，即从"静默"升级为"挂载失败"）。
+#
+# 数据来源（harness 仓库，2026-10-15 核对）：
+#   packages/subagent/tool-subagent/src/index.ts:80-99  → Config 已无 backgroundMode /
+#     enableRunInBackground（移除于 3d852a1cea）；apply() 只对 persona/toolFilter 抛错。
+#   上游迁移指南：docs/upgrade-guide/v0.2.1-alpha.1/subagent-activations/guide.md
+#     ——「Remove `backgroundMode` and `enableRunInBackground` from `tool-subagent` rows
+#     in `cordis.yml`, profile patches, and overlays.」
+DSH_PACKAGE_REMOVED_KEYS = {
+    "@deepseek-ai/dsh-tool-subagent": ("backgroundMode", "enableRunInBackground"),
+}
+
+
+def _iter_rows_deep(rows):
+    """深度遍历行列表：`cordis:group` 行的 config 本身是**子行列表**（如 delegation 组），
+    故受契约约束的行（tool-subagent 就在该组内）不在顶层——必须递归才能找到。
+
+    为什么单列一个 helper：BDD-18 的 required-key 契约只用顶层 `_load_rows`（它约束的
+    persona / tool-fs-search / tool-todo 恰在顶层），若这里也只用顶层，会因"找不到该包"
+    而**永远红**（实测：漏递归时 `live` 为空，断言在防空跑分支上失败，而非在真正的
+    死键断言上失败——红灯原因错误，等于契约失效）。
+    """
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        yield row
+        nested = row.get("config")
+        if isinstance(nested, list):
+            yield from _iter_rows_deep(nested)
+
+
+def test_dsh_package_configs_have_no_removed_keys(agate_root):
+    """模板中引用 DSH 包的行，其 config **不得**含上游已移除的 key（BDD-18 的反向契约）。
+
+    这些键不会导致挂载失败（schemastery 非 strict ⇒ 静默忽略），因此**无法**被
+    "挂载失败"或 BDD-18 的 required-key 断言间接覆盖——必须显式守护，否则会静默
+    重新长回来（本契约建立时，模板里确有两处这类死键）。
+    """
+    rows = _load_rows(agate_root)
+    live = set()
+    for row in _iter_rows_deep(rows):
+        name = row.get("name")
+        removed = DSH_PACKAGE_REMOVED_KEYS.get(name)
+        if not removed:
+            continue
+        config = row.get("config") or {}
+        assert isinstance(config, dict), (
+            f"{row.get('id')} 行（{name}）的 config 须为 mapping，实际 {type(config).__name__}"
+        )
+        for key in removed:
+            assert key not in config, (
+                f"{row.get('id')} 行（{name}）含上游**已移除**的 config key `{key}`——"
+                f"该键已从 DSH 包 schema 删除，留着是死键（非 strict ⇒ 静默忽略、不报错，"
+                f"故无人会发现）。请从模板删除，见上游迁移指南 "
+                f"docs/upgrade-guide/v0.2.1-alpha.1/subagent-activations/"
+            )
+        live.add(name)
+    # 防"清单写了但模板没引用该包"导致空跑
+    assert live, (
+        f"模板中未找到任何受 removed-key 契约约束的 DSH 包行——"
+        f"契约清单 {sorted(DSH_PACKAGE_REMOVED_KEYS)} 疑与模板脱节"
+    )
 
 
 def test_dsh_package_configs_have_all_required_keys(agate_root):
