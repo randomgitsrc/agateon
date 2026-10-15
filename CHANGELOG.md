@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.83.1] - 2026-10-15
+
 ### 修复
 
 - **DSH preset 模板含上游已移除的死键 `backgroundMode`（走 hotfix 通道，不立项）**：
@@ -20,7 +22,7 @@
   非 strict（`vendor/schemastery/src/index.ts` 默认 `strict=false`）⇒ 未知键被 merge 后忽略，
   既不导致挂载失败、也不触发任何断言（实测 `~standard.validate` 对多余键返回无 issues）；
   而本仓 BDD-18 的 required-key 契约方向相反（断言"必填键**在**"），覆盖不到"已移除键**不在**"。
-  **修复**：删两处死键 + 新增反向契约 `DSH_PACKAGE_REMOVED_KEYS` 与守护用例（BDD-19），
+  **修复**：删两处死键 + 新增反向契约 `DSH_PACKAGE_REMOVED_KEYS` 与守护用例，
   防其静默长回；模板注释写明出处，避免后人照抄旧版本又加回去。
   **副作用（如实记录）**：该键在 DSH **< 0.2.1-alpha.1** 上**是生效的**（旧 schema 为
   `z.union(['one-shot','continuable']).default('one-shot')`），作用是"省略 `run_in_background`

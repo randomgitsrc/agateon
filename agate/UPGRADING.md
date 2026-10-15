@@ -283,6 +283,40 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.83.1 — DSH preset 模板删死键 `backgroundMode`（**对当前 DSH 用户无行为变化**）
+
+> 实现注记：本段为版本升级记录（DSH 平台支持变更史：该版本删除 preset 模板中一个已被上游移除的
+> 配置键，DSH = deepseek-harness）——记录已发生事实，平台名是记录对象本身，属历史叙事元信息
+> （升级说明元信息判定；UPGRADING.md 全文均为面向存量项目的版本升级说明，见文件头）；不删改历史事实。
+
+来源：DSH `0.2.1-alpha.1` 迁移指南
+（`docs/upgrade-guide/v0.2.1-alpha.1/subagent-activations/`）· 移除提交 `3d852a1cea`。
+
+**改了什么**：`agate/assets/templates/dsh/agent.cordis.yml` 的 `tool-subagent` /
+`tool-subagent-fork` 两行删掉 `backgroundMode: continuable`（自 v0.75.0 起一直带着）。
+
+**为什么**：DSH `0.2.1-alpha.1` 移除了 `backgroundMode`、`enableRunInBackground` 与模型参数
+`run_in_background`——委派改为 activation-only（每次委派返回 `{ kind: 'activation', subagentId }`，
+后台语义由运行时统一保证），上游迁移指南明文要求删除该键。该键在 `tool-subagent` 的
+schemastery schema 中已不存在，**但不会报错**：schemastery 非 strict（默认 `strict=false`）
+⇒ 未知键被 merge 后静默忽略、preset 照常挂载。故它既无功能、也无告警，纯属配置漂移。
+
+**兼容性（按 DSH 版本分支）**
+
+| 你的 DSH 版本 | 影响 |
+|---|---|
+| **≥ 0.2.1-alpha.1** | **无行为变化**——该键本就被忽略；删除后 presets 行为完全相同 |
+| **0.1.7-alpha.1 ～ 0.2.0-rc.2** | ⚠️ **行为变化**：该键在这批版本上**生效**（旧 schema 为 `z.union(['one-shot','continuable']).default('one-shot')`），作用是"省略 `run_in_background` 时默认走后台"。删除后退回默认 `one-shot` = **前台委派**（逐次阻塞等待结果） |
+
+**为什么选择直接删（而非保留为兼容键）**：模板的职责是跟踪**当前** DSH；上游迁移指南明文要求
+Remove；且保留死键在未来上游若转向 strict 校验时会从"静默"升级为**挂载失败**（那会直接阻断
+新会话创建）。若你仍停留在 < 0.2.1-alpha.1 且需要默认后台委派，请勿升级 Agateon 到本版本，
+或在升级后自行在 profile 的托管块内补回该键（注意：托管块由 `agate-setup.py` 管理，手改会被
+下次接入覆盖）。
+
+**回归守护**：新增反向契约 `DSH_PACKAGE_REMOVED_KEYS` 与对应用例——断言模板**不得**含上游已移除的
+键（既有 required-key 契约方向相反，覆盖不到"已移除键不在"，这正是死键能潜伏两个多月的原因）。
+
 ### v0.83.0 — 留痕口径与发布门口径收口 + 治理规则（**无破坏性变更**）
 
 来源：DEBT0073（自评审留痕接受集）· DEBT0074（发布门并发重跑）· `opencode` CLI v2 文档/测试适配 ·
