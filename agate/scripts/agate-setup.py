@@ -687,8 +687,14 @@ def _list_installed(home):
                 os.environ.get("DSH_HOME") or os.path.join(os.path.expanduser("~"), ".dsh"),
                 ".agent-presets", agate_common.DSH_PRESET_ID)
             if os.path.isdir(legacy):
-                print(f"  ℹ️  [{name}] {legacy}  旧目录式 preset——DSH ≥0.1.7 已不读取"
-                      f"（重跑接入即可清理）")
+                # ⚠️ 措辞须如实：**注册路径不清理该目录**（清理只在 `_unregister_dsh_preset`
+                # 的卸载路径里）。此前这里写「重跑接入即可清理」，2026-10-15 实测**反证**——
+                # 重跑 `agate-setup.py`（注册）后该目录仍在，用户会以为已清理。
+                # 归属 caveat 与 UPGRADING.md「旧式 preset 目录」节同口径：卸载只清**指向
+                # 本安装**的软链，用户自己的实体文件保留（避免用户预期整个目录被清）。
+                print(f"  ℹ️  [{name}] {legacy}  旧目录式 preset——DSH ≥0.1.7 已不读取，"
+                      f"属遗留死物（本命令**不会**清理它；卸载路径 --uninstall 才处理，"
+                      f"且仅清指向本安装的软链、你的文件保留）")
         for src_rel, dst_spec in cfg.get("global") or []:
             dst = os.path.expanduser(dst_spec)
             if not os.path.lexists(dst):
