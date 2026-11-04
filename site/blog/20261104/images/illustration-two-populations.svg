@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="900" height="520" fill="#FAF9F4"/>
+
+  <text x="450" y="52" font-size="27" font-weight="700" fill="#1A1A18" text-anchor="middle">Two populations, two behaviours</text>
+  <text x="450" y="82" font-size="16" font-style="italic" fill="#444441" text-anchor="middle">fixing a critical finding shrinks the set; fixing a cosmetic one just swaps it</text>
+
+  <!-- 左：critical 收敛 -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <rect x="40" y="108" width="390" height="290" rx="12" fill="#FAF9F4" stroke="#1D9E75" stroke-width="3"/>
+    <text x="235" y="140" font-size="17" font-weight="700" fill="#085041" text-anchor="middle">CRITICAL / IMPORTANT</text>
+    <text x="235" y="162" font-size="13" fill="#444441" text-anchor="middle">small, enumerable, converges</text>
+
+    <!-- 三个方块，逐轮减少 -->
+    <rect x="80" y="184" width="34" height="34" rx="4" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2"/>
+    <rect x="124" y="184" width="34" height="34" rx="4" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2"/>
+    <rect x="168" y="184" width="34" height="34" rx="4" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2"/>
+    <text x="222" y="206" font-size="13" fill="#444441">round 1: 3</text>
+
+    <rect x="80" y="232" width="34" height="34" rx="4" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2"/>
+    <rect x="124" y="232" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#1D9E75" stroke-width="2" stroke-dasharray="4,4"/>
+    <rect x="168" y="232" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#1D9E75" stroke-width="2" stroke-dasharray="4,4"/>
+    <text x="222" y="254" font-size="13" fill="#444441">round 2: 1</text>
+
+    <rect x="80" y="280" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#1D9E75" stroke-width="2" stroke-dasharray="4,4"/>
+    <rect x="124" y="280" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#1D9E75" stroke-width="2" stroke-dasharray="4,4"/>
+    <rect x="168" y="280" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#1D9E75" stroke-width="2" stroke-dasharray="4,4"/>
+    <text x="222" y="302" font-size="13" font-weight="700" fill="#085041">round 3: 0 — ship</text>
+
+    <text x="235" y="356" font-size="14" fill="#085041" text-anchor="middle">an empty set is a real terminal state</text>
+    <text x="235" y="378" font-size="13" fill="#444441" text-anchor="middle">because the population was finite to begin with</text>
+  </g>
+
+  <!-- 右：cosmetic 不收敛 -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <rect x="470" y="108" width="390" height="290" rx="12" fill="#FAF9F4" stroke="#D85A30" stroke-width="3" stroke-dasharray="8,6"/>
+    <text x="665" y="140" font-size="17" font-weight="700" fill="#712B13" text-anchor="middle">COSMETIC</text>
+    <text x="665" y="162" font-size="13" fill="#444441" text-anchor="middle">effectively unbounded, does not converge</text>
+
+    <rect x="510" y="184" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <rect x="554" y="184" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <rect x="598" y="184" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <text x="652" y="206" font-size="13" fill="#444441">round 1: 3</text>
+
+    <rect x="510" y="232" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <rect x="554" y="232" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <rect x="598" y="232" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <text x="652" y="254" font-size="13" fill="#444441">round 2: 3 (different ones)</text>
+
+    <rect x="510" y="280" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <rect x="554" y="280" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <rect x="598" y="280" width="34" height="34" rx="4" fill="#FAF9F4" stroke="#D85A30" stroke-width="2"/>
+    <text x="652" y="302" font-size="13" font-weight="700" fill="#712B13">round 9: still 3</text>
+
+    <text x="665" y="356" font-size="14" fill="#712B13" text-anchor="middle">fixing swaps the instance, not the population</text>
+    <text x="665" y="378" font-size="13" fill="#444441" text-anchor="middle">so cap the count instead of chasing zero</text>
+  </g>
+
+  <text x="450" y="446" font-size="15" font-style="italic" fill="#444441" text-anchor="middle">A rule that mixes the two classes makes progress only on the one that does not need it.</text>
+  <text x="450" y="478" font-size="14" fill="#444441" text-anchor="middle">Stop when the left panel is empty. Cap the right. Escalate if the right starts to look like the left.</text>
+</svg>

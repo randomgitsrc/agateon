@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="1200" height="630" fill="#FAF9F4"/>
+  <text x="70" y="86" font-family="'Helvetica Neue', Arial, sans-serif" font-size="19" letter-spacing="3.5" fill="#1D9E75" font-weight="600">AGATEON — ORCHESTRATION PROTOCOL</text>
+  <text x="70" y="196" font-size="56" font-weight="700" fill="#1A1A18" font-family="Noto Sans SC, serif">评审到什么时候算够？</text>
+  <text x="70" y="264" font-size="52" font-weight="700" fill="#1D9E75" font-family="Noto Sans SC, serif">给评审循环一条停止规则</text>
+  <text x="70" y="314" font-size="21" font-style="italic" fill="#444441" font-family="Noto Sans SC, serif">采样器永远不会交回空的一轮</text>
+
+  <g font-family="Noto Sans SC, sans-serif">
+    <text x="70" y="376" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.8">同一个产物，评审三次</text>
+
+    <text x="70" y="424" font-size="14" fill="#444441">第 1 轮</text>
+    <rect x="150" y="402" width="210" height="34" rx="6" fill="#FAF9F4" stroke="#1A1A18" stroke-width="2.5"/>
+    <text x="255" y="425" font-size="13" fill="#1A1A18" text-anchor="middle">产物（未改动）</text>
+    <circle cx="404" cy="412" r="6" fill="#D85A30"/><circle cx="424" cy="412" r="6" fill="#D85A30"/><circle cx="444" cy="412" r="6" fill="#D85A30"/>
+    <text x="472" y="418" font-size="13" fill="#712B13">3 条形式发现</text>
+
+    <text x="70" y="472" font-size="14" fill="#444441">第 2 轮</text>
+    <rect x="150" y="450" width="210" height="34" rx="6" fill="#FAF9F4" stroke="#1A1A18" stroke-width="2.5"/>
+    <text x="255" y="473" font-size="13" fill="#1A1A18" text-anchor="middle">产物（未改动）</text>
+    <circle cx="404" cy="460" r="6" fill="#D85A30"/><circle cx="424" cy="460" r="6" fill="#D85A30"/>
+    <text x="452" y="466" font-size="13" fill="#712B13">2 条（不一样的）</text>
+
+    <text x="70" y="520" font-size="14" fill="#444441">第 3 轮</text>
+    <rect x="150" y="498" width="210" height="34" rx="6" fill="#FAF9F4" stroke="#1A1A18" stroke-width="2.5"/>
+    <text x="255" y="521" font-size="13" fill="#1A1A18" text-anchor="middle">产物（未改动）</text>
+    <circle cx="404" cy="508" r="6" fill="#D85A30"/><circle cx="424" cy="508" r="6" fill="#D85A30"/><circle cx="444" cy="508" r="6" fill="#D85A30"/>
+    <text x="472" y="514" font-size="13" fill="#712B13">3 条（新的）</text>
+  </g>
+
+  <g font-family="Noto Sans SC, sans-serif">
+    <rect x="720" y="392" width="210" height="130" rx="10" fill="#FAF9F4" stroke="#1D9E75" stroke-width="3"/>
+    <text x="825" y="418" font-size="13" font-weight="700" fill="#085041" text-anchor="middle" letter-spacing="1.5">致命 / 重要</text>
+    <text x="825" y="482" font-size="46" font-weight="700" fill="#1D9E75" text-anchor="middle">0</text>
+    <text x="825" y="506" font-size="13" fill="#085041" text-anchor="middle">第 1 轮就清了</text>
+
+    <rect x="960" y="392" width="170" height="130" rx="10" fill="#FAF9F4" stroke="#D85A30" stroke-width="3" stroke-dasharray="7,5"/>
+    <text x="1045" y="418" font-size="13" font-weight="700" fill="#712B13" text-anchor="middle" letter-spacing="1.5">形式 / 边角</text>
+    <text x="1045" y="482" font-size="46" font-weight="700" fill="#D85A30" text-anchor="middle">n</text>
+    <text x="1045" y="506" font-size="13" fill="#712B13" text-anchor="middle">设上限，别清零</text>
+  </g>
+
+  <text x="70" y="596" font-size="17" font-style="italic" fill="#444441" font-family="Noto Sans SC, serif">循环不是不收敛，它收敛在错的那一类上。</text>
+</svg>

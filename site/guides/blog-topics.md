@@ -11,7 +11,7 @@
 > `agate-workspace/roadmap/`（RM 卡片、P8 gate 硬校验其回写）是两套东西，互不相通——
 > 博客选题不走协议卡片、不进 RM 状态机。
 
-## 已发布弧线（截至 2026-10-09）
+## 已发布弧线（截至 2026-11-04）
 
 | 篇 | 标题 | 管的层次 |
 |---|---|---|
@@ -26,6 +26,7 @@
 | post-09 (09-11) | A new session isn't a new perspective | 独立性第二轴（同源模型盲区；派发路由 v0.71.0；回落≠评委购物） |
 | post-10 (09-19) | Should your agent workflow use a protocol at all? | 决策课层（该不该用：客观算分代替拍脑袋、单向 fail-closed、真实成本账、五问清单） |
 | post-11 (10-09) | The switches in your agent workflow that nobody reads | 配置有效性层（校验≠消费：三步审计法、四类命中判据、口径决定答案） |
+| post-12 (11-04) | When is the review done? A stopping rule for LLM review loops | 停止判据层（采样器≠校验器：缺陷分两类、按类别定停止、升级条款） |
 
 ## post-04（已发布 2026-08-30，本节留档）
 
