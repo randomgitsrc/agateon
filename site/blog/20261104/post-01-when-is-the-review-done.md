@@ -1,7 +1,7 @@
 ---
 title: "When is the review done? A stopping rule for LLM review loops"
 date: 2026-11-04
-description: "LLM reviewers are samplers, not validators: ask again and the same artifact usually yields a different batch of findings. That makes \"keep reviewing until nothing new comes up\" a criterion with no terminating guarantee. Here is a stopping rule built on severity classes instead of round counts — plus our own review logs showing why the distinction matters."
+description: 'LLM reviewers are samplers, not validators: ask again and the same artifact usually yields a different batch of findings. That makes "keep reviewing until nothing new comes up" a criterion with no terminating guarantee. Here is a stopping rule built on severity classes instead of round counts, plus our own review logs showing why the distinction matters.'
 tags:
   - ai-agents
   - code-review
