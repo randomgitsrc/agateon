@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="1200" height="630" fill="#FAF9F4"/>
+
+  <text x="70" y="86" font-family="'Helvetica Neue', Arial, sans-serif" font-size="19" letter-spacing="3.5" fill="#1D9E75" font-weight="600">AGATEON — ORCHESTRATION PROTOCOL</text>
+
+  <text x="70" y="196" font-size="56" font-weight="700" fill="#1A1A18">When is the review done?</text>
+  <text x="70" y="264" font-size="56" font-weight="700" fill="#1D9E75">A stopping rule for review loops</text>
+  <text x="70" y="314" font-size="21" font-style="italic" fill="#444441">a sampler never returns an empty round</text>
+
+  <!-- 三个采样轮次：同一个产物，不同的一组缺陷 -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <text x="70" y="376" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.8">THE SAME ARTIFACT, REVIEWED THREE TIMES</text>
+
+    <!-- pass 1 -->
+    <text x="70" y="424" font-size="14" fill="#444441">pass 1</text>
+    <rect x="140" y="402" width="220" height="34" rx="6" fill="#FAF9F4" stroke="#1A1A18" stroke-width="2.5"/>
+    <text x="250" y="425" font-size="13" fill="#1A1A18" text-anchor="middle">the artifact (unchanged)</text>
+    <circle cx="404" cy="412" r="6" fill="#D85A30"/><circle cx="424" cy="412" r="6" fill="#D85A30"/><circle cx="444" cy="412" r="6" fill="#D85A30"/>
+    <text x="470" y="418" font-size="13" fill="#712B13">3 cosmetic</text>
+
+    <!-- pass 2 -->
+    <text x="70" y="472" font-size="14" fill="#444441">pass 2</text>
+    <rect x="140" y="450" width="220" height="34" rx="6" fill="#FAF9F4" stroke="#1A1A18" stroke-width="2.5"/>
+    <text x="250" y="473" font-size="13" fill="#1A1A18" text-anchor="middle">the artifact (unchanged)</text>
+    <circle cx="404" cy="460" r="6" fill="#D85A30"/><circle cx="424" cy="460" r="6" fill="#D85A30"/>
+    <text x="450" y="466" font-size="13" fill="#712B13">2 cosmetic (different)</text>
+
+    <!-- pass 3 -->
+    <text x="70" y="520" font-size="14" fill="#444441">pass 3</text>
+    <rect x="140" y="498" width="220" height="34" rx="6" fill="#FAF9F4" stroke="#1A1A18" stroke-width="2.5"/>
+    <text x="250" y="521" font-size="13" fill="#1A1A18" text-anchor="middle">the artifact (unchanged)</text>
+    <circle cx="404" cy="508" r="6" fill="#D85A30"/><circle cx="424" cy="508" r="6" fill="#D85A30"/><circle cx="444" cy="508" r="6" fill="#D85A30"/>
+    <text x="470" y="514" font-size="13" fill="#712B13">3 cosmetic (new)</text>
+  </g>
+
+  <!-- 右侧：两个托盘，一个是空的 -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <rect x="720" y="392" width="210" height="130" rx="10" fill="#FAF9F4" stroke="#1D9E75" stroke-width="3"/>
+    <text x="825" y="418" font-size="13" font-weight="700" fill="#085041" text-anchor="middle" letter-spacing="1.5">CRITICAL</text>
+    <text x="825" y="482" font-size="46" font-weight="700" fill="#1D9E75" text-anchor="middle">0</text>
+    <text x="825" y="506" font-size="13" fill="#085041" text-anchor="middle">was cleared in pass 1</text>
+
+    <rect x="960" y="392" width="170" height="130" rx="10" fill="#FAF9F4" stroke="#D85A30" stroke-width="3" stroke-dasharray="7,5"/>
+    <text x="1045" y="418" font-size="13" font-weight="700" fill="#712B13" text-anchor="middle" letter-spacing="1.5">COSMETIC</text>
+    <text x="1045" y="482" font-size="46" font-weight="700" fill="#D85A30" text-anchor="middle">n</text>
+    <text x="1045" y="506" font-size="13" fill="#712B13" text-anchor="middle">cap it, don't clear it</text>
+  </g>
+
+  <text x="70" y="596" font-size="17" font-style="italic" fill="#444441">The loop doesn't fail to converge. It converges on the wrong class.</text>
+</svg>
