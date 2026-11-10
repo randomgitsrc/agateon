@@ -589,3 +589,239 @@ def test_uninstall_removes_legacy_dead_preset_dir(run_cli, python_exe, agate_scr
     assert res.returncode == 0, res.output
     assert not os.path.lexists(legacy / "preset.yml"), "指向本安装的旧死目录产物应被清"
     assert (legacy / "user-note.txt").is_file(), "用户文件不得被删"
+
+
+# ── DSH 托管块：容忍 DSH 自己的追加条目 + 重写时保留它们 ─────────────────────
+#
+# 实测背景（2026-11-10）：DSH 会把 profile patch **解析后重新序列化** ⇒ ① `>-` 折叠标量
+# 重新折行；② 它自己的 `- id: agent-preset-registry`（列 0 顶层条目）被写进我们的定界符
+# **之内**。原实现有两处问题：
+#   · `_dsh_block_matches_installed` 用**逐字文本相等** ⇒ 该情形**永远报"不一致"**（误报）；
+#   · `dsh_apply_block` **先删光两定界符之间再追加** ⇒ 照 `--list` 的"重跑接入刷新"去做，
+#     会**删掉 DSH 的注册条目**（真损坏，不是误报）。
+#
+# 判据改为**语义**：我们生成的顶层条目是否都还在（外来条目忽略、空白折叠忽略）。
+
+_FOREIGN = (
+    "- id: agent-preset-registry\n"
+    "  name: \"@deepseek-ai/dsh-agent-preset-registry\"\n"
+    "  config:\n"
+    "    default: standard\n"
+    "    selectedDefault: standard\n"
+)
+
+
+def test_dsh_apply_block_preserves_foreign_entry_inside_block(agate_root):
+    """重写托管块时，**块内**的外来顶层条目必须保留（否则重跑会删掉 DSH 注册项）。"""
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    # 模拟 DSH 已把注册条目写进块内（定界符之内、END 之前）
+    installed = block.replace(
+        ac.DSH_BLOCK_END, _FOREIGN + "\n" + ac.DSH_BLOCK_END)
+    text = "# user patch\n" + installed + "\n"
+
+    new = ac.dsh_apply_block(text, block)
+    assert "agent-preset-registry" in new, (
+        "重写托管块不得删除块内外来条目（照 --list 的引导重跑会损坏 DSH 接入）")
+    assert new.count(ac.DSH_BLOCK_BEGIN) == 1
+    # 外来条目仍在块内（BEGIN 与 END 之间）
+    body = new.split(ac.DSH_BLOCK_BEGIN, 1)[1].split(ac.DSH_BLOCK_END, 1)[0]
+    assert "agent-preset-registry" in body
+
+
+def test_dsh_block_matches_ignores_foreign_and_folding(agate_root):
+    """DSH 追加条目 + 折叠标量重折行 ⇒ 仍判「一致」（原逐字比对恒报不一致）。"""
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    installed = block.replace(
+        ac.DSH_BLOCK_END, _FOREIGN + "\n" + ac.DSH_BLOCK_END)
+    assert ac.dsh_block_matches(installed, block) is True, (
+        "DSH 追加条目/重折行属正常，不应报「已过期或被手改」")
+
+    # 折行：**只在 `>-` 折叠标量内部**把相邻同缩进内容行合并（这才是 DSH 重序列化的效果）。
+    # ⚠️ 不能用 `re.sub(r"(\n\s+)(?=\S)", " ")` 这类写法——它把**缩进本身**也吞掉，
+    # 构造的是"YAML 已非法"的输入，断言 True 证明不了折叠等价（评审指出的假绿）。
+    def _fold_scalar(text):
+        lines, out, ind, inside, content_ind = text.splitlines(), [], 0, False, None
+        for ln in lines:
+            if not inside:
+                out.append(ln)
+                if re.search(r":\s*>-\s*$", ln):
+                    inside, ind, content_ind = True, len(ln) - len(ln.lstrip()), None
+                continue
+            stripped = ln.lstrip()
+            cur = len(ln) - len(stripped)
+            if stripped and cur <= ind:      # 标量结束
+                inside = False
+                out.append(ln)
+                continue
+            if not stripped:
+                out.append("")
+                continue
+            if content_ind is None:
+                content_ind = cur
+            # 同缩进的内容行 ⇒ YAML 折叠成一行（更深的续行保留换行）
+            if cur == content_ind and out and out[-1].strip() and not re.search(r":\s*>-\s*$", out[-1]):
+                out[-1] = out[-1] + " " + stripped
+            else:
+                out.append(ln)
+        return "\n".join(out) + "\n"
+
+    folded = _fold_scalar(block)
+    assert folded != block, "前提：折行须确实改变了文本（否则本断言无鉴别力）"
+    assert ac.dsh_block_matches(folded, block) is True, (
+        "折叠标量重折行属语义等价，不应报不一致")
+
+    # 反向：**缩进被破坏**（YAML 语义已变）不得被判一致
+    broken_indent = block.replace("\n          - id: tool-web", "\n- id: tool-web", 1)
+    assert ac.dsh_block_matches(broken_indent, block) is False, (
+        "缩进被破坏会改变 YAML 结构，必须判不一致（防判据连缩进都不敏感）")
+
+
+def test_dsh_block_matches_detects_real_content_change(agate_root):
+    """真内容变化（我们的插件条目被删/改）仍必须判「不一致」。"""
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    removed = block.replace("- id: tool-web\n", "- id: tool-web-REMOVED\n")
+    assert ac.dsh_block_matches(removed, block) is False, "条目被改必须能检出"
+
+    deleted = re.sub(r"- id: tool-web\n(?:[ \t].*\n)*", "", block)
+    assert ac.dsh_block_matches(deleted, block) is False, "条目被删必须能检出"
+
+
+def test_dsh_list_warning_states_rewrite_consequence(run_cli, python_exe, agate_scripts,
+                                                     agate_root, tmp_path):
+    """`--list` 的告警须**如实说明重跑会重写块内内容**，不得引导无脑重跑。
+
+    原实现断言源码不含某短语——那证明不了新文案存在/正确（文案写错仍绿，评审指出的假绿）。
+    这里改为**实跑 `--list`**，断言真实输出同时满足：
+      ① 不再出现破坏性引导「重跑接入刷新」；
+      ② 明确写出「重写块内内容」这一后果。
+    """
+    dsh_home = tmp_path / "dshhome"
+    patch = dsh_home / "profiles" / "web" / "cordis.patch.yml"
+    patch.parent.mkdir(parents=True)
+    _home, iroot = _fake_install_root(tmp_path, agate_root)
+
+    # 写入一个**真内容被改**的块（删掉一个插件条目）⇒ 必然触发告警
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+    damaged = re.sub(r"(?m)^[ \t]*- id: tool-web\n(?:[ \t].*\n)*", "", block)
+    assert damaged != block, "前提：须确实改坏块"
+    patch.write_text("# user\n" + damaged + "\n", encoding="utf-8")
+
+    env = {"HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home"),
+           "AGATE_HOME": str(iroot), "AGATE_ROOT": "", "DSH_HOME": str(dsh_home)}
+    (tmp_path / "home").mkdir(exist_ok=True)
+
+    listed = run_cli(python_exe, str(agate_scripts / "agate-setup.py"), "--list", env=env)
+    out = listed.output
+    assert "⚠️" in out and "不一致" in out, f"块被改坏应告警:\n{out}"
+    assert "重跑接入刷新" not in out, (
+        f"不得再给「重跑接入刷新」这种会改动块内容的无脑建议:\n{out}")
+    assert "重写块内内容" in out, (
+        f"告警须如实说明重跑会重写块内内容（否则用户不知后果）:\n{out}")
+
+
+def test_dsh_apply_block_replaces_our_stale_insert_not_duplicates(agate_root):
+    """**版本升级**：旧块里我们自己的 `- insert:` 必须被**替换**，不得作为"外来条目"保留。
+
+    原实现按「归一化后是否等于本次生成」判外来 ⇒ 升级时旧 `- insert:` 文本必然不同
+    （插件增删/改名），被误判为外来而保留 ⇒ 块内出现**两个** `- insert:`
+    ⇒ preset 重复注册（实测 v0.83.0 的块重写后 insert count = 2）。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    # 模拟旧版本生成的块：插件列表不同（升级后增删了插件）
+    stale = re.sub(r"(?m)^[ \t]*- id: tool-web\n(?:[ \t].*\n)*", "", block)
+    assert stale != block, "前提：stale 块须与当前生成块不同"
+    text = "# user patch\n" + stale + "\n"
+
+    new = ac.dsh_apply_block(text, block)
+    body = new.split(ac.DSH_BLOCK_BEGIN, 1)[1].split(ac.DSH_BLOCK_END, 1)[0]
+    assert body.count("- insert:") == 1, (
+        f"块内应只有 1 个 insert，实得 {body.count('- insert:')}（旧条目被当外来条目保留了）")
+    assert new.count(f"id: preset-{ac.DSH_PRESET_ID}") == 1, "preset 不得重复注册"
+    # 旧内容确实被新内容替换
+    assert "tool-web" in body, "应替换为当前生成的内容"
+    assert ac.dsh_block_matches(ac.dsh_extract_block(new), block) is True
+
+
+def test_dsh_apply_block_keeps_foreign_while_replacing_stale_ours(agate_root):
+    """升级 + 块内有 DSH 外来条目：**同时**满足"替换我们的"与"保留它的"。"""
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    stale = re.sub(r"(?m)^[ \t]*- id: tool-web\n(?:[ \t].*\n)*", "", block)
+    with_foreign = stale.replace(
+        ac.DSH_BLOCK_END, _FOREIGN + "\n" + ac.DSH_BLOCK_END)
+
+    new = ac.dsh_apply_block("# user\n" + with_foreign + "\n", block)
+    body = new.split(ac.DSH_BLOCK_BEGIN, 1)[1].split(ac.DSH_BLOCK_END, 1)[0]
+    assert body.count("- insert:") == 1, "我们的旧条目须被替换，不得重复"
+    assert "agent-preset-registry" in body, "DSH 外来条目须保留"
+    assert body.count("- id: agent-preset-registry") == 1, "外来条目不得重复"
+    # 幂等：再跑一次，**块体**不得再变（块外空行有既有摆动，不在本用例断言面内）
+    again = ac.dsh_apply_block(new, block)
+    body2 = again.split(ac.DSH_BLOCK_BEGIN, 1)[1].split(ac.DSH_BLOCK_END, 1)[0]
+    assert body2 == body, "块体重写须幂等（否则反复重跑会累积内容）"
+
+
+def test_dsh_apply_block_replaces_entry_even_if_user_edited_anchor_id(agate_root):
+    """块内**手改** `preset-agate` id ⇒ 该条目仍算我们的（仍须替换，不得重复）。
+
+    只按 `id: preset-agate` 判归属时，用户手改 id 会让该条目被误判为外来而保留
+    ⇒ 块内出现两个 `- insert:`（实测 insert count = 2）。定界符文案已明写
+    "手改会在下次接入时被覆盖" ⇒ 替换是**预期行为**。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    hand = block.replace(f"id: preset-{ac.DSH_PRESET_ID}", "id: preset-MYEDIT")
+    assert hand != block, "前提：须确实改掉了锚点 id"
+
+    new = ac.dsh_apply_block("# user\n" + hand + "\n", block)
+    body = new.split(ac.DSH_BLOCK_BEGIN, 1)[1].split(ac.DSH_BLOCK_END, 1)[0]
+    assert body.count("- insert:") == 1, (
+        f"手改 id 的旧条目仍须被替换，实得 insert={body.count('- insert:')}")
+    assert "preset-MYEDIT" not in body, "旧的手改内容应被覆盖（定界符已声明此行为）"
+    assert ac.dsh_block_matches(ac.dsh_extract_block(new), block) is True
+
+
+def test_dsh_is_ours_does_not_confuse_dsh_registry_prefix(agate_root):
+    """DSH 注册项包名是我们包名的**前缀**（`...-preset` vs `...-preset-registry`）⇒ 不得误判。
+
+    若拿包名当锚点，`@deepseek-ai/dsh-agent-preset` 是 `@deepseek-ai/dsh-agent-preset-registry`
+    的前缀 ⇒ DSH 的外来条目会被判成"我们的"而被**删掉**（正是本次要修的真损坏）。
+    """
+    ac = _dsh_common(agate_root)
+    assert ac._dsh_is_ours(_FOREIGN) is False, (
+        "DSH 注册项是外来条目，不得判为我们的（否则重写会删掉它）")
+    ours = ac._dsh_top_level_items(ac._dsh_block_body(ac.dsh_preset_block(str(agate_root))))
+    assert ours and all(ac._dsh_is_ours(i) for i in ours), "我们生成的条目须都判为我们的"
+
+
+def test_dsh_block_matches_detects_duplicate_insert(agate_root):
+    """块内出现**两个** `- insert:` ⇒ 必须判不一致（防"重复注册"假阴性）。
+
+    纯 set 超集判断下，两个 insert 仍满足"我们生成的条目都在"⇒ 判 ✅。而 insert=2 正是
+    旧版 `dsh_apply_block` 的破坏性产物（实测 v0.83.0 的块重写后 insert count = 2）。
+    若不查重复，这些用户会一直看到 ✅、永远不被告知"重跑即可修好"。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+    body = ac._dsh_block_body(block)
+
+    # 把块体原样**再放一遍** ⇒ 两个 insert（模拟旧实现的重复写入结果）
+    dup = (ac.DSH_BLOCK_BEGIN + "\n" + body.strip("\n") + "\n"
+           + body.strip("\n") + "\n" + ac.DSH_BLOCK_END + "\n")
+    assert ac._dsh_block_body(dup).count("- insert:") == 2, "前提：须构造出 2 个 insert"
+    assert ac.dsh_block_matches(dup, block) is False, (
+        "重复的 insert 属真实损坏（preset 重复注册），不得判一致")
+
+    # 反向护栏：正常的 1 个 insert 仍须判一致（防把判据改成一刀切 False）
+    assert ac.dsh_block_matches(block, block) is True

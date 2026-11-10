@@ -659,7 +659,9 @@ def _dsh_block_matches_installed(home, block):
         if os.path.islink(vdir) or not os.path.isdir(vdir):
             continue
         want = agate_common.dsh_preset_block(agate_common._protocol_root(vdir))
-        if want and want.strip() == block.strip():
+        # 语义比对（非逐字）：DSH 会重新序列化该文件、并在块内追加**它自己的**顶层条目
+        # （实测 agent-preset-registry）⇒ 逐字相等对该文件恒不成立。见 dsh_block_matches。
+        if want and agate_common.dsh_block_matches(block, want):
             return True
     return False
 
@@ -678,8 +680,12 @@ def _list_installed(home):
                 if got is None:
                     print(f"  ❌ [{name}] {patch}  未找到 preset-agate 声明块（DSH 不会出现该模式）")
                 elif not _dsh_block_matches_installed(home, got):
-                    print(f"  ⚠️  [{name}] {patch}  声明块存在但与**任何已装版本**的权威模板都不一致"
-                          f"（已过期或被手改；重跑接入刷新）")
+                    # ⚠️ 措辞须**不引导破坏**：重跑 `agate-setup.py` 会按当前版本
+                    # **重写块内内容**（外来条目已保留，但块内容会被替换）。故此处
+                    # 如实说明影响，不给"直接重跑"这种会改动块内容的无脑建议。
+                    print(f"  ⚠️  [{name}] {patch}  声明块与本机已装版本生成的条目**不一致**"
+                          f"（缺条目、被改或重复）。注意：重跑接入会**按当前版本重写块内内容**；"
+                          f"若你只想核对差异，先比对再决定")
                 else:
                     print(f"  ✅ [{name}] {patch}  preset-agate 声明块")
                 found = True

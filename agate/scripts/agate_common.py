@@ -1180,14 +1180,109 @@ def dsh_patch_files(home=None):
     return out
 
 
+def _dsh_block_body(block):
+    """取块体（两条定界符**之间**的内容）；无定界符 → 原文本。"""
+    if DSH_BLOCK_BEGIN in block and DSH_BLOCK_END in block:
+        return block.split(DSH_BLOCK_BEGIN, 1)[1].split(DSH_BLOCK_END, 1)[0]
+    return block
+
+
+def _dsh_top_level_items(body):
+    """把块体按**列 0 的 `- `** 切成顶层条目（缩进行与空行归入当前条目）。"""
+    items, cur = [], []
+    for line in body.splitlines():
+        if line.startswith("- "):
+            if cur:
+                items.append("\n".join(cur))
+            cur = [line]
+        elif cur:
+            cur.append(line)
+    if cur:
+        items.append("\n".join(cur))
+    return [it.strip("\n") for it in items if it.strip()]
+
+
+def _dsh_norm_item(item):
+    """条目归一化：**折叠所有空白**。
+
+    为什么折叠：DSH 会把 patch 文件解析后**重新序列化**，`>-` 折叠标量的换行位置必然变化
+    （实测同一版本生成的块与已装块差 62 行，全是折行差异）⇒ 逐字比对在本文件上**天然不稳**。
+    """
+    return " ".join(item.split())
+
+
+def _dsh_is_ours(item):
+    r"""该顶层条目是否由**我们**生成（= 承载 preset-agate 的那条 `- insert:`）。
+
+    判据用**身份锚点**，不用"文本是否等于本次生成"：
+    版本升级时旧块里我们自己的 `- insert:` 必然与**新**生成块不同（插件增删/改名），
+    若按"文本不相等 ⇒ 外来"处理，它会被**保留**下来与新块并列 ⇒ 块内出现**两个**
+    `- insert:`（实测 v0.83.0 的块重写后 insert count = 2 ⇒ preset 重复注册）。
+
+    锚点取**任一命中即算我们的**（由新块替换）：
+      · `- insert:` —— `dsh_preset_block` 生成的块**唯一**的顶层条目形态；
+      · `id: preset-agate` —— 我们的 preset 身份（用于非 insert 形态的兜底）。
+    为什么两个都要：只认 `id:` 时，用户若手改 id（`preset-agate` → 别的）该条目会被
+    误判为外来而保留 ⇒ 仍会重复插入（实测 insert count = 2）；而"托管块内手改会被下次
+    接入覆盖"是**文档化的预期行为**（定界符文案即如此写），故仍应替换。
+    ⚠️ 不用包名 `@deepseek-ai/dsh-agent-preset` 作锚点：它是 DSH 注册项包名
+    `@deepseek-ai/dsh-agent-preset-registry` 的**前缀** ⇒ 会误把 DSH 条目判成我们的。
+    ⚠️ `id:` 判据须带**右边界**：`id: preset-agate-custom` 不该算我们的（否则用户的
+    同名自定义 preset 会被静默删掉）。用 `(?![\w-])` 卡住词尾。
+    """
+    norm = _dsh_norm_item(item)
+    if norm.startswith("- insert:"):
+        return True
+    return re.search(rf"id: preset-{re.escape(DSH_PRESET_ID)}(?![\w-])", norm) is not None
+
+
+def dsh_block_matches(installed, generated):
+    """已装块是否**仍包含**我们生成的全部顶层条目（外来条目忽略）。
+
+    **不用逐字文本相等**：DSH 会重新序列化该文件，且会把**自己的**顶层条目
+    （实测 `- id: agent-preset-registry`）写进我们的定界符**之内** ⇒ 逐字比对
+    对该文件恒报"不一致"（误报，且其引导"重跑接入刷新"会**删掉** DSH 的条目）。
+    判据改为超集检查：我们生成的条目都在 ⇒ 一致；被删/被改 ⇒ 不一致。
+
+    **额外要求"我们的条目恰有 1 个"**（防重复注册的假阴性）：纯 set 超集判断下，
+    块内出现**两个** `- insert:` 仍判"一致"——而那正是旧版 `dsh_apply_block` 的
+    破坏性产物（实测 v0.83.0 的块重写后 insert count = 2）。若不查重复，这类用户
+    会一直看到 ✅、永远不被告知要重跑修复（重跑确实能修好，但没人会知道）。
+    """
+    gen = {_dsh_norm_item(i) for i in _dsh_top_level_items(_dsh_block_body(generated))}
+    if not gen:
+        return False
+    inst_items = _dsh_top_level_items(_dsh_block_body(installed))
+    inst = {_dsh_norm_item(i) for i in inst_items}
+    if not gen <= inst:
+        return False
+    # 我们的条目必须**恰好一个**：0 个已被上面的超集检查排除；≥2 个 = 重复注册
+    return sum(1 for i in inst_items if _dsh_is_ours(i)) == 1
+
+
 def dsh_apply_block(text, block):
-    """把托管块幂等写入 patch 文本：先移除既有块，再追加。返回新文本。"""
+    """把托管块幂等写入 patch 文本：移除既有块 → 追加新块。返回新文本。
+
+    **保留块内的外来顶层条目**：定界符之间的内容不全是我们的——DSH 会把自己的条目写进来
+    （实测 `agent-preset-registry`）。原实现"先删光再追加"会**静默删掉**它
+    （注册项丢失 ⇒ preset 不再可选）。此处把外来条目原样带回到新块内。
+    """
+    old = dsh_extract_block(text)
+    foreign = ""
+    if old:
+        kept = [i for i in _dsh_top_level_items(_dsh_block_body(old))
+                if not _dsh_is_ours(i)]
+        if kept:
+            foreign = "\n".join(kept) + "\n"
     stripped = re.sub(
         r"\n*" + re.escape(DSH_BLOCK_BEGIN) + r".*?" + re.escape(DSH_BLOCK_END) + r"\n?",
         "\n", text, flags=re.S)
     if not stripped.endswith("\n"):
         stripped += "\n"
-    return stripped + "\n" + block
+    new_block = block
+    if foreign:
+        new_block = block.replace(DSH_BLOCK_END, foreign + DSH_BLOCK_END, 1)
+    return stripped + "\n" + new_block
 
 
 def dsh_strip_block(text):

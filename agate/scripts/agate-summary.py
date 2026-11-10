@@ -25,6 +25,7 @@ try:
     from agate_common import (
         _protocol_root,
         _resolve_pointer_chain,
+        dsh_block_matches,
         dsh_extract_block,
         dsh_patch_files,
         dsh_preset_block,
@@ -290,9 +291,12 @@ def _check_platform_artifacts():
     # DSH 声明式 preset：状态先算出来——「未接入」要**并入上面的聚合行**（而不是自己
     # 再打一行，那会让"未安装"变成两条噪声）。
     if _dsh_declarative_drifted(installed):
+        # 文案与 `agate-setup.py --list` **同源**（判据同为语义比对，不再是"逐字等于模板"）：
+        # 如实说明"缺条目/被改/重复"，并说明重跑会**重写块内内容**（不引导无脑重跑）。
         sys.stderr.write(
-            "⚠️  DSH 接入产物漂移: profile patch 里的 preset-agate 声明块与任何已安装版本的"
-            "权威模板都不一致（DSH 仍会出现该模式，但内容已旧或被你手改）\n"
+            "⚠️  DSH 接入产物漂移: profile patch 里的 preset-agate 声明块与本机已装版本"
+            "生成的条目**不一致**（缺条目、被改或重复）\n"
+            f"    注意：重跑接入会**按当前版本重写块内内容**（块内 DSH 自己的条目会保留）\n"
             f"    修复: python3 {_home_entry('agate-setup.py')}\n"
         )
     elif _dsh_declarative_missing():
@@ -326,7 +330,11 @@ def _dsh_declarative_state(installed):
     patches = dsh_patch_files()
     if not patches:
         return "missing", None
-    ok_variants = [b.strip() for b in (dsh_preset_block(r) for r in installed) if b]
+    # 判据用**语义比对**（`dsh_block_matches`），不用逐字相等：DSH 会把 profile patch
+    # 解析后**重新序列化** ⇒ ① `>-` 折叠标量重折行；② 它自己的顶层条目
+    # （实测 `- id: agent-preset-registry`）被写进我们的定界符**之内**。
+    # 逐字比对对该文件**恒报漂移**（假阳性，与 `agate-setup.py --list` 同一个根因）。
+    ok_variants = [b for b in (dsh_preset_block(r) for r in installed) if b]
     for patch in patches:
         try:
             with open(patch, encoding="utf-8", errors="replace") as f:
@@ -335,7 +343,7 @@ def _dsh_declarative_state(installed):
             continue
         if got is None:
             continue
-        if ok_variants and got.strip() not in ok_variants:
+        if ok_variants and not any(dsh_block_matches(got, want) for want in ok_variants):
             return "drifted", patch
         return "ok", patch
     return "missing", None
