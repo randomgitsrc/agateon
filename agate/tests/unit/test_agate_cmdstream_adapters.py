@@ -82,6 +82,22 @@ def _make_zstd_frame(jsonl_text, tmp_path, node_available):
     return out
 
 
+def _zstd_compress_bytes(text, tmp_path):
+    """把单段文本压缩为 zstd 字节（不写文件），供需要自定文件名的用例复用。"""
+    node = shutil.which("node")
+    script = (
+        "const z=require('node:zlib');"
+        "let s='';process.stdin.on('data',d=>s+=d);"
+        "process.stdin.on('end',()=>process.stdout.write(z.zstdCompressSync(s)));"
+    )
+    proc = subprocess.run(
+        [node, "-e", script], input=text.encode("utf-8"),
+        capture_output=True, text=False, timeout=30,
+    )
+    assert proc.returncode == 0, f"node zstdCompressSync 失败: {proc.stderr!r}"
+    return proc.stdout
+
+
 def _make_zstd_multi_frame(jsonl_frames, tmp_path):
     """构造真实 zstd 拼接帧容器（每段文本独立压缩成一帧后字节拼接），返回路径。
 
@@ -1077,3 +1093,51 @@ def test_bdd_21_command_record_ten_fields_unchanged(agate_scripts):
         "platform", "session_id", "tool", "command", "ts_start",
         "ts_end", "exit", "exit_signal", "output_hash", "truncated",
     ]
+
+
+# ================= 回归：DSH 真实 tool/result 结构（isError 在 message 上） =================
+# 缺陷（2026-11-10 实测）：适配器取 `message.content[0].isError`，而 DSH 真实结构是
+#   data.message.content = [{"type":"text","text":"...---exit:0---\n"}]
+#   data.message.isError = false
+# 实测 314 条 tool/result 里 content[0] 含 isError 的有 0 条、message.isError=true 有 4 条
+# ⇒ 全部记录 exit=0，真实失败被静默吞掉；SPIN 签名的 exit 维度恒为 0。
+# 旧 fixture 把 isError 写在 content[0] 上（与真实格式不符），故测试长期未暴露。
+
+
+def test_regression_dsh_exit_from_message_level_is_error(agate_scripts, tmp_path):
+    """回归：DSH tool/result 的 isError 在 message 层级（非 content[0]），
+    失败命令须产出非 0 exit；且 toolCallId 在 message 层级即可配对。"""
+    if not _node_zstd_available():
+        pytest.skip("node zstd 不可用，无法构造真实 zstd 会话文件")
+
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.DSHAdapter()
+
+    jsonl_text = (
+        '{"type":"session","version":4,"id":"s1","cwd":"/proj/demo"}\n'
+        '{"type":"tool/call","seq":1,"time":1787883650000,"data":{"callId":"c_ok",'
+        '"name":"bash","arguments":"{\\"command\\":\\"true\\"}"}}\n'
+        '{"type":"tool/call","seq":2,"time":1787883650100,"data":{"callId":"c_fail",'
+        '"name":"bash","arguments":"{\\"command\\":\\"false\\"}"}}\n'
+        # 真实结构：message 直接带 toolCallId + isError，content[0] 只有 type/text
+        '{"type":"tool/result","seq":3,"time":1787883650200,"data":{"message":{'
+        '"role":"tool","source":{"kind":"tool","callId":"c_ok"},'
+        '"toolCallId":"c_ok","content":[{"type":"text","text":"---exit:0---\\n"}],'
+        '"isError":false}}}\n'
+        '{"type":"tool/result","seq":4,"time":1787883650300,"data":{"message":{'
+        '"role":"tool","source":{"kind":"tool","callId":"c_fail"},'
+        '"toolCallId":"c_fail","content":[{"type":"text","text":"---exit:1---\\n"}],'
+        '"isError":true}}}\n'
+    )
+    p = tmp_path / "real-shape.jsonl.zstd"
+    p.write_bytes(_zstd_compress_bytes(jsonl_text, tmp_path))
+
+    records = adapter.read_commands(str(p))
+    ok = [r for r in records if r.command == "true"]
+    fail = [r for r in records if r.command == "false"]
+    assert len(ok) == 1 and len(fail) == 1, f"配对失败: {[r.command for r in records]}"
+    assert ok[0].exit == 0, f"成功命令 exit 应为 0，实际 {ok[0].exit}"
+    assert fail[0].exit not in (0, None), (
+        f"isError=true 的命令（message 层级）须产出非 0 exit，实际 {fail[0].exit} —— "
+        "适配器仍在读 content[0].isError"
+    )

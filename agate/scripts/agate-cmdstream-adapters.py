@@ -566,12 +566,23 @@ class DSHAdapter(CommandStreamAdapter):
             is_error = False
             text_out = ""
             truncated = False
+            # isError / toolCallId 的**权威位置在 message 层级**（2026-11-10 实测 DSH 真实结构：
+            # message = {role, source{callId}, toolCallId, content:[{type,text}], isError}）。
+            # 旧实现只读 content[0].isError —— 实测 314 条 tool/result 里 content[0] 含该键的
+            # 为 0 条、message.isError=true 有 4 条 ⇒ 全部记录 exit=0，真实失败被静默吞掉。
+            # content[0] 保留为兜底（历史 fixture / 旧版本格式可能把键放在内层）。
+            call_id = message.get("toolCallId") or source.get("callId") or ""
+            if "isError" in message:
+                is_error = bool(message.get("isError", False))
             if isinstance(content_list, list) and content_list:
                 first = content_list[0]
                 if isinstance(first, dict):
-                    call_id = first.get("toolCallId") or source.get("callId") or ""
-                    is_error = bool(first.get("isError", False))
+                    call_id = call_id or first.get("toolCallId") or ""
+                    if "isError" not in message:
+                        is_error = bool(first.get("isError", False))
                     truncated = self._detect_truncated(first)
+                    # 文本取处：真实结构是 content[0] = {"type":"text","text":...}
+                    # （文本直接在 `text` 键上）；历史/嵌套形态才在 `content` 里。
                     inner = first.get("content")
                     if isinstance(inner, list):
                         text_out = "".join(
@@ -580,6 +591,10 @@ class DSHAdapter(CommandStreamAdapter):
                         )
                     elif isinstance(inner, str):
                         text_out = inner
+                    if not text_out:
+                        direct = first.get("text")
+                        if isinstance(direct, str):
+                            text_out = direct
             call = calls.get(call_id)
             if call is None:
                 continue
@@ -629,8 +644,19 @@ class DSHAdapter(CommandStreamAdapter):
                 truncated=False,
             )
 
-        exit_code = None
-        if is_error:
+        # exit 解析优先级（2026-11-10 实测 DSH 输出形态）：
+        #   1. 输出文本里的 `---exit:N---` 标记——DSH 工具执行层直接写入，最可靠
+        #   2. isError=true → 非 0（具体码未知，留 exit_signal 说明来源）
+        #   3. 否则 0
+        # 旧实现只有 2/3 两支：isError=true 时 exit 恒为 None（"码未知"），而真实失败
+        # 在文本里带 `---exit:1---`，本可直接取到。SPIN 签名含 exit 维度，恒为 None 会
+        # 让"失败命令重复"这类空转特征失真。
+        marked = re.search(r"---exit:(-?\d+)---", text_out or "")
+        if marked:
+            exit_code = int(marked.group(1))
+            exit_signal = "" if exit_code == 0 else f"---exit:{exit_code}---"
+        elif is_error:
+            exit_code = None
             exit_signal = "Error:" if re.search(r"Error:", text_out) else "isError=true"
         else:
             exit_code = 0

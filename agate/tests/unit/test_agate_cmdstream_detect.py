@@ -679,3 +679,33 @@ def test_bdd_21_detect_thresholds_unchanged(agate_scripts):
     assert mod.ACTIVITY_SUSPECT == 300
     assert mod.SPIN_THRESHOLD == 5
     assert mod.REPEAT_WINDOW == 10
+
+
+# ================= 回归：SPIN 窗口不依赖列表顺序（须取最近 N 条） =================
+
+
+def test_regression_spin_window_takes_most_recent_not_list_head(agate_scripts):
+    """回归：适配器可能「最新在前」返回（DSH `records[::-1]`），此时旧的
+    `completed[-N:]` 取到的是**列表尾部** = **会话最早**那一截。
+
+    构造要点：列表顺序与时间顺序**相反**（真实 DSH 形态）。
+      - 列表**尾部**（最早，ts 1..16）：8 条同签名 → 若窗口取尾部即误判 SPIN
+      - 列表**头部**（最新，ts 100..115）：8 条互异   → 正确窗口应取这截 → NORMAL
+    旧实现取 `[-N:]` 命中尾部同签名段；新实现按 ts 排序后取最近 8 条（互异）。
+    """
+    events = []
+    # 头部 = 最新（ts 100..115），互异：写在列表前面，模拟"最新在前"
+    for i in range(8):
+        events.append(_ev(100 + i * 2, "call", id=f"new{i}", cmd=f"recent_{i}"))
+        events.append(_ev(100 + i * 2 + 1, "result", id=f"new{i}", cmd=f"recent_{i}",
+                          exit=0, out=f"hash_{i}"))
+    # 尾部 = 最早（ts 1..16），同签名：写在列表末尾
+    for i in range(8):
+        events.append(_ev(i * 2, "call", id=f"old{i}", cmd="stale_at_tail"))
+        events.append(_ev(i * 2 + 1, "result", id=f"old{i}", cmd="stale_at_tail",
+                          exit=0, out="same_hash"))
+
+    verdict, reasons = _run_detect(agate_scripts, events, now=116)
+    assert verdict == "NORMAL", (
+        f"窗口取到了列表尾部（最早记录，未按 ts 排序）→ 误判 {verdict}: {reasons}"
+    )

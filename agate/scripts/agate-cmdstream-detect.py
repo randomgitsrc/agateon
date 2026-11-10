@@ -217,7 +217,13 @@ def detect(events, now, config=None):
             return "FROZEN", reasons
 
     # ---- 3. 无效重复检测（逻辑空转）----
-    window = completed[-cfg["spin_window"]:]
+    # 窗口按 **ts 排序后取最近 N 条**，不依赖调用方给的列表顺序：
+    # 适配器可能"最新在前"返回（DSH 适配器 records[::-1]，注释明写监控视角最新优先），
+    # 此时 `completed[-N:]` 取到的是**会话最早**的 N 条——实测 1773 条记录的会话里，
+    # 该窗口落在会话开头，判出的 SPIN 命中 `command=""` 的 read/skill 调用（空串 sha1
+    # da39a3ee…），与真正要抓的空转无关。按 ts 排序即与顺序约定解耦。
+    ordered = sorted(completed, key=lambda e: e.get("ts", 0))
+    window = ordered[-cfg["spin_window"]:]
     combo_counts = {}
     for r in window:
         if r.get("truncated"):
