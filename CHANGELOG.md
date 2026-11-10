@@ -10,6 +10,29 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **DSH 会话多帧解压把记录重复一倍（走 hotfix 通道，不立项）**：
+  `agate-cmdstream-adapters.py` 的 `DSHAdapter._decompress` 按 zstd magic 扫描帧，每轮
+  `zstdDecompressSync(buf.subarray(idx))` 后只把游标推进 `idx + 4`——它**假定该调用只解
+  第一帧**（旧注释与 docstring 均如此写）。该假定在现代 Node 上**不成立**：v22+ 对多帧拼接
+  输入**一次解压全部帧**（实测 v24.22.1：2 帧输入一次调用即得 `"AAABBB"`）⇒ 第一轮已取到
+  全部内容，循环又定位到帧 2 再解一次 ⇒ **每条记录出现两次**。
+  **实测影响（真实数据）**：本机 839 个 DSH 会话文件中抽样 40 个，**40/40 都是多帧**
+  （单个文件最多 **14320 帧**）；旧实现对其中一个真实文件解出 **6324 行 / 17.7 MB**，正确
+  结果应为 **3162 行 / 8.9 MB**——**恰好一倍**。即命令流统计（时长/次数/成本）在 DSH 平台上
+  长期**整体翻倍**。
+  **为什么 CI 一直是绿的**：`protocol-tests.yml` **没有 setup-node**，CI runner 的 Node 无
+  `zlib.zstdDecompressSync` ⇒ 该用例被 `_node_zstd_available()` 探测跳过；只有本地新 Node 才暴露。
+  **修复**：按 RFC 8878 逐块计算**真实帧边界**（帧头 FHD / Dictionary_ID /
+  Frame_Content_Size + 块头 3 字节逐块跳过，含 RLE 与 checksum 情形），每次只解
+  `subarray(idx, frameEnd)`、游标推进到 `frameEnd` ⇒ 与 Node 是否支持多帧无关，既不重复也
+  不遗漏；保留"伪 magic 跳过"容错。
+  **为什么不用流式 `createZstdDecompress()`**：流式对**截断的尾帧**直接抛
+  `unexpected end of file`，而真实会话尾部截断是常态；逐帧边界扫描能保留已完整帧、丢弃残帧
+  （该取舍已用专门用例钉住，防后人"简化"成流式）。
+  用例经红/绿双态验证：旧实现下 6 个新用例全红（含 200 帧逐字节比对、截断尾帧），修复后全绿。
+
 ## [0.83.1] - 2026-10-15
 
 ### 修复

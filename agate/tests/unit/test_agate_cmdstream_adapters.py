@@ -404,6 +404,111 @@ def test_bdd_4_dsh_multi_frame_container_returns_all_records(agate_scripts, tmp_
     assert late.ts_start == 200 and late.ts_end == 210
 
 
+@pytest.mark.parametrize("n_frames", [2, 3, 7, 20])
+def test_bdd_4_dsh_multi_frame_no_duplicate_records(agate_scripts, tmp_path, n_frames):
+    """**多帧容器不得重复记录**（帧数参数化回归）。
+
+    缺陷（实测 2026-11-10，Node v24.22.1）：`_decompress` 的逐帧扫描用
+    `off = idx + 4` 只推进到 magic 之后，**假定 `zstdDecompressSync` 只解第一帧**。
+    但现代 Node（v22+）对多帧拼接输入**一次解压全部帧** ⇒ 第一轮已拿到全部内容，
+    第二轮又定位到帧 2 再解一次 ⇒ 记录重复（2 帧时 late 出现 2 次）。
+
+    为什么 CI 一直是绿的：`protocol-tests.yml` **没有 setup-node**，该用例在 CI 里
+    因 `_node_zstd_available()` 探测失败而 **skip** ⇒ 只在本地新 Node 上暴露。
+    """
+    if not _node_zstd_available():
+        pytest.skip("node 不可用（zlib.zstdDecompressSync 非 function），跳过 DSH zstd 真实解压用例")
+
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.DSHAdapter()
+
+    frames = []
+    for i in range(n_frames):
+        call_id = f"call_demo_dup_{i}"
+        # 用 json.dumps 构造（手写嵌套转义易错：转错一个引号就整行不是合法 JSON，
+        # 适配器会静默跳过 → 记录为空，测试会以"空列表"误导性失败）
+        call_line = {
+            "type": "tool/call", "seq": 100 + i * 2, "time": 100 + i * 10,
+            "data": {"callId": call_id, "name": "bash",
+                     "arguments": json.dumps({"command": f"echo f{i}"})},
+        }
+        result_line = {
+            "type": "tool/result", "seq": 101 + i * 2, "time": 105 + i * 10,
+            "data": {"message": {
+                "source": {"kind": "tool", "callId": call_id},
+                "content": [{"type": "tool-result", "toolCallId": call_id,
+                             "content": [{"type": "text", "text": f"out{i}"}],
+                             "isError": False}],
+            }},
+        }
+        frames.append(
+            json.dumps(call_line, ensure_ascii=False) + "\n"
+            + json.dumps(result_line, ensure_ascii=False) + "\n"
+        )
+    zstd_path = _make_zstd_multi_frame(frames, tmp_path)
+
+    records = adapter.read_commands(str(zstd_path))
+    commands = [r.command for r in records]
+    expected = {f"echo f{i}" for i in range(n_frames)}
+    # 用**集合**比较（顺序无关）：`sorted()` 是字典序，f10 会排在 f2 之前，拿它跟自然序的
+    # expected 比会假失败——那与"是否重复"这个被测性质也无关。
+    assert set(commands) == expected, (
+        f"{n_frames} 帧应各产出 1 条记录；缺 {expected - set(commands)}，"
+        f"多 {set(commands) - expected}")
+    assert len(commands) == len(set(commands)), (
+        f"记录不得重复（多帧容器每帧只应解一次）: {sorted(commands)}")
+
+
+def test_bdd_4_dsh_decompress_preserves_frame_boundaries(agate_scripts, tmp_path):
+    """`_decompress` 直接级：帧数多时**逐帧边界解压**不得重复或遗漏。
+
+    用 200 帧（真实会话实测可达 14320 帧）覆盖"帧数多 + 每帧内容不同"的场景，
+    断言解压结果**逐字节等于**各帧明文拼接——这是"重复解压"最直接的判据
+    （旧实现会把内容解成两倍长）。
+    """
+    if not _node_zstd_available():
+        pytest.skip("node 不可用（zlib.zstdDecompressSync 非 function），跳过 DSH zstd 真实解压用例")
+
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.DSHAdapter()
+
+    payloads = [f'{{"n":{i},"pad":"{"x" * (i % 40)}"}}\n' for i in range(200)]
+    zstd_path = _make_zstd_multi_frame(payloads, tmp_path)
+
+    got = adapter._decompress(str(zstd_path))
+    assert got == "".join(payloads), (
+        f"解压结果须逐字节等于 {len(payloads)} 帧明文拼接"
+        f"（实得 {len(got)} 字节，期望 {len(''.join(payloads))} 字节）")
+
+
+def test_bdd_4_dsh_decompress_tolerates_truncated_tail(agate_scripts, tmp_path):
+    """尾部残帧（真实会话常见：写入中断）⇒ 保留已完整帧、丢弃残帧，不整体失败。
+
+    为什么必须有：改用流式 `createZstdDecompress()` 虽能正确处理多帧，但对截断尾帧
+    直接抛 "unexpected end of file" ⇒ 整份会话读不出来。逐帧边界扫描是**有意的**取舍，
+    本用例把该取舍钉住（防后人"简化"成流式）。
+    """
+    if not _node_zstd_available():
+        pytest.skip("node 不可用（zlib.zstdDecompressSync 非 function），跳过 DSH zstd 真实解压用例")
+
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.DSHAdapter()
+
+    good = '{"n":0,"pad":""}\n'
+    second = '{"n":1,"pad":""}\n'
+    p_good = _make_zstd_multi_frame([good], tmp_path)
+    blob_good = p_good.read_bytes()
+    p_two = _make_zstd_multi_frame([second], tmp_path)
+    blob_second = p_two.read_bytes()
+
+    truncated = tmp_path / "truncated.jsonl.zstd"
+    truncated.write_bytes(blob_good + blob_second[: max(1, len(blob_second) // 2)])
+
+    got = adapter._decompress(str(truncated))
+    assert got == good, (
+        f"须保留已完整的第一帧、丢弃残帧；实得 {got!r}")
+
+
 def test_bdd_2_claude_unfinished_call_emits_exit_none(agate_scripts, tmp_path):
     """BDD-2 补充（CRITICAL-3）：claude-code 会话含未结束 tool_use（无配对 tool_result）
     → 适配器产出 exit=None/ts_end=None 记录（IR 契约允许 exit=None），不再静默丢弃。
