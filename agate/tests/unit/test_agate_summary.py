@@ -677,6 +677,66 @@ def test_dsh_declarative_block_stale_warns(run_cli, python_exe, agate_scripts,
     assert "agate-setup.py" in result.output, "漂移提示须给出修复入口"
 
 
+@pytest.mark.windows_smoke
+def test_dsh_declarative_block_with_dsh_foreign_entry_not_drifted(
+        run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
+    """**DSH 追加自己的顶层条目 + 重折行 ⇒ 不得报漂移**（假阳性回归）。
+
+    实测（2026-11-10）：DSH 会把 profile patch 解析后**重新序列化**，并把
+    `- id: agent-preset-registry` 写进我们定界符**之内**。原实现用逐字文本相等
+    ⇒ 该情形**恒报漂移**（与 `agate-setup.py --list` 同一个根因）。
+    """
+    home = _make_home(tmp_path)
+    import sys as _sys
+    p = str(_PROTO_ROOT / "scripts")
+    if p not in _sys.path:
+        _sys.path.insert(0, p)
+    import agate_common as _ac
+
+    blk = _ac.dsh_preset_block(str(_version_dir(home)))
+    assert blk, "前置：应能生成块"
+    foreign = (
+        "- id: agent-preset-registry\n"
+        '  name: "@deepseek-ai/dsh-agent-preset-registry"\n'
+        "  config:\n"
+        "    default: standard\n"
+        "    selectedDefault: standard\n"
+    )
+    installed = blk.replace(_ac.DSH_BLOCK_END, foreign + "\n" + _ac.DSH_BLOCK_END)
+    _write_dsh_block(home, installed)
+
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "DSH 接入产物漂移" not in result.output, (
+        f"DSH 追加条目属正常序列化结果，不得报漂移（原逐字比对会误报）:\n{result.output}"
+    )
+
+
+@pytest.mark.windows_smoke
+def test_dsh_declarative_block_missing_plugin_still_drifted(
+        run_cli, python_exe, agate_scripts, agate_assets, tmp_path):
+    """反向：**真**内容变化（我们的插件条目被删）仍须报漂移（防放宽成假绿）。"""
+    home = _make_home(tmp_path)
+    import sys as _sys
+    p = str(_PROTO_ROOT / "scripts")
+    if p not in _sys.path:
+        _sys.path.insert(0, p)
+    import agate_common as _ac
+
+    blk = _ac.dsh_preset_block(str(_version_dir(home)))
+    assert blk, "前置：应能生成块"
+    import re as _re
+    damaged = _re.sub(r"(?m)^[ \t]*- id: tool-todo\n(?:[ \t].*\n)*", "", blk)
+    assert damaged != blk, "前置：须确实删掉一个插件条目"
+    _write_dsh_block(home, damaged)
+
+    result = _run_summary(run_cli, python_exe, agate_scripts, home, tmp_path)
+    assert result.returncode == 0
+    assert "DSH 接入产物漂移" in result.output, (
+        f"我们的插件条目被删 ⇒ 必须报漂移（语义比对不得放宽成假绿）:\n{result.output}"
+    )
+
+
 @pytest.mark.parametrize("label,platform_dir", [
     ("Claude Code", ".claude"),
     ("OpenCode", ".config/opencode"),

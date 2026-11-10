@@ -12,6 +12,24 @@
 
 ### 修复
 
+- **DSH 声明块过期检测假阳性，且其修复引导会真损坏接入（走 hotfix 通道，不立项）**：
+  `agate-setup.py --list` 与 `agate-summary.py` 对 DSH profile 的 `preset-agate` 托管块报
+  「与任何已装版本都不一致 / 漂移」是**误报**——DSH 会把 `~/.dsh/profiles/*/cordis.patch.yml`
+  解析后**重新序列化**：① `>-` 折叠标量重折行（实测同一版本差 62 行）；② 它自己的顶层条目
+  `- id: agent-preset-registry` 被写进我们定界符**之内**（实测包名集合 27 vs 26）。任何
+  「逐字文本相等」判据在该文件上**天然恒假**。**更严重的是原引导**：告警写「重跑接入刷新」，
+  而原 `dsh_apply_block` 是「删光两定界符之间再追加」⇒ **照做会删掉 DSH 的注册条目**
+  （preset 可能不再可选）。**修复**：判据改为**语义超集检查**（`dsh_block_matches`：我们生成的
+  顶层条目是否都还在；外来条目与折行忽略），`--list` 与 `summary` **同源**；`dsh_apply_block`
+  重写时**保留块内外来条目**；告警文案改为如实说明「重跑会按当前版本重写块内内容」，不再给
+  无脑建议。**未走 YAML 解析**的理由：块内含 `!!js` 自定义标签
+  （`disabled: !!js process.platform === 'win32'`），标准解析器直接报错。
+  **同时修掉一处升级路径回归**：保留外来条目的判据若按「文本不在本次生成集合里」，升级时
+  **我们自己的**旧 `- insert:` 会被误判为外来而保留 ⇒ 块内出现**两个** `- insert:`
+  （实测 v0.83.0 块重写后 insert count = 2，preset 重复注册）；改用**锚点身份**
+  （含 `id: preset-agate` 即我们的，一律替换）后，v0.80.2 / v0.83.0 / v0.83.1 三条升级路径
+  块内 `- insert:` 均 == 1。
+
 - **DSH 会话多帧解压把记录重复一倍（走 hotfix 通道，不立项）**：
   `agate-cmdstream-adapters.py` 的 `DSHAdapter._decompress` 按 zstd magic 扫描帧，每轮
   `zstdDecompressSync(buf.subarray(idx))` 后只把游标推进 `idx + 4`——它**假定该调用只解
