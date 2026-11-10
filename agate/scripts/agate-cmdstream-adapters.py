@@ -434,9 +434,22 @@ class DSHAdapter(CommandStreamAdapter):
     def _decompress(self, session_path):
         """node 单行脚本逐帧解压拼接帧容器 → 明文 JSONL 文本（BDD-4 解压隔离）。
 
-        CRITICAL-2：zstd 拼接帧容器（验证记录 Q7：实测 20020 帧）不能一次解压——Node
-        zstdDecompressSync 对多帧输入只解第一帧。脚本按 zstd 帧 magic 0x28B52FFD 扫描
-        帧边界、逐帧解压后拼接（验证记录「需扫描帧边界逐个解压后拼接」结论落地）。
+        CRITICAL-2：zstd 拼接帧容器（验证记录 Q7：实测 20020 帧）不能"解一次就完"。
+        历史实现按 magic 0x28B52FFD 扫描，每轮 `zstdDecompressSync(buf.subarray(idx))`
+        后只把游标推进 `idx + 4`——它**假定该调用只解第一帧**。该假定在现代 Node 上不成立：
+        v22+ 对多帧拼接输入**一次解压全部帧**（实测 v24.22.1：2 帧输入一次调用即得
+        "AAABBB"）⇒ 第一轮已取到全部内容，循环又定位到帧 2 再解一次 ⇒ **记录重复**
+        （2 帧容器里帧 2 的命令出现两次）。旧用例在 CI 一直 skip（CI 无 node），故长期未暴露。
+
+        修法：**算出真实帧边界**（按 RFC 8878 帧头 + 块头逐块跳过），每次只解
+        `buf.subarray(idx, frameEnd)`，游标推进到 `frameEnd` ⇒ 与 Node 是否支持多帧无关，
+        既不重复也不遗漏。保留"伪 magic 跳过"容错（压缩数据内部可能恰好出现该 4 字节序列；
+        按块头解析失败即视为伪 magic）。
+
+        为什么不用 `createZstdDecompress()` 流式一次解完：流式对**截断的尾帧**直接抛错
+        （实测 "unexpected end of file"），而真实会话文件尾部截断是常态；逐帧边界扫描能
+        保留已完整的帧、丢弃残帧。为什么不用 python `zstandard`：适配器的解压隔离设计
+        明确不硬依赖该第三方包（BDD-4 / dispatch-context 约束 5）。
         """
         ok, err = self._node_zstd_available()
         if not ok:
@@ -446,15 +459,35 @@ class DSHAdapter(CommandStreamAdapter):
             "const z=require('node:zlib');const fs=require('fs');"
             "const buf=fs.readFileSync(process.argv[1]);"
             "const MAGIC=Buffer.from([0x28,0xb5,0x2f,0xfd]);"
-            "let chunks=[];let off=0;"
+            # 按 RFC 8878 算单帧结束偏移；结构非法/越界 → -1（当作伪 magic 跳过）
+            "function frameEnd(b,s){"
+            "let p=s+4;if(p>=b.length)return -1;"
+            "const fhd=b[p++];"
+            "const fcs=fhd>>6,single=(fhd>>5)&1,cks=(fhd>>2)&1,dict=fhd&3;"
+            "if(!single)p+=1;"
+            "p+=[0,1,2,4][dict];"
+            "p+=single?[1,2,4,8][fcs]:[0,2,4,8][fcs];"
+            "for(;;){"
+            "if(p+3>b.length)return -1;"
+            "const h=b[p]|(b[p+1]<<8)|(b[p+2]<<16);p+=3;"
+            "const last=h&1,type=(h>>1)&3,size=h>>>3;"
+            "if(type===3)return -1;"
+            "p+=(type===1)?1:size;"
+            "if(last)break;"
+            "}"
+            "if(cks)p+=4;"
+            "return p<=b.length?p:-1;"
+            "}"
+            "let chunks=[],off=0;"
             "while(off<buf.length){"
             "const idx=buf.indexOf(MAGIC,off);"
             "if(idx<0)break;"
+            "const end=frameEnd(buf,idx);"
+            "if(end<0){off=idx+4;continue;}"
             "try{"
-            "const dec=z.zstdDecompressSync(buf.subarray(idx));"
-            "chunks.push(dec);"
-            "off=idx+4;"  # 推进到 magic 之后，下一轮 indexOf 定位下一帧
-            "}catch(e){off=idx+1;}"  # 数据内伪 magic：跳过 1 字节继续扫
+            "chunks.push(z.zstdDecompressSync(buf.subarray(idx,end)));"
+            "off=end;"                                  # 推进到**真实帧尾**（不重复解压）
+            "}catch(e){off=idx+4;}"                     # 残帧/损坏帧：跳过继续
             "}"
             "process.stdout.write(Buffer.concat(chunks));"
         )
