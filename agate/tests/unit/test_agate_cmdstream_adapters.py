@@ -1190,3 +1190,28 @@ def test_regression_output_hash_strips_pid_keeps_rest(agate_scripts):
     h = adapters._sha1_hex
     assert h("worker pid=1234 running") == h("worker pid=9876 running"), "pid 未被剥"
     assert h("worker pid=1234 ok") != h("worker pid=1234 fail"), "归一化吞掉了实质内容差异"
+
+
+def test_regression_output_hash_keeps_inline_time_as_data(agate_scripts):
+    """假阴性守护：**行内**的日期/时刻是数据，不得被当成装饰剥掉。
+
+    这是第一版实现的真实缺陷（自查发现）：全局正则替换会把下面两对压成同一签名，
+    从而把「有进展」误判成「空转」——比漏抓更糟（漏抓退回人工发现，误判否定真实迭代）。
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    # 日期作为被比较的数据
+    assert h("ticket due 2026-11-10") != h("ticket due 2026-11-11"), (
+        "行内日期被剥掉（假阴性）：不同日期的断言输出被压成同一签名"
+    )
+    # 时刻作为断言对象
+    assert h("expected 12:00:00 != actual 13:00:00") != \
+           h("expected 12:00:00 != actual 14:00:00"), (
+        "行内时刻被剥掉（假阴性）：不同实际值的断言输出被压成同一签名"
+    )
+    # 而"整行只是时刻"的日志写法仍须归一化（否则 D-b 白修）
+    assert h("not yet\n22:45:50") == h("not yet\n22:50:47"), "独立时刻行未归一化"
+    # 行首日志时间前缀也须归一化
+    assert h("2026-11-10 22:45:50 INFO waiting") == h("2026-11-10 22:50:47 INFO waiting"), (
+        "日志时间前缀未归一化"
+    )

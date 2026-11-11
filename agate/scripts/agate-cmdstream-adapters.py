@@ -66,35 +66,56 @@ CommandRecord = _IR.CommandRecord
 # ---- 通用小工具 ----
 
 
-# 归一化剥离的"装饰性"模式（2026-11-11，D-b）：这些内容每次运行必变、且不携带任何
-# 进展信息。不剥它们，轮询只要带 `date +%H:%M:%S`（看日志的自然习惯）就能让每次输出
-# 都不同 ⇒ output_hash 永不重复 ⇒ SPIN 判据失效。
-_TS_DECOR_PATTERNS = (
-    # HH:MM:SS[.fff]（含前置的日期分隔可选）
-    (re.compile(r"\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b"), "<TS>"),
-    # ISO-8601 / 日期时间
-    (re.compile(r"\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?\b"), "<TS>"),
-    # 纯日期
-    (re.compile(r"\b\d{4}-\d{2}-\d{2}\b"), "<DATE>"),
-    # pid / PID
-    (re.compile(r"\b(?:pid|PID)[=: ]\s*\d+"), "<PID>"),
+# 装饰性时刻的识别规则（2026-11-11，D-b）——**按位置判定，不按形态全局替换**。
+#
+# 为什么不用"全局正则替换时间戳"：那样会把**作为数据的时间**一起压平，产生假阴性。
+# 实测反例（全局替换时被判为同一签名）：
+#     "ticket due 2026-11-10"        vs "ticket due 2026-11-11"
+#     "expected 12:00:00 != actual 13:00:00" vs "... != actual 14:00:00"
+# 这两类里日期/时刻是**被比较的数据**，差异本身就是结论差异，抹掉它会把"有进展"
+# 误判成"空转"——比漏抓更糟（漏抓退回人工发现，误判会否定真实迭代）。
+#
+# 判据：只有**整行就是一个时刻**，或**行首是日志时间前缀**时，才认定为装饰。
+# 行内出现的日期/时刻一律保留。
+# 整行仅为一个时刻：纯时钟（22:45:50）或完整 ISO/日期时间（2026-11-10T22:45:50+08:00）
+_LINE_IS_ONLY_TIME = re.compile(
+    r"^\s*(?:\d{2}:\d{2}:\d{2}(?:\.\d+)?|"
+    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
+    r"|\d{4}-\d{2}-\d{2})\s*$"
 )
-
-# **刻意不剥**耗时（`12.3s` / `450ms`）与任意数字：耗时长短、失败条数、百分比进度都与
-# 真实进展相关，剥掉会把"合法迭代"与"空转"一起压平（反向守护见
-# test_regression_output_hash_keeps_progress_distinct）。
+_LOG_PREFIX_TIME = re.compile(
+    r"^(\s*\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+(.*)$"
+)
+_PID_DECOR = re.compile(r"\b(?:pid|PID)[=: ]\s*\d+")
 
 
 def _normalize_output_for_hash(text):
-    """把输出里"装饰性、每次必变"的部分归一化，供空转判据使用。
+    """把输出里"装饰性、每次必变、且不携带进展信息"的部分归一化，供空转判据使用。
 
-    只剥**绝对时刻 / 日期 / pid**——即"与这件事做到哪一步无关"的信息。
-    遍历顺序固定（模式表顺序），保证同一输入恒得同一输出。
+    只处理两类（其余原样保留，宁可漏抓也不误伤）：
+      1. **整行仅为一个时刻**（`not yet` 后追加一行 `22:45:50` 这类看日志的习惯写法）
+      2. **行首日志时间前缀**（`2026-11-10 22:45:50 INFO ...`）
+    另剥 `pid=NNN`（每次必变、与进展无关）。
+
+    刻意**不剥**：行内日期/时刻（可能是被比较的数据）、耗时（`12.3s`）、任意数字
+    （失败条数 / 百分比进度都与真实进展相关）。
     """
-    out = text
-    for pattern, repl in _TS_DECOR_PATTERNS:
-        out = pattern.sub(repl, out)
-    return out
+    # 用 splitlines(keepends=True) 保留原换行，否则 "hi\n" 会被压成 "hi" ——
+    # 那会让 output_hash 不再等于「原内容哈希」，破坏 IR 契约（output_hash 是内容哈希）
+    # 与既有断言（test_bdd_4 断言 output_hash == sha1("hi\n")）。
+    out = []
+    for chunk in text.splitlines(keepends=True):
+        body = chunk.rstrip("\r\n")
+        eol = chunk[len(body):]
+        if _LINE_IS_ONLY_TIME.match(body):
+            out.append("<TS>" + eol)
+            continue
+        m = _LOG_PREFIX_TIME.match(body)
+        if m:
+            out.append("<TS> " + m.group(2) + eol)
+            continue
+        out.append(_PID_DECOR.sub("<PID>", body) + eol)
+    return "".join(out)
 
 
 def _sha1_hex(text):
