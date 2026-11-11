@@ -16,7 +16,10 @@
               exit 字段，靠文本前缀解析失败时为 None）
   exit_signal 退出信号的原始形态留档（"Exit code N" / "Error:" 文本前缀、is_error 布尔、
               "pending" 等），供审计追溯解析规则（验证记录差异点 2）
-  output_hash 输出内容哈希（truncated=True 时必为 None，截断输出不参与哈希比对）
+  output_hash 输出内容哈希（truncated=True 时必为 None，截断输出不参与哈希比对）。
+              ⚠️ 仅 adapter 侧做**装饰信息归一化**后再哈希（剥「整行就是时间」的装饰行与 pid），
+              因为唯一消费方是空转判据（按 `(命令, exit, output_hash)` 判重复）；
+              它**不是**原文字节的哈希，不可用于内容完整性校验。
   truncated   输出是否被截断（bool）
 
 依赖：仅标准库（dataclasses / json）。

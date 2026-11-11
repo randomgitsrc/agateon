@@ -217,7 +217,13 @@ def detect(events, now, config=None):
             return "FROZEN", reasons
 
     # ---- 3. 无效重复检测（逻辑空转）----
-    window = completed[-cfg["spin_window"]:]
+    # 窗口按 **ts 排序后取最近 N 条**，不依赖调用方给的列表顺序：
+    # 适配器可能"最新在前"返回（DSH 适配器 records[::-1]，注释明写监控视角最新优先），
+    # 此时 `completed[-N:]` 取到的是**会话最早**的 N 条——实测 1773 条记录的会话里，
+    # 该窗口落在会话开头，判出的 SPIN 命中 `command=""` 的 read/skill 调用（空串 sha1
+    # da39a3ee…），与真正要抓的空转无关。按 ts 排序即与顺序约定解耦。
+    ordered = sorted(completed, key=lambda e: e.get("ts", 0))
+    window = ordered[-cfg["spin_window"]:]
     combo_counts = {}
     for r in window:
         if r.get("truncated"):
@@ -250,9 +256,18 @@ def detect(events, now, config=None):
 
 
 def _looks_like_polling(cmd):
-    """轮询误报类特征：命令含 watch / poll / checks --watch 等轮询关键字（BDD-18）。"""
+    """轮询误报类特征：命令含 watch / poll 等**原生等待原语**（BDD-18）。
+
+    刻意**不含 `sleep`**（2026-11-11，D-c）：`sleep N; <查产出>` 不是等待原语，而是
+    "用沉睡消耗时间再手工查一次"——本仓实测的空转形态就是它（2026-11-10 事故 13 次
+    sleep / 3765s / 输出恒为 not yet）。把 `sleep` 归入"合法轮询"，等于抓到空转后
+    再补一句"可能是合法轮询循环"，判据自我否定。
+
+    区分标准：命令自身**内建**了持续等待与完成检测（`--watch` 由被调命令自行阻塞并
+    轮询），才算"合法轮询"；靠外层 `sleep` 反复重跑同一个查询，不是。
+    """
     lowered = cmd.lower()
-    return any(kw in lowered for kw in ("watch", "poll", "checks --watch", "sleep"))
+    return any(kw in lowered for kw in ("--watch", "-watch", "checks --watch"))
 
 
 # ---- 心跳文件生命周期 helper（P3 §4.4，Phase 3） ----

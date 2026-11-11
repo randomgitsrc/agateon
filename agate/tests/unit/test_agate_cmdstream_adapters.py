@@ -82,6 +82,22 @@ def _make_zstd_frame(jsonl_text, tmp_path, node_available):
     return out
 
 
+def _zstd_compress_bytes(text, tmp_path):
+    """把单段文本压缩为 zstd 字节（不写文件），供需要自定文件名的用例复用。"""
+    node = shutil.which("node")
+    script = (
+        "const z=require('node:zlib');"
+        "let s='';process.stdin.on('data',d=>s+=d);"
+        "process.stdin.on('end',()=>process.stdout.write(z.zstdCompressSync(s)));"
+    )
+    proc = subprocess.run(
+        [node, "-e", script], input=text.encode("utf-8"),
+        capture_output=True, text=False, timeout=30,
+    )
+    assert proc.returncode == 0, f"node zstdCompressSync 失败: {proc.stderr!r}"
+    return proc.stdout
+
+
 def _make_zstd_multi_frame(jsonl_frames, tmp_path):
     """构造真实 zstd 拼接帧容器（每段文本独立压缩成一帧后字节拼接），返回路径。
 
@@ -1077,3 +1093,161 @@ def test_bdd_21_command_record_ten_fields_unchanged(agate_scripts):
         "platform", "session_id", "tool", "command", "ts_start",
         "ts_end", "exit", "exit_signal", "output_hash", "truncated",
     ]
+
+
+# ================= 回归：DSH 真实 tool/result 结构（isError 在 message 上） =================
+# 缺陷（2026-11-10 实测）：适配器取 `message.content[0].isError`，而 DSH 真实结构是
+#   data.message.content = [{"type":"text","text":"...---exit:0---\n"}]
+#   data.message.isError = false
+# 实测 314 条 tool/result 里 content[0] 含 isError 的有 0 条、message.isError=true 有 4 条
+# ⇒ 全部记录 exit=0，真实失败被静默吞掉；SPIN 签名的 exit 维度恒为 0。
+# 旧 fixture 把 isError 写在 content[0] 上（与真实格式不符），故测试长期未暴露。
+
+
+def test_regression_dsh_exit_from_message_level_is_error(agate_scripts, tmp_path):
+    """回归：DSH tool/result 的 isError 在 message 层级（非 content[0]），
+    失败命令须产出非 0 exit；且 toolCallId 在 message 层级即可配对。"""
+    if not _node_zstd_available():
+        pytest.skip("node zstd 不可用，无法构造真实 zstd 会话文件")
+
+    adapters = _load_adapters(agate_scripts)
+    adapter = adapters.DSHAdapter()
+
+    jsonl_text = (
+        '{"type":"session","version":4,"id":"s1","cwd":"/proj/demo"}\n'
+        '{"type":"tool/call","seq":1,"time":1787883650000,"data":{"callId":"c_ok",'
+        '"name":"bash","arguments":"{\\"command\\":\\"true\\"}"}}\n'
+        '{"type":"tool/call","seq":2,"time":1787883650100,"data":{"callId":"c_fail",'
+        '"name":"bash","arguments":"{\\"command\\":\\"false\\"}"}}\n'
+        # 真实结构：message 直接带 toolCallId + isError，content[0] 只有 type/text
+        '{"type":"tool/result","seq":3,"time":1787883650200,"data":{"message":{'
+        '"role":"tool","source":{"kind":"tool","callId":"c_ok"},'
+        '"toolCallId":"c_ok","content":[{"type":"text","text":"---exit:0---\\n"}],'
+        '"isError":false}}}\n'
+        '{"type":"tool/result","seq":4,"time":1787883650300,"data":{"message":{'
+        '"role":"tool","source":{"kind":"tool","callId":"c_fail"},'
+        '"toolCallId":"c_fail","content":[{"type":"text","text":"boom\\n"}],'
+        '"isError":true}}}\n'
+    )
+    p = tmp_path / "real-shape.jsonl.zstd"
+    p.write_bytes(_zstd_compress_bytes(jsonl_text, tmp_path))
+
+    records = adapter.read_commands(str(p))
+    ok = [r for r in records if r.command == "true"]
+    fail = [r for r in records if r.command == "false"]
+    assert len(ok) == 1 and len(fail) == 1, f"配对失败: {[r.command for r in records]}"
+    assert ok[0].exit == 0, f"成功命令 exit 应为 0，实际 {ok[0].exit}"
+    # 失败命令的判定依据是 exit_signal（isError 不带具体退出码，故 exit 允许 None），
+    # 关键是**不得为 0**——为 0 即"失败被报成成功"。
+    assert fail[0].exit != 0, (
+        f"isError=true 的命令（message 层级）exit 不得为 0，实际 {fail[0].exit} —— "
+        "适配器仍在读 content[0].isError，失败会被报成成功"
+    )
+    assert fail[0].exit_signal, "失败命令须留 exit_signal 说明信号来源"
+
+
+# ================= 回归：output_hash 须剥装饰性时间戳（D-b） =================
+# 缺陷（2026-11-10 实测）：SPIN 判据用 (cmd, exit, output_hash) 判"是否空转"。
+# 轮询命令常带 `date +%H:%M:%S` 看日志（人的自然习惯）⇒ 输出每次不同 ⇒ 哈希永不重复
+# ⇒ 判 NORMAL，理由还写"结果签名在变化（合法迭代特征）"。
+# 修法：哈希前剥掉**绝对时刻**与 pid 这类纯装饰信息（不剥耗时——耗时与进展相关）。
+
+
+def test_regression_output_hash_ignores_timestamps(agate_scripts):
+    """回归：仅时间戳不同的两次输出，须产出**相同**哈希（否则空转判据可被时钟绕过）。"""
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    a = h("not yet\n22:45:50")
+    b = h("not yet\n22:50:47")
+    assert a == b, "仅 HH:MM:SS 不同，哈希却不同 → 轮询可用时间戳绕过空转判据"
+    c = h("not yet\n2026-11-10T22:45:50+08:00")
+    assert a == c, "仅 ISO 时间戳不同，哈希却不同"
+
+
+def test_regression_output_hash_keeps_progress_distinct(agate_scripts):
+    """反向守护：真实进展（失败数变化、耗时变化）**不得**被归一化抹平。
+
+    这条防的是"归一化过头"——若连耗时/数字都剥，合法迭代会被误判成空转。
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    # 失败数在变 → 真进展，必须互异
+    fails = [h(f"{n} failed in 10.{n}s") for n in range(4)]
+    assert len(set(fails)) == 4, "失败数变化被归一化抹平（误伤合法迭代）"
+    # 仅耗时变化 → 也必须互异（耗时与进展相关，故意不剥）
+    durs = [h(f"12 passed in {30 + i}.1s") for i in range(3)]
+    assert len(set(durs)) == 3, "耗时被剥掉了（会误伤「测试成功但耗时不同」的重复运行）"
+    # 进度百分比 → 必须互异
+    pct = [h(f"progress {p}%") for p in (10, 55, 90)]
+    assert len(set(pct)) == 3, "进度百分比被归一化抹平"
+
+
+def test_regression_output_hash_strips_pid_keeps_rest(agate_scripts):
+    """pid 属纯装饰（每次必变、无进展信息）→ 剥；其余内容须保留。"""
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    assert h("worker pid=1234 running") == h("worker pid=9876 running"), "pid 未被剥"
+    assert h("worker pid=1234 ok") != h("worker pid=1234 fail"), "归一化吞掉了实质内容差异"
+
+
+def test_regression_output_hash_keeps_inline_time_as_data(agate_scripts):
+    """假阴性守护：**行内**的日期/时刻是数据，不得被当成装饰剥掉。
+
+    这是第一版实现的真实缺陷（自查发现）：全局正则替换会把下面两对压成同一签名，
+    从而把「有进展」误判成「空转」——比漏抓更糟（漏抓退回人工发现，误判否定真实迭代）。
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    # 日期作为被比较的数据
+    assert h("ticket due 2026-11-10") != h("ticket due 2026-11-11"), (
+        "行内日期被剥掉（假阴性）：不同日期的断言输出被压成同一签名"
+    )
+    # 时刻作为断言对象
+    assert h("expected 12:00:00 != actual 13:00:00") != \
+           h("expected 12:00:00 != actual 14:00:00"), (
+        "行内时刻被剥掉（假阴性）：不同实际值的断言输出被压成同一签名"
+    )
+    # 而"整行只是时刻"的日志写法仍须归一化（否则 D-b 白修）
+    assert h("not yet\n22:45:50") == h("not yet\n22:50:47"), "独立时刻行未归一化"
+    # 行首日志时间前缀也须归一化
+    assert h("2026-11-10 22:45:50 INFO waiting") == h("2026-11-10 22:50:47 INFO waiting"), (
+        "日志时间前缀未归一化"
+    )
+
+
+def test_regression_output_hash_covers_real_date_forms(agate_scripts):
+    """C1 守护：事故命令原文是 `... ; date`（无格式参数），其真实输出形态必须被归一化。
+
+    第 1 版只认 `HH:MM:SS`/ISO，导致**裸 `date` 逃逸**——修完事故命令仍判 NORMAL
+    （评审实测）。真实形态（本机实测）：
+      zh_CN → 2026年 11月 11日 星期三 14:52:17 CST
+      C     → Wed Nov 11 14:52:17 CST 2026
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    zh = ["2026年 11月 11日 星期三 14:52:17 CST",
+          "2026年 11月 11日 星期三 14:52:22 CST",
+          "2026年 11月 11日 星期三 14:52:27 CST"]
+    assert len({h(x) for x in zh}) == 1, "zh_CN `date` 输出未被归一化（事故命令仍可绕过判据）"
+    c = ["Wed Nov 11 14:52:17 CST 2026",
+         "Wed Nov 11 14:52:22 CST 2026",
+         "Wed Nov 11 14:52:27 CST 2026"]
+    assert len({h(x) for x in c}) == 1, "C locale `date` 输出未被归一化"
+    # 事故命令的真实形态：文件不存在提示 + 独立一行 date
+    poll = [f"not yet\n2026年 11月 11日 星期三 14:52:{s:02d} CST" for s in (17, 22, 27)]
+    assert len({h(x) for x in poll}) == 1, "「not yet + date 独立行」未被归一化"
+
+
+def test_regression_output_hash_keeps_inline_evidence_with_time(agate_scripts):
+    """C2/行内守护：带上下文的时间（数据）不得被抹平。
+
+    已知边界（有意保留）：**逐行纯日期**（`2026-11-09\\n2026-11-10\\n2026-11-11`）会被
+    归一化成 `<TS>\\n<TS>\\n<TS>` —— 单凭输出形态无法区分"日志装饰"与"表格数据"，
+    选择保留该漏判（放宽到行内会立刻产生更严重的假阴性）。
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    assert h("ticket due 2026-11-10") != h("ticket due 2026-11-11"), "行内日期（数据）被抹平"
+    assert h("expected 12:00:00 != actual 13:00:00") != \
+           h("expected 12:00:00 != actual 14:00:00"), "行内时刻（断言）被抹平"
+    assert h("2026-11-10 ERROR boom") != h("2026-11-10 ERROR quiet"), "行首日期+不同结论被抹平"

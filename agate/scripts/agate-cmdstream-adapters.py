@@ -66,9 +66,86 @@ CommandRecord = _IR.CommandRecord
 # ---- 通用小工具 ----
 
 
+# 装饰性时刻的识别规则（2026-11-11 第 2 版，评审 C1/C2 修正）——**整行才是装饰**。
+#
+# 判定原则：**只把"整行就是一个时间"当作装饰**，行内出现的任何时间都保留。
+#
+# 为什么"整行"这个判据能同时解决 C1 与 C2：
+#   · 事故命令 `... ; date` 的输出是**独立一行**的 date —— 必须覆盖（C1）。
+#     且真实 `date` 形态不止 `HH:MM:SS`：
+#         zh_CN  → `2026年 11月 11日 星期三 14:52:17 CST`
+#         C      → `Wed Nov 11 14:52:17 CST 2026`
+#     第 1 版只认 ISO/时钟，这两类**逃逸** ⇒ 事故命令原样仍判 NORMAL（评审实测）。
+#   · 逐行日期列表 `2026-11-09\n2026-11-10\n2026-11-11` 每行都是纯日期，**会被**归一化
+#     成 `<TS>` ⇒ 内容推进时同签名（C2）。这是本判据的**已知边界**：单凭输出形态无法
+#     区分"这行日期是日志装饰还是表格数据"。**选择保留 C2 的漏判**，理由是：
+#     该类输出（逐行纯日期、不带任何标签）在真实轮询里远少于"裸 date 追加一行"，
+#     而放宽到行内会立刻产生"行内数据被抹平"的假阴性（比漏抓更糟）。
+#
+# 行内日期/时刻一律保留，故下列场景不受影响：
+#     "ticket due 2026-11-10"                          （日期是数据）
+#     "expected 12:00:00 != actual 13:00:00"            （时刻是断言对象）
+_LINE_DECOR_TIME_PATTERNS = (
+    # 纯时钟 22:45:50[.fff]
+    r"\d{2}:\d{2}:\d{2}(?:\.\d+)?",
+    # 纯日期 2026-11-10
+    r"\d{4}-\d{2}-\d{2}",
+    # ISO-8601 日期时间
+    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?",
+    # zh_CN `date`：2026年 11月 11日 星期三 14:52:17 CST
+    r"\d{4}年\s*\d{1,2}月\s*\d{1,2}日(?:\s*星期.)?"
+    r"(?:\s*\d{2}:\d{2}:\d{2})?(?:\s*[A-Z]{2,5})?",
+    # C locale `date`：Wed Nov 11 14:52:17 CST 2026
+    r"[A-Z][a-z]{2}\s+[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}"
+    r"(?:\s+[A-Z]{2,5})?(?:\s+\d{4})?",
+)
+_LINE_IS_DECOR_TIME = re.compile(
+    r"^\s*(?:" + "|".join(_LINE_DECOR_TIME_PATTERNS) + r")\s*$"
+)
+_LOG_PREFIX_TIME = re.compile(
+    r"^(\s*\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+(.*)$"
+)
+_PID_DECOR = re.compile(r"\b(?:pid|PID)[=: ]\s*\d+")
+
+
+def _normalize_output_for_hash(text):
+    """把输出里"装饰性、每次必变、且不携带进展信息"的部分归一化，供空转判据使用。
+
+    只处理两类（其余原样保留，宁可漏抓也不误伤）：
+      1. **整行就是一个时间**（`date` 追加一行；含 zh_CN / C locale / ISO / 纯时钟）
+      2. **行首日志时间前缀**（`2026-11-10 22:45:50 INFO ...`）
+    另剥 `pid=NNN`（每次必变、与进展无关）。
+
+    刻意**不剥**：行内日期/时刻（可能是被比较的数据）、耗时（`12.3s`）、任意数字
+    （失败条数 / 百分比进度都与真实进展相关）。已知边界见上方注释。
+    """
+    # 用 splitlines(keepends=True) 保留原换行——否则 "hi\n" 会被压成 "hi"，
+    # output_hash 就不再等于「原内容哈希」，破坏 IR 契约与既有断言。
+    out = []
+    for chunk in text.splitlines(keepends=True):
+        body = chunk.rstrip("\r\n")
+        eol = chunk[len(body):]
+        if _LINE_IS_DECOR_TIME.match(body):
+            out.append("<TS>" + eol)
+            continue
+        m = _LOG_PREFIX_TIME.match(body)
+        if m:
+            out.append("<TS> " + m.group(2) + eol)
+            continue
+        out.append(_PID_DECOR.sub("<PID>", body) + eol)
+    return "".join(out)
+
+
 def _sha1_hex(text):
-    """输出内容哈希（截断输出不参与哈希比对，调用方负责 truncated 处理）。"""
-    return hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()
+    """输出内容哈希（截断输出不参与哈希比对，调用方负责 truncated 处理）。
+
+    哈希前先做**装饰信息归一化**（见 `_normalize_output_for_hash`）：这是空转判据
+    `(cmd, exit, output_hash)` 成立的前提——判据假定"输出相同 ⇒ 无进展"，而不带归一化
+    时"输出里带时钟"就把这个假定破了。
+    """
+    return hashlib.sha1(
+        _normalize_output_for_hash(text).encode("utf-8", errors="replace")
+    ).hexdigest()
 
 
 def _iso8601_to_epoch_ms(ts):
@@ -566,12 +643,23 @@ class DSHAdapter(CommandStreamAdapter):
             is_error = False
             text_out = ""
             truncated = False
+            # isError / toolCallId 的**权威位置在 message 层级**（2026-11-10 实测 DSH 真实结构：
+            # message = {role, source{callId}, toolCallId, content:[{type,text}], isError}）。
+            # 旧实现只读 content[0].isError —— 实测 314 条 tool/result 里 content[0] 含该键的
+            # 为 0 条、message.isError=true 有 4 条 ⇒ 全部记录 exit=0，真实失败被静默吞掉。
+            # content[0] 保留为兜底（历史 fixture / 旧版本格式可能把键放在内层）。
+            call_id = message.get("toolCallId") or source.get("callId") or ""
+            if "isError" in message:
+                is_error = bool(message.get("isError", False))
             if isinstance(content_list, list) and content_list:
                 first = content_list[0]
                 if isinstance(first, dict):
-                    call_id = first.get("toolCallId") or source.get("callId") or ""
-                    is_error = bool(first.get("isError", False))
+                    call_id = call_id or first.get("toolCallId") or ""
+                    if "isError" not in message:
+                        is_error = bool(first.get("isError", False))
                     truncated = self._detect_truncated(first)
+                    # 文本取处：真实结构是 content[0] = {"type":"text","text":...}
+                    # （文本直接在 `text` 键上）；历史/嵌套形态才在 `content` 里。
                     inner = first.get("content")
                     if isinstance(inner, list):
                         text_out = "".join(
@@ -580,6 +668,10 @@ class DSHAdapter(CommandStreamAdapter):
                         )
                     elif isinstance(inner, str):
                         text_out = inner
+                    if not text_out:
+                        direct = first.get("text")
+                        if isinstance(direct, str):
+                            text_out = direct
             call = calls.get(call_id)
             if call is None:
                 continue
@@ -629,9 +721,25 @@ class DSHAdapter(CommandStreamAdapter):
                 truncated=False,
             )
 
-        exit_code = None
+        # exit 解析优先级（2026-11-11 评审修正）：
+        #   1. **isError=true 优先**——它是平台给出的权威失败信号，任何文本内容都不能覆盖它。
+        #      反例（评审实测）：isError=true 而命令输出里恰好打印了字面量 `---exit:0---`
+        #      （例如正在 grep/echo 这串字符），旧顺序会把**失败报成成功**。
+        #   2. 输出文本的 `---exit:N---` 标记——仅当 isError 为假时采信。
+        #      注意：该标记在真实 DSH 数据里极罕见（实测 15709 条 tool/result 命中 3 条），
+        #      把它当主判据属于"为罕见形态牺牲主信号"，故降为次选、且只在成功侧兜底。
+        #   3. 两者皆无 → 0。
+        marked = re.search(r"---exit:(-?\d+)---", text_out or "")
         if is_error:
+            # 平台判失败：具体码未知（isError 不带码），保留信号来源供审计
+            exit_code = int(marked.group(1)) if marked else None
+            if exit_code is not None and exit_code == 0:
+                # isError 与文本标记矛盾 → 以 isError 为准，不采信 0
+                exit_code = None
             exit_signal = "Error:" if re.search(r"Error:", text_out) else "isError=true"
+        elif marked:
+            exit_code = int(marked.group(1))
+            exit_signal = "" if exit_code == 0 else f"---exit:{exit_code}---"
         else:
             exit_code = 0
             exit_signal = ""
