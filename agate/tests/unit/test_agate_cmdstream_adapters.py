@@ -1126,7 +1126,7 @@ def test_regression_dsh_exit_from_message_level_is_error(agate_scripts, tmp_path
         '"isError":false}}}\n'
         '{"type":"tool/result","seq":4,"time":1787883650300,"data":{"message":{'
         '"role":"tool","source":{"kind":"tool","callId":"c_fail"},'
-        '"toolCallId":"c_fail","content":[{"type":"text","text":"---exit:1---\\n"}],'
+        '"toolCallId":"c_fail","content":[{"type":"text","text":"boom\\n"}],'
         '"isError":true}}}\n'
     )
     p = tmp_path / "real-shape.jsonl.zstd"
@@ -1137,10 +1137,13 @@ def test_regression_dsh_exit_from_message_level_is_error(agate_scripts, tmp_path
     fail = [r for r in records if r.command == "false"]
     assert len(ok) == 1 and len(fail) == 1, f"配对失败: {[r.command for r in records]}"
     assert ok[0].exit == 0, f"成功命令 exit 应为 0，实际 {ok[0].exit}"
-    assert fail[0].exit not in (0, None), (
-        f"isError=true 的命令（message 层级）须产出非 0 exit，实际 {fail[0].exit} —— "
-        "适配器仍在读 content[0].isError"
+    # 失败命令的判定依据是 exit_signal（isError 不带具体退出码，故 exit 允许 None），
+    # 关键是**不得为 0**——为 0 即"失败被报成成功"。
+    assert fail[0].exit != 0, (
+        f"isError=true 的命令（message 层级）exit 不得为 0，实际 {fail[0].exit} —— "
+        "适配器仍在读 content[0].isError，失败会被报成成功"
     )
+    assert fail[0].exit_signal, "失败命令须留 exit_signal 说明信号来源"
 
 
 # ================= 回归：output_hash 须剥装饰性时间戳（D-b） =================
@@ -1148,11 +1151,6 @@ def test_regression_dsh_exit_from_message_level_is_error(agate_scripts, tmp_path
 # 轮询命令常带 `date +%H:%M:%S` 看日志（人的自然习惯）⇒ 输出每次不同 ⇒ 哈希永不重复
 # ⇒ 判 NORMAL，理由还写"结果签名在变化（合法迭代特征）"。
 # 修法：哈希前剥掉**绝对时刻**与 pid 这类纯装饰信息（不剥耗时——耗时与进展相关）。
-
-
-def _hash_fn():
-    """取被测模块的哈希函数（归一化实现所在处）。"""
-    return None
 
 
 def test_regression_output_hash_ignores_timestamps(agate_scripts):
@@ -1215,3 +1213,41 @@ def test_regression_output_hash_keeps_inline_time_as_data(agate_scripts):
     assert h("2026-11-10 22:45:50 INFO waiting") == h("2026-11-10 22:50:47 INFO waiting"), (
         "日志时间前缀未归一化"
     )
+
+
+def test_regression_output_hash_covers_real_date_forms(agate_scripts):
+    """C1 守护：事故命令原文是 `... ; date`（无格式参数），其真实输出形态必须被归一化。
+
+    第 1 版只认 `HH:MM:SS`/ISO，导致**裸 `date` 逃逸**——修完事故命令仍判 NORMAL
+    （评审实测）。真实形态（本机实测）：
+      zh_CN → 2026年 11月 11日 星期三 14:52:17 CST
+      C     → Wed Nov 11 14:52:17 CST 2026
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    zh = ["2026年 11月 11日 星期三 14:52:17 CST",
+          "2026年 11月 11日 星期三 14:52:22 CST",
+          "2026年 11月 11日 星期三 14:52:27 CST"]
+    assert len({h(x) for x in zh}) == 1, "zh_CN `date` 输出未被归一化（事故命令仍可绕过判据）"
+    c = ["Wed Nov 11 14:52:17 CST 2026",
+         "Wed Nov 11 14:52:22 CST 2026",
+         "Wed Nov 11 14:52:27 CST 2026"]
+    assert len({h(x) for x in c}) == 1, "C locale `date` 输出未被归一化"
+    # 事故命令的真实形态：文件不存在提示 + 独立一行 date
+    poll = [f"not yet\n2026年 11月 11日 星期三 14:52:{s:02d} CST" for s in (17, 22, 27)]
+    assert len({h(x) for x in poll}) == 1, "「not yet + date 独立行」未被归一化"
+
+
+def test_regression_output_hash_keeps_inline_evidence_with_time(agate_scripts):
+    """C2/行内守护：带上下文的时间（数据）不得被抹平。
+
+    已知边界（有意保留）：**逐行纯日期**（`2026-11-09\\n2026-11-10\\n2026-11-11`）会被
+    归一化成 `<TS>\\n<TS>\\n<TS>` —— 单凭输出形态无法区分"日志装饰"与"表格数据"，
+    选择保留该漏判（放宽到行内会立刻产生更严重的假阴性）。
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    assert h("ticket due 2026-11-10") != h("ticket due 2026-11-11"), "行内日期（数据）被抹平"
+    assert h("expected 12:00:00 != actual 13:00:00") != \
+           h("expected 12:00:00 != actual 14:00:00"), "行内时刻（断言）被抹平"
+    assert h("2026-11-10 ERROR boom") != h("2026-11-10 ERROR quiet"), "行首日期+不同结论被抹平"

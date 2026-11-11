@@ -267,7 +267,7 @@ def _looks_like_polling(cmd):
     轮询），才算"合法轮询"；靠外层 `sleep` 反复重跑同一个查询，不是。
     """
     lowered = cmd.lower()
-    return any(kw in lowered for kw in ("watch", "poll", "checks --watch"))
+    return any(kw in lowered for kw in ("--watch", "-watch", "checks --watch"))
 
 
 # ---- 心跳文件生命周期 helper（P3 §4.4，Phase 3） ----

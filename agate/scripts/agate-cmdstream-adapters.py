@@ -66,58 +66,66 @@ CommandRecord = _IR.CommandRecord
 # ---- 通用小工具 ----
 
 
-# 装饰性时刻的识别规则（2026-11-11，D-b）——**按位置判定，不按形态全局替换**。
+# 装饰性时刻的识别规则（2026-11-11 第 2 版，评审 C1/C2 修正）——**整行才是装饰**。
 #
-# 为什么不用"全局正则替换时间戳"：那样会把**作为数据的时间**一起压平，产生假阴性。
-# 实测反例（全局替换时被判为同一签名）：
-#     "ticket due 2026-11-10"        vs "ticket due 2026-11-11"
-#     "expected 12:00:00 != actual 13:00:00" vs "... != actual 14:00:00"
-# 这两类里日期/时刻是**被比较的数据**，差异本身就是结论差异，抹掉它会把"有进展"
-# 误判成"空转"——比漏抓更糟（漏抓退回人工发现，误判会否定真实迭代）。
+# 判定原则：**只把"整行就是一个时间"当作装饰**，行内出现的任何时间都保留。
 #
-# 判据：只有**整行就是一个时刻**，或**行首是日志时间前缀**时，才认定为装饰。
-# 行内出现的日期/时刻一律保留。
-# 整行仅为一个时刻：纯时钟（22:45:50）或完整 ISO/日期时间（2026-11-10T22:45:50+08:00）
-_LINE_IS_ONLY_TIME = re.compile(
-    r"^\s*(?:\d{2}:\d{2}:\d{2}(?:\.\d+)?|"
-    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
-    r"|\d{4}-\d{2}-\d{2})\s*$"
+# 为什么"整行"这个判据能同时解决 C1 与 C2：
+#   · 事故命令 `... ; date` 的输出是**独立一行**的 date —— 必须覆盖（C1）。
+#     且真实 `date` 形态不止 `HH:MM:SS`：
+#         zh_CN  → `2026年 11月 11日 星期三 14:52:17 CST`
+#         C      → `Wed Nov 11 14:52:17 CST 2026`
+#     第 1 版只认 ISO/时钟，这两类**逃逸** ⇒ 事故命令原样仍判 NORMAL（评审实测）。
+#   · 逐行日期列表 `2026-11-09\n2026-11-10\n2026-11-11` 每行都是纯日期，**会被**归一化
+#     成 `<TS>` ⇒ 内容推进时同签名（C2）。这是本判据的**已知边界**：单凭输出形态无法
+#     区分"这行日期是日志装饰还是表格数据"。**选择保留 C2 的漏判**，理由是：
+#     该类输出（逐行纯日期、不带任何标签）在真实轮询里远少于"裸 date 追加一行"，
+#     而放宽到行内会立刻产生"行内数据被抹平"的假阴性（比漏抓更糟）。
+#
+# 行内日期/时刻一律保留，故下列场景不受影响：
+#     "ticket due 2026-11-10"                          （日期是数据）
+#     "expected 12:00:00 != actual 13:00:00"            （时刻是断言对象）
+_LINE_DECOR_TIME_PATTERNS = (
+    # 纯时钟 22:45:50[.fff]
+    r"\d{2}:\d{2}:\d{2}(?:\.\d+)?",
+    # 纯日期 2026-11-10
+    r"\d{4}-\d{2}-\d{2}",
+    # ISO-8601 日期时间
+    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?",
+    # zh_CN `date`：2026年 11月 11日 星期三 14:52:17 CST
+    r"\d{4}年\s*\d{1,2}月\s*\d{1,2}日(?:\s*星期.)?"
+    r"(?:\s*\d{2}:\d{2}:\d{2})?(?:\s*[A-Z]{2,5})?",
+    # C locale `date`：Wed Nov 11 14:52:17 CST 2026
+    r"[A-Z][a-z]{2}\s+[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}"
+    r"(?:\s+[A-Z]{2,5})?(?:\s+\d{4})?",
+)
+_LINE_IS_DECOR_TIME = re.compile(
+    r"^\s*(?:" + "|".join(_LINE_DECOR_TIME_PATTERNS) + r")\s*$"
 )
 _LOG_PREFIX_TIME = re.compile(
     r"^(\s*\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+(.*)$"
 )
 _PID_DECOR = re.compile(r"\b(?:pid|PID)[=: ]\s*\d+")
 
-# **已知边界（有意保守，不补）**：下列两种形态**不会**被归一化，故仍可用它们绕过空转
-# 判据——这是"漏抓 vs 误伤"的取舍，选漏抓：
-#   ① 行首是**纯时钟无日期**（`22:45:50 INFO waiting`）
-#   ② 时刻出现在**行中**（`[22:45:50] waiting`）
-# 补 ① 的正则 `^(\s*\d{2}:\d{2}:\d{2})\s+(.*)$` 会同时命中
-#   `12:00:00 != 13:00:00` / `12:00:00 expected, got 13:00:00`
-# ——那里时刻是**被比较的数据**，归一化即产生假阴性（把真实断言差异抹平）。
-# 本次事故形态是「`not yet` 后追加一行 `date` 输出」，即独立时刻行，已被覆盖。
-# 若未来要收紧，正确方向是给"输出结构"更多信息（如按行分类），而非放宽正则。
-
 
 def _normalize_output_for_hash(text):
     """把输出里"装饰性、每次必变、且不携带进展信息"的部分归一化，供空转判据使用。
 
     只处理两类（其余原样保留，宁可漏抓也不误伤）：
-      1. **整行仅为一个时刻**（`not yet` 后追加一行 `22:45:50` 这类看日志的习惯写法）
+      1. **整行就是一个时间**（`date` 追加一行；含 zh_CN / C locale / ISO / 纯时钟）
       2. **行首日志时间前缀**（`2026-11-10 22:45:50 INFO ...`）
     另剥 `pid=NNN`（每次必变、与进展无关）。
 
     刻意**不剥**：行内日期/时刻（可能是被比较的数据）、耗时（`12.3s`）、任意数字
-    （失败条数 / 百分比进度都与真实进展相关）。
+    （失败条数 / 百分比进度都与真实进展相关）。已知边界见上方注释。
     """
-    # 用 splitlines(keepends=True) 保留原换行，否则 "hi\n" 会被压成 "hi" ——
-    # 那会让 output_hash 不再等于「原内容哈希」，破坏 IR 契约（output_hash 是内容哈希）
-    # 与既有断言（test_bdd_4 断言 output_hash == sha1("hi\n")）。
+    # 用 splitlines(keepends=True) 保留原换行——否则 "hi\n" 会被压成 "hi"，
+    # output_hash 就不再等于「原内容哈希」，破坏 IR 契约与既有断言。
     out = []
     for chunk in text.splitlines(keepends=True):
         body = chunk.rstrip("\r\n")
         eol = chunk[len(body):]
-        if _LINE_IS_ONLY_TIME.match(body):
+        if _LINE_IS_DECOR_TIME.match(body):
             out.append("<TS>" + eol)
             continue
         m = _LOG_PREFIX_TIME.match(body)
@@ -713,20 +721,25 @@ class DSHAdapter(CommandStreamAdapter):
                 truncated=False,
             )
 
-        # exit 解析优先级（2026-11-10 实测 DSH 输出形态）：
-        #   1. 输出文本里的 `---exit:N---` 标记——DSH 工具执行层直接写入，最可靠
-        #   2. isError=true → 非 0（具体码未知，留 exit_signal 说明来源）
-        #   3. 否则 0
-        # 旧实现只有 2/3 两支：isError=true 时 exit 恒为 None（"码未知"），而真实失败
-        # 在文本里带 `---exit:1---`，本可直接取到。SPIN 签名含 exit 维度，恒为 None 会
-        # 让"失败命令重复"这类空转特征失真。
+        # exit 解析优先级（2026-11-11 评审修正）：
+        #   1. **isError=true 优先**——它是平台给出的权威失败信号，任何文本内容都不能覆盖它。
+        #      反例（评审实测）：isError=true 而命令输出里恰好打印了字面量 `---exit:0---`
+        #      （例如正在 grep/echo 这串字符），旧顺序会把**失败报成成功**。
+        #   2. 输出文本的 `---exit:N---` 标记——仅当 isError 为假时采信。
+        #      注意：该标记在真实 DSH 数据里极罕见（实测 15709 条 tool/result 命中 3 条），
+        #      把它当主判据属于"为罕见形态牺牲主信号"，故降为次选、且只在成功侧兜底。
+        #   3. 两者皆无 → 0。
         marked = re.search(r"---exit:(-?\d+)---", text_out or "")
-        if marked:
+        if is_error:
+            # 平台判失败：具体码未知（isError 不带码），保留信号来源供审计
+            exit_code = int(marked.group(1)) if marked else None
+            if exit_code is not None and exit_code == 0:
+                # isError 与文本标记矛盾 → 以 isError 为准，不采信 0
+                exit_code = None
+            exit_signal = "Error:" if re.search(r"Error:", text_out) else "isError=true"
+        elif marked:
             exit_code = int(marked.group(1))
             exit_signal = "" if exit_code == 0 else f"---exit:{exit_code}---"
-        elif is_error:
-            exit_code = None
-            exit_signal = "Error:" if re.search(r"Error:", text_out) else "isError=true"
         else:
             exit_code = 0
             exit_signal = ""
