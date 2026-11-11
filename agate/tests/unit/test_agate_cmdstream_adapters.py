@@ -1141,3 +1141,52 @@ def test_regression_dsh_exit_from_message_level_is_error(agate_scripts, tmp_path
         f"isError=true 的命令（message 层级）须产出非 0 exit，实际 {fail[0].exit} —— "
         "适配器仍在读 content[0].isError"
     )
+
+
+# ================= 回归：output_hash 须剥装饰性时间戳（D-b） =================
+# 缺陷（2026-11-10 实测）：SPIN 判据用 (cmd, exit, output_hash) 判"是否空转"。
+# 轮询命令常带 `date +%H:%M:%S` 看日志（人的自然习惯）⇒ 输出每次不同 ⇒ 哈希永不重复
+# ⇒ 判 NORMAL，理由还写"结果签名在变化（合法迭代特征）"。
+# 修法：哈希前剥掉**绝对时刻**与 pid 这类纯装饰信息（不剥耗时——耗时与进展相关）。
+
+
+def _hash_fn():
+    """取被测模块的哈希函数（归一化实现所在处）。"""
+    return None
+
+
+def test_regression_output_hash_ignores_timestamps(agate_scripts):
+    """回归：仅时间戳不同的两次输出，须产出**相同**哈希（否则空转判据可被时钟绕过）。"""
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    a = h("not yet\n22:45:50")
+    b = h("not yet\n22:50:47")
+    assert a == b, "仅 HH:MM:SS 不同，哈希却不同 → 轮询可用时间戳绕过空转判据"
+    c = h("not yet\n2026-11-10T22:45:50+08:00")
+    assert a == c, "仅 ISO 时间戳不同，哈希却不同"
+
+
+def test_regression_output_hash_keeps_progress_distinct(agate_scripts):
+    """反向守护：真实进展（失败数变化、耗时变化）**不得**被归一化抹平。
+
+    这条防的是"归一化过头"——若连耗时/数字都剥，合法迭代会被误判成空转。
+    """
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    # 失败数在变 → 真进展，必须互异
+    fails = [h(f"{n} failed in 10.{n}s") for n in range(4)]
+    assert len(set(fails)) == 4, "失败数变化被归一化抹平（误伤合法迭代）"
+    # 仅耗时变化 → 也必须互异（耗时与进展相关，故意不剥）
+    durs = [h(f"12 passed in {30 + i}.1s") for i in range(3)]
+    assert len(set(durs)) == 3, "耗时被剥掉了（会误伤「测试成功但耗时不同」的重复运行）"
+    # 进度百分比 → 必须互异
+    pct = [h(f"progress {p}%") for p in (10, 55, 90)]
+    assert len(set(pct)) == 3, "进度百分比被归一化抹平"
+
+
+def test_regression_output_hash_strips_pid_keeps_rest(agate_scripts):
+    """pid 属纯装饰（每次必变、无进展信息）→ 剥；其余内容须保留。"""
+    adapters = _load_adapters(agate_scripts)
+    h = adapters._sha1_hex
+    assert h("worker pid=1234 running") == h("worker pid=9876 running"), "pid 未被剥"
+    assert h("worker pid=1234 ok") != h("worker pid=1234 fail"), "归一化吞掉了实质内容差异"

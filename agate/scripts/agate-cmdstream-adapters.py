@@ -66,9 +66,47 @@ CommandRecord = _IR.CommandRecord
 # ---- 通用小工具 ----
 
 
+# 归一化剥离的"装饰性"模式（2026-11-11，D-b）：这些内容每次运行必变、且不携带任何
+# 进展信息。不剥它们，轮询只要带 `date +%H:%M:%S`（看日志的自然习惯）就能让每次输出
+# 都不同 ⇒ output_hash 永不重复 ⇒ SPIN 判据失效。
+_TS_DECOR_PATTERNS = (
+    # HH:MM:SS[.fff]（含前置的日期分隔可选）
+    (re.compile(r"\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b"), "<TS>"),
+    # ISO-8601 / 日期时间
+    (re.compile(r"\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?\b"), "<TS>"),
+    # 纯日期
+    (re.compile(r"\b\d{4}-\d{2}-\d{2}\b"), "<DATE>"),
+    # pid / PID
+    (re.compile(r"\b(?:pid|PID)[=: ]\s*\d+"), "<PID>"),
+)
+
+# **刻意不剥**耗时（`12.3s` / `450ms`）与任意数字：耗时长短、失败条数、百分比进度都与
+# 真实进展相关，剥掉会把"合法迭代"与"空转"一起压平（反向守护见
+# test_regression_output_hash_keeps_progress_distinct）。
+
+
+def _normalize_output_for_hash(text):
+    """把输出里"装饰性、每次必变"的部分归一化，供空转判据使用。
+
+    只剥**绝对时刻 / 日期 / pid**——即"与这件事做到哪一步无关"的信息。
+    遍历顺序固定（模式表顺序），保证同一输入恒得同一输出。
+    """
+    out = text
+    for pattern, repl in _TS_DECOR_PATTERNS:
+        out = pattern.sub(repl, out)
+    return out
+
+
 def _sha1_hex(text):
-    """输出内容哈希（截断输出不参与哈希比对，调用方负责 truncated 处理）。"""
-    return hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()
+    """输出内容哈希（截断输出不参与哈希比对，调用方负责 truncated 处理）。
+
+    哈希前先做**装饰信息归一化**（见 `_normalize_output_for_hash`）：这是空转判据
+    `(cmd, exit, output_hash)` 成立的前提——判据假定"输出相同 ⇒ 无进展"，而不带归一化
+    时"输出里带时钟"就把这个假定破了。
+    """
+    return hashlib.sha1(
+        _normalize_output_for_hash(text).encode("utf-8", errors="replace")
+    ).hexdigest()
 
 
 def _iso8601_to_epoch_ms(ts):
