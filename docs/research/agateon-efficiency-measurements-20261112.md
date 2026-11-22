@@ -43,18 +43,22 @@
 
 ## 3. 派发次数与改动规模**脱钩** `[实测]`
 
-按生产代码行数（排除 test/spec/`.md`）分组，统计每任务的 `*dispatch-context*.md` 份数：
+按生产代码行数（`git show --numstat` 累加该 task_id 全部提交，排除 `test/tests/spec/__tests__`、
+`*.md/*.mdx`、`*_test.*/*.test.*/*.spec.*`）分组，统计每任务的 `*dispatch-context*.md` 份数。
+**分母只含至少派发过 1 次的任务**（两仓 145 个任务目录中 86 个有派发；其余 59 个多为 P0 未启动、
+遗留或非协议任务 —— 其派发数为 0 属「没跑」而非「跑得快」，混入会稀释结论）：
 
 | 生产代码规模 | 任务数 | 平均派发份数 |
 |---|---|---|
-| ≤100 行 | 5 | 9.8 |
-| 101–1000 行 | 24 | 10.7 |
-| 1001–10000 行 | 17 | 18.1 |
+| ≤100 行 | 3 | 7.3 |
+| 101–1000 行 | 32 | 12.2 |
+| 1001–10000 行 | 45 | 19.6 |
+| >10000 行 | 6 | 31.3 |
 
-- 派发份数 vs 全部改动行数：r = 0.50
-- 派发份数 vs log10(生产代码行)：r = 0.39
+- 派发份数 vs log10(生产代码行)：r = **0.51**
 
-**结论**：改动规模跨 100 倍，派发次数只跨约 2 倍。派发次数不随任务变小而下降。
+**结论**：规模跨约 100 倍（≤100 → 1001–10000），平均派发只跨 **2.7 倍**（7.3 → 19.6）——
+派发次数随规模增长，但**远低于线性**。小任务不因体量小而显著减少派发。
 
 ## 4. gate 的低红率来自 retries 位于其上游 `[实测]`
 
@@ -74,12 +78,14 @@
 
 ## 5. 四条降级/分流通道的消费状态 `[实测]`
 
+**三条零消费，一条已消费**（`phases:` 裁剪有机械判据，见末行）——不要把四条一并当作「待接线」。
+
 | 通道 | 定义位置 | 消费情况（grep 实测） |
 |---|---|---|
-| `ceremony: thin` | `agate/WORKFLOW.md:241`、`phase-cards/P1-requirements.md:124` | `agate/rules/` 四个权威源中 `thin` 命中 **0**；122 个 P1 中声明 2 次；薄化不减任何阶段或派发 |
+| `ceremony: thin` | `agate/WORKFLOW.md:241`、`phase-cards/P1-requirements.md:124` | 全仓任务 frontmatter 中 `ceremony: thin` 声明 **0 次**（`TAG0019`/`TAG0022` 的命中均为正文 BDD 描述）；`check-routing.py` 只校验四要素格式，无任何脚本按 thin 档位减少阶段或派发 |
 | `gate_layer.commit_types` | `agate/rules/phases.yaml:186`（`docs-only: [P0,P1,P2,P7,P8]`） | `grep "gate_layer\|commit_types" agate/scripts/*.py` = **0** |
 | 派发路由 | `agate-workspace/dispatch-routing.yaml` | 两仓 `dispatch_route` 事件 = **0** |
-| `phases:` 裁剪 | P1 frontmatter | `agate-next.py` 对 `phases` 声明零引用；靠主 Agent 读卡执行 |
+| `phases:` 裁剪 | P1 frontmatter | **已被机械消费**（非零消费）：`pre-commit-gate.py:1005` 每次提交调 `check-pruning.py`，后者读 frontmatter `phases` 校验不可裁剪阶段（P1/P2/P4/P5/P6）与裁剪条件，`exit 1` 即中止提交；`check-state-transition.py:343` 走同一读取链判跨阶 |
 
 ## 6. token / 步数的可得性 `[实测]`
 
@@ -105,8 +111,8 @@
 单会话 167 次工具调用：bash **151**、read 9、grep 3、write 1、edit 1。
 151 次 bash 中：`cat`/`sed` 读文件 67、`grep` 60、`find` 5、`ls`/`wc` 1、其他 18。
 
-`agate/assets/templates/dispatch-prompt.md` 与 7 个 `execution-roles/*.md`
-未对「用 read 工具还是 bash 读文件」作出规定；
+`agate/assets/templates/dispatch-prompt.md` 与 `agate/assets/execution-roles/` 下 7 个角色文件
+未对「用 read 工具还是 bash 读文件」作出规定（两处 `grep` 均 0 命中）；
 `agate/assets/templates/dsh/SKILL.md:68` 有该规定（理由为「避免 bash 挂起」，未提时间成本）。
 
 ## 9. 与前沿材料的对照（供引用，非决策）
@@ -126,7 +132,11 @@
 
 ## 10. 时效性复核清单
 
+- **计数类数字（任务数、分桶 n、事件总数、相关系数）只增不减地漂移**——复现时数字不同属正常，
+  应复核的是**结论方向**（比例关系、数量级、有无机械消费），不是回原值
 - 会话日志格式依赖 DSH 版本（`usage` 字段位置）；平台升级后需复核 §2、§6
 - `gate_run` 写入时机依赖 `pre-commit-gate.py`；若改写入点，§4 需重测
-- §3 的分组依赖 git 提交信息含 task_id；任务未打标签者不计入
-- §5 的 grep 结论随脚本接线变化，复核命令已在表内
+- §3 的分组依赖 git 提交信息含 task_id；任务未打标签者不计入。分母限定为「至少派发过 1 次」的任务，
+  排除 P0 未启动/遗留任务（其 0 派发源于未运行，非效率）
+- §5 的 grep 结论随脚本接线变化，复核命令已在表内；**接线的判定须查 gate 调用链，不能只 grep 脚本名**
+  （`phases:` 一项即因只查 `agate-next.py` 而误判为零消费）
