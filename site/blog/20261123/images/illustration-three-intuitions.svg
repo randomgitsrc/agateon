@@ -23,9 +23,9 @@
     <!-- 行 2 -->
     <text x="52" y="258" font-size="15" font-weight="700" fill="#1A1A18">"tools are</text>
     <text x="52" y="278" font-size="15" font-weight="700" fill="#1A1A18">the bottleneck"</text>
-    <text x="330" y="258" font-size="15.5" fill="#444441">23.7% pooled,</text>
+    <text x="330" y="258" font-size="15.5" fill="#444441">32.7% pooled,</text>
     <text x="330" y="278" font-size="15.5" fill="#444441">2.1% median</text>
-    <text x="690" y="268" font-size="14" font-weight="700" fill="#D85A30">a quarter at most</text>
+    <text x="690" y="268" font-size="14" font-weight="700" fill="#D85A30">a third at most</text>
     <line x1="40" y1="296" x2="860" y2="296" stroke="#D8D5CB" stroke-width="1.5" stroke-dasharray="4,4"/>
 
     <!-- 行 3 -->

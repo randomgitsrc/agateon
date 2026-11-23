@@ -10,7 +10,7 @@
     <rect x="70" y="384" width="620" height="46" rx="5" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2.5"/>
     <rect x="70" y="384" width="147" height="46" rx="5" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5"/>
     <text x="380" y="413" font-size="15" font-weight="700" fill="#085041" text-anchor="middle">模型思考 — 约 76%</text>
-    <text x="151" y="412" font-size="12" fill="#712B13" text-anchor="middle">工具 23.7%</text>
+    <text x="151" y="412" font-size="12" fill="#712B13" text-anchor="middle">工具 32.7%</text>
 
     <text x="740" y="368" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.8">上下文 vs 步耗时</text>
     <line x1="740" y1="470" x2="1090" y2="470" stroke="#1A1A18" stroke-width="2"/>
