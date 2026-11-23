@@ -19,9 +19,9 @@
 
     <text x="52" y="258" font-size="15" font-weight="700" fill="#1A1A18">"工具</text>
     <text x="52" y="278" font-size="15" font-weight="700" fill="#1A1A18">是瓶颈"</text>
-    <text x="300" y="258" font-size="15.5" fill="#444441">占周期 23.7%（pooled）</text>
+    <text x="300" y="258" font-size="15.5" fill="#444441">占周期 32.7%（pooled）</text>
     <text x="300" y="278" font-size="15.5" fill="#444441">2.1%（中位）</text>
-    <text x="662" y="268" font-size="14" font-weight="700" fill="#D85A30">最多四分之一</text>
+    <text x="662" y="268" font-size="14" font-weight="700" fill="#D85A30">最多三分之一</text>
     <line x1="40" y1="296" x2="860" y2="296" stroke="#D8D5CB" stroke-width="1.5" stroke-dasharray="4,4"/>
 
     <text x="52" y="336" font-size="15" font-weight="700" fill="#1A1A18">"大任务</text>
