@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="1200" height="630" fill="#FAF9F4"/>
+  <text x="70" y="86" font-family="'Helvetica Neue', Arial, sans-serif" font-size="19" letter-spacing="3.5" fill="#1D9E75" font-weight="600">AGATEON — ORCHESTRATION PROTOCOL</text>
+  <text x="70" y="196" font-size="56" font-weight="700" fill="#1A1A18" font-family="Noto Sans SC, serif">你的 agent 到底</text>
+  <text x="70" y="264" font-size="56" font-weight="700" fill="#1D9E75" font-family="Noto Sans SC, serif">把时间花在哪？</text>
+  <text x="70" y="314" font-size="21" font-style="italic" fill="#444441" font-family="Noto Sans SC, serif">占比和"存在这个成本"是两个不同的问题</text>
+
+  <g font-family="Noto Sans SC, sans-serif">
+    <text x="70" y="368" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.8">一个 step，中位 8.5 秒</text>
+    <rect x="70" y="384" width="620" height="46" rx="5" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2.5"/>
+    <rect x="70" y="384" width="147" height="46" rx="5" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5"/>
+    <text x="380" y="413" font-size="15" font-weight="700" fill="#085041" text-anchor="middle">模型思考 — 约 76%</text>
+    <text x="151" y="412" font-size="12" fill="#712B13" text-anchor="middle">工具 23.7%</text>
+
+    <text x="740" y="368" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.8">上下文 vs 步耗时</text>
+    <line x1="740" y1="470" x2="1090" y2="470" stroke="#1A1A18" stroke-width="2"/>
+    <line x1="740" y1="384" x2="740" y2="470" stroke="#1A1A18" stroke-width="2"/>
+    <text x="915" y="492" font-size="12" fill="#444441" text-anchor="middle">上下文（log）→</text>
+
+    <path d="M 760 452 L 1070 396" fill="none" stroke="#D85A30" stroke-width="3" stroke-dasharray="7,5"/>
+    <text x="1078" y="392" font-size="12.5" fill="#712B13" text-anchor="end">上下文 9.6 倍</text>
+
+    <line x1="760" y1="432" x2="1070" y2="430" stroke="#1D9E75" stroke-width="4"/>
+    <text x="1070" y="452" font-size="12.5" font-weight="700" fill="#085041" text-anchor="end">耗时持平</text>
+    <text x="915" y="418" font-size="12.5" font-style="italic" fill="#444441" text-anchor="middle">r = −0.03（测不出）</text>
+  </g>
+
+  <text x="70" y="566" font-size="18" font-style="italic" fill="#444441" font-family="Noto Sans SC, serif">时间在模型思考里，而上下文不是让它慢的原因。</text>
+  <text x="70" y="596" font-size="15" fill="#444441" font-family="'Helvetica Neue', Arial, sans-serif">147 会话 · 13,578 步 · 单项目单模型</text>
+</svg>
