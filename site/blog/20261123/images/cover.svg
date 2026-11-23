@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Georgia, 'Times New Roman', serif">
+  <rect width="1200" height="630" fill="#FAF9F4"/>
+
+  <text x="70" y="86" font-family="'Helvetica Neue', Arial, sans-serif" font-size="19" letter-spacing="3.5" fill="#1D9E75" font-weight="600">AGATEON — ORCHESTRATION PROTOCOL</text>
+
+  <text x="70" y="196" font-size="56" font-weight="700" fill="#1A1A18">Where does your agent</text>
+  <text x="70" y="264" font-size="56" font-weight="700" fill="#1D9E75">actually spend its time?</text>
+  <text x="70" y="314" font-size="21" font-style="italic" fill="#444441">the share is not the same question as the cost</text>
+
+  <!-- 左：一步的构成条 -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif">
+    <text x="70" y="368" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.8">ONE STEP, 8.5 s (median)</text>
+    <rect x="70" y="384" width="620" height="46" rx="5" fill="#9FE1CB" stroke="#1D9E75" stroke-width="2.5"/>
+    <rect x="70" y="384" width="147" height="46" rx="5" fill="#FAF9F4" stroke="#D85A30" stroke-width="2.5"/>
+    <text x="380" y="413" font-size="15" font-weight="700" fill="#085041" text-anchor="middle">model thinking — ~76%</text>
+    <text x="151" y="412" font-size="12" fill="#712B13" text-anchor="middle">tools 23.7%</text>
+
+    <!-- 右：上下文涨了 10 倍，步耗时持平 -->
+    <text x="740" y="368" font-size="13" font-weight="700" fill="#085041" letter-spacing="1.8">CONTEXT vs STEP DURATION</text>
+
+    <!-- 坐标轴 -->
+    <line x1="740" y1="470" x2="1090" y2="470" stroke="#1A1A18" stroke-width="2"/>
+    <line x1="740" y1="384" x2="740" y2="470" stroke="#1A1A18" stroke-width="2"/>
+    <text x="915" y="492" font-size="12" fill="#444441" text-anchor="middle">context (log) →</text>
+
+    <!-- 上下文上升（虚线，标注 10x） -->
+    <path d="M 760 452 L 1070 396" fill="none" stroke="#D85A30" stroke-width="3" stroke-dasharray="7,5"/>
+    <text x="1078" y="392" font-size="12.5" fill="#712B13" text-anchor="end">context 9.6x</text>
+
+    <!-- 步耗时持平（实线） -->
+    <line x1="760" y1="432" x2="1070" y2="430" stroke="#1D9E75" stroke-width="4"/>
+    <text x="1070" y="452" font-size="12.5" font-weight="700" fill="#085041" text-anchor="end">duration flat</text>
+    <text x="915" y="418" font-size="12.5" font-style="italic" fill="#444441" text-anchor="middle">r = −0.03 (none detectable)</text>
+  </g>
+
+  <text x="70" y="566" font-size="18" font-style="italic" fill="#444441">The time is in the model thinking, and the context is not what makes it slow.</text>
+  <text x="70" y="596" font-size="15" fill="#444441" font-family="'Helvetica Neue', Arial, sans-serif">147 sessions · 13,578 steps · one project, one model</text>
+</svg>
