@@ -12,6 +12,42 @@
 
 ### 修复
 
+- **DSH 0.2.x 适配：preset 引用了已移除的包子路径 ⇒ 挂载失败（走 hotfix 通道，不立项）**：
+  用户报告「DSH 升到 0.2.3 后 agateon 应该不兼容了」——**属实，是真故障**（第一版判断为
+  「无硬性不兼容」是错的，独立评审用 registry 的 broken 状态推翻）。根因：模板引用的
+  `@deepseek-ai/dsh-tool-subagent-control/list-agents` 子路径自 DSH **0.2.2-rc.5** 起已从
+  包 `exports` 移除（上游指南 `v0.2.1-rc.1/subagent-control-tools` 明文要求删该行；
+  `list_agents` 改由 `tool-subagent-control` **根入口**一并注册）。实测该子路径
+  `require` → `ERR_PACKAGE_PATH_NOT_EXPORTED`，根入口正常 ⇒ **preset 必然挂载失败**，
+  表现为「选 Agateon 编排者建会话失败」。
+
+  **当初为何漏判（判据教训）**：该失败被降级为 preset registry 的 `broken` 状态、只走
+  `logger.warn`，而**启动日志不落盘**（只有 CLI 启动失败路径才附着 `startupLogs`）⇒
+  「启动日志零错误」看起来像「兼容」。**判据必须是「用该 preset 建一个会话」**，不是看日志、
+  也不是看 schema dump。
+  **修法**：删除该行（`list_agents` 由根入口承担）；模板补注释说明为何不能再加；
+  `test_t41_platform_hygiene.py` 的期望授权集合同步去掉它。
+  **用户动作**：重跑 `python3 ~/.agate/scripts/agate-setup.py` 刷新已装产物
+  （见 `agate/UPGRADING.md`「未发布 — DSH 0.2.x 适配」）。
+
+  同批另修三处**陈述失准**（有据，非机制）：
+  ① persona 称 `subagent`「默认后台」——DSH **0.2.1-alpha.1** 起委派为 activation-only，
+  调用即返回 `started subagent <name>`，**无前台/后台、无 `run_in_background`**，结果由运行时
+  **通知**送达、**不经 `job_output`**。原措辞会诱导编排者去等一个永远不会出现的 job。
+  ② `tool-subagent-control` 未声明 `interrupt`——DSH **0.2.2-rc.1** 起 base bundle 与官方
+  standard/cordis/ptc preset 都设 `false`（模型不再获得 `interrupt_agent`）；Agateon 需要该
+  能力停掉卡死/跑偏的子 agent，故**显式写 `interrupt: true`**，不依赖插件默认值。
+  ③ `[NEED_CONFIRM]` 无工具落点 ⇒ 补 `ask_user_question` 映射。
+
+  **判据陷阱（写进模板头与 platform-notes）**：`dsh --dump-config-schema` 会对
+  `@deepseek-ai/dsh-agent-preset` 条目报 `unrecognized Loader tree carrier`。实测同一 profile：
+  patch 缺失 = **4** 条、`[]` = **4** 条、`[]` + 一个最小合法 preset = **5** 条、真实 patch
+  （含 agateon 块）= **5** 条 ⇒ 条数只与「有几个 preset 声明」有关、与内容无关；那是该工具
+  对原生 group carrier 的投影限制。它既报不了 agateon 的问题，也不能用来证明兼容。
+
+  验证：`test_dsh_preset.py` 31 passed（新增 3 条，各做过变异）；`test_t41_platform_hygiene.py`
+  期望集合同步；独立评审报告 `docs/reviews/agate-alignment-review-2026-11-27-DSH-023.md`。
+
 - **`agate-doctor` 对「hook 全哑」报绿：诊断的是存在性，不是效力（走 hotfix 通道，不立项）**：
   `_diagnose_hooks()` 用 `is_file()` 判 hook，且路径写死 `<repo>/.git/hooks`。实测三处与事实相反：
   ① 三个 hook 权限 0644 时 git **忽略它们并让 commit 照常成功**（只打印两行 advice 提示，

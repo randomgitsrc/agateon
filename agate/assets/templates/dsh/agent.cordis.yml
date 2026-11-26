@@ -8,12 +8,21 @@
 # 真正的行为规范在 {agate_root}/orchestrator-template.md —— persona 只做「指向 + 平台差异」，
 # 不复制协议内容（否则会与模板漂移：同一信息两处维护，模板改了副本不会自动跟——2026-09-21 实测失实）。
 #
-# 结构与 standard preset（apps/cli/config/agent-presets/standard/agent.cordis.yml）对齐：
+# 结构与 standard preset（`@deepseek-ai/dsh-web-app/presets/standard.patch.yml`）对齐：
 # group/isolate 语法（delegation 组）、!!js process.platform 平台分支、工具行 id/name 契约。
 # 已实机验证（2026-08-21，DSH v0.1.0-rc.8）：preset 软链安装 → 热发现 → 会话选择器
 # 出现「Agateon 编排者 · 自定义」→ 新会话以 Agateon 编排者人格启动；tool-fs-search 缺
 # sampleOverCapGlobResults 的挂载失败缺陷已复现并修复（该字段为 schemastery 必填，
 # 无默认值，缺失 → preset 挂载失败 → DSH fail-closed 拒绝创建会话，勿删）。
+#
+# 已实机复验（2026-11-27，DSH v0.2.3-alpha.2）：真启动 web profile **零错误零告警**，
+# 声明式 preset 块被正常加载。复验方法与结论见 agate/platform-notes.md「DSH 平台适配」
+# 的版本核验节；本文件本身不是版本兼容性判据，判据是实机启动。
+#
+# ⚠️ 判据陷阱（2026-11-27 实测，勿重蹈）：`dsh --dump-config-schema` 会对
+# `@deepseek-ai/dsh-agent-preset` 条目报 "unrecognized Loader tree carrier" ——
+# **官方自带的 preset-standard / preset-ptc / preset-minimal 同样报**，那是该工具
+# 对原生 group carrier 的投影限制，不是不兼容。判断兼容性请用**真启动**，不要用 schema dump。
 
 # ── identity ────────────────────────────────────────────────────────────────
 
@@ -33,12 +42,18 @@
          本文件不复制其内容；不要本地复制模板，它随版本升级自动更新。
 
       ## DSH 工具映射（平台差异，其余照模板执行）
-      - 派发 subagent（模板里的 task 工具）→ `subagent`（全新上下文，默认后台）；需要继承本会话上下文时用 `subagent_fork`
+      - 派发 subagent（模板里的 task 工具）→ `subagent`（全新上下文）；需要继承本会话上下文时用 `subagent_fork`。
+        **委派自 DSH 0.2.1-alpha.1 起是 activation-only**：调用即返回 `started subagent <name>`，
+        **没有"后台/前台"之别、也没有 `run_in_background` 参数**；子 agent 的最终答案由运行时的
+        **完成通知**送达。用 `list_agents` 看成员与容量，用 `send_message` 续聊。
       - 读文件 → `read` / `grep` / `glob`（不占 bash 通道）；写/改状态 → `write` / `edit`
-      - 跑 gate 脚本 → `bash`（返回 [exit code: N] 标记，以此判定，不信输出文本）；长 gate 用后台 job（job_output/job_kill）
+      - 跑 gate 脚本 → `bash`（返回 [exit code: N] 标记，以此判定，不信输出文本）。
+        **注意区分两种"长任务"**：`bash` 命令本身用 `timeout` 或工具的后台 job（`job_output` / `job_kill`）；
+        而 **subagent 委派的结果不走 job**——子 agent 完成后自动通知你，不要用 `job_output` 等它。
       - 批量并行派发（P3 红灯批 / P4 实现批）→ `workflow` 脚本（agent/pipeline/parallel/phase）
       - 独立复核角色（如 judge，需 fresh context）→ `ralph`（每轮全新 agent）或 `subagent`（不 fork）
       - 跨轮续跑 → `goal`（持久化同会话目标）
+      - 向人提问（协议里的 `[NEED_CONFIRM]` 落点）→ `ask_user_question`；**不要**用散文提问后干等
 
       ## 平台注意（DSH 特有）
       - DSH 沙箱默认 workspace-write：协议本体所在目录可能只读（写仓库内文件会 Errno 30）——
@@ -160,9 +175,23 @@
   config:
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
+      # `interrupt` 显式声明为 true（插件默认也是 true，这里写出来是为了**表明意图**）：
+      # DSH 0.2.2-rc.1 起，base bundle 与官方的 standard/cordis/ptc preset **都显式设
+      # false**（模型不再获得 `interrupt_agent`）。Agateon 的编排模型需要它能主动停掉
+      # 跑偏/卡死的 subagent（见 dispatch-protocol「subagent 超时判定」），故保留该能力。
+      # 若不写这一行，行为取决于插件默认值——那是别人的实现细节，不该当作本协议的约定。
+      # 见 DSH docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/。
+      config:
+        interrupt: true
 
-    - id: tool-subagent-list-agents
-      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+    # ⚠️ 不要再加 `@deepseek-ai/dsh-tool-subagent-control/list-agents` 这一行：
+    # 该子路径自 DSH **0.2.2-rc.5** 起已从包的 `exports` 移除（上游指南
+    # v0.2.1-rc.1/subagent-control-tools 明文：「独立的 /list-agents 导出已移除」、
+    # 「移除针对已停用的 tool-subagent-list-agents 行的 patch」）。`list_agents` 现由
+    # `tool-subagent-control` **根入口**一并注册——多挂这一行会让 preset **挂载失败**
+    # （实测该子路径 require 得 `ERR_PACKAGE_PATH_NOT_EXPORTED`），而失败只会被降级为
+    # registry 的 broken 状态、**启动日志不落盘**（只有 CLI 启动失败路径才附着
+    # startupLogs）⇒ 表现为「选 Agateon 编排者建会话失败」却查不到原因。
 
     # ⚠️ 不要再加 `backgroundMode: continuable`：DSH 0.2.1-alpha.1 已移除该键
     # （连同 enableRunInBackground 与 run_in_background 参数）——委派改为

@@ -134,6 +134,51 @@
 
 > 接入步骤见 `SETUP.md`「步骤 2-DSH」（接入命令单一真相源，本条目只做能力差异说明）；preset / skill 模板文件在 `assets/templates/dsh/`。已实机验证（2026-08-21，DSH v0.1.0-rc.8）——新兴平台，机制可能随版本变化。最近复核（2026-09-01，DSH v0.1.2-alpha.3，实机核验通过）：工具面（subagent / subagent_fork / workflow / ralph / goal）、preset 工具行包名与 delegation 组、skill 发现机制、`sampleOverCapGlobResults` 挂载关键字段均未漂移，与当前 DSH 标准 preset 结构逐行一致。**2026-09-24 修正**：preset 的**载体**变了——DSH ≥ **0.1.7-alpha.1** 起不再读目录式 `$DSH_HOME/.agent-presets/<id>/`，改为读 profile 自己 patch 文件里的声明行（见下「已知注意」）。
 
+**版本核验（2026-11-27，DSH v0.2.3-alpha.2，实机复验）**：`workflow-worker-thread → workflow-ptc` 的包改名仍然正确（上游 `packages/workflow/workflow-ptc` 在册，`dsh-workflow-worker-thread` 在 0.2.3 已不存在，模板里的 `_DSH_PLUGIN_RENAMES` 映射无需改动）。
+
+**⚠️ 一处真故障（本次修掉的）**：模板曾授权 `@deepseek-ai/dsh-tool-subagent-control/list-agents`
+这一**子路径**，而它自 DSH **0.2.2-rc.5** 起已从包 `exports` 移除（上游指南
+`v0.2.1-rc.1/subagent-control-tools`：「独立的 `/list-agents` 导出已移除」；`list_agents` 改由
+`tool-subagent-control` **根入口**注册）。实测 `require('@deepseek-ai/dsh-tool-subagent-control/list-agents')`
+→ `ERR_PACKAGE_PATH_NOT_EXPORTED` ⇒ **preset 挂载失败，选「Agateon 编排者」建会话会失败**。
+
+**为什么这类故障用日志查不出来（判据教训，必读）**：挂载失败被 `agent-preset-registry`
+降级为 **`broken` 状态**并只走 `logger.warn`，而**启动日志不落盘**（只有 CLI 启动失败路径才
+附着 `startupLogs`）。作者第一版据「真启动零错误」判断「无硬性不兼容」，正是漏在这里。
+⇒ **兼容性判据 = 用该 preset 建一个会话**；「启动日志干净」和「`--dump-config-schema` 通过」
+都**证明不了**它能挂载。
+
+**另三处陈述失准**（有据，非机制）：
+
+1. **委派语义**：`subagent` 自 **0.2.1-alpha.1** 起是 activation-only（无「后台/前台」、无 `run_in_background`），完成结果**由运行时通知送达，不经 `job_output`**。模板原写「默认后台」已改正——这条错得有害：编排者会去 `job_output` 等一个永远不会出现的 job。
+2. **`interrupt` 显式声明**：DSH **0.2.2-rc.1** 起，base bundle 与官方 standard/cordis/ptc preset 都给 `tool-subagent-control` 设 `config.interrupt: false`（模型不再获得 `interrupt_agent`）。Agateon 需要它主动停掉跑偏/卡死的 subagent，故模板**显式写 `interrupt: true`**——不写虽然当前也默认 `true`，但那依赖插件实现细节，不该当作本协议约定。
+3. **向人提问点**：协议里的 `[NEED_CONFIRM]` 在 DSH 的落点是 `ask_user_question`，已补进 persona 工具映射（此前缺失，agent 会退化成散文提问后干等）。
+
+> ⚠️ **判据陷阱（必读，2026-11-27 实测）**：`dsh --dump-config-schema` 会对
+> `@deepseek-ai/dsh-agent-preset` 条目报 `unrecognized Loader tree carrier; use cordis:group or
+> cordis:include`。**这不是 agateon 的问题**——实测同一台机器、同一 profile：
+>
+> | profile patch | `unrecognized` 错误条数 |
+> |---|---|
+> | 空 patch（写成 `[]`，不是 0 字节空文件） | **4**（即 DSH 自带的 standard / ptc / minimal / cordis 四个 preset） |
+> | 只加一个**最小**合法 preset（`plugins` 仅 persona） | **5** |
+> | 加 **agateon** 的完整 preset 块 | **5** |
+>
+> ⇒ 报错条数只与「有几个 preset 声明」有关，**与 preset 内容无关**；agateon 块与最小合法
+> preset 报**一样多**。那是该工具对**原生 group carrier** 的投影限制。
+> （复现：`DSH_HOME=<副本> node <dsh>/lib/bin.js --profile web --dump-config-schema 2>&1 >/dev/null
+> | grep -c 'unrecognized Loader tree carrier'`；注意 patch 若写成 0 字节空文件，报的是
+> `must be a top-level YAML array` 而非本条，须写成 `[]`。）
+>
+> **它也报不出真问题**：本批那个真故障（`list-agents` 子路径已移除 ⇒ preset 挂载失败）在这份
+> dump 里**毫无痕迹**。所以 schema dump 既不能证明兼容、也不能当"修不存在的缺陷"的依据。
+>
+> **正确的判据顺序**（本批实测得出）：
+> 1. **用该 preset 建一个会话**——这是唯一能证明「能挂载」的判据；
+> 2. 启动日志**只能**排除启动期崩溃（挂载失败不进日志，见上「判据教训」）；
+> 3. `--dump-config-schema` 只用于排查 YAML/条目**结构**问题，且它对原生 group carrier 恒报
+>    `unrecognized`（连 DSH 自带的 4 个 preset 都报），**不要**拿它当兼容性判据。
+
 **平台形态**：pnpm monorepo + cordis 插件框架；身份注册用 **agent-preset**——声明行由 `agent.cordis.yml`（插件行列表）+ `preset.yml`（`name` / `description` / `order`）两个模板生成，写进 **profile 自己的 patch 文件** `~/.dsh/profiles/<profile>/cordis.patch.yml` 的托管块（定界符之间的整段，卸载按定界符精确摘除）；skill 是打包/分发单元（`SKILL.md` + frontmatter，自动进会话技能目录）。
 
 **能力差异（与 OpenCode / Claude Code 对照）**：
