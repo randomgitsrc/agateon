@@ -382,15 +382,20 @@ def test_bdd_23_no_new_check_star_script_added(agate_scripts):
     if not added:
         return
 
-    # 新增的 check-*.py 必须已登记（锚点表 或 豁免集）——与 BDD-23 支① 同一口径。
-    cpc = (agate_scripts / "check-protocol-consistency.py").read_text(encoding="utf-8")
-    import re as _re
-    anchors = set(_re.findall(r'"script":\s*"agate/scripts/([^"]+)"', cpc))
-    exempt_m = _re.search(r"GATE_SCRIPT_EXEMPT\s*=\s*[\{\(\[]", cpc)
-    unregistered = [
-        n for n in added
-        if n not in anchors and (exempt_m is None or n not in cpc[exempt_m.start():])
-    ]
+    # 新增的 check-*.py 必须已登记 —— **复用真门禁的同一判据**，不再自己写一份。
+    # ⚠️ 曾用「在 check-protocol-consistency.py 文本里 grep 脚名」做判据，实测是**子串匹配**：
+    # 在豁免集之后的任意位置（含一行注释）写一遍该名即可 PASS，而真门禁 SG.6 仍 FAIL
+    # ——与 DEBT0046 已修缺陷同型（评审 B-4′）。现直接 importlib 复用
+    # `uncovered_gate_scripts()`（该函数是「是否登记」的唯一权威判据）。
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cpc_for_bdd23", agate_scripts / "check-protocol-consistency.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    uncovered = {p.rsplit("/", 1)[-1] for p in mod.uncovered_gate_scripts(agate_scripts.parent.parent)}
+    unregistered = [n for n in added if n in uncovered]
     assert not unregistered, (
         "BDD-23 支①：新增的 `check-*.py` 未见登记——须进 `SCRIPT_ALIGNMENT_ANCHORS`"
         f"（承载 gate 判定逻辑）或 `GATE_SCRIPT_EXEMPT`（纯观测/调度类，须写理由）。未登记：{unregistered}"

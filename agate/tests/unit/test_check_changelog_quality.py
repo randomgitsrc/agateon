@@ -218,10 +218,17 @@ def test_released_section_only_warns_never_blocks(agate_scripts, python_exe, run
     为什么：已发布段是历史快照（`doc-freshness-guide.md` §3「保留不动」）。对它硬阻断，
     唯一出路是改写历史——与那条既有纪律直接冲突，且会让「升级协议后第一次提交就被卡住」。
     """
+    # 必须用**真实已发布**的版本号（有对应 tag）——B-3′ 之后，未发布的版本标题按草稿
+    # 处理（同一阻断强度）。这里取仓库里确实打了 tag 的版本。
+    import subprocess
+    tags = subprocess.run(["git", "tag", "-l", "v*"], capture_output=True, text=True,
+                          encoding="utf-8", cwd=str(agate_scripts.parent.parent)).stdout.split()
+    assert tags, "前置：仓库应有至少一个 v* tag（否则本用例无法构造'已发布段'）"
+    ver = tags[-1].lstrip("v")
     f = tmp_path / "CHANGELOG.md"
     f.write_text(
         "## [Unreleased]\n\n- 正常条目。\n\n"
-        "## [9.9.9] - 2026-01-01\n\n"
+        f"## [{ver}] - 2026-01-01\n\n"
         "- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训。\n",
         encoding="utf-8",
     )
@@ -243,3 +250,90 @@ def test_unreleased_hit_blocks_even_if_released_also_hit(agate_scripts, python_e
     )
     r = run_cli(python_exe, str(agate_scripts / _SCRIPT), str(f))
     assert r.returncode == 1, f"Unreleased 命中须阻断；实际 rc={r.returncode}"
+
+
+# ── 第二轮评审（B-6/B-7/B-3′）────────────────────────────────────────────────
+
+
+def test_check17_in_consistency_points_to_existing_script(agate_root):
+    """**B-6**：CHECK 17 调用的脚本路径必须**真实存在**。
+
+    实测来源：改名 `agate-*` → `check-*` 后，CHECK 17 里仍留着旧名 ⇒ `is_file()` 判假 ⇒
+    **静默渲染成"已检查"**，CI 侧完全不生效。这类「路径写错但静默跳过」是本批要消灭的
+    同一种缺陷，必须机械锁住。
+    """
+    import re
+    cpc = (agate_root / "scripts" / "check-protocol-consistency.py").read_text(encoding="utf-8")
+    refs = set(re.findall(r'"agate/scripts/([A-Za-z0-9_.-]+\.py)"', cpc))
+    assert "check-changelog-quality.py" in refs, "CHECK 17 应指向 check-changelog-quality.py"
+    for name in refs:
+        if "changelog-quality" in name:
+            assert (agate_root / "scripts" / name).is_file(), (
+                f"CHECK 17 引用了不存在的脚本 {name}——`is_file()` 判假后本 CHECK 会静默跳过"
+            )
+
+
+def test_missing_script_is_fail_closed(agate_root, tmp_path):
+    """**B-6 另一半**：判据脚本缺失时 CHECK 17 必须报 ERROR，不得静默跳过。"""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "cpc_missing", agate_root / "scripts" / "check-protocol-consistency.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    class Rep:
+        def __init__(self):
+            self.errors, self.warnings = [], []
+
+        def error(self, c, m, loc=None):
+            self.errors.append((c, m, loc))
+
+        def warn(self, c, m, loc=None):
+            self.warnings.append((c, m, loc))
+
+    fake_root = tmp_path / "empty-root"     # 无 agate/scripts/check-changelog-quality.py
+    (fake_root / "agate" / "scripts").mkdir(parents=True)
+    rep = Rep()
+    mod.check_changelog_quality(fake_root, rep)
+    assert rep.errors, "脚本缺失时应 fail-closed 报 ERROR（而非静默 return）"
+
+
+def test_unreleased_heading_without_space_is_scanned(agate_scripts, python_exe, run_cli, tmp_path):
+    """**B-7**：`##[Unreleased]`（缺空格）也必须被扫——否则该段完全逃检。
+
+    实测来源：段头正则原为 `^## \\[`（要求恰好一个空格），而 `agate-changelog-unreleased.py:9`
+    用 `##\\s*\\[` 能看见它 ⇒ 同一文件两份判据口径不一致。
+    """
+    f = tmp_path / "CHANGELOG.md"
+    f.write_text(
+        "##[Unreleased]\n\n"
+        "- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训。\n",
+        encoding="utf-8",
+    )
+    r = run_cli(python_exe, str(agate_scripts / _SCRIPT), str(f))
+    assert r.returncode == 1, (
+        f"`##[Unreleased]`（缺空格）内的过程日志必须被拦；实际 rc={r.returncode}"
+    )
+
+
+def test_unreleased_version_heading_is_treated_as_draft(agate_scripts, python_exe, run_cli,
+                                                         tmp_path):
+    """**B-3′**：**未发布**的版本标题（无对应 tag）按草稿处理 ⇒ 命中即阻断。
+
+    实测来源：「已发布段」原按「首个非 Unreleased 段」判定，不校验是否真发布 ⇒ 作者只要
+    新写 `## [99.99.99]` 把痕迹放进去，就被当作"历史快照"降级为 exit 2，**端到端放行**。
+    现改为与 `git tag` 比对：未发布 ⇒ 视同 `[Unreleased]`（同一阻断强度）。
+    """
+    f = tmp_path / "CHANGELOG.md"
+    f.write_text(
+        "## [Unreleased]\n\n- 正常。\n\n"
+        "## [99.99.99] - 2026-12-01\n\n"
+        "- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训。\n",
+        encoding="utf-8",
+    )
+    r = run_cli(python_exe, str(agate_scripts / _SCRIPT), str(f))
+    assert r.returncode == 1, (
+        "未发布版本标题下的过程日志须按草稿阻断（不得降级为提示）；"
+        f"实际 rc={r.returncode}\n{r.output[:400]}"
+    )

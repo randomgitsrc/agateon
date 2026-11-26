@@ -24,7 +24,7 @@ agate 协议结构一致性检查 (P3-1)
   CHECK 14  markdown 叙述段落平台名扫描（护栏 1 机械化，BDD-16/22/24：结构性判据，无文件名单）
   CHECK 15  数据面（rules/*.yaml + rules/schema/*.json）平台名扫描（BDD-15：词边界 + 豁免词典机械生成）
   CHECK 16  任务数据契约快照冻结（rules/task-data/*.yaml 的 LF 归一 sha256 == LEVELS.yaml 登记值；TAG0050 批 A1）
-  CHECK 17  CHANGELOG 条目非「过程日志」（RM-AG0117；判据单源 = agate-changelog-quality.py）
+  CHECK 17  CHANGELOG 条目非「过程日志」（RM-AG0117；判据单源 = check-changelog-quality.py）
 
  退出码：0 = 全过；1 = 有 ERROR；2 = 仅有 WARNING（可配置是否失败）。
 
@@ -1458,28 +1458,52 @@ def check_rules_platform_tokens(root: Path, rep: Report) -> None:
 # 「本地 hook 未装」两种绕过）。⚠️ 但它**不是可靠兜底**：纯 docs 提交时 `protocol-tests.yml`
 # 的 consistency job 因 `docs_only=true` 直接 exit 0 fast-pass，改由 `docs-check.yml` 的
 # `docs-consistency` 跑本脚本——而那个 job **不在** required check 里，红了不阻止合并。
-# 判据本体在 agate-changelog-quality.py（**单源**，
+# 判据本体在 check-changelog-quality.py（**单源**，
 # 本函数只做调用，不复制任何词表——本仓 SG.6 曾因「共用正则但未共用通过规则」出过分叉）。
 # ⚠️ 判据脚本命名为 `agate-*.py` 而非 `check-*.py`：后者会触发 SG.6 / CHECK9-coverage 两处
-# 登记面（`test_release_gate.py::test_bdd_23_no_new_check_star_script_added` 硬守护），
-# 而本判据是「工具/观测定性」类，用 agate- 前缀是既有约定。
+# 承载 gate 判定逻辑 ⇒ 按 `agate/scripts/README.md`「新增脚本登记面」① 命名 `check-*.py`
+# 并登记到 `SCRIPT_ALIGNMENT_ANCHORS`（见本文件锚点表末项）。
 def check_changelog_quality(root: Path, rep) -> None:
-    """CHANGELOG 的 `[Unreleased]` / 最新已发布段不得是「工作过程记录」。"""
-    script = root / "agate" / "scripts" / "agate-changelog-quality.py"
+    """CHANGELOG 条目质量：`[Unreleased]` 命中即 ERROR；仅已发布段命中 → WARNING。
+
+    退出码语义（判据脚本自身定义）：0=通过、1=`[Unreleased]` 命中、2=仅已发布段命中或
+    `--warn-only`。⇒ **不能只判 `rc == 1`**：那样「已发布段命中」在 CI 侧完全静默
+    （评审 B-6 实测）。此处 1 → ERROR，2 → WARNING。
+    """
+    script = root / "agate" / "scripts" / "check-changelog-quality.py"
     changelog = root / "CHANGELOG.md"
-    if not script.is_file() or not changelog.is_file():
+    if not script.is_file():
+        # 脚本缺失 → fail-closed 报 ERROR（而非静默跳过）：否则本 CHECK 变成装饰。
+        # 旧版协议 / fake 根未复制该脚本时，宁可看见红，也不要以为"检查过了"。
+        rep.error(
+            "CHECK17-changelog-quality",
+            "判据脚本不存在（协议包不完整或版本过旧）：agate/scripts/check-changelog-quality.py",
+            "agate/scripts/check-changelog-quality.py",
+        )
+        return
+    if not changelog.is_file():
         return
     import subprocess  # 模块级未导入；与本文件既有用法保持一致（函数内导入）
     proc = subprocess.run(
         [sys.executable, str(script), str(changelog)],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
+    if proc.returncode == 0:
+        return
+    detail = (proc.stderr or "").strip().splitlines()
+    detail = detail[0] if detail else ""
     if proc.returncode == 1:
-        msg = (proc.stderr or "").strip().splitlines()
         rep.error(
             "CHECK17-changelog-quality",
-            "CHANGELOG 条目疑似「工作过程记录」（详见 agate-changelog-quality.py）"
-            + (f"：{msg[0]}" if msg else ""),
+            "`[Unreleased]` 条目疑似「工作过程记录」（详见 check-changelog-quality.py）"
+            + (f"：{detail}" if detail else ""),
+            "CHANGELOG.md",
+        )
+    else:
+        rep.warn(
+            "CHECK17-changelog-quality",
+            "最新已发布段含过程痕迹（历史快照，不阻断；若为下一版内容请移到 `[Unreleased]`）"
+            + (f"：{detail}" if detail else ""),
             "CHANGELOG.md",
         )
 

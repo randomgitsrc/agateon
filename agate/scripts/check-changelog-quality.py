@@ -87,6 +87,29 @@ def _read(path):
         return None
 
 
+def _released_versions():
+    """已发布版本号的集合（来自 `git tag`）；取不到则空集。
+
+    空集时**所有**版本段都按「未发布」处理（fail-closed：宁可多拦，不可放行）——
+    这正是 B-3′ 要防的绕过。仓库外/浅克隆跑不到 git 时也走这条路。
+    """
+    import subprocess
+    try:
+        proc = subprocess.run(
+            ["git", "tag", "-l", "v*"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for line in (proc.stdout or "").splitlines():
+        m = re.search(r"v?(\d+)\.(\d+)\.(\d+)", line.strip())
+        if m:
+            out.append(tuple(int(x) for x in m.groups()))
+    return out
+
+
 def target_sections(text):
     """取出 `[Unreleased]` 与**最新一个已发布**段（其余历史段不扫）。
 
@@ -102,7 +125,11 @@ def target_sections(text):
     if not text:
         return []
     lines = text.splitlines()
-    heads = [(i, ln) for i, ln in enumerate(lines) if re.match(r"^## \[", ln)]
+    # 段头正则：允许 `##` 与 `[` 之间有任意空白（`## [x]` / `##[x]` / `##  [x]`）。
+    # ⚠️ 曾用 `^## \[`（要求恰好一个空格）⇒ `##[Unreleased]` 整段不被扫、rc=0 放行，
+    # 而 `agate-changelog-unreleased.py:9` 用 `##\s*\[` 能看见它 ⇒ 同一文件两份判据口径
+    # 不一致（评审 B-7）。此处与其对齐。
+    heads = [(i, ln) for i, ln in enumerate(lines) if re.match(r"^##\s*\[", ln)]
     if not heads:
         return []
 
@@ -114,11 +141,24 @@ def target_sections(text):
             break
 
     # 最新一个已发布段 = 首个非 Unreleased 的 `## [` 段
+    #
+    # ⚠️ **必须校验它是否「真的已发布」**（评审 B-3′）：只按「首个非 Unreleased 段」判定
+    # 的话，作者只要**新写一个版本标题**（如 `## [0.84.0]`）把过程痕迹放进去，就会被当作
+    # 「历史快照」降级为 `exit 2`，端到端 pre-commit **rc=0 放行**。
+    # 判据：该段版本号 ≤ 已发布的最大 tag（`git tag`），否则按 `[Unreleased]` 同等对待
+    # （它其实是"下一版的草稿"，就是作者正在写的东西）。
+    released_versions = _released_versions()
     for idx, ln in heads:
         if "[Unreleased]" in ln:
             continue
         end = next((j for j, _ in heads if j > idx), len(lines))
-        picked.append((ln, "\n".join(lines[idx + 1:end]), False))
+        ver_m = re.search(r"\[v?(\d+)\.(\d+)\.(\d+)", ln)
+        is_really_released = False
+        if ver_m:
+            v = tuple(int(x) for x in ver_m.groups())
+            is_really_released = any(v <= rv for rv in released_versions)
+        # 不是真发布 ⇒ 视作「作者正在写」（与 Unreleased 同等阻断）
+        picked.append((ln, "\n".join(lines[idx + 1:end]), not is_really_released))
         break
 
     return picked
