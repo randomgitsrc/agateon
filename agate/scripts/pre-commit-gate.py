@@ -29,6 +29,7 @@ CLI 契约：hook 无参数运行；exit 0/1；输出 `GATE P{n} ...` 格式（�
 Python 3.8+（无 match / str.removeprefix）；所有文本读写显式 encoding="utf-8"。
 """
 
+import contextlib as _contextlib
 import glob
 import hashlib
 import os
@@ -1187,6 +1188,50 @@ def main():
                         "GATE: 技术债登记 schema 非法（check-debt.py exit 1）——阻断 commit"
                         "（RM-AG0088 / DEBT0033）\n")
                     sys.exit(1)
+
+    # 2z2. CHANGELOG 条目质量（RM-AG0117）——**循环外**（对任何提交都生效）：
+    # ⚠️ 这是本判据的**主要强制力**，不是「本地预检 + CI 兜底」里的那个预检：对**纯 docs
+    # 提交**（只改 CHANGELOG.md 的那类，也是最危险的），`protocol-tests.yml` 的 `consistency`
+    # job 会因 `docs_only=true` 直接 `exit 0` fast-pass，改由 `docs-check.yml` 的
+    # `docs-consistency` 接手——而该 job **不在** 6 个 required check 里（实测
+    # `gh api .../branches/main/protection`：shellcheck×2 / pytest×2 / consistency /
+    # gate-backstop）⇒ 它红了**不阻止合并**。所以别把 CI 当唯一防线。
+    # `CHANGELOG.md` 被**暂存**时跑 `check-changelog-quality.py`，exit 1 → 阻断 commit。
+    # 为什么必须有机械判据：本仓实证纯 WARNING 会被无视（`SELF-GATE.md` 自陈「WARNING 不拦截
+    # ……强制力依赖主 Agent 自觉」；同款纯 warning 机制复犯 6 次后才靠 CI 阻断级守卫收住）。
+    # 存量证据：v0.78.0 段 248 行、v0.77.0 段 191 行，按本判据分别命中 21 / 25 处、3 类
+    # ——均被人眼 review 放行。
+    # ⚠️ **必须置于 `for state_file in state_files:` 循环之外**——循环体内且在各 continue
+    # 之后 ⇒ 对「没有 .state.yaml 的提交」（= hotfix 通道，正是本判据要拦的场景）完全不生效。
+    # 同 2z 的教训（其注释已记过一次放错位置的事故）。
+    # 只在**暂存了 CHANGELOG.md** 时跑 ⇒ 对其余 99% 的提交零增量（判据本体实测约 5ms）。
+    # 脚本缺失 → fail-open 跳过（旧版协议 / 测试 fake 根未复制该脚本）。
+    if os.path.isfile(os.path.join(SCRIPT_DIR, "check-changelog-quality.py")):
+        for _rel in _staged_name_only():
+            if _rel.replace("\\", "/").endswith("CHANGELOG.md"):
+                # ⚠️ 必须判**暂存区内容**（`:<path>`），不能判工作区文件——AGENTS.md 明写
+                # 「所有 git diff 用 --cached，不用 HEAD~1」（hook 运行时 commit 尚未创建）。
+                # 判工作区会留一个漏口：暂存坏件、再把工作区改好（不 `git add`）即可放行
+                # （评审实测 rc=0），而真正提交进去的仍是坏件。
+                _staged_text = _git_show(repo_root, ":" + _rel)
+                if _staged_text is None:
+                    break
+                import tempfile as _tempfile
+                with _tempfile.NamedTemporaryFile(
+                        "w", suffix=".md", delete=False, encoding="utf-8") as _tf:
+                    _tf.write(_staged_text)
+                    _tmp_path = _tf.name
+                try:
+                    _rc = _run_script_rc("check-changelog-quality.py", [_tmp_path])
+                finally:
+                    with _contextlib.suppress(OSError):
+                        os.unlink(_tmp_path)
+                if _rc == 1:
+                    sys.stderr.write(
+                        "GATE: CHANGELOG 条目疑似「工作过程记录」而非变更记录"
+                        "（check-changelog-quality.py exit 1）——阻断 commit（RM-AG0117）\n")
+                    sys.exit(1)
+                break
 
     # 3. 扫描暂存的 P{n}-*.md 产出文件（无 .state.yaml 变更的任务也检查一致性）
     # 只做 WARNING，不拦截——覆盖"产出了但忘改 phase"的场景

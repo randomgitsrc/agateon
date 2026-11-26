@@ -350,9 +350,19 @@ def test_bdd_23_release_gate_is_agate_star_subcommand(
 
 
 def test_bdd_23_no_new_check_star_script_added(agate_scripts):
-    """BDD-23 支①排除：未新增 `agate/scripts/check-*.py`（否则 SG.6 红 / CHECK9-coverage WARNING）。
+    """BDD-23 支①：**新增的** `check-*.py` 必须已登记（进锚点表或豁免集），否则 SG.6 红。
 
-    对照 `origin/main` 的 `agate/scripts/check-*.py` 集合；本方案（支②）不应引入新 check 脚本。
+    ⚠️ 本用例原先是「**禁止**新增 check-*.py」，与本条需求原文不符——原文（TAG0051
+    `P1-requirements.md` BDD-23）写的是：
+
+    > ① 落 `check-*.py`：该脚本**须已登记**（进 `SCRIPT_ALIGNMENT_ANCHORS` 锚点表或
+    > `GATE_SCRIPT_EXEMPT` 豁免集）使 SG.6 通过（未登记则 SG.6 红，判 FAIL）
+
+    即「新增必须登记」，而非「不许新增」。原实现把某个任务（TAG0051）的**落点选择**
+    固化成了全仓规则，会错误禁止「承载 gate 判定逻辑的新脚本」——而 `agate/scripts/README.md`
+    「新增脚本登记面」恰恰规定这类脚本**应**命名为 `check-*.py` 并登记锚点。
+
+    现在按需求原文判：**新增的** `check-*.py` 允许存在，但必须出现在锚点表或豁免集里。
     """
     current = sorted(p.name for p in agate_scripts.glob("check-*.py"))
     probe = H.run_git(H.REPO_ROOT, "rev-parse", "--verify", "-q", "origin/main")
@@ -369,9 +379,26 @@ def test_bdd_23_no_new_check_star_script_added(agate_scripts):
         if p.rsplit("/", 1)[-1].startswith("check-") and p.endswith(".py")
     )
     added = [n for n in current if n not in baseline]
-    assert not added, (
-        "BDD-23：新增了 `agate/scripts/check-*.py`（落点①）——本方案应落 agate-*.py（支②）；"
-        f"新增：{added}"
+    if not added:
+        return
+
+    # 新增的 check-*.py 必须已登记 —— **复用真门禁的同一判据**，不再自己写一份。
+    # ⚠️ 曾用「在 check-protocol-consistency.py 文本里 grep 脚名」做判据，实测是**子串匹配**：
+    # 在豁免集之后的任意位置（含一行注释）写一遍该名即可 PASS，而真门禁 SG.6 仍 FAIL
+    # ——与 DEBT0046 已修缺陷同型（评审 B-4′）。现直接 importlib 复用
+    # `uncovered_gate_scripts()`（该函数是「是否登记」的唯一权威判据）。
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cpc_for_bdd23", agate_scripts / "check-protocol-consistency.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    uncovered = {p.rsplit("/", 1)[-1] for p in mod.uncovered_gate_scripts(agate_scripts.parent.parent)}
+    unregistered = [n for n in added if n in uncovered]
+    assert not unregistered, (
+        "BDD-23 支①：新增的 `check-*.py` 未见登记——须进 `SCRIPT_ALIGNMENT_ANCHORS`"
+        f"（承载 gate 判定逻辑）或 `GATE_SCRIPT_EXEMPT`（纯观测/调度类，须写理由）。未登记：{unregistered}"
     )
 
 

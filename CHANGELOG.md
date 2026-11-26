@@ -6,9 +6,60 @@
 
 > **已有 Agateon 项目升级前，先读 `agate/UPGRADING.md`**——旧任务数据（active-tasks.md/.state.yaml/任务编号）如何处理，以及各版本的破坏性变更。
 
+## 怎么写一条变更
+
+**一条判据**：读者读完这条，能否决定「这个版本会不会影响我、我要做什么」？不能的信息就不属于这里。
+
+只写三件事：**发生了什么 / 影响是什么 / 怎么修（含升级动作）**。
+
+| 该写在这里 | 该写到别处 |
+|---|---|
+| 用户能感知的行为变化 | 我是怎么发现它的 → `docs/reviews/` |
+| 升级后必须做的动作 | 评审了几轮、谁指出的 → commit message |
+| 破坏性变更 / 弃用 | 「变异实验转红」「N passed」 → 测试文件 / commit message |
+| 修的是哪个用户可见的缺陷 | 自我勘误「第一版写错了」 → commit message |
+
+**正例**（v0.83.4 实际条目，节选）：
+
+```markdown
+- **DSH 0.2.x 上 Agateon preset 挂载失败**（**需重跑接入**：`python3 ~/.agate/scripts/agate-setup.py`）：
+  preset 模板授权 `.../list-agents` 子路径，而 DSH 0.2.2-rc.5 起已从该包 `exports` 移除
+  ⇒ 选「Agateon 编排者」建会话会失败。已删除该行。
+```
+—— 有现象、有影响、有动作，读者读完就知道要不要升、升完做什么。
+
+**反例**（同一版本最初写的，已被判据拦下并重写）：
+
+```markdown
+- ...**属实，是真故障**（第一版判断为「无硬性不兼容」是错的，独立评审用 registry 的
+  broken 状态推翻）……**当初为何漏判（判据教训）**……变异验证：加回即红……
+```
+—— 「第一版判断错了」「独立评审推翻」「变异验证」都是**作者的干活过程**，读者不需要；
+它们已分别归入 commit message 与 `docs/reviews/`。
+
+**机械判据**（不靠自觉）：`agate/scripts/check-changelog-quality.py` 扫 `[Unreleased]` 与最新
+已发布段，命中「过程痕迹」达阈值即 **阻断 commit**（pre-commit `2z2`，这是主要强制力）。
+CHECK 17 在 CI 侧作补充（1 → ERROR，2 → WARNING），但**不是可靠兜底**——纯 docs 提交时
+`consistency` job fast-pass、接手的 `docs-check` 不在 required check 里。
+自证：`python3 agate/scripts/check-changelog-quality.py CHANGELOG.md`。
+
 ---
 
 ## [Unreleased]
+
+### 新增
+
+- **CHANGELOG 条目「过程日志化」判据（RM-AG0117）**：CHANGELOG 曾多次被写成工作过程记录
+  （v0.78.0 段 248 行、v0.77.0 段 191 行，按本判据分别命中 21 / 25 处、3 类），而人眼 review 会放行。
+  新增 `check-changelog-quality.py`：扫 `[Unreleased]` 与最新已发布段，命中「过程痕迹」
+  （第一人称、评审轮次、变异实验、`N passed`、自我勘误等 6 类）**≥3 处且 ≥2 类**即判失败
+  —— 单类反复不判，避免把写法习惯当缺陷。主闸在 pre-commit（**循环外**，故 hotfix 这类
+  无 `.state.yaml` 的提交也受检）。CHECK 17 作补充检查（覆盖 `--no-verify`），但**不是**
+  可靠兜底：纯 docs 提交时 `consistency` job fast-pass、接手的 `docs-check` 不是 required
+  check ⇒ 红了不阻止合并。故强制力主要来自 pre-commit。
+  **为何不用行数**：行数是间接指标，反例成立——v0.81.0 段 240 行但零过程痕迹。
+  **为何不用 WARNING**：本仓实证纯 WARNING 会被无视（`SELF-GATE.md` 自陈），故取阻断级。
+  写法指南见本文件顶部「怎么写一条变更」。
 
 ## [0.83.4] - 2026-11-27
 
