@@ -128,7 +128,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 
 | 脚本 | 用途 | 退出码语义 |
 |------|------|-----------|
-| `agate-doctor.py` (TAG0042 批5) | 诊断项目接入状态（声明文件 / git hook / 版本解析 / 账本完整性）+ 对异常项给出可执行修复指引 | 0=诊断正常完成（退出码固定；报告问题 ≠ 自身失败）|
+| `agate-doctor.py` (TAG0042 批5) | 诊断项目接入状态（声明文件 / git hook / 版本解析 / 账本完整性）+ 对异常项给出可执行修复指引。**hook 维度判「git 会不会执行它」**（查 `git rev-parse --git-path hooks` 指向的目录 + POSIX 执行位 + 非断链），**版本维度与 gate 同源**（走 `resolve_hook_root`，解析链告警判异常）——即两处判的都是**效力**而非仅存在性（缺失/断链仍会报，但不再把「文件在」当成「gate 生效」） | 0=诊断正常完成（退出码固定；报告问题 ≠ 自身失败）|
 
 ### 安装
 

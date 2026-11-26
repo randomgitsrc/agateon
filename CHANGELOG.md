@@ -10,6 +10,55 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **`agate-doctor` 对「hook 全哑」报绿：诊断的是存在性，不是效力（走 hotfix 通道，不立项）**：
+  `_diagnose_hooks()` 用 `is_file()` 判 hook，且路径写死 `<repo>/.git/hooks`。实测三处与事实相反：
+  ① 三个 hook 权限 0644 时 git **忽略它们并让 commit 照常成功**（只打印两行 advice 提示，
+  不阻断），doctor 仍报 `[OK] hook: 已安装` +
+  `全部维度正常`——**gate 全失效却被诊断工具判绿**，而该失效模式单测覆盖不到（单测跑
+  `agate/scripts/`，失效发生在 `.git/hooks/` 的**部署形态**上）；② 链接 worktree 里 `.git` 是
+  **文件**，doctor 误报「未检测到 .git/hooks（非 git 仓库或未初始化）」——而 worktree 正是本仓
+  dogfooding 的标准工作目录；③ `core.hooksPath` 覆盖时同理误报缺失。**修法**：目录一律问
+  `agate_common.git_hooks_dir()`（`git rev-parse --git-path hooks`，同仓单一实现），在位 hooks
+  另判执行位（仅 POSIX 有该语义），断链与不可执行分别报，并在状态行标出「查的是哪个目录」。
+
+- **`agate-doctor` 版本维度报的不是 gate 实际会用的版本（走 hotfix 通道，不立项）**：原实现取
+  「`AGATE_ROOT` env 或**脚本自身所在目录**」，等于把「doctor 住在哪个 checkout」当成「gate 判定
+  用哪个版本」，且不跑解析链。实测：项目声明 `agate: v0.80.0`（未安装）时 doctor 报
+  `<开发 checkout>/agate`，而 `agate-resolve.py`（hook 实际走的链）报 `~/.agate/v0.83.3/agate`
+  （回退 current）——两者指向不同版本目录，**解析链的「声明未安装」告警被完全吞掉**。**修法**：
+  改走 `agate_common` 的解析链，解析链的 warnings 摊到台面上并判异常。**用哪条链**：gate 由
+  `resolve-entry.py` → `resolve_hook_root()` 定位，它比 `resolve_version_root()` 多一层兜底
+  （脚本路径上溯 + 复制模式 `.agate-root`，故恒有 root）；只用后者会在「链不可用但 hook 仍能跑」
+  的环境里误报「无可用 AGATE_ROOT」——**同一缺陷的镜像**（独立评审 C1 指出）。故以
+  `resolve_hook_root` 为准，兜底时如实说明「链没结果、gate 走的是哪条兜底」。
+
+- **`agate-doctor` 在缺 pyyaml 时只打两行标题就退出，rc=1**（独立评审 N-1 发现，本批一并修）：
+  `agate_common` 缺 pyyaml 时用 `sys.exit(1)` 中止，抛的是 **`SystemExit`——它不是 `Exception`
+  的子类**，所以 doctor 里四处 `except Exception` 一处都接不住：第一个维度（声明文件）就把整个
+  诊断打断，输出停在两行标题、**四个维度一个都没出**、`rc=1`——同时违反 BDD-17「诊断完成即
+  rc=0」与「对异常项给出可执行修复指引」两条契约。**修法**：四处收窄为
+  `except (Exception, SystemExit)`，并把 `SystemExit` 还原成可读原因（否则只会显示裸退出码
+  `1`）。修后该场景 **rc=0、四维度齐全、原因可读**。
+
+- **上面那条修复自身引入的两处「假绿 / 误指路」，同批修掉**（二轮独立评审指出）：
+  ① **账本维度假绿**——`_tasks_dir()` 接住 `SystemExit` 后返回 `None`，而账本维度把 `None`
+  当作「没有任务目录」判 **`[OK]`**：`agate_common` 挂掉时审计根本没跑却报绿，正是本批要消灭的
+  那类问题。**修法**：改为返回 `(dir, 失败原因)` 二元组，「解析失败」判异常并写明「审计未执行」，
+  与「解析成功但没有任务」严格分开。② **修复指引按真因分流**——`agate_common` 不可用时，原指引
+  仍让人「检查 `agate.config.yaml` 的 YAML 语法」或「运行 `agate-setup.py` / `agate-resolve.py`」，
+  而那两个脚本**同样 import `agate_common`**（是死循环建议）。**修法**：`SystemExit` 分支统一指向
+  「先让 agate_common 可用」，非 `SystemExit` 分支才给原指引；并对多维度共享同一根因的建议**去重**。
+
+### 文档
+
+- `agate/LIMITATIONS.md` 抬头不再用「零基础设施」概括这条路线：该说法在安装 / 版本管理 / CI 兜底
+  一侧本就不成立，而**本文件局限 5 自己就写着**（enforcement 依赖 python3 + git + pyyaml + git 仓库）。
+  改为可辩护的表述（状态在仓库里、无旁挂服务要运维），依赖边界照旧如实写。
+- `docs/guides/project-map.md` 删掉写死的脚本数（原写「约 60 个」，与实际已不符），改为现场命令——
+  与本仓 `docs/guides/doc-freshness-guide.md`「时变数字不写死」的既有纪律一致。
+
 ## [0.83.3] - 2026-11-11
 
 ### 修复
