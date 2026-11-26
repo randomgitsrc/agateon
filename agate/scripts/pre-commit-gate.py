@@ -1196,7 +1196,7 @@ def main():
     # `docs-consistency` 接手——而该 job **不在** 6 个 required check 里（实测
     # `gh api .../branches/main/protection`：shellcheck×2 / pytest×2 / consistency /
     # gate-backstop）⇒ 它红了**不阻止合并**。所以别把 CI 当唯一防线。
-    # `CHANGELOG.md` 被**暂存**时跑 `agate-changelog-quality.py`，exit 1 → 阻断 commit。
+    # `CHANGELOG.md` 被**暂存**时跑 `check-changelog-quality.py`，exit 1 → 阻断 commit。
     # 为什么必须有机械判据：本仓实证纯 WARNING 会被无视（`SELF-GATE.md` 自陈「WARNING 不拦截
     # ……强制力依赖主 Agent 自觉」；同款纯 warning 机制复犯 6 次后才靠 CI 阻断级守卫收住）。
     # 存量证据：v0.78.0 段 248 行、v0.77.0 段 191 行，按本判据分别命中 21 / 25 处、3 类
@@ -1206,7 +1206,7 @@ def main():
     # 同 2z 的教训（其注释已记过一次放错位置的事故）。
     # 只在**暂存了 CHANGELOG.md** 时跑 ⇒ 对其余 99% 的提交零增量（判据本体实测约 5ms）。
     # 脚本缺失 → fail-open 跳过（旧版协议 / 测试 fake 根未复制该脚本）。
-    if os.path.isfile(os.path.join(SCRIPT_DIR, "agate-changelog-quality.py")):
+    if os.path.isfile(os.path.join(SCRIPT_DIR, "check-changelog-quality.py")):
         for _rel in _staged_name_only():
             if _rel.replace("\\", "/").endswith("CHANGELOG.md"):
                 # ⚠️ 必须判**暂存区内容**（`:<path>`），不能判工作区文件——AGENTS.md 明写
@@ -1222,14 +1222,14 @@ def main():
                     _tf.write(_staged_text)
                     _tmp_path = _tf.name
                 try:
-                    _rc = _run_script_rc("agate-changelog-quality.py", [_tmp_path])
+                    _rc = _run_script_rc("check-changelog-quality.py", [_tmp_path])
                 finally:
                     with _contextlib.suppress(OSError):
                         os.unlink(_tmp_path)
                 if _rc == 1:
                     sys.stderr.write(
                         "GATE: CHANGELOG 条目疑似「工作过程记录」而非变更记录"
-                        "（agate-changelog-quality.py exit 1）——阻断 commit（RM-AG0117）\n")
+                        "（check-changelog-quality.py exit 1）——阻断 commit（RM-AG0117）\n")
                     sys.exit(1)
                 break
 

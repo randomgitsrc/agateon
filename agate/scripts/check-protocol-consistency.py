@@ -857,6 +857,11 @@ SCRIPT_ALIGNMENT_ANCHORS = [
         # keywords 定值（P2-design §1.4 N4）：三串须在脚本文本中字面出现。
         "keywords": ["obligations.yaml", "M 类占比", "无归宿"],
     },
+    {
+        "desc": "CHANGELOG 条目「过程日志化」判据（RM-AG0117；阻断级，主闸 pre-commit 2z2）",
+        "script": "agate/scripts/check-changelog-quality.py",
+        "keywords": ["A2-review-rounds", "FIRE_MIN_CATEGORIES", "commit message"],
+    },
 ]
 
 

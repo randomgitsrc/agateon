@@ -350,9 +350,19 @@ def test_bdd_23_release_gate_is_agate_star_subcommand(
 
 
 def test_bdd_23_no_new_check_star_script_added(agate_scripts):
-    """BDD-23 支①排除：未新增 `agate/scripts/check-*.py`（否则 SG.6 红 / CHECK9-coverage WARNING）。
+    """BDD-23 支①：**新增的** `check-*.py` 必须已登记（进锚点表或豁免集），否则 SG.6 红。
 
-    对照 `origin/main` 的 `agate/scripts/check-*.py` 集合；本方案（支②）不应引入新 check 脚本。
+    ⚠️ 本用例原先是「**禁止**新增 check-*.py」，与本条需求原文不符——原文（TAG0051
+    `P1-requirements.md` BDD-23）写的是：
+
+    > ① 落 `check-*.py`：该脚本**须已登记**（进 `SCRIPT_ALIGNMENT_ANCHORS` 锚点表或
+    > `GATE_SCRIPT_EXEMPT` 豁免集）使 SG.6 通过（未登记则 SG.6 红，判 FAIL）
+
+    即「新增必须登记」，而非「不许新增」。原实现把某个任务（TAG0051）的**落点选择**
+    固化成了全仓规则，会错误禁止「承载 gate 判定逻辑的新脚本」——而 `agate/scripts/README.md`
+    「新增脚本登记面」恰恰规定这类脚本**应**命名为 `check-*.py` 并登记锚点。
+
+    现在按需求原文判：**新增的** `check-*.py` 允许存在，但必须出现在锚点表或豁免集里。
     """
     current = sorted(p.name for p in agate_scripts.glob("check-*.py"))
     probe = H.run_git(H.REPO_ROOT, "rev-parse", "--verify", "-q", "origin/main")
@@ -369,9 +379,21 @@ def test_bdd_23_no_new_check_star_script_added(agate_scripts):
         if p.rsplit("/", 1)[-1].startswith("check-") and p.endswith(".py")
     )
     added = [n for n in current if n not in baseline]
-    assert not added, (
-        "BDD-23：新增了 `agate/scripts/check-*.py`（落点①）——本方案应落 agate-*.py（支②）；"
-        f"新增：{added}"
+    if not added:
+        return
+
+    # 新增的 check-*.py 必须已登记（锚点表 或 豁免集）——与 BDD-23 支① 同一口径。
+    cpc = (agate_scripts / "check-protocol-consistency.py").read_text(encoding="utf-8")
+    import re as _re
+    anchors = set(_re.findall(r'"script":\s*"agate/scripts/([^"]+)"', cpc))
+    exempt_m = _re.search(r"GATE_SCRIPT_EXEMPT\s*=\s*[\{\(\[]", cpc)
+    unregistered = [
+        n for n in added
+        if n not in anchors and (exempt_m is None or n not in cpc[exempt_m.start():])
+    ]
+    assert not unregistered, (
+        "BDD-23 支①：新增的 `check-*.py` 未见登记——须进 `SCRIPT_ALIGNMENT_ANCHORS`"
+        f"（承载 gate 判定逻辑）或 `GATE_SCRIPT_EXEMPT`（纯观测/调度类，须写理由）。未登记：{unregistered}"
     )
 
 

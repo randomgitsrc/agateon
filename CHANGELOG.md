@@ -37,9 +37,9 @@
 —— 「第一版判断错了」「独立评审推翻」「变异验证」都是**作者的干活过程**，读者不需要；
 它们已分别归入 commit message 与 `docs/reviews/`。
 
-**机械兜底**（不靠自觉）：`agate/scripts/agate-changelog-quality.py` 扫 `[Unreleased]` 与最新
+**机械兜底**（不靠自觉）：`agate/scripts/check-changelog-quality.py` 扫 `[Unreleased]` 与最新
 已发布段，命中「过程痕迹」达阈值即 **阻断 commit**（pre-commit `2z2`）并由 CI **CHECK 17**
-兜底。自证：`python3 agate/scripts/agate-changelog-quality.py CHANGELOG.md`。
+兜底。自证：`python3 agate/scripts/check-changelog-quality.py CHANGELOG.md`。
 
 ---
 
@@ -49,7 +49,7 @@
 
 - **CHANGELOG 条目「过程日志化」判据（RM-AG0117）**：CHANGELOG 曾多次被写成工作过程记录
   （v0.78.0 段 248 行、v0.77.0 段 191 行，按本判据分别命中 21 / 25 处、3 类），而人眼 review 会放行。
-  新增 `agate-changelog-quality.py`：扫 `[Unreleased]` 与最新已发布段，命中「过程痕迹」
+  新增 `check-changelog-quality.py`：扫 `[Unreleased]` 与最新已发布段，命中「过程痕迹」
   （第一人称、评审轮次、变异实验、`N passed`、自我勘误等 6 类）**≥3 处且 ≥2 类**即判失败
   —— 单类反复不判，避免把写法习惯当缺陷。主闸在 pre-commit（**循环外**，故 hotfix 这类
   无 `.state.yaml` 的提交也受检）。CHECK 17 作补充检查（覆盖 `--no-verify`），但**不是**
