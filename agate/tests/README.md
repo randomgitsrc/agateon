@@ -143,6 +143,18 @@ GitHub Actions workflow 在 `.github/workflows/protocol-tests.yml`：
 | R2.3 | ~~DESIGN_GAP 在 P4 但 architect 忘记转抄 P7 → 静默放过~~ | P4/P7 交叉核对 | 已关闭（v0.6 hardening R2.3） |
 | R2.4 | `unit/test_agate_archive_stale_outputs.py` 的 `test_arch_4`（同一任务对 P6 归档两次）偶发因归档目录名用秒级时间戳（`agate-archive-stale-outputs.py` 的时间戳）而在快速连续执行/系统负载较高时撞名，导致该用例单独失败 | 隔离单跑必过（非逻辑错误，纯计时窗口问题）；全量重跑一次可确认是否为此 flaky，而非真实回归 | 已知不修复——功能正确性不受影响（仅影响测试稳定性），根治需把时间戳粒度提到毫秒级或加序号后缀，评估后判定当前收益不足以覆盖改动风险；v0.35 起即存在，非 v0.40.0 引入，v0.40.0（T001）改造过程中多次复现并确认，见 `archived/docs-2026-08/reviews/agate-alignment-review-final-2026-08-10.md` |
 
+## 测 `SystemExit` 类路径时怎么复刻环境
+
+被测脚本在**依赖缺失时于 import 阶段 `sys.exit()`**（如 `agate_common` 缺 pyyaml）——抛的是
+`SystemExit`，**不是** `Exception` 子类，普通 `except Exception` 接不住。复刻这种环境时，注入方式
+会决定结果真假，务必用前两种：
+
+| 做法 | 结果 |
+|------|------|
+| **`runpy` + 启动器**：另写一个极小的 `launcher.py`，先把假模块塞进 `sys.modules`，再 `runpy.run_path` 跑被测脚本 | ✅ 可控且与真实触发路径一致 |
+| **`PYTHONPATH` 放一个抛 `ImportError` 的 `yaml.py`**：让真 `agate_common` 自己走它那句 `sys.exit(1)` | ✅ 最忠实（模拟"缺 pyyaml"本身） |
+| `PYTHONPATH` 前置同名 stub `agate_common` | ❌ **假结果**——会被脚本自身的 `sys.path.insert(0, SCRIPT_DIR)` 压过去 |
+
 ## 目录
 
 ```
