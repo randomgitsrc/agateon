@@ -94,6 +94,18 @@ def _diagnose_declaration(project_root):
     if cfg.get("present"):
         language = (cfg.get("project") or {}).get("language", "") or "unknown"
         return True, f"声明文件: 存在（agate.config.yaml，language={language}）", None
+
+    # 「文件不存在」与「文件在但读不懂」是**两种不同的病**，修法也不同（本批主题：
+    # 报的必须是实际状态）。`read_project_config` 已经用 `parse_error` 区分了后者，
+    # 早先这里一律报「缺失」，会让一个被改坏的声明文件看起来像从未创建过
+    # ——而按「缺失」给出的 `agate-config.py init` 会覆盖掉用户原有内容。
+    # YAML 的 parse_error 是多行的（带 caret 定位），压成一行首句——状态行要能一眼读完，
+    # 完整信息可用 `agate-config.py validate` 复现。
+    parse_error = " ".join((cfg.get("parse_error") or "").split())
+    if parse_error:
+        return False, f"声明文件: 存在但无法解析（agate.config.yaml；{parse_error}）", \
+            f"修正 {project_root / 'agate.config.yaml'} 的 YAML 语法（**不要**重跑 init，会覆盖现有内容）；" \
+            f"或用 {sys.executable} {_SCRIPT_DIR / 'agate-config.py'} validate 定位"
     return False, "声明文件: 缺失（agate.config.yaml 不存在）", \
         f"运行 {sys.executable} {_SCRIPT_DIR / 'agate-config.py'} init 生成声明"
 
@@ -129,7 +141,9 @@ def _diagnose_hooks(project_root):
         fix = ("先让 agate_common 可用（缺 pyyaml 时 pip install pyyaml）后重跑"
                if hooks_dir_fallback else
                "确认项目为 git 仓库；再运行 agate-setup.py 安装 hook")
-        return False, f"hook: hooks 目录不存在（{hooks_dir}；来源={hooks_dir_source}；非 git 仓库或未初始化）", fix
+        # 只陈述事实（这个目录不存在），不替读者推断原因：「非 git 仓库」在链接 worktree 里
+        # 是**假**的（`.git` 是文件、仓库完全正常），把猜测写进状态行就是又一处「报的不是实际状态」。
+        return False, f"hook: hooks 目录不存在（{hooks_dir}；来源={hooks_dir_source}）", fix
 
     present = [n for n in _HOOK_NAMES if (hooks_dir / n).is_file()]
     broken_links = [n for n in _HOOK_NAMES
@@ -219,12 +233,20 @@ def _diagnose_version(project_root):
         chain = agate_common.resolve_version_root(str(project_root))
         # 真实 hook 入口：hooks 目录下的 pre-commit 解析掉软链；不存在则退回本 checkout 的
         # resolve-entry.py（此时 hook 也没装，结果只用于「链给出什么」的对比展示）。
+        # 注意：hook 未装（或断链）时无从取真实入口，只能退回本 checkout —— 此时 hook 本就不跑，
+        # 该值也就没有「gate 实际用什么」的含义。故下面用 hook_entry_is_real 标注出来，
+        # 不把「我住哪」冒充「gate 用哪个」（三轮评审 R3 候选①；与本批主题同源）。
         try:
             hook_entry = Path(agate_common.git_hooks_dir(str(project_root))) / "pre-commit"
-            hook_entry = hook_entry.resolve() if hook_entry.exists() else \
-                _AGATE_ROOT / "scripts" / "resolve-entry.py"
+            if hook_entry.exists():
+                hook_entry = hook_entry.resolve()
+                hook_entry_is_real = True
+            else:
+                hook_entry = _AGATE_ROOT / "scripts" / "resolve-entry.py"
+                hook_entry_is_real = False
         except (Exception, SystemExit):
             hook_entry = _AGATE_ROOT / "scripts" / "resolve-entry.py"
+            hook_entry_is_real = False
         hook_root, hook_warnings = agate_common.resolve_hook_root(str(hook_entry))
     except (Exception, SystemExit) as exc:
         # 同样按真因分流：agate-resolve.py 自己也 import agate_common，让它去跑是死循环建议。
@@ -245,7 +267,14 @@ def _diagnose_version(project_root):
 
     # 兜底时 **不能** 照抄解析链的 reason（"无可用 AGATE_ROOT"）——那会和下面给出的
     # 实际可用 root 直接矛盾。改成如实说明「链没结果、gate 走了哪条兜底」。
-    reason_note = "解析链无结果，gate 实际走脚本路径上溯兜底" if via_fallback else reason
+    if via_fallback:
+        reason_note = (
+            "解析链无结果，gate 实际走脚本路径上溯兜底" if hook_entry_is_real
+            else "解析链无结果，且 hook 未安装（无从取真实入口；此值为本工具所在 checkout，"
+                 "不代表 gate 会用什么）"
+        )
+    else:
+        reason_note = reason
 
     detail = f"AGATE_ROOT={Path(root).resolve()}；版本={version or '未标注'}；原因={reason_note}；" \
              f"项目 .agate-version={declared_note}"
@@ -259,6 +288,13 @@ def _diagnose_version(project_root):
     if not Path(root).is_dir():
         return False, f"版本解析: AGATE_ROOT 不可用（{root}）｜{detail}", \
             f"运行 {sys.executable} {_AGATE_ROOT / 'scripts' / 'agate-resolve.py'} 查看解析链"
+    if via_fallback and not hook_entry_is_real:
+        # 判据是「能不能确认」，不是「看起来像不像」：链无结果且没有真实 hook 入口时，
+        # 报出来的 root 只是本工具所在 checkout，与 gate 会用什么无关 ⇒ 不能判 OK
+        # （否则又是一处「我住哪」冒充「gate 用哪个」）。
+        # hook 维度的建议已经覆盖「装 hook」；这里只补版本侧独有的动作，避免同一根因两条重复建议。
+        return False, f"版本解析: {detail}", \
+            "安装 .agate-version 所声明的版本（或修正该声明）后重跑，以取得与 gate 同源的解析结果"
     return True, f"版本解析: {detail}", None
 
 

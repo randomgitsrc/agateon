@@ -674,3 +674,98 @@ def test_exc_note_passes_through_plain_exception(agate_scripts):
     spec.loader.exec_module(module)
 
     assert module._exc_note(ValueError("boom")) == "boom"
+
+
+def test_doctor_distinguishes_missing_from_unparseable_declaration(
+    git_repo, agate_scripts, python_exe, run_cli, agate_root, tmp_path
+):
+    """「声明文件不存在」与「存在但读不懂」必须报成两种状态（修法不同）。
+
+    Given 两种项目：一个没有 `agate.config.yaml`，一个有但 YAML 非法
+    When 分别运行 `agate-doctor`
+    Then 两者都 `[!!]`，但**文案可区分**：后者须明确说「存在但无法解析」，
+         且**不得**建议 `init`（那会覆盖用户原有内容）。
+
+    为什么：本批主题是「报的必须是实际状态」。原实现把两者一律报「缺失（不存在）」——
+    一个被改坏的声明文件看起来像从未创建过，而按「缺失」给出的 `init` 建议会覆盖掉
+    用户原有内容（数据丢失风险，不只是文案错）。`read_project_config` 本就用
+    `parse_error` 区分了后者，doctor 只是没用它。
+    """
+    # A：缺失
+    env = _isolated_agate_env(tmp_path, agate_root)
+    missing = _run_doctor(agate_scripts, python_exe, run_cli, cwd=git_repo.path, env=env)
+    ok_missing, line_missing = _dim_line(missing.output, "声明文件")
+    assert not ok_missing and "缺失" in line_missing
+
+    # B：存在但 YAML 非法
+    (git_repo.path / _CONFIG_FILE).write_text(
+        "schema_version: 1\nproject: [unclosed\n", encoding="utf-8"
+    )
+    broken = _run_doctor(agate_scripts, python_exe, run_cli, cwd=git_repo.path, env=env)
+    ok_broken, line_broken = _dim_line(broken.output, "声明文件")
+    assert not ok_broken, f"非法声明须判异常；实际 {line_broken!r}"
+    assert "存在但无法解析" in line_broken, (
+        f"须说清「文件在、但读不懂」而不是笼统报缺失；实际 {line_broken!r}"
+    )
+    assert line_broken != line_missing, "两种情形不得给出同一句状态"
+    # 不得建议 init——那会覆盖用户原有声明内容。
+    assert "agate-config.py init" not in broken.output, (
+        "声明文件存在时不得建议 init（会覆盖用户内容）；"
+        f"实际输出 {broken.output[:600]!r}"
+    )
+
+
+def test_doctor_version_not_ok_when_root_is_merely_self_checkout(
+    git_repo, agate_scripts, python_exe, run_cli, agate_root, tmp_path
+):
+    """链无结果且**无真实 hook 入口**时，版本维度不得判 OK。
+
+    Given `AGATE_HOME` 指向不存在目录（链无结果），且 `.git/hooks` 里没有 hook
+    When 运行 `agate-doctor`
+    Then 版本维度为 `[!!]`，且状态行明说「此值为本工具所在 checkout，不代表 gate 会用什么」。
+
+    为什么（三轮评审 R3 候选①）：hook 未装时无从取真实入口，只能退回本 checkout ——
+    此时该值没有「gate 实际用什么」的含义。判据是**能不能确认**，不是看起来像不像：
+    报 OK 就又是一处「我住哪」冒充「gate 用哪个」。
+    """
+    env = {
+        "AGATE_HOME": str(tmp_path / "no-such-home"),
+        "HOME": str(tmp_path / "fake-home"),
+        "USERPROFILE": str(tmp_path / "fake-home"),
+    }
+    env.pop("AGATE_ROOT", None)
+    _write_config(git_repo.path)
+    result = _run_doctor(agate_scripts, python_exe, run_cli, cwd=git_repo.path, env=env)
+
+    ok, line = _dim_line(result.output, "版本")
+    assert not ok, f"无法确认 gate 会用哪个 root 时不得判 OK；实际 {line!r}"
+    assert "不代表 gate 会用什么" in line, (
+        f"须明确标注该值不具有「gate 实际使用」的含义；实际 {line!r}"
+    )
+
+
+def test_doctor_hook_status_does_not_infer_not_a_repo(
+    git_repo, agate_scripts, python_exe, run_cli, agate_root, tmp_path
+):
+    """hook 目录不存在时只陈述事实，不得断言「非 git 仓库或未初始化」。
+
+    Given 一个正常 git 仓库，但 `core.hooksPath` 指向不存在的目录（命令级 `-c`，不落盘）
+    When 运行 `agate-doctor`
+    Then 状态行报告该目录不存在，且**不**出现「非 git 仓库」这类未经验证的推断
+         （链接 worktree 里 `.git` 是文件，仓库完全正常，该断言为假）。
+
+    为什么（三轮评审 R3 候选②）：把猜测写进状态行，又是「报的不是实际状态」。
+    """
+    missing_dir = tmp_path / "no-such-hooks"
+    env = _isolated_agate_env(tmp_path, agate_root)
+    env["GIT_CONFIG_COUNT"] = "1"
+    env["GIT_CONFIG_KEY_0"] = "core.hooksPath"
+    env["GIT_CONFIG_VALUE_0"] = str(missing_dir)
+    _write_config(git_repo.path)
+    result = _run_doctor(agate_scripts, python_exe, run_cli, cwd=git_repo.path, env=env)
+
+    _ok, line = _dim_line(result.output, "hook")
+    assert str(missing_dir) in line, f"须报出实际查的目录；实际 {line!r}"
+    assert "非 git 仓库" not in line, (
+        f"不得断言仓库类型（未经验证的推断）；实际 {line!r}"
+    )

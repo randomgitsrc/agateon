@@ -51,7 +51,12 @@
   而那两个脚本**同样 import `agate_common`**（是死循环建议）。**修法**：`SystemExit` 分支统一指向
   「先让 agate_common 可用」，非 `SystemExit` 分支才给原指引；并对多维度共享同一根因的建议**去重**。
   **实测**：这 4 个被建议的脚本（`agate-setup.py` / `agate-resolve.py` / `check-events.py` /
-  `agate-config.py`）在同一环境下 RC 全非 0，确认是死循环建议而非猜测。
+  `agate-config.py`）在同一环境下 RC 全非 0（4/4），确认是死循环建议而非猜测。
+  ⚠️ **复刻方式必须写对**（三轮评审指出）：要模拟「缺 pyyaml」，须在 `PYTHONPATH` 放一个
+  **抛 `ImportError` 的 `yaml.py`**，让真 `agate_common` 自己走它那句 `sys.exit(1)`。若改用
+  「往 `sys.path` 前置一个 stub `agate_common`」，会被脚本自身的
+  `sys.path.insert(0, SCRIPT_DIR)` 压过去 ⇒ 得到 rc=0 的**假结果**。同理，本批所有
+  `SystemExit` 相关用例都经 `runpy` + 启动器注入，而不是靠改 `PYTHONPATH` 顺序。
 
 - **「回退查 `.git/hooks` 后仍判 OK」的假绿（二轮独立评审 N-1，已复现并修）**：
   `agate_common` 不可用时 hook 维度回退查 `<repo>/.git/hooks`。但 git 实际只看
@@ -61,9 +66,32 @@
   「无法确认效力（已回退查 X；git 实际目录可能是 `core.hooksPath` 指向的别处）」并给 `[!!]`。
   —— 判据是「我能不能确认」，不是「我看到的东西看起来对不对」。
 
+- **同主题的三处残留（三轮独立评审 + 作者自查，同批修）**——判据统一为「报的必须是实际状态，
+  且只报**能确认**的」：
+  ① **声明维度把「文件在但读不懂」报成「不存在」**：`read_project_config()` 本就用 `parse_error`
+  区分「YAML 非法 / 顶层非映射」，doctor 只看 `present` 把它丢了。危害不止文案：按「缺失」给出的
+  建议是 `agate-config.py init`，而对一个**存在但被改坏**的声明跑 init 会**覆盖用户原有内容**。
+  现区分三态：缺失（建议 init）/ 存在但无法解析（建议改语法，**明写不要 init**）/ 正常；
+  YAML 的多行 `parse_error` 压成单行首句以保持状态行可读。
+  ② **hook 目录不存在时断言「非 git 仓库或未初始化」**：该推断在链接 worktree 里为**假**
+  （`.git` 是文件、仓库完全正常）。现只陈述事实，不替读者推断原因。
+  ③ **版本维度在「无真实 hook 入口」时判 OK**：hook 未装时只能退回本 checkout，该值没有
+  「gate 实际上会用什么」的含义。现判 `[!!]` 并明写「此值为本工具所在 checkout，不代表 gate
+  会用什么」——判据是**能不能确认**，不是看起来像不像。
+
   同上，本批新增的 4 段分流/去重逻辑（hook 回退、声明真因、版本真因、建议去重）此前**无守护**；
   已补 5 组断言，并逐个做过变异实验（回退对应实现即转红），另加 `SystemExit.code` 取
   `None`/整数/字符串/0 的参数化用例，确保诊断文案不会因 code 类型而抛异常。
+
+### 勘误
+
+- **本批前两个 commit 的测试数字有两处不实，在此更正**（三轮独立评审逐条实测指出）：
+  ① commit `8690c9d2` 的 message 写「全量 3042 passed + **2 个**既有环境失败」，实际当时即有
+  **3 个**——`test_bdd_45` 依赖 `codex` CLI，与 `test_bdd_43` 依赖 `opencode` 同族，在该环境
+  同样按设计判 FAIL。② commit `70f051ba` 的 message 写「3046 passed」，而在**该提交的树**上实测
+  收集 `3052`、跑出 `3049 passed / 3 skipped / 3 failed`（复现：`git checkout 70f051ba` 后
+  `python3 -m pytest agate/tests/ -q -n auto --reruns 1`）。两处均属**作者自述未经命令核验**，
+  正是 A8「声称-命令绑定」要拦的类型；数字一律以现场输出为准，不凭记忆写。
 
 ### 文档
 
