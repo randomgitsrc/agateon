@@ -85,13 +85,29 @@
 
 ### 勘误
 
-- **本批前两个 commit 的测试数字有两处不实，在此更正**（三轮独立评审逐条实测指出）：
-  ① commit `8690c9d2` 的 message 写「全量 3042 passed + **2 个**既有环境失败」，实际当时即有
-  **3 个**——`test_bdd_45` 依赖 `codex` CLI，与 `test_bdd_43` 依赖 `opencode` 同族，在该环境
-  同样按设计判 FAIL。② commit `70f051ba` 的 message 写「3046 passed」，而在**该提交的树**上实测
-  收集 `3052`、跑出 `3049 passed / 3 skipped / 3 failed`（复现：`git checkout 70f051ba` 后
-  `python3 -m pytest agate/tests/ -q -n auto --reruns 1`）。两处均属**作者自述未经命令核验**，
-  正是 A8「声称-命令绑定」要拦的类型；数字一律以现场输出为准，不凭记忆写。
+- **本批 commit message 里的测试计数不可复现，且「既有失败」个数本来就不是固定值**——这是
+  三轮独立评审逐条实测（其中一次纠正了我上一版勘误里的错数字）后得到的结论。为避免在这里
+  再写一个会漂移的数字，**只给判定方法，不写计数**：
+
+  ```bash
+  git checkout <commit>            # 在任何历史提交上复现
+  python3 -m pytest agate/tests/ -q -n auto --reruns 1
+  ```
+
+  **可靠性结论（与计数无关，才是要记住的）**：
+  - `test_bdd_43`（依赖 `opencode` CLI）与 `test_bdd_45`（依赖 `codex` CLI）**按设计判 FAIL 而非
+    skip**（P1 BDD-43/45 的二值规则），故「既有失败数」取决于**跑测试那一刻 PATH 里有哪些 CLI**
+    ——我观察到 2 个和 3 个两种结果，**这不是回归，是环境差异**。
+  - `test_t15_real_tree_smoke_pack_install_resolve` 因 `git clone --local` 跨设备硬链接失败
+    （仓库与 `TMPDIR` 不在同一文件系统）：本机 `/tmp` 是 tmpfs、仓库在 `/dev/sdd`。
+    **想得到干净基线就 `git clone --no-hardlinks` 到**仓库所在文件系统**再跑**（三轮评审用这招
+    把这条假红消掉了）；反之，若你直接在 `/tmp` 跑，会把这条**假的**失败当成"既知既有失败"，
+    从而漏看真实回归——判据本身要先可信。
+  - 上述三项在**未改动的 `origin/main` 上同样失败**，可用 `git checkout origin/main` 复跑自证。
+
+  **教训（写给后来者）**：commit message 里写「N passed」是个**假精确**——它同时依赖提交内容
+  与环境；一旦有人复跑得到别的数，会误以为出了回归。要留证据就留**命令 + 当时的环境前提**
+  （哪些 CLI 在 PATH、TMPDIR 在哪），不要留裸数字。本节前一版正是在这里连错了两次。
 
 ### 文档
 

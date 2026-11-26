@@ -613,12 +613,15 @@ def test_doctor_stays_green_exit_when_agate_common_aborts(
         "agate_common 不可用时账本审计根本没执行，不得报 OK——"
         f"「解析失败」与「无任务」必须分开；实际 {ledger_line!r}"
     )
-    # hook 维度同理：agate_common 挂掉时查的是回退目录，无法确认 git 真正会用的目录
-    # （core.hooksPath 可能指向别处），不得判 OK（二轮评审 N-1：实测该组合下 git 真哑而
-    # doctor 报绿）。
+    # hook 维度：agate_common 挂掉**不影响**判断——目录可直调
+    # `git rev-parse --git-path hooks` 得到（纯 git 查询，不需要 pyyaml）。
+    # 故此处判据不是「必须 [!!]」也不是「必须 [OK]」，而是**与 git 的实际行为一致**：
+    # 本用例的仓库装了三个可执行 hook 且无 core.hooksPath ⇒ git 会执行它们 ⇒ 应判 OK。
+    # （三轮评审 A2 指出：上一版在此声称「无法确认」是**假前提**，会制造假红。）
     _hook_ok, hook_line = _dim_line(result.output, "hook")
-    assert not _hook_ok, (
-        "agate_common 不可用时报的是回退目录，无法确认效力，不得判 OK；"
+    assert _hook_ok, (
+        "agate_common 不可用但 git 查得到 hooks 目录且三个 hook 可执行时，须判 OK"
+        "（否则是假红：一切正常却报异常，还会误导人去装无关的 pyyaml）；"
         f"实际 {hook_line!r}"
     )
     # 修复指引不得循环：agate-setup.py / agate-resolve.py / check-events.py /
@@ -769,3 +772,86 @@ def test_doctor_hook_status_does_not_infer_not_a_repo(
     assert "非 git 仓库" not in line, (
         f"不得断言仓库类型（未经验证的推断）；实际 {line!r}"
     )
+
+
+# ── 「不得假红」反向守护（三轮评审 A2 指出：本批新增 4 条 hook 用例全是
+#    「必须报异常」方向，缺「一切正常时不得报异常」方向 ⇒ 过度保守无人拦）───────────
+
+
+def test_doctor_hook_ok_when_agate_common_unavailable_but_git_knows(
+    git_repo, agate_scripts, python_exe, run_cli, agate_root, tmp_path
+):
+    """`agate_common` 挂掉但 git 查得到 hooks 且 hook 可执行 ⇒ **必须判 OK**。
+
+    Given `agate_common` import 即中止；`.git/hooks` 下三个 hook 可执行；无 core.hooksPath
+    When 运行 `agate-doctor`
+    Then hook 维度判 `[OK]`。
+
+    为什么（三轮评审 A2）：`git rev-parse --git-path hooks` 是**纯 git 查询，不需要 pyyaml**，
+    所以「agate_common 不可用」**不构成**「无法确认 hooks 目录」。上一版在此放弃判断并报
+    `[!!] 无法确认效力`，属**假红**——一切正常却报异常，还让人去装无关的 pyyaml。
+    这条守卫固定「不得为了保守而制造假红」。
+    """
+    if os.name == "nt":
+        pytest.skip("Windows 无 POSIX 执行位语义")
+    _write_config(git_repo.path)
+    _install_hooks(git_repo.path / ".git" / "hooks", 0o755)
+    stub_dir = tmp_path / "stub"
+    stub_dir.mkdir()
+    (stub_dir / "agate_common.py").write_text("import sys\nsys.exit(1)\n", encoding="utf-8")
+    launcher = tmp_path / "launcher.py"
+    launcher.write_text(
+        "import runpy, sys\n"
+        f"sys.path.insert(0, {str(stub_dir)!r})\n"
+        "sys.argv = ['agate-doctor.py']\n"
+        f"runpy.run_path({str(agate_scripts / _DOCTOR_SCRIPT)!r}, run_name='__main__')\n",
+        encoding="utf-8",
+    )
+    env = {"HOME": str(tmp_path / "fh"), "USERPROFILE": str(tmp_path / "fh")}
+    result = run_cli(python_exe, str(launcher), env=env, cwd=git_repo.path)
+
+    ok, line = _dim_line(result.output, "hook")
+    assert ok, (
+        "agate_common 不可用但 git 能查到 hooks 目录、hook 也都可执行时，hook 维度须判 OK；"
+        f"报异常即为假红。实际 {line!r}"
+    )
+    assert str(git_repo.path / ".git" / "hooks") in line, (
+        f"须报出**问 git 得到**的目录（而不是写死的猜测）；实际 {line!r}"
+    )
+
+
+def test_doctor_version_flags_root_without_gate_script(
+    git_repo, agate_scripts, python_exe, run_cli, agate_root, tmp_path
+):
+    """`AGATE_ROOT` 存在但**缺 gate 脚本** ⇒ 版本维度必须判异常。
+
+    Given `AGATE_HOME` 下装了 v9.9.9 且 current 指向它，但该目录**只有空的 scripts/**
+          （没有 `pre-commit-gate.py`）
+    When 运行 `agate-doctor`
+    Then 版本维度判 `[!!]` 且状态行指出「缺 gate 脚本」。
+
+    为什么（三轮评审 A2 第 2 条）：gate 由 `resolve-entry.py` 定位后校验
+    `<root>/scripts/<gate>.py` 存在，缺失即 **fail-closed 阻断提交**（`resolve-entry.py:49-52`）。
+    doctor 只报「目录存在」会让「装了一半 / 被手删过」的项目四维全绿，而真实 `git commit`
+    被拦——判的是「目录在不在」，不是「gate 跑不跑得起来」。
+    """
+    home = tmp_path / "fake-home"
+    (home / "v9.9.9" / "scripts").mkdir(parents=True)   # 有 scripts/ 但**无** gate py
+    (home / "v9.9.9" / "assets").mkdir(parents=True)
+    (home / "current").write_text("v9.9.9", encoding="utf-8")
+    _write_config(git_repo.path)
+    _install_hooks(git_repo.path / ".git" / "hooks", 0o755)
+    env = {
+        "AGATE_HOME": str(home),
+        "HOME": str(tmp_path / "fh"),
+        "USERPROFILE": str(tmp_path / "fh"),
+    }
+    env.pop("AGATE_ROOT", None)
+    result = _run_doctor(agate_scripts, python_exe, run_cli, cwd=git_repo.path, env=env)
+
+    ok, line = _dim_line(result.output, "版本")
+    assert not ok, (
+        "root 下缺 gate 脚本时 gate 会 fail-closed 阻断提交，版本维度不得判 OK；"
+        f"实际 {line!r}"
+    )
+    assert "缺 gate 脚本" in line, f"须点明缺的是 gate 脚本；实际 {line!r}"

@@ -28,6 +28,7 @@ import contextlib
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -124,19 +125,39 @@ def _diagnose_hooks(project_root):
       模式在复制模式安装时踩过两次，两次都只修了产生端，消费端无人检查）。故「在位」不等于
       「生效」，须单独判执行位并单独报。
     """
+    # **目录来源：优先 agate_common，失败则直接问 git**（三轮评审 A2 指出）。
+    # `git rev-parse --git-path hooks` 是**纯 git 查询，不需要 pyyaml** —— 所以
+    # 「agate_common 不可用（缺 pyyaml）」根本不构成「无法确认 hooks 目录」。
+    # 早先在这种情况下回退到写死的 `<repo>/.git/hooks`，等于在一个**能问到答案**的场景里
+    # 主动去猜——那正是本批要消灭的那类缺陷（猜出来的目录 + core.hooksPath 覆盖 = 假绿）。
+    hooks_dir = None
+    hooks_dir_source = ""
     try:
         import agate_common
         hooks_dir = Path(agate_common.git_hooks_dir(str(project_root)))
-        hooks_dir_source = "git rev-parse --git-path hooks"
+        hooks_dir_source = "git rev-parse --git-path hooks（经 agate_common）"
     except (Exception, SystemExit) as exc:
-        # agate_common 不可用（缺 pyyaml 等）→ 退回旧路径，并**在状态行里标明这是回退值**：
-        # 否则「查的是哪儿」又变成读者看不见的隐含假设——正是本次要消灭的那类缺陷。
-        hooks_dir = project_root / ".git" / "hooks"
-        hooks_dir_source = f"回退 .git/hooks（agate_common 不可用：{_exc_note(exc)}）"
-        # 此时 agate-setup.py 同样跑不起来（它也 import agate_common），不能拿它当修复指引。
-        hooks_dir_fallback = True
-    else:
-        hooks_dir_fallback = False
+        note = _exc_note(exc)
+        try:
+            proc = subprocess.run(
+                ["git", "rev-parse", "--git-path", "hooks"],
+                cwd=str(project_root), capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=30,
+            )
+            rel = proc.stdout.strip() if proc.returncode == 0 else ""
+            if rel:
+                hooks_dir = Path(os.path.normpath(os.path.join(str(project_root), rel)))
+                hooks_dir_source = f"git rev-parse --git-path hooks（直调；agate_common 不可用：{note}）"
+        except (OSError, subprocess.SubprocessError):
+            hooks_dir = None
+    if hooks_dir is None:
+        # 走到这里说明**连 git 都问不到**（非仓库 / git 不在 PATH）——此时如实说"问不到"，
+        # 既不用猜的路径冒充答案，也不假装能给出结论。
+        return False, "hook: 无法确定 hooks 目录（git rev-parse --git-path hooks 失败；非 git 仓库或 git 不可用）", \
+            "确认项目是 git 仓库、且 git 在 PATH 上；再运行 agate-setup.py 安装 hook"
+    # agate_common 不可用不影响本维度其余判断（执行位 / 断链 / 在位都不需要它），
+    # 但仍记住它——修复建议里不能推荐同样跑不起来的 agate-setup.py。
+    hooks_dir_fallback = "agate_common 不可用" in hooks_dir_source
     if not hooks_dir.is_dir():
         fix = ("先让 agate_common 可用（缺 pyyaml 时 pip install pyyaml）后重跑"
                if hooks_dir_fallback else
@@ -156,20 +177,16 @@ def _diagnose_hooks(project_root):
         not_executable = [n for n in present if not os.access(hooks_dir / n, os.X_OK)]
 
     if not missing and not broken_links and not not_executable:
-        # 回退分支**不得判 OK**（二轮评审 N-1，已实测复现）：agate_common 挂掉时我们查的是
-        # `<repo>/.git/hooks`，而 git 实际只看 `core.hooksPath`。两者不一致时这里明明有可执行
-        # hook、git 却在看一个空目录——`git commit` 照常成功（gate 真哑），报 OK 就是假绿。
-        # 既然「查的是哪儿」无法确认，就只能如实说「无法确认效力」，不能替 git 下结论。
-        if hooks_dir_fallback:
-            return False, (
-                f"hook: 无法确认效力（agate_common 不可用，已回退查 {hooks_dir}；"
-                "git 实际目录可能是 core.hooksPath 指向的别处）"
-            ), "先让 agate_common 可用（缺 pyyaml 时 pip install pyyaml）后重跑"
+        # 注意：**不再**因 `agate_common` 不可用就判「无法确认效力」。目录是直调
+        # `git rev-parse --git-path hooks` 得到的，与 agate_common 那条路径同源同义，
+        # 所以「在位 + 可执行 + 非断链」这个结论仍然成立（三轮评审 A2：原实现在**能问到
+        # 答案**的场景里主动放弃判断，既没问 git 也没下结论，与索引行的承诺不符）。
+        #
         # 收窄用词：本维度能证明的只是「git 会执行它」（在位 + 可执行 + 非断链）。
         # 它是否真能**阻断**取决于其内容（空文件、exit 0 的脚本也会被 git 执行却不拦），
         # 那要跑一次真实提交才知道——不在这里替 git 下结论（独立评审 A4 指出）。
         return True, (
-            f"hook: 已安装且可执行（{', '.join(_HOOK_NAMES)}）"
+            f"hook: 已安装且可执行（{', '.join(_HOOK_NAMES)}）〔{hooks_dir}；来源={hooks_dir_source}〕"
             "——注意：判的是「git 会不会执行它」，不含「其内容是否真能阻断」"
         ), None
 
@@ -288,6 +305,15 @@ def _diagnose_version(project_root):
     if not Path(root).is_dir():
         return False, f"版本解析: AGATE_ROOT 不可用（{root}）｜{detail}", \
             f"运行 {sys.executable} {_AGATE_ROOT / 'scripts' / 'agate-resolve.py'} 查看解析链"
+    # **判「gate 跑得起来」，不是判「目录存在」**（三轮评审 A2 第 2 条）：gate 实际由
+    # `resolve-entry.py` 定位后校验 `<root>/scripts/<gate>.py` 是否存在，缺失即 fail-closed
+    # 阻断提交（`resolve-entry.py:49-52`）。只报「AGATE_ROOT 目录在」会让「版本目录装了一半 /
+    # 被手删过」的项目四维全绿，而真实 `git commit` 被拦——那是本批要消灭的那类差。
+    gate_py = Path(root) / "scripts" / "pre-commit-gate.py"
+    if not gate_py.is_file():
+        return False, f"版本解析: {detail}｜**该 root 下缺 gate 脚本**（{gate_py}）", \
+            "gate 会 fail-closed 阻断提交：重装所声明的版本（agate-install.py <version>），" \
+            f"或用 {sys.executable} {_AGATE_ROOT / 'scripts' / 'agate-resolve.py'} 复核解析结果"
     if via_fallback and not hook_entry_is_real:
         # 判据是「能不能确认」，不是「看起来像不像」：链无结果且没有真实 hook 入口时，
         # 报出来的 root 只是本工具所在 checkout，与 gate 会用什么无关 ⇒ 不能判 OK
