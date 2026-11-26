@@ -17,7 +17,7 @@ BDD 计数），状态机才前进；状态全部落盘到版本控制下的 Mar
 
 - 仓库：`randomgitsrc/agateon`，MIT 协议；版本以 README badge / `git describe --tags` 为准
 - 起源：2026-06-16 首个 commit，由 Agateon 自身 dogfooding 驱动演进（持续演进中）
-- 规模：`agate/scripts/` 约 60 个 Python 脚本 + 3 个 `.sh` hook 薄壳（脚本清单见 `agate/scripts/README.md`）；测试用例数以 `bash agate/tests/scripts/count-tests.sh` 为准
+- 规模：`agate/scripts/` 下 Python 脚本 + 3 个 `.sh` hook 薄壳（**具体数目现场查**：`ls agate/scripts/*.py | wc -l`；脚本清单见 `agate/scripts/README.md`）；测试用例数以 `bash agate/tests/scripts/count-tests.sh` 为准
 - 历史：自我改造任务持续闭环中——已完成任务见 `agate-workspace/tasks/active-tasks.md`，规划 / 债条目以 `roadmap.md`、`tech-debt.md` 为准
 
 ## 2. 仓库四块

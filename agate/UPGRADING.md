@@ -283,6 +283,37 @@ git commit
 >
 > **v0.73.0 起旧软链布局不再支持**：下列历史版本节中关于软链布局 / `git pull` 升级 / 软链兜底的表述仅作历史记录，不再是可执行指引；现行口径以「版本管理生命周期」节与 `### v0.73.0` 为准。
 
+### v0.83.4 — DSH 0.2.x 适配（**需要动作：重跑接入**）
+
+> 实现注记：本段为版本升级记录（DSH 平台支持变更史：修正 preset 模板对 DSH ≥0.2.2-rc.5 的
+> 兼容性，以及三处会误导编排者的陈述）——记录已发生事实，平台名是记录对象本身，属历史叙事
+> 元信息。
+
+**⚠️ 需要动作：如果你在 DSH 上用 Agateon，升级后必须重跑一次接入命令**：
+
+```bash
+python3 ~/.agate/scripts/agate-setup.py
+```
+
+**原因（真故障，不是措辞问题）**：模板里 `@deepseek-ai/dsh-tool-subagent-control/list-agents`
+这一行引用的是**已被移除的包子路径**。DSH 自 **0.2.2-rc.5** 起该子路径已从 `exports` 移除
+（上游指南 `v0.2.1-rc.1/subagent-control-tools` 明文：「独立的 `/list-agents` 导出已移除」、
+「移除针对已停用的 `tool-subagent-list-agents` 行的 patch」），`list_agents` 改由
+`tool-subagent-control` **根入口**一并注册。实测 `require('@deepseek-ai/dsh-tool-subagent-control/list-agents')`
+→ `ERR_PACKAGE_PATH_NOT_EXPORTED`。
+
+后果：**旧接入产物会让 Agateon preset 挂载失败** ⇒ 选「Agateon 编排者」建会话会失败。
+而该失败**不会出现在启动日志里**——它被降级为 preset registry 的 `broken` 状态（只有 CLI
+启动失败路径才附着 `startupLogs`），所以用「启动日志干净」判断兼容性会漏掉它（本批第一版
+就是这么漏的）。重跑接入后该行被删除，preset 恢复正常。
+
+同批另修三处**陈述**（无动作要求，仅纠正误导）：
+1. persona 不再称 `subagent`「默认后台」——DSH 0.2.1-alpha.1 起委派是 activation-only，
+   结果由运行时通知送达，**不经 `job_output`**。
+2. `tool-subagent-control` 显式声明 `interrupt: true`——DSH 0.2.2-rc.1 起官方各 preset 都
+   设 `false`；Agateon 需要该能力停掉卡死的子 agent，故显式保留而非依赖插件默认值。
+3. persona 补 `[NEED_CONFIRM]` → `ask_user_question` 的工具落点。
+
 ### v0.83.3 — 命令流空转检测与 DSH 退出码修复（**无破坏性变更**）
 
 > 实现注记：本段为版本升级记录（DSH 平台支持变更史：该版本修复 DSH 会话的退出码解析、

@@ -67,8 +67,9 @@ judge 需要 fresh context（只看标准、不看实现者自述）——DSH �
 3. **审批策略**：审批被禁用时沙箱拒绝即终局，不可升级——gate 命令设计成不触发需审批的操作
 4. **bash 纪律**：长命令外层 `timeout`；读文件用 read/grep/glob 工具而非 bash（避免 bash 挂起）
 5. **临时产物落 `<项目根>/.agate-tmp/`**（不能用 `/tmp`——见第 2 条）：该目录须**已被 .gitignore 忽略**，且其中**文件名不得匹配测试收集模式**（`*.spec.*` / `*.test.*` / `test_*.py` 等——它在项目树内，会被测试框架默认 `include` 扫到，静默抬高基线）。完整四项约定（名称/忽略/收集面/清理时点）见 `{agate_root}/platform-notes.md`「受限 harness 通用约束」
-6. **长驻服务存活跟随「发起它的那次调用」**：DSH 在调用/后台 job 结束时回收其派生的**整个进程树**——`&` / `nohup` / `setsid` detach **均不保活**。要跨调用使用服务，须挂在**持续 running 的后台 job** 下托底（如 `( make debug-start; sleep 3600 )` 提交为后台 job），**并且每次使用前探活**（端口/健康检查，不是 pidfile）——托底时长**不是**可靠性保证（实测逐次加长到 12h 仍被跨越 4 次）。⚠️ **不要靠加长 `sleep`**，掉线即重启。完整四步做法见 `{agate_root}/platform-notes.md`「受限 harness 通用约束」
-7. **不要启用 `agent-team` 组合包**：它作用在**顶层**（注册 team 工具 + 禁用顶层 subagent），而本 preset 的 `subagent` / `subagent_fork` 挂在**预设作用域**——上游「已知限制」明确「顶层组合包**不会替换**这些注册」⇒ 启用后是**两套委派面并存**（不是本 preset 失效），编排者须自行判断用哪套；团队任务板还与 `.state.yaml` 形成第二个协调基质，与「单一权威 + 阶段门禁 + 单一作者」竞争。**agateon 已有等价能力**：批量并行 = `workflow`；独立 fresh 复核 = `ralph`；跨轮续跑 = `goal`。**自查**：`~/.dsh/profiles/<profile>/package.json` 的 `dsh.profile.bundles`（`agate-setup.py` 接入时也会检测并提示）。详见 `{agate_root}/platform-notes.md` DSH 章
+6. **「长任务」有两种，别混**：`bash` 命令可以（也应该）用外层 `timeout` 或后台 job 管；**但 subagent 委派的结果不走 job**——DSH 0.2.1-alpha.1 起委派是 activation-only，调用即返回 `started subagent <name>`，最终答案由运行时**通知**送达。用 `job_output` 等 subagent 会永远等不到（这也是本仓「别轮询」纪律的机制根据）。
+7. **长驻服务存活跟随「发起它的那次调用」**：DSH 在调用/后台 job 结束时回收其派生的**整个进程树**——`&` / `nohup` / `setsid` detach **均不保活**。要跨调用使用服务，须挂在**持续 running 的后台 job** 下托底（如 `( make debug-start; sleep 3600 )` 提交为后台 job），**并且每次使用前探活**（端口/健康检查，不是 pidfile）——托底时长**不是**可靠性保证（实测逐次加长到 12h 仍被跨越 4 次）。⚠️ **不要靠加长 `sleep`**，掉线即重启。完整四步做法见 `{agate_root}/platform-notes.md`「受限 harness 通用约束」
+8. **不要启用 `agent-team` 组合包**：它作用在**顶层**（注册 team 工具 + 禁用顶层 subagent），而本 preset 的 `subagent` / `subagent_fork` 挂在**预设作用域**——上游「已知限制」明确「顶层组合包**不会替换**这些注册」⇒ 启用后是**两套委派面并存**（不是本 preset 失效），编排者须自行判断用哪套；团队任务板还与 `.state.yaml` 形成第二个协调基质，与「单一权威 + 阶段门禁 + 单一作者」竞争。**agateon 已有等价能力**：批量并行 = `workflow`；独立 fresh 复核 = `ralph`；跨轮续跑 = `goal`。**自查**：`~/.dsh/profiles/<profile>/package.json` 的 `dsh.profile.bundles`（`agate-setup.py` 接入时也会检测并提示）。详见 `{agate_root}/platform-notes.md` DSH 章
 
 ## 验证清单（接入后第一次跑任务前）
 

@@ -10,6 +10,151 @@
 
 ## [Unreleased]
 
+## [0.83.4] - 2026-11-27
+
+### 修复
+
+- **DSH 0.2.x 适配：preset 引用了已移除的包子路径 ⇒ 挂载失败（走 hotfix 通道，不立项）**：
+  用户报告「DSH 升到 0.2.3 后 agateon 应该不兼容了」——**属实，是真故障**（第一版判断为
+  「无硬性不兼容」是错的，独立评审用 registry 的 broken 状态推翻）。根因：模板引用的
+  `@deepseek-ai/dsh-tool-subagent-control/list-agents` 子路径自 DSH **0.2.2-rc.5** 起已从
+  包 `exports` 移除（上游指南 `v0.2.1-rc.1/subagent-control-tools` 明文要求删该行；
+  `list_agents` 改由 `tool-subagent-control` **根入口**一并注册）。实测该子路径
+  `require` → `ERR_PACKAGE_PATH_NOT_EXPORTED`，根入口正常 ⇒ **preset 必然挂载失败**，
+  表现为「选 Agateon 编排者建会话失败」。
+
+  **当初为何漏判（判据教训）**：该失败被降级为 preset registry 的 `broken` 状态、只走
+  `logger.warn`，而**启动日志不落盘**（只有 CLI 启动失败路径才附着 `startupLogs`）⇒
+  「启动日志零错误」看起来像「兼容」。**判据必须是「用该 preset 建一个会话」**，不是看日志、
+  也不是看 schema dump。
+  **修法**：删除该行（`list_agents` 由根入口承担）；模板补注释说明为何不能再加；
+  `test_t41_platform_hygiene.py` 的期望授权集合同步去掉它。
+  **用户动作**：重跑 `python3 ~/.agate/scripts/agate-setup.py` 刷新已装产物
+  （见 `agate/UPGRADING.md`「未发布 — DSH 0.2.x 适配」）。
+
+  同批另修三处**陈述失准**（有据，非机制）：
+  ① persona 称 `subagent`「默认后台」——DSH **0.2.1-alpha.1** 起委派为 activation-only，
+  调用即返回 `started subagent <name>`，**无前台/后台、无 `run_in_background`**，结果由运行时
+  **通知**送达、**不经 `job_output`**。原措辞会诱导编排者去等一个永远不会出现的 job。
+  ② `tool-subagent-control` 未声明 `interrupt`——DSH **0.2.2-rc.1** 起 base bundle 与官方
+  standard/cordis/ptc preset 都设 `false`（模型不再获得 `interrupt_agent`）；Agateon 需要该
+  能力停掉卡死/跑偏的子 agent，故**显式写 `interrupt: true`**，不依赖插件默认值。
+  ③ `[NEED_CONFIRM]` 无工具落点 ⇒ 补 `ask_user_question` 映射。
+
+  **判据陷阱（写进模板头与 platform-notes）**：`dsh --dump-config-schema` 会对
+  `@deepseek-ai/dsh-agent-preset` 条目报 `unrecognized Loader tree carrier`。实测同一 profile：
+  patch 缺失 = **4** 条、`[]` = **4** 条、`[]` + 一个最小合法 preset = **5** 条、真实 patch
+  （含 agateon 块）= **5** 条 ⇒ 条数只与「有几个 preset 声明」有关、与内容无关；那是该工具
+  对原生 group carrier 的投影限制。它既报不了 agateon 的问题，也不能用来证明兼容。
+
+  验证：`test_dsh_preset.py` 31 passed（新增 3 条，各做过变异）；`test_t41_platform_hygiene.py`
+  期望集合同步；独立评审报告 `docs/reviews/agate-alignment-review-2026-11-27-DSH-023.md`。
+
+- **`agate-doctor` 对「hook 全哑」报绿：诊断的是存在性，不是效力（走 hotfix 通道，不立项）**：
+  `_diagnose_hooks()` 用 `is_file()` 判 hook，且路径写死 `<repo>/.git/hooks`。实测三处与事实相反：
+  ① 三个 hook 权限 0644 时 git **忽略它们并让 commit 照常成功**（只打印两行 advice 提示，
+  不阻断），doctor 仍报 `[OK] hook: 已安装` +
+  `全部维度正常`——**gate 全失效却被诊断工具判绿**，而该失效模式单测覆盖不到（单测跑
+  `agate/scripts/`，失效发生在 `.git/hooks/` 的**部署形态**上）；② 链接 worktree 里 `.git` 是
+  **文件**，doctor 误报「未检测到 .git/hooks（非 git 仓库或未初始化）」——而 worktree 正是本仓
+  dogfooding 的标准工作目录；③ `core.hooksPath` 覆盖时同理误报缺失。**修法**：目录一律问
+  `agate_common.git_hooks_dir()`（`git rev-parse --git-path hooks`，同仓单一实现），在位 hooks
+  另判执行位（仅 POSIX 有该语义），断链与不可执行分别报，并在状态行标出「查的是哪个目录」。
+
+- **`agate-doctor` 版本维度报的不是 gate 实际会用的版本（走 hotfix 通道，不立项）**：原实现取
+  「`AGATE_ROOT` env 或**脚本自身所在目录**」，等于把「doctor 住在哪个 checkout」当成「gate 判定
+  用哪个版本」，且不跑解析链。实测：项目声明 `agate: v0.80.0`（未安装）时 doctor 报
+  `<开发 checkout>/agate`，而 `agate-resolve.py`（hook 实际走的链）报 `~/.agate/v0.83.3/agate`
+  （回退 current）——两者指向不同版本目录，**解析链的「声明未安装」告警被完全吞掉**。**修法**：
+  改走 `agate_common` 的解析链，解析链的 warnings 摊到台面上并判异常。**用哪条链**：gate 由
+  `resolve-entry.py` → `resolve_hook_root()` 定位，它比 `resolve_version_root()` 多一层兜底
+  （脚本路径上溯 + 复制模式 `.agate-root`，故恒有 root）；只用后者会在「链不可用但 hook 仍能跑」
+  的环境里误报「无可用 AGATE_ROOT」——**同一缺陷的镜像**（独立评审 C1 指出）。故以
+  `resolve_hook_root` 为准，兜底时如实说明「链没结果、gate 走的是哪条兜底」。
+
+- **`agate-doctor` 在缺 pyyaml 时只打两行标题就退出，rc=1**（独立评审 N-1 发现，本批一并修）：
+  `agate_common` 缺 pyyaml 时用 `sys.exit(1)` 中止，抛的是 **`SystemExit`——它不是 `Exception`
+  的子类**，所以 doctor 里原有的 **3 处** `except Exception` 一处都接不住：第一个维度（声明文件）就把整个
+  诊断打断，输出停在两行标题、**四个维度一个都没出**、`rc=1`——同时违反 BDD-17「诊断完成即
+  rc=0」与「对异常项给出可执行修复指引」两条契约。**修法**：收窄为
+  `except (Exception, SystemExit)`，并把 `SystemExit` 还原成可读原因（否则只会显示裸退出码
+  `1`）。修后该场景 **rc=0、四维度齐全、原因可读**。
+
+- **上面那条修复自身引入的两处「假绿 / 误指路」，同批修掉**（二轮独立评审指出）：
+  ① **账本维度假绿**——`_tasks_dir()` 接住 `SystemExit` 后返回 `None`，而账本维度把 `None`
+  当作「没有任务目录」判 **`[OK]`**：`agate_common` 挂掉时审计根本没跑却报绿，正是本批要消灭的
+  那类问题。**修法**：改为返回 `(dir, 失败原因)` 二元组，「解析失败」判异常并写明「审计未执行」，
+  与「解析成功但没有任务」严格分开。② **修复指引按真因分流**——`agate_common` 不可用时，原指引
+  仍让人「检查 `agate.config.yaml` 的 YAML 语法」或「运行 `agate-setup.py` / `agate-resolve.py`」，
+  而那两个脚本**同样 import `agate_common`**（是死循环建议）。**修法**：`SystemExit` 分支统一指向
+  「先让 agate_common 可用」，非 `SystemExit` 分支才给原指引；并对多维度共享同一根因的建议**去重**。
+  **实测**：这 4 个被建议的脚本（`agate-setup.py` / `agate-resolve.py` / `check-events.py` /
+  `agate-config.py`）在同一环境下 RC 全非 0（4/4），确认是死循环建议而非猜测。
+  ⚠️ **复刻方式必须写对**（三轮评审指出）：要模拟「缺 pyyaml」，须在 `PYTHONPATH` 放一个
+  **抛 `ImportError` 的 `yaml.py`**，让真 `agate_common` 自己走它那句 `sys.exit(1)`。若改用
+  「往 `sys.path` 前置一个 stub `agate_common`」，会被脚本自身的
+  `sys.path.insert(0, SCRIPT_DIR)` 压过去 ⇒ 得到 rc=0 的**假结果**。同理，本批所有
+  `SystemExit` 相关用例都经 `runpy` + 启动器注入，而不是靠改 `PYTHONPATH` 顺序。
+
+- **「回退查 `.git/hooks` 后仍判 OK」的假绿（二轮独立评审 N-1，已复现并修）**：
+  `agate_common` 不可用时 hook 维度回退查 `<repo>/.git/hooks`。但 git 实际只看
+  `core.hooksPath`——若它指向别处，回退查的那个目录里的 hook **git 根本不会执行**。实测构造
+  （`core.hooksPath` 指向空目录 + `.git/hooks` 有可执行 hook）：`git commit` 照常成功（**gate
+  真哑**），而 doctor 报 `[OK] 已安装且可执行`。**修法**：回退分支不再判 OK，改为如实报
+  「无法确认效力（已回退查 X；git 实际目录可能是 `core.hooksPath` 指向的别处）」并给 `[!!]`。
+  —— 判据是「我能不能确认」，不是「我看到的东西看起来对不对」。
+
+- **同主题的三处残留（三轮独立评审 + 作者自查，同批修）**——判据统一为「报的必须是实际状态，
+  且只报**能确认**的」：
+  ① **声明维度把「文件在但读不懂」报成「不存在」**：`read_project_config()` 本就用 `parse_error`
+  区分「YAML 非法 / 顶层非映射」，doctor 只看 `present` 把它丢了。危害不止文案：按「缺失」给出的
+  建议是 `agate-config.py init`，而对一个**存在但被改坏**的声明跑 init 会**覆盖用户原有内容**。
+  现区分三态：缺失（建议 init）/ 存在但无法解析（建议改语法，**明写不要 init**）/ 正常；
+  YAML 的多行 `parse_error` 压成单行首句以保持状态行可读。
+  ② **hook 目录不存在时断言「非 git 仓库或未初始化」**：该推断在链接 worktree 里为**假**
+  （`.git` 是文件、仓库完全正常）。现只陈述事实，不替读者推断原因。
+  ③ **版本维度在「无真实 hook 入口」时判 OK**：hook 未装时只能退回本 checkout，该值没有
+  「gate 实际上会用什么」的含义。现判 `[!!]` 并明写「此值为本工具所在 checkout，不代表 gate
+  会用什么」——判据是**能不能确认**，不是看起来像不像。
+
+  同上，本批新增的 4 段分流/去重逻辑（hook 回退、声明真因、版本真因、建议去重）此前**无守护**；
+  已补 5 组断言，并逐个做过变异实验（回退对应实现即转红），另加 `SystemExit.code` 取
+  `None`/整数/字符串/0 的参数化用例，确保诊断文案不会因 code 类型而抛异常。
+
+### 勘误
+
+- **本批 commit message 里的测试计数不可复现，且「既有失败」个数本来就不是固定值**——这是
+  三轮独立评审逐条实测（其中一次纠正了我上一版勘误里的错数字）后得到的结论。为避免在这里
+  再写一个会漂移的数字，**只给判定方法，不写计数**：
+
+  ```bash
+  git checkout <commit>            # 在任何历史提交上复现
+  python3 -m pytest agate/tests/ -q -n auto --reruns 1
+  ```
+
+  **可靠性结论（与计数无关，才是要记住的）**：
+  - `test_bdd_43`（依赖 `opencode` CLI）与 `test_bdd_45`（依赖 `codex` CLI）**按设计判 FAIL 而非
+    skip**（P1 BDD-43/45 的二值规则），故「既有失败数」取决于**跑测试那一刻 PATH 里有哪些 CLI**
+    ——我观察到 2 个和 3 个两种结果，**这不是回归，是环境差异**。
+  - `test_t15_real_tree_smoke_pack_install_resolve` 因 `git clone --local` 跨设备硬链接失败
+    （仓库与 `TMPDIR` 不在同一文件系统）：本机 `/tmp` 是 tmpfs、仓库在 `/dev/sdd`。
+    **想得到干净基线就 `git clone --no-hardlinks` 到**仓库所在文件系统**再跑**（三轮评审用这招
+    把这条假红消掉了）；反之，若你直接在 `/tmp` 跑，会把这条**假的**失败当成"既知既有失败"，
+    从而漏看真实回归——判据本身要先可信。
+  - 上述三项在**未改动的 `origin/main` 上同样失败**，可用 `git checkout origin/main` 复跑自证。
+
+  **教训（写给后来者）**：commit message 里写「N passed」是个**假精确**——它同时依赖提交内容
+  与环境；一旦有人复跑得到别的数，会误以为出了回归。要留证据就留**命令 + 当时的环境前提**
+  （哪些 CLI 在 PATH、TMPDIR 在哪），不要留裸数字。本节前一版正是在这里连错了两次。
+
+### 文档
+
+- `agate/LIMITATIONS.md` 抬头不再用「零基础设施」概括这条路线：该说法在安装 / 版本管理 / CI 兜底
+  一侧本就不成立，而**本文件局限 5 自己就写着**（enforcement 依赖 python3 + git + pyyaml + git 仓库）。
+  改为可辩护的表述（状态在仓库里、无旁挂服务要运维），依赖边界照旧如实写。
+- `docs/guides/project-map.md` 删掉写死的脚本数（原写「约 60 个」，与实际已不符），改为现场命令——
+  与本仓 `docs/guides/doc-freshness-guide.md`「时变数字不写死」的既有纪律一致。
+
 ## [0.83.3] - 2026-11-11
 
 ### 修复

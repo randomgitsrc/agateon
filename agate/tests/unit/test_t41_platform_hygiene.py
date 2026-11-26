@@ -137,11 +137,13 @@ def test_t41_preset_mounts_delegation_in_preset_scope(agate_root):
     )
     tail = block.split("plugins:", 1)[1]
     granted = set(re.findall(r"^\s+- id: (tool-subagent\S*)", tail, re.MULTILINE))
+    # `tool-subagent-list-agents` **不在**集合内：DSH 0.2.2-rc.5 起
+    # `.../list-agents` 子路径已从 exports 移除，`list_agents` 由 `tool-subagent-control`
+    # 根入口一并注册；多挂那一行会让整个 preset **挂载失败**（见 agent.cordis.yml 的注释）。
     assert granted == {
         "tool-subagent",
         "tool-subagent-control",
         "tool-subagent-fork",
-        "tool-subagent-list-agents",
     }, f"生成块在 plugins: 下授权的委派控件集合已变：{sorted(granted)} —— 文档需重核"
 
 

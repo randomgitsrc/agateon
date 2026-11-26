@@ -825,3 +825,122 @@ def test_dsh_block_matches_detects_duplicate_insert(agate_root):
 
     # 反向护栏：正常的 1 个 insert 仍须判一致（防把判据改成一刀切 False）
     assert ac.dsh_block_matches(block, block) is True
+
+
+# ── DSH 0.2.x 语义对齐（2026-11-27，v0.2.3-alpha.2 实机复验）──────────────────
+#
+# 三处都是**描述性陈述失准**（不是机制失效），但错得有害：编排者照它做会走错路。
+# 判据一律落在生成产物上（模板 → 块），不靠读模板文本猜。
+
+
+def _JsLoader():
+    """带 `!!js` 构造器的 SafeLoader（DSH 的 YAML 方言；测试里把它当标量读）。"""
+    class _L(yaml.SafeLoader):
+        pass
+    _L.add_constructor("tag:yaml.org,2002:js", lambda loader, node: loader.construct_scalar(node))
+    return _L
+
+
+def test_preset_delegation_declares_interrupt_explicitly(agate_root):
+    """`tool-subagent-control` 须**显式**声明 `interrupt`，不依赖插件默认值。
+
+    DSH 0.2.2-rc.1 起，base bundle 与官方 standard/cordis/ptc preset 都设
+    `config.interrupt: false`（模型不再获得 `interrupt_agent`）。Agateon 需要该能力
+    （dispatch-protocol「subagent 超时判定」要求能停掉卡死的 subagent）⇒ 必须显式写
+    `true`：插件当前默认也是 true，但那属上游实现细节，改默认值就会静默改变本协议行为。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+    assert block, "预设块生成失败"
+
+    # 块是 `- insert:` 列表，可直接解析（!!js 用占位构造器）
+    docs = yaml.load(block, Loader=_JsLoader())
+    preset = docs[0]["insert"][0]
+    plugins = preset["config"]["plugins"]
+
+    delegation = next(p for p in plugins if p["id"] == "delegation")
+    control = next(c for c in delegation["config"] if c["id"] == "tool-subagent-control")
+    assert control.get("config", {}).get("interrupt") is True, (
+        "tool-subagent-control 须显式 config.interrupt: true"
+        f"（实际 {control.get('config')!r}）；否则一旦上游把默认值改成 false，"
+        "Agateon 会在无任何报错的情况下失去 interrupt_agent"
+    )
+
+
+def test_preset_persona_does_not_claim_delegation_is_background(agate_root):
+    """persona 不得再称 `subagent`「默认后台」——0.2.1-alpha.1 起是 activation-only。
+
+    该说法有害：编排者会去 `job_output` 等一个永远不会出现的 job（委派结果由运行时
+    通知送达）。本条锁住措辞与机制说明，防回退。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    assert "默认后台" not in block, (
+        "不得再写「默认后台」：DSH 0.2.1-alpha.1 起委派为 activation-only，"
+        "没有前台/后台之分"
+    )
+    assert "activation-only" in block, (
+        "须写明委派是 activation-only（这是编排者最容易踩的机制变更）"
+    )
+    assert "job_output" in block, "须说明「subagent 结果不走 job」这一关键区别"
+
+
+def test_preset_persona_maps_need_confirm_to_ask_user(agate_root):
+    """协议里的 `[NEED_CONFIRM]` 须有 DSH 工具落点（`ask_user_question`）。
+
+    persona 此前只列了派发/读文件/跑 gate 等，**没有**「向人提问」的映射 ⇒ agent 会退化成
+    散文提问后干等（DSH 下用户不回答就是卡住）。协议要求拿不准方向时停下找人，这条必须有落点。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+
+    # ⚠️ 必须**限定在 persona 的工具映射节内**断言。`ask_user_question` 在 plan-mode
+    # 段落里也出现（那是 DSH 自带的说明文本），全块 grep 会被它满足 ⇒ 假绿
+    # （实测：删掉 persona 那行后测试仍通过）。
+    persona = next(
+        p for p in yaml.load(block, Loader=_JsLoader())
+        [0]["insert"][0]["config"]["plugins"] if p["id"] == "persona"
+    )
+    prefix = persona["config"]["prefix"]
+    mapping = prefix.split("## 平台注意")[0]
+    assert "ask_user_question" in mapping, (
+        "persona 的**工具映射节**须把 [NEED_CONFIRM] 映射到 ask_user_question；"
+        f"实际映射节为：{mapping[-400:]!r}"
+    )
+    assert "NEED_CONFIRM" in mapping, (
+        "须点明这是协议 [NEED_CONFIRM] 的落点（而不只是列一个工具名）"
+    )
+
+
+def test_preset_does_not_author_removed_list_agents_subpath(agate_root):
+    """生成块**不得**授权 `.../list-agents` 子路径——它已从包 exports 移除，会让 preset 挂载失败。
+
+    Given 生成好的 preset 块
+    When 检查其中的插件行
+    Then 无任何行把 `name` 指到 `@deepseek-ai/dsh-tool-subagent-control/list-agents`。
+
+    为什么（本批真故障）：该子路径自 DSH **0.2.2-rc.5** 起从 `exports` 移除（上游指南
+    `v0.2.1-rc.1/subagent-control-tools` 明文要求删该行；`list_agents` 改由
+    `tool-subagent-control` 根入口注册）。实测 `require(...list-agents)` →
+    `ERR_PACKAGE_PATH_NOT_EXPORTED` ⇒ **preset 挂载失败**，表现为「选 Agateon 编排者建会话
+    失败」，且失败不进启动日志（被降级为 registry 的 broken 状态），很难查。
+    这条用例只认**配置行**（`id:`/`name:` 开头），不误伤解释性注释。
+    """
+    ac = _dsh_common(agate_root)
+    block = ac.dsh_preset_block(str(agate_root))
+    assert block, "预设块生成失败"
+
+    offenders = [
+        line for line in block.splitlines()
+        if re.match(r"^\s+-\s+(id|name):", line) and "list-agents" in line
+    ]
+    assert not offenders, (
+        "生成块仍在授权已移除的 `/list-agents` 子路径（会让 preset 挂载失败）："
+        f"{offenders}"
+    )
+    # 反向护栏：`tool-subagent-control` 的**根入口**仍须在（名单由它一并注册，
+    # 若把它也删了，list_agents 就真没了）。
+    assert re.search(r"name:\s+'@deepseek-ai/dsh-tool-subagent-control'\s*$", block, re.MULTILINE), (
+        "根入口 tool-subagent-control 须保留（list_agents 由它注册）"
+    )
