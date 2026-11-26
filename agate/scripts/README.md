@@ -70,6 +70,7 @@ python3 -m pytest agate/tests/integration/test_protocol_alignment_review.py -q  
 | `check-state-yaml.py` (P2.15) | `.state.yaml` 格式校验 | 0=通过, 1=格式错, 2=无文件 |
 | `check-gate.py` (P1.1) | 各阶段脚本化 gate | 0=通过, 1=未通过, 2=需自判 |
 | `check-changelog.py` (P1.6) | `[Unreleased]` 含 task_id | 0=通过, 1=未记录 |
+| `agate-changelog-quality.py` (RM-AG0117) | CHANGELOG 条目**质量**判据：`[Unreleased]` + 最新已发布段命中「过程日志化」痕迹（≥3 处且 ≥2 类）即判失败。主闸 pre-commit `2z2`（**循环外**，阻断 commit，覆盖 hotfix 这类无 `.state.yaml` 的提交）；CI 由 CHECK 17 兜底（覆盖 `--no-verify`）。判据单源，词表与阈值均在本脚本内 | 0=通过（含不适用）, 1=命中, 2=命中但 `--warn-only` |
 | `check-p6-evidence.py` (P1.7) | P6 证据目录非空 + md5 逐字节去重（阻断）+ 像素方差（WARNING）+ average hash 雷同降级待复核（有 `雷同截图复核`/manual-review 记录放行，无则阻断；帧序列/`-tN` 时序截图按同 BDD 组豁免）+ 渲染形态证据形式校验（帧序列/渲染输出对比/时序截图）+ GAP 降级链人工复核记录存在性 | 0=通过, 1=阻断, 2=WARNING |
 | `check-p6-provenance.py` (P2.1/P2.10) | P6 客观行为审计（六道 + EXIT_CODE 一致性 + 协作规范）+ R1b vision YAML 审计的 GAP 放宽（vision=GAP → 改验人工复核记录，不要求 vision YAML）| 0=通过, 1=审计失败, 2=WARNING |
 | `check-gate.py`（续） | gate_p1 新增 `_gate_p1_vision_capability`（frontend 任务必须声明 vision 三态条目）+ `_gate_p1_ui_shape`（形态/维度声明合法性）；gate_p2 新增 `_gate_p2_ui_design_section`（ui_affected:true → UI 设计节 + 形态声明 + 按形态 checklist + P1-P2 形态一致性规范化值比对）| |

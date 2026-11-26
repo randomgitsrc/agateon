@@ -24,6 +24,7 @@ agate 协议结构一致性检查 (P3-1)
   CHECK 14  markdown 叙述段落平台名扫描（护栏 1 机械化，BDD-16/22/24：结构性判据，无文件名单）
   CHECK 15  数据面（rules/*.yaml + rules/schema/*.json）平台名扫描（BDD-15：词边界 + 豁免词典机械生成）
   CHECK 16  任务数据契约快照冻结（rules/task-data/*.yaml 的 LF 归一 sha256 == LEVELS.yaml 登记值；TAG0050 批 A1）
+  CHECK 17  CHANGELOG 条目非「过程日志」（RM-AG0117；判据单源 = agate-changelog-quality.py）
 
  退出码：0 = 全过；1 = 有 ERROR；2 = 仅有 WARNING（可配置是否失败）。
 
@@ -1447,6 +1448,37 @@ def check_rules_platform_tokens(root: Path, rep: Report) -> None:
         rep.ok("CHECK15-rules")
 
 
+# ── CHECK 17: CHANGELOG 条目「过程日志化」兜底（RM-AG0117）───────────────────────
+# 主闸在 pre-commit 2z2（阻断 commit）；本 CHECK 是**补充**检查（覆盖 `--no-verify` 与
+# 「本地 hook 未装」两种绕过）。⚠️ 但它**不是可靠兜底**：纯 docs 提交时 `protocol-tests.yml`
+# 的 consistency job 因 `docs_only=true` 直接 exit 0 fast-pass，改由 `docs-check.yml` 的
+# `docs-consistency` 跑本脚本——而那个 job **不在** required check 里，红了不阻止合并。
+# 判据本体在 agate-changelog-quality.py（**单源**，
+# 本函数只做调用，不复制任何词表——本仓 SG.6 曾因「共用正则但未共用通过规则」出过分叉）。
+# ⚠️ 判据脚本命名为 `agate-*.py` 而非 `check-*.py`：后者会触发 SG.6 / CHECK9-coverage 两处
+# 登记面（`test_release_gate.py::test_bdd_23_no_new_check_star_script_added` 硬守护），
+# 而本判据是「工具/观测定性」类，用 agate- 前缀是既有约定。
+def check_changelog_quality(root: Path, rep) -> None:
+    """CHANGELOG 的 `[Unreleased]` / 最新已发布段不得是「工作过程记录」。"""
+    script = root / "agate" / "scripts" / "agate-changelog-quality.py"
+    changelog = root / "CHANGELOG.md"
+    if not script.is_file() or not changelog.is_file():
+        return
+    import subprocess  # 模块级未导入；与本文件既有用法保持一致（函数内导入）
+    proc = subprocess.run(
+        [sys.executable, str(script), str(changelog)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if proc.returncode == 1:
+        msg = (proc.stderr or "").strip().splitlines()
+        rep.error(
+            "CHECK17-changelog-quality",
+            "CHANGELOG 条目疑似「工作过程记录」（详见 agate-changelog-quality.py）"
+            + (f"：{msg[0]}" if msg else ""),
+            "CHANGELOG.md",
+        )
+
+
 # ── CHECK 16: 任务数据契约快照冻结（TAG0050 批 A1，设计 §2.1 冻结规则 1）────────
 def check_task_data_snapshot_freeze(root: Path, rep: Report) -> None:
     """每个快照文件的 LF 归一 sha256 必须等于 LEVELS.yaml 登记值。
@@ -1530,6 +1562,7 @@ CHECKS = [
     ("CHECK 14 md 叙述段落平台名扫描", check_md_platform_paragraphs),
     ("CHECK 15 数据面平台名扫描", check_rules_platform_tokens),
     ("CHECK 16 任务数据契约快照冻结", check_task_data_snapshot_freeze),
+    ("CHECK 17 CHANGELOG 条目非「过程日志」（RM-AG0117）", check_changelog_quality),
 ]
 
 
