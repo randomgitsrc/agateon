@@ -36,9 +36,9 @@
 
 - **`agate-doctor` 在缺 pyyaml 时只打两行标题就退出，rc=1**（独立评审 N-1 发现，本批一并修）：
   `agate_common` 缺 pyyaml 时用 `sys.exit(1)` 中止，抛的是 **`SystemExit`——它不是 `Exception`
-  的子类**，所以 doctor 里四处 `except Exception` 一处都接不住：第一个维度（声明文件）就把整个
+  的子类**，所以 doctor 里原有的 **3 处** `except Exception` 一处都接不住：第一个维度（声明文件）就把整个
   诊断打断，输出停在两行标题、**四个维度一个都没出**、`rc=1`——同时违反 BDD-17「诊断完成即
-  rc=0」与「对异常项给出可执行修复指引」两条契约。**修法**：四处收窄为
+  rc=0」与「对异常项给出可执行修复指引」两条契约。**修法**：收窄为
   `except (Exception, SystemExit)`，并把 `SystemExit` 还原成可读原因（否则只会显示裸退出码
   `1`）。修后该场景 **rc=0、四维度齐全、原因可读**。
 
@@ -50,6 +50,20 @@
   仍让人「检查 `agate.config.yaml` 的 YAML 语法」或「运行 `agate-setup.py` / `agate-resolve.py`」，
   而那两个脚本**同样 import `agate_common`**（是死循环建议）。**修法**：`SystemExit` 分支统一指向
   「先让 agate_common 可用」，非 `SystemExit` 分支才给原指引；并对多维度共享同一根因的建议**去重**。
+  **实测**：这 4 个被建议的脚本（`agate-setup.py` / `agate-resolve.py` / `check-events.py` /
+  `agate-config.py`）在同一环境下 RC 全非 0，确认是死循环建议而非猜测。
+
+- **「回退查 `.git/hooks` 后仍判 OK」的假绿（二轮独立评审 N-1，已复现并修）**：
+  `agate_common` 不可用时 hook 维度回退查 `<repo>/.git/hooks`。但 git 实际只看
+  `core.hooksPath`——若它指向别处，回退查的那个目录里的 hook **git 根本不会执行**。实测构造
+  （`core.hooksPath` 指向空目录 + `.git/hooks` 有可执行 hook）：`git commit` 照常成功（**gate
+  真哑**），而 doctor 报 `[OK] 已安装且可执行`。**修法**：回退分支不再判 OK，改为如实报
+  「无法确认效力（已回退查 X；git 实际目录可能是 `core.hooksPath` 指向的别处）」并给 `[!!]`。
+  —— 判据是「我能不能确认」，不是「我看到的东西看起来对不对」。
+
+  同上，本批新增的 4 段分流/去重逻辑（hook 回退、声明真因、版本真因、建议去重）此前**无守护**；
+  已补 5 组断言，并逐个做过变异实验（回退对应实现即转红），另加 `SystemExit.code` 取
+  `None`/整数/字符串/0 的参数化用例，确保诊断文案不会因 code 类型而抛异常。
 
 ### 文档
 

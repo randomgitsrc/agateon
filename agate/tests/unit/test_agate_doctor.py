@@ -558,7 +558,7 @@ def test_doctor_stays_green_exit_when_agate_common_aborts(
          ③ `SystemExit` 的原因被还原成可读文案，而不是裸的退出码。
 
     为什么（独立评审 N-1）：`agate_common` 缺 pyyaml 时用 `sys.exit(1)`，抛的是
-    `SystemExit`——它**不是** `Exception` 的子类。原代码四处 `except Exception` 全都接不住，
+    `SystemExit`——它**不是** `Exception` 的子类。原代码的 3 处 `except Exception` 全都接不住，
     于是第一个维度就把整个诊断打断：只打印两行标题、rc=1、四个维度一个都没出。
     这违反 BDD-17 的核心契约（诊断完成即 rc=0），也让「对异常项给出修复指引」完全失效。
     """
@@ -578,6 +578,15 @@ def test_doctor_stays_green_exit_when_agate_common_aborts(
         encoding="utf-8",
     )
     _write_config(git_repo.path)
+    # 关键：必须在 `.git/hooks` 放**可执行** hook。否则回退后走的是「缺失」分支，
+    # 测不到「回退且看似齐全」这条——那正是 N-1 假绿的触发路径（二轮评审实测：
+    # core.hooksPath 指向空目录时 git 真哑，而 doctor 报「已安装且可执行」）。
+    hooks_dir = git_repo.path / ".git" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("pre-commit", "commit-msg", "pre-push"):
+        hook = hooks_dir / name
+        hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        os.chmod(hook, 0o755)
     env = {
         "HOME": str(tmp_path / "fake-home"),
         "USERPROFILE": str(tmp_path / "fake-home"),
@@ -604,3 +613,64 @@ def test_doctor_stays_green_exit_when_agate_common_aborts(
         "agate_common 不可用时账本审计根本没执行，不得报 OK——"
         f"「解析失败」与「无任务」必须分开；实际 {ledger_line!r}"
     )
+    # hook 维度同理：agate_common 挂掉时查的是回退目录，无法确认 git 真正会用的目录
+    # （core.hooksPath 可能指向别处），不得判 OK（二轮评审 N-1：实测该组合下 git 真哑而
+    # doctor 报绿）。
+    _hook_ok, hook_line = _dim_line(result.output, "hook")
+    assert not _hook_ok, (
+        "agate_common 不可用时报的是回退目录，无法确认效力，不得判 OK；"
+        f"实际 {hook_line!r}"
+    )
+    # 修复指引不得循环：agate-setup.py / agate-resolve.py / check-events.py /
+    # agate-config.py **都 import agate_common**，同环境下同样跑不起来（二轮评审 M-2
+    # 指出这些分流逻辑此前无守护，变异 M9/M11 全绿）。
+    for circular in ("agate-setup.py", "agate-resolve.py", "check-events.py", "agate-config.py"):
+        assert circular not in result.output, (
+            f"不得建议运行同样依赖 agate_common 的 {circular}（该建议在本环境下必然失败）；"
+            f"实际输出 {result.output[:800]!r}"
+        )
+    # 声明维度的指引不得误指路到 YAML 语法：本场景真因是 agate_common 不可用，
+    # 让人去改声明文件的语法是彻头彻尾的误导（二轮评审 M-2 / M11）。
+    assert "YAML 语法" not in result.output, (
+        "agate_common 不可用时不得把修复方向指向声明文件的 YAML 语法；"
+        f"实际输出 {result.output[:800]!r}"
+    )
+    # 多维度共享同一根因时建议须去重（二轮评审 M-2 / M10）。
+    assert result.output.count("先让 agate_common 可用") == 1, (
+        "同一条建议只该出现一次（去重生效）；"
+        f"实际出现 {result.output.count('先让 agate_common 可用')} 次：{result.output[:800]!r}"
+    )
+
+
+@pytest.mark.parametrize("code", [None, 3, "boom", 0])
+def test_exc_note_handles_any_systemexit_code(code, agate_scripts):
+    """`_exc_note` 对任意 `SystemExit.code` 都须给出可读文案，不得抛异常。
+
+    Given `SystemExit` 的 code 为 None / 整数 / 字符串 / 0
+    When 调用 `_exc_note`
+    Then 返回含可行动信息的字符串（不抛异常，也不只是裸退出码）。
+
+    为什么（二轮评审 M-3）：`sys.exit()` 允许任意 code（None → 默认 0、字符串 → 作为消息）。
+    诊断文案若在某种 code 上抛异常，就把「诊断工具不崩」这条底线自己破了。
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("doctor_under_test", agate_scripts / _DOCTOR_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    note = module._exc_note(SystemExit(code))
+    assert isinstance(note, str) and note, f"code={code!r} 须返回非空文案"
+    assert "agate_common" in note, f"code={code!r} 的文案须指明是 agate_common 中止：{note!r}"
+    assert "pyyaml" in note, f"code={code!r} 的文案须给出可行动的下一步：{note!r}"
+
+
+def test_exc_note_passes_through_plain_exception(agate_scripts):
+    """普通异常仍返回 `str(exc)`（不被 `SystemExit` 文案污染）。"""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("doctor_under_test2", agate_scripts / _DOCTOR_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module._exc_note(ValueError("boom")) == "boom"

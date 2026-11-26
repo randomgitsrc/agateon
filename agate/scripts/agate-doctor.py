@@ -142,6 +142,15 @@ def _diagnose_hooks(project_root):
         not_executable = [n for n in present if not os.access(hooks_dir / n, os.X_OK)]
 
     if not missing and not broken_links and not not_executable:
+        # 回退分支**不得判 OK**（二轮评审 N-1，已实测复现）：agate_common 挂掉时我们查的是
+        # `<repo>/.git/hooks`，而 git 实际只看 `core.hooksPath`。两者不一致时这里明明有可执行
+        # hook、git 却在看一个空目录——`git commit` 照常成功（gate 真哑），报 OK 就是假绿。
+        # 既然「查的是哪儿」无法确认，就只能如实说「无法确认效力」，不能替 git 下结论。
+        if hooks_dir_fallback:
+            return False, (
+                f"hook: 无法确认效力（agate_common 不可用，已回退查 {hooks_dir}；"
+                "git 实际目录可能是 core.hooksPath 指向的别处）"
+            ), "先让 agate_common 可用（缺 pyyaml 时 pip install pyyaml）后重跑"
         # 收窄用词：本维度能证明的只是「git 会执行它」（在位 + 可执行 + 非断链）。
         # 它是否真能**阻断**取决于其内容（空文件、exit 0 的脚本也会被 git 执行却不拦），
         # 那要跑一次真实提交才知道——不在这里替 git 下结论（独立评审 A4 指出）。
