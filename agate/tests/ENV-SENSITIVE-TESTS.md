@@ -11,6 +11,7 @@
 | test_bdd_7 | basetemp位置依赖 | 已根治 | RM-AG0041 |
 | test_bdd_25 | basetemp位置依赖 | 已根治 | RM-AG0041 |
 | test_bdd_14 | git版本差异 | 已根治 | RM-AG0044，TAG0023 |
+| test_t15_real_tree_smoke_pack_install_resolve | 临时目录挂载点差异 | 由环境规避 | 根因：`git clone --local` 硬链接跨设备失败（`无效的跨设备链接`）。仓库与 `TMPDIR` 不在同一文件系统时必红（如 `/tmp` 是 tmpfs、仓库在普通盘）。**规避**：`git clone --no-hardlinks` 到仓库所在文件系统再跑，或以仓库内目录作 `TMPDIR`。**不规避的后果**：把这条**假失败**误当"既有环境失败"而放行，会漏看真实回归 |
 
 ## 字段说明
 
