@@ -28,8 +28,8 @@ CHANGELOG 是给**读者**看的：读者要判断「这个版本会不会影响
         2 = 命中但以提示模式运行（`--warn-only`）。
 
 用法：
-  python3 agate-changelog-quality.py [CHANGELOG.md]
-  python3 agate-changelog-quality.py --warn-only [CHANGELOG.md]
+  python3 check-changelog-quality.py [CHANGELOG.md]
+  python3 check-changelog-quality.py --warn-only [CHANGELOG.md]
 """
 
 import os
@@ -40,9 +40,15 @@ import sys
 # 设计原则：每条正则只匹配「作者向读者交代自己怎么干活」的语言，而非技术内容。
 # 谨慎处（见下方 _HINT_ONLY）：「评审指出/发现」可以是正当的变更说明，故不计数。
 _CATEGORIES = (
-    # A1 第一人称：作者在讲自己的动作/判断
+    # A1 **自我检讨/自我叙述**句式。只认「作者在交代自己的判断过程」。
+    # ⚠️ **不要把裸「我们发现 / 我们认为」计入**（评审 R3 判 BLOCKER 级误伤）：
+    # 「修复 X：我们发现这会导致 Y，已改」是完全正当的变更说明（主语是团队，不是心路），
+    # 而它与「我原先以为…」属不同性质。实测：两条「我们发现 X，已修」+ 一句「教训：」
+    # ⇒ total=3/cats=2 被**误阻断**。
+    # 检出不受损：真过程语料（v0.78.0 / v0.77.0 / 旧版 144 行）的 A7（第一版/原先/我原先）
+    # 均能独立命中，不依赖本类。
     ("A1-first-person", re.compile(
-        r"(我们发现|我判断|我原先|我第一版|我错|我漏|我的|我写|我先|我认为|"
+        r"(我原先|我第一版|我错了|我判断错|我漏了|我以为|我先做|"
         r"\bI (?:had|was|originally|first|wrongly)\b)", re.IGNORECASE)),
     # A2 评审轮次：第 N 轮 / N 轮评审 / 二轮三轮
     ("A2-review-rounds", re.compile(
@@ -73,7 +79,7 @@ _CATEGORIES = (
 )
 
 # 只提示、不计数（避免误伤正当的变更说明）
-_HINT_ONLY = re.compile(r"(评审(?:指出|发现|报出)|审查(?:指出|发现))")
+_HINT_ONLY = re.compile(r"(评审(?:指出|发现|报出)|审查(?:指出|发现)|我们发现|我们认为)")
 
 FIRE_MIN_TOTAL = 3
 FIRE_MIN_CATEGORIES = 2
@@ -87,30 +93,52 @@ def _read(path):
         return None
 
 
-def _released_versions():
-    """已发布版本号的集合（来自 `git tag`）；取不到则空集。
+def _released_versions(changelog_path):
+    """已发布版本号的**集合**（来自该 CHANGELOG 所在仓库的 `git tag`）。
 
-    空集时**所有**版本段都按「未发布」处理（fail-closed：宁可多拦，不可放行）——
-    这正是 B-3′ 要防的绕过。仓库外/浅克隆跑不到 git 时也走这条路。
+    返回 `set[(major, minor, patch)]`；**取不到则返回 None**（与"空集"区分——语义不同，
+    见下）。
+
+    三个必须（每条都有实测依据）：
+      · **传 `cwd`**：判据脚本会被以任意 cwd 调用（pre-commit 传临时文件、测试传 tmp_path）。
+        不传 cwd 时 `git tag` 查的是**当前目录**所属仓库，同一棵树换个 cwd 结论就变
+        （实测：cwd=/tmp ⇒ 查不到 tag ⇒ FAIL；cwd=仓库 ⇒ WARN）。
+      · **不要 `-l "v*"` 过滤**：下游项目可能用 `1.2.3` 这类无前缀 tag（RM-AG0116 的教训：
+        协议不得假设项目分支/流程/命名）。解析侧 `v?` 已兼容两种形态。
+      · **取不到时返回 None 而非空集**：空集会被上层当成「一个版本都没发布」⇒ 把**真已发布**
+        的历史段当草稿**误阻断**；`None` 则让上层降级为「仅提示」（不能确认就不阻断）。
     """
     import subprocess
+    # 在 CHANGELOG 所在目录**及其祖先**里找 git 仓库根——判据脚本常被以临时文件调用
+    # （pre-commit 把暂存内容写进 tmp、测试用 tmp_path），那些位置没有 `.git`。
+    repo_dir = os.path.dirname(os.path.abspath(changelog_path)) or "."
+    probe = repo_dir
+    while probe and not os.path.exists(os.path.join(probe, ".git")):
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    if os.path.exists(os.path.join(probe, ".git")):
+        repo_dir = probe
     try:
         proc = subprocess.run(
-            ["git", "tag", "-l", "v*"],
+            ["git", "-C", repo_dir, "tag", "-l"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=30,
         )
     except (OSError, subprocess.SubprocessError):
-        return []
-    out = []
+        return None
+    if proc.returncode != 0:
+        return None
+    out = set()
     for line in (proc.stdout or "").splitlines():
         m = re.search(r"v?(\d+)\.(\d+)\.(\d+)", line.strip())
         if m:
-            out.append(tuple(int(x) for x in m.groups()))
+            out.add(tuple(int(x) for x in m.groups()))
     return out
 
 
-def target_sections(text):
+def target_sections(text, changelog_path=None):
     """取出 `[Unreleased]` 与**最新一个已发布**段（其余历史段不扫）。
 
     返回 [(标题行, 正文, is_unreleased), ...]。
@@ -147,16 +175,25 @@ def target_sections(text):
     # 「历史快照」降级为 `exit 2`，端到端 pre-commit **rc=0 放行**。
     # 判据：该段版本号 ≤ 已发布的最大 tag（`git tag`），否则按 `[Unreleased]` 同等对待
     # （它其实是"下一版的草稿"，就是作者正在写的东西）。
-    released_versions = _released_versions()
+    released_versions = _released_versions(changelog_path)
     for idx, ln in heads:
         if "[Unreleased]" in ln:
             continue
         end = next((j for j, _ in heads if j > idx), len(lines))
         ver_m = re.search(r"\[v?(\d+)\.(\d+)\.(\d+)", ln)
-        is_really_released = False
-        if ver_m:
+        if released_versions is None:
+            # 无法确认发布状态（无 git / 非仓库 / 查不到 tag）⇒ **不能阻断**，
+            # 但也不能当历史快照放行 ⇒ 按「仅提示」处理（treat as released）。
+            is_really_released = True
+        elif ver_m:
+            # ⚠️ **必须是集合成员，不能用 `<=` 比较**（评审 BLOCKER-1 实测）：
+            # 用「v <= 最大 tag」时，写一行 `## [0.1.0]`（任何低于当前版本的号）就能把
+            # 过程痕迹降级为 exit 2、端到端 pre-commit rc=0 放行。只有**真打过 tag 的号**
+            # 才算已发布。
             v = tuple(int(x) for x in ver_m.groups())
-            is_really_released = any(v <= rv for rv in released_versions)
+            is_really_released = v in released_versions
+        else:
+            is_really_released = False
         # 不是真发布 ⇒ 视作「作者正在写」（与 Unreleased 同等阻断）
         picked.append((ln, "\n".join(lines[idx + 1:end]), not is_really_released))
         break
@@ -182,12 +219,13 @@ def _strip_code_fences(body):
     return _CODE_FENCE.sub("", body)
 
 
-def scan(text):
-    """返回 (total, [{category, hits}, ...], hints)。
+def scan(text, changelog_path=None):
+    """返回 (unreleased_total, unreleased_found, hints, (released_total, released_found))。
 
-    total 只累加 `_CATEGORIES` 的命中数；`_HINT_ONLY` 的命中进 hints（不参与判定）。
+    `changelog_path` 用于定位 git tag（判定哪段真已发布）；缺省时按"无法确认"处理
+    （已发布段只提示、不阻断）。
     """
-    sections = target_sections(text)
+    sections = target_sections(text, changelog_path)
     unreleased = _strip_code_fences("\n".join(b for _, b, u in sections if u))
     released = _strip_code_fences("\n".join(b for _, b, u in sections if not u))
 
@@ -220,7 +258,7 @@ _GUIDANCE = (
     "  以下内容请移到 commit message、PR 描述或 docs/reviews/：\n"
     "    我是怎么发现的、评审了几轮、变异实验、N passed、自我勘误、第一版写错了\n"
     "  写法见 CHANGELOG.md 顶部「怎么写一条变更」；自证：\n"
-    "    python3 agate/scripts/agate-changelog-quality.py CHANGELOG.md\n"
+    "    python3 agate/scripts/check-changelog-quality.py CHANGELOG.md\n"
 )
 
 
@@ -235,7 +273,7 @@ def main():
         # 无 CHANGELOG → 判据不适用（与 check-changelog.py 的「GATE SKIP」同取向）
         return 0
 
-    total, found, hints, (rel_total, rel_found) = scan(text)
+    total, found, hints, (rel_total, rel_found) = scan(text, path)
 
     # ── [Unreleased]：作者正在写的内容，命中即阻断 ──
     fires = total >= FIRE_MIN_TOTAL and len(found) >= FIRE_MIN_CATEGORIES

@@ -1463,6 +1463,12 @@ def check_rules_platform_tokens(root: Path, rep: Report) -> None:
 # ⚠️ 判据脚本命名为 `agate-*.py` 而非 `check-*.py`：后者会触发 SG.6 / CHECK9-coverage 两处
 # 承载 gate 判定逻辑 ⇒ 按 `agate/scripts/README.md`「新增脚本登记面」① 命名 `check-*.py`
 # 并登记到 `SCRIPT_ALIGNMENT_ANCHORS`（见本文件锚点表末项）。
+# 判据脚本相对路径（**单点定义**）：测试可直接断言本常量指向真实文件，不必正则扒源码
+# ——原测试用 `"agate/scripts/(...)"` 正则去扒调用点，而实际写法是 `root / "agate" / "scripts" / "..."`
+# 分段字符串 ⇒ 正则**匹配不到**，测试恒绿而缺陷仍在（评审 R3 BLOCKER-2 实测）。
+CHANGELOG_QUALITY_SCRIPT = Path("agate") / "scripts" / "check-changelog-quality.py"
+
+
 def check_changelog_quality(root: Path, rep) -> None:
     """CHANGELOG 条目质量：`[Unreleased]` 命中即 ERROR；仅已发布段命中 → WARNING。
 
@@ -1470,7 +1476,7 @@ def check_changelog_quality(root: Path, rep) -> None:
     `--warn-only`。⇒ **不能只判 `rc == 1`**：那样「已发布段命中」在 CI 侧完全静默
     （评审 B-6 实测）。此处 1 → ERROR，2 → WARNING。
     """
-    script = root / "agate" / "scripts" / "check-changelog-quality.py"
+    script = root / CHANGELOG_QUALITY_SCRIPT
     changelog = root / "CHANGELOG.md"
     if not script.is_file():
         # 脚本缺失 → fail-closed 报 ERROR（而非静默跳过）：否则本 CHECK 变成装饰。

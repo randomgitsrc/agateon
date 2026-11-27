@@ -69,11 +69,11 @@ def test_warn_only_returns_2(agate_scripts, python_exe, run_cli, tmp_path):
     assert r.returncode == 2
 
 
-def test_single_category_does_not_fire(agate_scripts, tmp_path):
+def test_single_category_does_not_fire(agate_scripts, agate_root, tmp_path):
     """单类反复出现不判 —— 那是写法习惯，不是「工作日志」的形态特征。"""
     mod = _load(agate_scripts)
     text = "## [Unreleased]\n\n- 教训：甲。教训：乙。教训：丙。教训：丁。\n"
-    total, found, _, _rel = mod.scan(text)
+    total, found, _, _rel = mod.scan(text, str(agate_root / "CHANGELOG.md"))
     assert total >= 3 and len(found) == 1
     f = tmp_path / "CHANGELOG.md"
     f.write_text(text, encoding="utf-8")
@@ -82,32 +82,32 @@ def test_single_category_does_not_fire(agate_scripts, tmp_path):
     assert not (total >= mod.FIRE_MIN_TOTAL and len(found) >= mod.FIRE_MIN_CATEGORIES)
 
 
-def test_test_red_is_not_a_process_signal(agate_scripts):
+def test_test_red_is_not_a_process_signal(agate_scripts, agate_root):
     """裸「转红」不得计入 —— v0.81.0 实测误伤（「不得以会让测试转红为由回退」等 5 处）。"""
     mod = _load(agate_scripts)
     text = "## [Unreleased]\n\n- 设计要求：不得以「会让测试转红」为由回退；实测 35 个用例转红。\n"
-    total, found, _, _rel = mod.scan(text)
+    total, found, _, _rel = mod.scan(text, str(agate_root / "CHANGELOG.md"))
     assert total == 0, f"「转红」被误计为过程痕迹：{found}"
 
 
-def test_audit_wording_self_correction_not_counted(agate_scripts):
+def test_audit_wording_self_correction_not_counted(agate_scripts, agate_root):
     """裸「自我更正」不得计入 —— 可指「审计口径自我更正」（规格口径，非作者心态）。"""
     mod = _load(agate_scripts)
     text = "## [Unreleased]\n\n- 审计口径自我更正：首版按连字符匹配，改为按边界。\n"
-    total, found, _, _rel = mod.scan(text)
+    total, found, _, _rel = mod.scan(text, str(agate_root / "CHANGELOG.md"))
     assert total == 0, f"「自我更正」被误计：{found}"
 
 
-def test_review_mention_stays_as_hint_only(agate_scripts):
+def test_review_mention_stays_as_hint_only(agate_scripts, agate_root):
     """「评审指出/发现」只进提示、不计数（否则会误伤「本版修复了独立评审发现的 X」）。"""
     mod = _load(agate_scripts)
     text = "## [Unreleased]\n\n- 修复了独立评审发现的状态泄漏问题。\n"
-    total, found, hints, _rel = mod.scan(text)
+    total, found, hints, _rel = mod.scan(text, str(agate_root / "CHANGELOG.md"))
     assert total == 0, f"正当的变更说明被计入：{found}"
     assert hints, "应作为提示出现，便于作者自查"
 
 
-def test_only_unreleased_and_latest_release_are_scanned(agate_scripts):
+def test_only_unreleased_and_latest_release_are_scanned(agate_scripts, agate_root):
     """只扫 `[Unreleased]` + 最新已发布段；更早的历史段不扫（存量零影响）。"""
     mod = _load(agate_scripts)
     text = (
@@ -115,7 +115,7 @@ def test_only_unreleased_and_latest_release_are_scanned(agate_scripts):
         "## [9.9.9] - 2026-01-01\n\n- 正常条目。\n\n"
         "## [9.9.8] - 2025-12-01\n\n- 教训：历史段。第一版写错了。三轮评审。31 passed。\n"
     )
-    total, found, _, _rel = mod.scan(text)
+    total, found, _, _rel = mod.scan(text, str(agate_root / "CHANGELOG.md"))
     assert total == 0, f"历史已发布段不应被扫：{found}"
 
 
@@ -139,7 +139,7 @@ def test_pre_commit_mounts_quality_check_outside_state_loop(agate_root):
     assert mount > loop, "2z2 必须放在 state_files 循环之外，否则 hotfix 提交不受检查"
 
 
-def test_meta_words_do_not_exempt_a_line(agate_scripts):
+def test_meta_words_do_not_exempt_a_line(agate_scripts, agate_root):
     """**防绕过（B-1）**：在坏条目里插「（阈值）/（自检）/（词表）…」不得让该行豁免。
 
     历史：曾用 `_META_DISCUSSION` 做「行内含某词即整行剥离」，被实测证伪——11 个词里
@@ -155,25 +155,25 @@ def test_meta_words_do_not_exempt_a_line(agate_scripts):
             "## [Unreleased]\n\n"
             f"- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训（{word}）\n"
         )
-        total, found, _, _rel = mod.scan(txt)
+        total, found, _, _rel = mod.scan(txt, str(agate_root / "CHANGELOG.md"))
         assert total >= mod.FIRE_MIN_TOTAL and len(found) >= mod.FIRE_MIN_CATEGORIES, (
             f"插「（{word}）」后仍须 FIRE——否则判据可被一个词绕过。"
             f"实际 total={total}, cats={len(found)}"
         )
 
 
-def test_code_fence_is_not_counted(agate_scripts):
+def test_code_fence_is_not_counted(agate_scripts, agate_root):
     """围栏代码块里的示例不是作者叙述，不参与计数。"""
     mod = _load(agate_scripts)
     text = (
         "## [Unreleased]\n\n- 正常条目。\n\n"
         "```python\n# 教训：第一版判断错了，三轮评审，31 passed\n```\n"
     )
-    total, found, _, _rel = mod.scan(text)
+    total, found, _, _rel = mod.scan(text, str(agate_root / "CHANGELOG.md"))
     assert total == 0, f"代码块被计入：{found}"
 
 
-def test_meta_keyword_cannot_be_used_to_bypass(agate_scripts):
+def test_meta_keyword_cannot_be_used_to_bypass(agate_scripts, agate_root):
     """**防绕过**：在坏条目里加「（判据）」二字，不得让该行豁免。
 
     实测来源：`_strip_non_prose()` 的早期版本用「行内含『判据/命中/词表』任一即整行剥离」，
@@ -184,8 +184,8 @@ def test_meta_keyword_cannot_be_used_to_bypass(agate_scripts):
     base = "## [Unreleased]\n\n- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训\n"
     evil = "## [Unreleased]\n\n- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训（判据）\n"
 
-    t_base, _f_base, _, _r1 = mod.scan(base)
-    t_evil, f_evil, _, _r2 = mod.scan(evil)
+    t_base, _f_base, _, _r1 = mod.scan(base, str(agate_root / "CHANGELOG.md"))
+    t_evil, f_evil, _, _r2 = mod.scan(evil, str(agate_root / "CHANGELOG.md"))
     assert t_base >= mod.FIRE_MIN_TOTAL, f"前提：基线应超标，实际 {t_base}"
     assert t_evil >= mod.FIRE_MIN_TOTAL and len(f_evil) >= mod.FIRE_MIN_CATEGORIES, (
         f"加「（判据）」后仍须 FIRE —— 否则判据可被一行注释绕过（实测曾从 {t_base} 归零）。"
@@ -193,7 +193,7 @@ def test_meta_keyword_cannot_be_used_to_bypass(agate_scripts):
     )
 
 
-def test_legit_erratum_is_not_blocked(agate_scripts):
+def test_legit_erratum_is_not_blocked(agate_scripts, agate_root):
     """**B-2**：正当的「勘误：上一版的 X 写错了」不得被判为过程日志。
 
     实测来源：`A6` 含 `勘误` + `A7` 含 `上一版` 叠加 ⇒ 两条纯正当的勘误行 total=4/cats=2，
@@ -206,7 +206,7 @@ def test_legit_erratum_is_not_blocked(agate_scripts):
         "- 勘误：上一版的版本号写错了。\n"
         "- 勘误：上一版写错了命令名。\n"
     )
-    total, found, _, _rel = mod.scan(txt)
+    total, found, _, _rel = mod.scan(txt, str(agate_root / "CHANGELOG.md"))
     assert not (total >= mod.FIRE_MIN_TOTAL and len(found) >= mod.FIRE_MIN_CATEGORIES), (
         f"正当勘误被误判为过程日志：total={total}, cats={[c['category'] for c in found]}"
     )
@@ -255,22 +255,58 @@ def test_unreleased_hit_blocks_even_if_released_also_hit(agate_scripts, python_e
 # ── 第二轮评审（B-6/B-7/B-3′）────────────────────────────────────────────────
 
 
-def test_check17_in_consistency_points_to_existing_script(agate_root):
-    """**B-6**：CHECK 17 调用的脚本路径必须**真实存在**。
+def test_check17_script_constant_points_to_existing_file(agate_root):
+    """**B-6（评审 R3 判为空转后重写）**：CHECK 17 用的脚本路径常量必须指向真实文件。
 
-    实测来源：改名 `agate-*` → `check-*` 后，CHECK 17 里仍留着旧名 ⇒ `is_file()` 判假 ⇒
-    **静默渲染成"已检查"**，CI 侧完全不生效。这类「路径写错但静默跳过」是本批要消灭的
-    同一种缺陷，必须机械锁住。
+    ⚠️ **前一版这条测试是空的**：它用正则 `"agate/scripts/(...)"` 去扒
+    `check-protocol-consistency.py` 的调用点，而实际写法是
+    `root / "agate" / "scripts" / "check-changelog-quality.py"`——**分段字符串**，正则匹配不到
+    ⇒ 把调用点改回已删除的旧名，20 个用例仍全绿、SG.6 绿、CHECK 17 报 PASS
+    （评审 R3 BLOCKER-2 实测：CI 实际在跑旧路径）。
+    现改为：路径提为模块常量 `CHANGELOG_QUALITY_SCRIPT`，直接断言该常量指向真实文件。
     """
-    import re
-    cpc = (agate_root / "scripts" / "check-protocol-consistency.py").read_text(encoding="utf-8")
-    refs = set(re.findall(r'"agate/scripts/([A-Za-z0-9_.-]+\.py)"', cpc))
-    assert "check-changelog-quality.py" in refs, "CHECK 17 应指向 check-changelog-quality.py"
-    for name in refs:
-        if "changelog-quality" in name:
-            assert (agate_root / "scripts" / name).is_file(), (
-                f"CHECK 17 引用了不存在的脚本 {name}——`is_file()` 判假后本 CHECK 会静默跳过"
-            )
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "cpc_const", agate_root / "scripts" / "check-protocol-consistency.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    const = getattr(mod, "CHANGELOG_QUALITY_SCRIPT", None)
+    assert const is not None, "须定义模块常量 CHANGELOG_QUALITY_SCRIPT（否则测试无法锚定）"
+    assert (agate_root.parent / const).is_file(), (
+        f"CHECK 17 的脚本路径常量指向不存在的文件：{const}——"
+        "这会让 CHECK 17 静默失效（旧缺陷 B-6 的原形态）"
+    )
+
+
+def test_check17_reports_error_when_script_missing(agate_root, tmp_path):
+    """**B-6 行为级守护**：脚本缺失时 CHECK 17 必须报 ERROR（fail-closed），不得静默跳过。
+
+    与上一条互补：常量断言只保证"路径字符串对"，这条保证"行为对"——两条都过才排除 B-6。
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "cpc_behav", agate_root / "scripts" / "check-protocol-consistency.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    class Rep:
+        def __init__(self):
+            self.errors, self.warnings = [], []
+
+        def error(self, c, m, loc=None):
+            self.errors.append((c, m, loc))
+
+        def warn(self, c, m, loc=None):
+            self.warnings.append((c, m, loc))
+
+    fake_root = tmp_path / "no-script-here"
+    (fake_root / "agate" / "scripts").mkdir(parents=True)
+    rep = Rep()
+    mod.check_changelog_quality(fake_root, rep)
+    assert rep.errors, "脚本缺失时必须 fail-closed 报 ERROR（静默跳过 = CHECK 变装饰）"
 
 
 def test_missing_script_is_fail_closed(agate_root, tmp_path):
@@ -317,23 +353,69 @@ def test_unreleased_heading_without_space_is_scanned(agate_scripts, python_exe, 
     )
 
 
-def test_unreleased_version_heading_is_treated_as_draft(agate_scripts, python_exe, run_cli,
-                                                         tmp_path):
-    """**B-3′**：**未发布**的版本标题（无对应 tag）按草稿处理 ⇒ 命中即阻断。
+def test_unreleased_version_heading_is_treated_as_draft(agate_scripts, agate_root, python_exe,
+                                                         run_cli):
+    """**B-3′ / BLOCKER-1**：**未发布**的版本标题按草稿处理 ⇒ 命中即阻断（exit 1）。
 
-    实测来源：「已发布段」原按「首个非 Unreleased 段」判定，不校验是否真发布 ⇒ 作者只要
-    新写 `## [99.99.99]` 把痕迹放进去，就被当作"历史快照"降级为 exit 2，**端到端放行**。
-    现改为与 `git tag` 比对：未发布 ⇒ 视同 `[Unreleased]`（同一阻断强度）。
+    实测来源（两处）：
+      · 「已发布段」原按「首个非 Unreleased 段」判定，不校验是否真发布 ⇒ 新写
+        `## [99.99.99]` 把痕迹放进去即降级为 exit 2、端到端放行（R2 的 B-3′）。
+      · 随后我用「v <= 最大 tag」比较 ⇒ 写 `## [0.1.0]`（任何**低于**当前版本的号）同样降级
+        （R3 的 BLOCKER-1）。现改为**集合成员**判断：只有真打过 tag 的号才算已发布。
+
+    ⚠️ 本用例**必须在仓库内**创建文件：判据要 `git tag` 才能区分「真已发布」与「未发布」，
+    放 `tmp_path`（无 git）会走「无法确认 → 仅提示」分支，测不到本判据。
     """
-    f = tmp_path / "CHANGELOG.md"
-    f.write_text(
-        "## [Unreleased]\n\n- 正常。\n\n"
-        "## [99.99.99] - 2026-12-01\n\n"
-        "- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训。\n",
-        encoding="utf-8",
+    import uuid
+
+    probe = agate_root.parent / f".probe-unreleased-{uuid.uuid4().hex[:8]}"
+    probe.mkdir(parents=True, exist_ok=True)
+    try:
+        f = probe / "CHANGELOG.md"
+        f.write_text(
+            "## [Unreleased]\n\n- 正常。\n\n"
+            "## [0.1.0] - 2026-01-01\n\n"
+            "- 第一版判断错了，三轮独立评审，变异实验，31 passed，教训。\n",
+            encoding="utf-8",
+        )
+        # 不用 `run_cli`：它隔离 HOME 并重定向环境，可能影响 `git tag` 的解析；
+        # 本用例**依赖真实 git 仓库上下文**，故直调 subprocess。
+        import subprocess
+        proc = subprocess.run(
+            [str(python_exe), str(agate_scripts / _SCRIPT), str(f)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        assert proc.returncode == 1, (
+            "未打 tag 的版本号（如 0.1.0）下的过程日志须按草稿阻断；"
+            f"实际 rc={proc.returncode}\n{(proc.stdout + proc.stderr)[:400]}"
+        )
+    finally:
+        import shutil
+        shutil.rmtree(probe, ignore_errors=True)
+
+
+# ── 第二轮评审（B-6/B-7/B-3′）────────────────────────────────────────────────
+
+
+def test_plain_we_discovered_is_not_a_process_signal(agate_scripts, agate_root):
+    """**A1 不得误伤裸「我们发现」**（评审 R3 判 BLOCKER 级）。
+
+    「修复 X：我们发现这会导致 Y，已改」是完全正当的变更说明——主语是团队、陈述的是
+    技术事实，不是作者的自我检讨。它与「我原先以为…」「第一版判断错」性质不同。
+
+    实测来源：两条「我们发现 X，已修」+ 一句「教训：」⇒ total=3/cats=2 被**误阻断**。
+    现 A1 只保留自我检讨句式，裸「我们发现/我们认为」降为 hint-only。
+
+    反向守护：改完后真过程语料仍须被拦住（见 test_process_log_is_blocked）。
+    """
+    mod = _load(agate_scripts)
+    txt = (
+        "## [Unreleased]\n\n"
+        "- 修复 A：我们发现它会导致相对路径解析失败，已改。\n"
+        "- 修复 B：我们发现同类问题一处，已改。教训：以后先验证基础行为。\n"
     )
-    r = run_cli(python_exe, str(agate_scripts / _SCRIPT), str(f))
-    assert r.returncode == 1, (
-        "未发布版本标题下的过程日志须按草稿阻断（不得降级为提示）；"
-        f"实际 rc={r.returncode}\n{r.output[:400]}"
+    total, found, _hints, _rel = mod.scan(txt, str(agate_root / "CHANGELOG.md"))
+    assert not (total >= mod.FIRE_MIN_TOTAL and len(found) >= mod.FIRE_MIN_CATEGORIES), (
+        "「我们发现 X，已修」属正当变更说明，不得被判过程日志；"
+        f"实际 total={total}, cats={[c['category'] for c in found]}"
     )
