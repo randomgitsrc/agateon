@@ -1498,10 +1498,14 @@ def check_changelog_quality(root: Path, rep) -> None:
         return
     detail = (proc.stderr or "").strip().splitlines()
     detail = detail[0] if detail else ""
+    # **一律 WARNING，不再 ERROR**（2026-11-28 用户裁定，RM-AG0117）：
+    # 该判据拦的是「呈现」不是「判定」（CHANGELOG 措辞不改变任何 gate 的红绿），
+    # 且实测真缺陷拦截数为 **0** ⇒ 不该成为 CI 的阻断项。
     if proc.returncode == 1:
-        rep.error(
+        rep.warn(
             "CHECK17-changelog-quality",
-            "`[Unreleased]` 条目疑似「工作过程记录」（详见 check-changelog-quality.py）"
+            "`[Unreleased]` 条目疑似「工作过程记录」（**仅提示，不阻断**；"
+            "详见 check-changelog-quality.py）"
             + (f"：{detail}" if detail else ""),
             "CHANGELOG.md",
         )

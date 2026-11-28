@@ -37,8 +37,9 @@
 —— 「第一版判断错了」「独立评审推翻」「变异验证」都是**作者的干活过程**，读者不需要；
 它们已分别归入 commit message 与 `docs/reviews/`。
 
-**机械判据**（不靠自觉）：`agate/scripts/check-changelog-quality.py` 扫 `[Unreleased]` 与最新
-已发布段，命中「过程痕迹」达阈值即 **阻断 commit**（pre-commit `2z2`，这是主要强制力）。
+**机械提示**（辅助，非强制）：`agate/scripts/check-changelog-quality.py` 扫 `[Unreleased]` 与最新
+已发布段，命中「过程痕迹」达阈值会**打一条 WARNING**（pre-commit `2z2` + CHECK 17），
+**不阻断 commit**——措辞好坏属「呈现」，不该卡住任何人的提交。
 CHECK 17 在 CI 侧作补充（1 → ERROR，2 → WARNING），但**不是可靠兜底**——纯 docs 提交时
 `consistency` job fast-pass、接手的 `docs-check` 不在 required check 里。
 自证：`python3 agate/scripts/check-changelog-quality.py CHANGELOG.md`。
