@@ -3,8 +3,16 @@
 #
 # 该判据的存在理由（不是自明的）：纯 WARNING 在本仓会被无视（`SELF-GATE.md` 自陈
 # 「WARNING 不拦截……强制力依赖主 Agent 自觉」；同款纯 warning 机制复犯 6 次后才靠 CI
-# 阻断级守卫收住）。存量证据：v0.78.0 段 248 行含 158 处过程痕迹、v0.77.0 段 191 行含 121 处，
-# 均被人眼 review 放行 —— 故这里必须是**阻断级**判据。
+# 阻断级守卫收住）。
+#
+# ⚠️ **2026-11-28 起本判据降为 WARNING（不再阻断 commit）** —— 用户裁定：
+# 它拦的是「呈现」不是「判定」（CHANGELOG 措辞不改变任何 gate 的红绿），且实测**真缺陷拦截数 0**
+# （抓到的是作者自己写坏的 CHANGELOG，不是用户的真实故障），而为它付出的代价是
+# 310 行判据 + 421 行测试 + 3 轮独立评审 + 12 个 BLOCKER。
+# ⇒ 脚本自身的既有行为（命中 exit 1 / `--warn-only` exit 2）**保持不变**，由调用方降级处置：
+#   · `pre-commit-gate.py` 2z2：`_rc != 0` 只打 WARNING，不再 `sys.exit(1)`
+#   · `check-protocol-consistency.py` CHECK 17：一律 `rep.warn`，不再 `rep.error`
+# 本文件的断言测的是**脚本自身判据**（该不该命中），与"命中后是否阻断"是两件事，故不受降级影响。
 #
 # 本文件同时是「不误伤」的守护：v0.81.0 段 240 行但零过程痕迹（长是真的因为变更多），
 # 它必须 PASS。若谁把词表放宽到裸「转红」/「自我更正」，这条会立刻转红。
@@ -52,8 +60,11 @@ def test_clean_entry_passes(agate_scripts, python_exe, run_cli, tmp_path):
     assert r.returncode == 0, f"干净条目被误判：{r.output[:500]}"
 
 
-def test_process_log_is_blocked(agate_scripts, python_exe, run_cli, tmp_path):
-    """工作过程记录必须 exit 1（阻断），且提示要指出该往哪挪。"""
+def test_process_log_hits_criterion(agate_scripts, python_exe, run_cli, tmp_path):
+    """工作过程记录必须被判据命中（脚本 exit 1），且提示要指出该往哪挪。
+
+    注意：**这只说明判据命中**，不说明"会阻断 commit"——2026-11-28 起调用方已降为 WARNING。
+    """
     r = _cli(agate_scripts, python_exe, run_cli, _PROCESS_LOG, tmp_path)
     assert r.returncode == 1, f"过程日志未被拦：rc={r.returncode}\n{r.output[:500]}"
     assert "过程" in r.output and "commit message" in r.output, (
@@ -62,7 +73,7 @@ def test_process_log_is_blocked(agate_scripts, python_exe, run_cli, tmp_path):
 
 
 def test_warn_only_returns_2(agate_scripts, python_exe, run_cli, tmp_path):
-    """`--warn-only` 供本地试跑用：命中但不阻断（exit 2）。"""
+    """`--warn-only`：命中但返回 2（调用方据此区分"提示"与"硬失败"）。"""
     f = tmp_path / "CHANGELOG.md"
     f.write_text(_PROCESS_LOG, encoding="utf-8")
     r = run_cli(python_exe, str(agate_scripts / _SCRIPT), "--warn-only", str(f))
@@ -418,4 +429,43 @@ def test_plain_we_discovered_is_not_a_process_signal(agate_scripts, agate_root):
     assert not (total >= mod.FIRE_MIN_TOTAL and len(found) >= mod.FIRE_MIN_CATEGORIES), (
         "「我们发现 X，已修」属正当变更说明，不得被判过程日志；"
         f"实际 total={total}, cats={[c['category'] for c in found]}"
+    )
+
+
+def test_callers_downgraded_to_warning_not_blocking(agate_root):
+    """**降级锁定（2026-11-28 用户裁定）**：两个调用方都必须只 WARNING，不得阻断。
+
+    为什么锁这个：该判据曾为**阻断级**，为它付出了 310 行判据 + 421 行测试 + 3 轮独立评审
+    + 12 个 BLOCKER，而实测**真缺陷拦截数 0**（拦的是作者自己写坏的 CHANGELOG，不是用户的
+    真实故障）。按本仓「新增判据 = 给所有使用者加成本」的原则，这是不划算的投入。
+    ⇒ 降为提示级。本条防止后人（或未来的我）无意中把它改回阻断。
+
+    ⚠️ 脚本自身的判据行为**不变**（命中仍 exit 1）——变的只是调用方如何处置。
+    """
+    pre = (agate_root / "scripts" / "pre-commit-gate.py").read_text(encoding="utf-8")
+    # 2z2 段内不得再有针对该判据的 sys.exit(1)
+    i = pre.find("2z2.")
+    assert i > 0, "找不到 2z2 段"
+    seg = pre[i:i + 4000]
+    assert "仅提示，不阻断" in seg, "2z2 段须明写「仅提示，不阻断」"
+    assert "sys.exit(1)" not in seg, (
+        "2z2 段仍含 sys.exit(1) —— 该判据不得阻断 commit（2026-11-28 用户裁定降为 WARNING）"
+    )
+
+    cpc = (agate_root / "scripts" / "check-protocol-consistency.py").read_text(encoding="utf-8")
+    j = cpc.find("def check_changelog_quality")
+    assert j > 0
+    # 截到下一个 def 为止（否则会越界读到 CHECK 16 的 rep.error）
+    nxt = cpc.find("\ndef ", j + 1)
+    body = cpc[j:nxt if nxt > j else j + 3000]
+    # ⚠️ 只检查「判据命中」这条路径：函数开头还有一个 `rep.error` 是**脚本缺失时的
+    # fail-closed**（协议包不完整 → 必须报错，不能静默跳过），那个必须保留。
+    hit_part = body[body.find("proc.returncode == 0"):] if "proc.returncode == 0" in body else body
+    assert 'rep.error(' not in hit_part, (
+        "CHECK 17 的命中路径仍用 rep.error —— 该判据不得判 ERROR（应一律 rep.warn）"
+    )
+    assert 'rep.warn(' in hit_part, "CHECK 17 命中路径须用 rep.warn"
+    # 反向守护：脚本缺失必须仍然 fail-closed 报错
+    assert 'rep.error(' in body[:body.find("proc.returncode == 0")], (
+        "脚本缺失时须 fail-closed 报 ERROR（该分支不得被一并降级）"
     )

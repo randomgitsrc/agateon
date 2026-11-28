@@ -1190,12 +1190,9 @@ def main():
                     sys.exit(1)
 
     # 2z2. CHANGELOG 条目质量（RM-AG0117）——**循环外**（对任何提交都生效）：
-    # ⚠️ 这是本判据的**主要强制力**，不是「本地预检 + CI 兜底」里的那个预检：对**纯 docs
-    # 提交**（只改 CHANGELOG.md 的那类，也是最危险的），`protocol-tests.yml` 的 `consistency`
-    # job 会因 `docs_only=true` 直接 `exit 0` fast-pass，改由 `docs-check.yml` 的
-    # `docs-consistency` 接手——而该 job **不在** 6 个 required check 里（实测
-    # `gh api .../branches/main/protection`：shellcheck×2 / pytest×2 / consistency /
-    # gate-backstop）⇒ 它红了**不阻止合并**。所以别把 CI 当唯一防线。
+    # **本步只提示，不阻断**（2026-11-28 用户裁定）：该判据拦的是「呈现」不是「判定」——
+    # CHANGELOG 措辞好坏不改变任何 gate 的红绿；实测真缺陷拦截数 **0**。降为 WARNING 后，
+    # 既保留"写坏时看一眼"的提示，又不会因措辞问题卡住任何人的提交。
     # `CHANGELOG.md` 被**暂存**时跑 `check-changelog-quality.py`，exit 1 → 阻断 commit。
     # 为什么必须有机械判据：本仓实证纯 WARNING 会被无视（`SELF-GATE.md` 自陈「WARNING 不拦截
     # ……强制力依赖主 Agent 自觉」；同款纯 warning 机制复犯 6 次后才靠 CI 阻断级守卫收住）。
@@ -1226,11 +1223,17 @@ def main():
                 finally:
                     with _contextlib.suppress(OSError):
                         os.unlink(_tmp_path)
-                if _rc == 1:
+                if _rc != 0:
+                    # **只提示，不阻断**（2026-11-28 用户裁定，RM-AG0117）：
+                    # 该判据拦的是「呈现」不是「判定」——CHANGELOG 措辞好坏不改变任何 gate 的红绿。
+                    # 按本仓「新增判据 = 给所有使用者加成本，先答它会拦下几个真缺陷」：实测答案是
+                    # **0**（它抓到的是作者自己写坏的 CHANGELOG，不是任何用户的真实故障），
+                    # 而为它付出的代价是 310 行判据 + 421 行测试 + 3 轮独立评审 + 12 个 BLOCKER。
+                    # ⇒ 降为 WARNING：保留"写坏时看一眼"的提示，但绝不因措辞问题卡住提交。
                     sys.stderr.write(
-                        "GATE: CHANGELOG 条目疑似「工作过程记录」而非变更记录"
-                        "（check-changelog-quality.py exit 1）——阻断 commit（RM-AG0117）\n")
-                    sys.exit(1)
+                        "GATE WARNING: CHANGELOG 条目疑似「工作过程记录」而非变更记录"
+                        "（check-changelog-quality.py；**仅提示，不阻断**，RM-AG0117）\n"
+                        "  只写「发生了什么 / 影响 / 怎么修」；过程细节放 commit message 或 docs/reviews/\n")
                 break
 
     # 3. 扫描暂存的 P{n}-*.md 产出文件（无 .state.yaml 变更的任务也检查一致性）
